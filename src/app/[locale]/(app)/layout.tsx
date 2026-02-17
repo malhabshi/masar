@@ -33,14 +33,12 @@ import {
   Award,
   BarChart,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { useEffect } from 'react';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const t = useTranslations('Sidebar');
   const { user: userProfile, isUserLoading } = useUser();
   const { auth, user: authUser } = useFirebase();
   const router = useRouter();
@@ -48,7 +46,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // This effect handles redirection for unauthenticated users.
     if (!isUserLoading && !authUser) {
-      router.replace('/login');
+      router.replace('/en/login');
     }
   }, [isUserLoading, authUser, router]);
 
@@ -98,49 +96,49 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <a href="/dashboard">
+                <a href="/en/dashboard">
                   <LayoutDashboard />
-                  <span>{t('dashboard')}</span>
+                  <span>Dashboard</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <a href="/applicants">
+                <a href="/en/applicants">
                   <Users />
-                  <span>{t('applicants')}</span>
+                  <span>Applicants</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <a href="/unassigned-students">
+                <a href="/en/unassigned-students">
                   <UserPlus />
-                  <span>{t('unassignedStudents')}</span>
+                  <span>Unassigned Students</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <a href="/resources">
+                <a href="/en/resources">
                   <LinkIcon />
-                  <span>{t('resources')}</span>
+                  <span>Resources</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <a href="/approved-universities">
+                <a href="/en/approved-universities">
                   <School />
-                  <span>{t('approvedUniversities')}</span>
+                  <span>Approved Universities</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <a href="/finalized-students">
+                <a href="/en/finalized-students">
                   <Award />
-                  <span>{t('finalizedStudents')}</span>
+                  <span>Finalized Students</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -149,33 +147,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <a href="/employee-activity">
+                    <a href="/en/employee-activity">
                       <Timer />
-                      <span>{t('employeeActivity')}</span>
+                      <span>Employee Activity</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <a href="/user-management">
+                    <a href="/en/user-management">
                       <UserCog />
-                      <span>{t('userManagement')}</span>
+                      <span>User Management</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <a href="/reports">
+                    <a href="/en/reports">
                       <BarChart />
-                      <span>{t('reports')}</span>
+                      <span>Reports</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                     <SidebarMenuButton asChild>
-                        <a href="/request-settings">
+                        <a href="/en/request-settings">
                         <Settings />
-                        <span>{t('requestSettings')}</span>
+                        <span>Request Settings</span>
                         </a>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -186,25 +184,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                <>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <a href="/internal-chat">
+                    <a href="/en/internal-chat">
                       <MessageSquare />
-                      <span>{t('internalChat')}</span>
+                      <span>Internal Chat</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <a href="/tasks">
+                    <a href="/en/tasks">
                       <ListChecks />
-                      <span>{t('tasks')}</span>
+                      <span>Tasks</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <a href="/customize-questions">
+                    <a href="/en/customize-questions">
                       <Bot />
-                      <span>{t('customizeQuestions')}</span>
+                      <span>Customize Questions</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -216,18 +214,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton asChild>
-                        <a href="/support">
+                        <a href="/en/support">
                             <LifeBuoy />
-                            <span>{t('support')}</span>
+                            <span>Support</span>
                         </a>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
                 {userProfile.role === 'admin' && (
                   <SidebarMenuItem>
                       <SidebarMenuButton asChild>
-                          <a href="/settings">
+                          <a href="/en/settings">
                               <Settings />
-                              <span>{t('settings')}</span>
+                              <span>Settings</span>
                           </a>
                       </SidebarMenuButton>
                   </SidebarMenuItem>

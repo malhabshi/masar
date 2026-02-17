@@ -13,13 +13,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ChevronsUpDown, User as UserIcon, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTranslations } from 'next-intl';
 import { useFirebase } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
 export function UserSwitcher() {
-  const t = useTranslations('UserSwitcher');
   const { user, isUserLoading } = useUser();
   const { auth } = useFirebase();
   const { toast } = useToast();
@@ -28,7 +26,7 @@ export function UserSwitcher() {
     try {
         await signOut(auth);
         toast({ title: 'Logged Out', description: 'You have been successfully logged out.'});
-        window.location.href = '/login';
+        window.location.href = '/en/login';
     } catch (error) {
         toast({ variant: 'destructive', title: 'Logout Failed', description: 'An error occurred during logout.' });
     }
@@ -58,11 +56,11 @@ export function UserSwitcher() {
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>
             <UserIcon className="mr-2 h-4 w-4"/>
-            <span>{t('profile')}</span>
+            <span>Profile</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4"/>
-            <span>{t('logout')}</span>
+            <span>Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

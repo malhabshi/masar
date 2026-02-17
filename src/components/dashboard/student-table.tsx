@@ -113,7 +113,7 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
                       <AvatarFallback>{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <a href={`/student/${student.id}`} className="hover:underline">
+                      <a href={`/en/student/${student.id}`} className="hover:underline">
                         <div className="font-medium flex items-center gap-2 flex-wrap">
                           <span>{student.name || 'Unknown Student'}</span>
                           {isCurrentUserAssigned && student.isNewForEmployee && (
@@ -227,7 +227,7 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                  <a href={`/student/${student.id}`}>View Details</a>
+                                  <a href={`/en/student/${student.id}`}>View Details</a>
                               </DropdownMenuItem>
                               {currentUser?.role === 'employee' && (
                                   <>
