@@ -4,61 +4,45 @@ import admin from 'firebase-admin';
 
 // Helper function to initialize Firebase Admin SDK idempotently.
 function initializeAdmin() {
+  const appName = 'UNIAPPLY_HUB_ADMIN_API'; // Unique name for this admin instance
   // Check if the app is already initialized to prevent errors.
-  if (admin.apps.length > 0) {
-    return admin;
+  const existingApp = admin.apps.find(app => app?.name === appName);
+  if (existingApp) {
+    return existingApp;
   }
 
   let serviceAccount;
   const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64;
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_JSON;
-
-  // Prioritize the Base64 environment variable (for Vercel/hosting).
+  
   if (serviceAccountBase64) {
     try {
-      // Decode the Base64 string to a JSON string.
       const decodedJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf8');
       serviceAccount = JSON.parse(decodedJson);
-      // The private_key field often has escaped newlines when stored as an env var.
-      // This line replaces '\\n' with the actual newline character '\n'.
+      // Replace escaped newlines in the private key.
       if (serviceAccount.private_key) {
         serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
       }
     } catch (e: any) {
-      // If parsing fails, throw a specific error.
       throw new Error(`Failed to parse Base64-encoded service account key: ${e.message}`);
     }
-  } 
-  // Fallback to the direct JSON variable (for local development).
-  else if (serviceAccountJson) {
-    try {
-      serviceAccount = JSON.parse(serviceAccountJson);
-    } catch (e: any) {
-      throw new Error(`Failed to parse JSON service account key: ${e.message}`);
-    }
-  } 
-  // If neither is found, throw an error.
-  else {
-    throw new Error('Firebase Admin SDK credentials not found. Set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or FIREBASE_SERVICE_ACCOUNT_KEY_JSON.');
+  } else {
+    throw new Error('Firebase Admin SDK credentials not found. Set FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 environment variable.');
   }
 
-  // Initialize the app with the parsed credentials.
+  // Initialize the app with the parsed credentials and a unique name.
   try {
-    admin.initializeApp({
+    return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       storageBucket: 'studio-9484431255-91d96.appspot.com'
-    });
+    }, appName);
   } catch (error: any) {
     throw new Error(`Firebase Admin SDK initialization error: ${error.message}`);
   }
-  
-  return admin;
 }
 
 
 export async function POST(req: NextRequest) {
   try {
-    // Initialize Admin SDK within the request to catch any setup errors.
     const adminApp = initializeAdmin();
     const bucket = adminApp.storage().bucket();
 
@@ -67,7 +51,6 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null;
     const destination = formData.get('destination') as 'student' | 'shared' | null;
 
-    // Validate that a file and destination were provided.
     if (!file) {
       return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
     }
@@ -75,7 +58,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No destination provided.' }, { status: 400 });
     }
 
-    // Determine the upload path based on the 'destination' parameter.
     let filePath = '';
     if (destination === 'student') {
         const studentId = formData.get('studentId') as string | null;
@@ -89,45 +71,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid destination specified.' }, { status: 400 });
     }
 
-    // Get the file content as a buffer.
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-    // Create a reference to the file in the bucket.
     const blob = bucket.file(filePath);
     
-    // Create a writable stream to upload the file.
-    const blobStream = blob.createWriteStream({
+    // Use the .save() method to upload the file buffer directly.
+    // This is simpler and more robust than using streams for this use case.
+    await blob.save(fileBuffer, {
         metadata: {
             contentType: file.type,
         },
-        resumable: false // Use a simple upload for reliability.
     });
 
-    // Wait for the upload to complete.
-    await new Promise((resolve, reject) => {
-        blobStream.on('error', (err) => {
-            console.error("Upload stream error:", err);
-            reject(new Error('Failed to upload file to storage.'));
-        });
-
-        blobStream.on('finish', () => {
-            resolve(true);
-        });
-
-        // Write the file buffer to the stream and end it.
-        blobStream.end(fileBuffer);
-    });
-
-    // Make the file public to get a downloadable URL.
     await blob.makePublic();
     const downloadURL = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
     
-    // Return the public URL in a JSON response.
     return NextResponse.json({ downloadURL });
 
   } catch (error: any) {
-    // If any part of the try block fails, log the error and return a proper JSON error response.
     console.error('API Upload Error:', error);
+    // The user's original error is a TypeError. Let's make sure our response reflects that.
+    if (error instanceof TypeError) {
+        return NextResponse.json({ error: 'Failed to process upload.', details: 'TypeError: ' + error.message }, { status: 500 });
+    }
     return NextResponse.json({ error: 'Failed to process upload.', details: error.message }, { status: 500 });
   }
 }
