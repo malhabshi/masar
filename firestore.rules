@@ -24,6 +24,15 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
+    function isStudentAssignedToCurrentUser(studentId) {
+      // Ensure we have a studentId to check and that the user data is available
+      if (studentId == null || getUserData() == null || getUserData().civilId == null) {
+        return false;
+      }
+      let student = get(/databases/$(database)/documents/students/$(studentId)).data;
+      return student.employeeId == getUserData().civilId;
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isUserAdmin() || (isOwner(userId) && (request.resource.data.role != 'admin' || request.resource.data.email == 'admin@uniapply.hub'));
@@ -91,11 +100,17 @@ service cloud.firestore {
     }
     
     match /applications/{applicationId} {
-      allow read, write: if false;
+      // Allow assigned employees, departments, and admins to manage applications.
+      allow read, update: if isSignedIn() && (isUserAdmin() || isDepartment() || isStudentAssignedToCurrentUser(resource.data.studentId));
+      allow create: if isSignedIn() && (isUserAdmin() || isStudentAssignedToCurrentUser(request.resource.data.studentId));
+      allow delete: if isUserAdmin();
     }
 
     match /documents/{documentId} {
-      allow read, write: if false;
+      // Allow assigned employees, departments, and admins to manage documents.
+      allow read: if isSignedIn() && (isUserAdmin() || isDepartment() || isStudentAssignedToCurrentUser(resource.data.studentId));
+      allow create: if isSignedIn() && (isUserAdmin() || isStudentAssignedToCurrentUser(request.resource.data.studentId));
+      allow update, delete: if isUserAdmin();
     }
 
     match /tasks/{taskId} {
