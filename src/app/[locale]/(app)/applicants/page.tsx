@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useUser } from '@/hooks/use-user';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, Loader2 } from 'lucide-react';
+import { PlusCircle, Search, Loader2, ChevronDown } from 'lucide-react';
 import type { Student, User } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useMemo, useState, useEffect } from 'react';
@@ -15,6 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ImportStudentsDialog } from '@/components/dashboard/import-students-dialog';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
@@ -60,7 +67,8 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
             const matchesSearch = !searchQuery ||
                                 (student.name || '').toLowerCase().includes(searchLower) ||
                                 (student.email || '').toLowerCase().includes(searchLower) ||
-                                (student.phone || '').toLowerCase().includes(searchLower);
+                                (student.phone || '').toLowerCase().includes(searchLower) ||
+                                (student.customId || '').toLowerCase().includes(searchLower);
 
             // Term filter
             const matchesTerm = termFilter === 'all' || student.term === termFilter;
@@ -107,7 +115,7 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
                     <div className="relative w-full md:max-w-sm">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input type="search" placeholder="Search by name, email, or phone..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <Input type="search" placeholder="Search by name, email, phone, ID..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                     </div>
                     <div className="flex gap-2 w-full flex-wrap md:w-auto justify-end">
                         <Select value={pipelineFilter} onValueChange={setPipelineFilter}><SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by pipeline" /></SelectTrigger><SelectContent><SelectItem value="all">All Pipelines</SelectItem><SelectItem value="green">Green</SelectItem><SelectItem value="orange">Orange</SelectItem><SelectItem value="red">Red</SelectItem><SelectItem value="none">No Status</SelectItem></SelectContent></Select>
@@ -174,7 +182,8 @@ function EmployeeStudentView({ user, users }: { user: User, users: User[] }) {
             const matchesSearch = !searchQuery ||
                                 (student.name || '').toLowerCase().includes(searchLower) ||
                                 (student.email || '').toLowerCase().includes(searchLower) ||
-                                (student.phone || '').toLowerCase().includes(searchLower);
+                                (student.phone || '').toLowerCase().includes(searchLower) ||
+                                (student.customId || '').toLowerCase().includes(searchLower);
 
             const studentPipelineStatus = student.pipelineStatus || 'none';
             const matchesPipeline = pipelineFilter === 'all' || studentPipelineStatus === pipelineFilter;
@@ -210,12 +219,23 @@ function EmployeeStudentView({ user, users }: { user: User, users: User[] }) {
                 <h2 className="text-2xl font-semibold">My Applicants</h2>
                 <div className="flex items-center gap-2">
                     <ImportStudentsDialog currentUser={user} />
-                    <Button asChild>
-                        <a href="/new-request">
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Add a New Student
-                        </a>
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add a New Student
+                                <ChevronDown className="ml-2 h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem asChild>
+                                <a href="/new-request">Add and Assign to Me</a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                                <a href="/new-request?unassigned=true">Add as Unassigned</a>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
              <Card>
@@ -223,7 +243,7 @@ function EmployeeStudentView({ user, users }: { user: User, users: User[] }) {
                     <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
                         <div className="relative w-full md:max-w-sm">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input type="search" placeholder="Search by name, email, or phone..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                            <Input type="search" placeholder="Search by name, email, phone, ID..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         </div>
                         <div className="flex gap-2 w-full flex-wrap md:w-auto justify-end">
                             <Select value={pipelineFilter} onValueChange={setPipelineFilter}><SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by pipeline" /></SelectTrigger><SelectContent><SelectItem value="all">All Pipelines</SelectItem><SelectItem value="green">Green</SelectItem><SelectItem value="orange">Orange</SelectItem><SelectItem value="red">Red</SelectItem><SelectItem value="none">No Status</SelectItem></SelectContent></Select>
