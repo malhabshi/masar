@@ -102,12 +102,23 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
             <h2 className="text-2xl font-semibold">All Applicants</h2>
             <div className="flex items-center gap-2">
                 <ImportStudentsDialog currentUser={user} />
-                <Button asChild>
-                  <a href="/new-request?unassigned=true">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add a New Student
-                  </a>
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button>
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Add a New Student
+                            <ChevronDown className="ml-2 h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem asChild>
+                            <a href="/new-request">Add and Assign to Me</a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <a href="/new-request?unassigned=true">Add as Unassigned</a>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </div>
         <Card>
@@ -283,3 +294,5 @@ export default function ApplicantsPage() {
   
   return <EmployeeStudentView user={user} users={users} />;
 }
+
+    
