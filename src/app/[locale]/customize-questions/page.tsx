@@ -1,3 +1,2 @@
-
-import CustomizeQuestionsPage from './(app)/customize-questions/page';
-export default CustomizeQuestionsPage;
+import Page from './(app)/customize-questions/page';
+export default Page;

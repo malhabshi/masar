@@ -1,3 +1,2 @@
-
-import UnassignedStudentsPage from './(app)/unassigned-students/page';
-export default UnassignedStudentsPage;
+import Page from './(app)/unassigned-students/page';
+export default Page;

@@ -1,3 +1,2 @@
-
-import EmployeeActivityPage from './(app)/employee-activity/page';
-export default EmployeeActivityPage;
+import Page from './(app)/employee-activity/page';
+export default Page;

@@ -1,3 +1,2 @@
-
-import UserManagementPage from './(app)/user-management/page';
-export default UserManagementPage;
+import Page from './(app)/user-management/page';
+export default Page;

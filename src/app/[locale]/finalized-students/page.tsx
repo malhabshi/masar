@@ -1,3 +1,2 @@
-
-import FinalizedStudentsPage from './(app)/finalized-students/page';
-export default FinalizedStudentsPage;
+import Page from './(app)/finalized-students/page';
+export default Page;

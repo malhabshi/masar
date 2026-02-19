@@ -1,3 +1,2 @@
-
-import ResourcesPage from './(app)/resources/page';
-export default ResourcesPage;
+import Page from './(app)/resources/page';
+export default Page;
