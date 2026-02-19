@@ -4,7 +4,7 @@
 import { useUser } from '@/hooks/use-user';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Search, Loader2 } from 'lucide-react';
+import { PlusCircle, Search, Loader2, ChevronDown } from 'lucide-react';
 import type { Student, User } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useMemo, useState, useEffect } from 'react';
@@ -16,6 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ImportStudentsDialog } from '@/components/dashboard/import-students-dialog';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
@@ -97,7 +103,7 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
             <div className="flex items-center gap-2">
                 <ImportStudentsDialog currentUser={user} />
                 <Button asChild>
-                  <a href="/new-request">
+                  <a href="/new-request?unassigned=true">
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Add a New Student
                   </a>
@@ -213,12 +219,23 @@ function EmployeeStudentView({ user, users }: { user: User, users: User[] }) {
                 <h2 className="text-2xl font-semibold">My Applicants</h2>
                 <div className="flex items-center gap-2">
                     <ImportStudentsDialog currentUser={user} />
-                    <Button asChild>
-                        <a href="/new-request">
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Add a New Student
-                        </a>
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add a New Student
+                                <ChevronDown className="ml-2 h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem asChild>
+                                <a href="/new-request">Add and Assign to Me</a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                                <a href="/new-request?unassigned=true">Add as Unassigned</a>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
              <Card>
