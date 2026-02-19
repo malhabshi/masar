@@ -1,2 +1,2 @@
-// This file is intentionally left empty to resolve a build-time routing conflict.
-// The active page for this route is located at /src/app/[locale]/(app)/student/[id]/page.tsx.
+// This file has been modified to resolve a build-time routing conflict.
+export const a = 1;
