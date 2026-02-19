@@ -12,7 +12,7 @@ import { Send, MessageSquare, Search, ArrowLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, query, where, getDocs, getDoc, documentId } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 
@@ -38,14 +38,14 @@ export default function InternalChatPage() {
   // --- Data Fetching Logic ---
   
   // Fetch all students for admin/dept
-  const allStudentsQuery = useMemoFirebase(() => {
+  const allStudentsQuery = useMemo(() => {
     if (!firestore || !isAdminOrDept) return null;
     return collection(firestore, 'students');
   }, [firestore, isAdminOrDept]);
   const { data: allStudentsData, isLoading: allStudentsLoading } = useCollection<Student>(allStudentsQuery);
 
   // Fetch assigned students for employee directly
-  const employeeStudentsQuery = useMemoFirebase(() => {
+  const employeeStudentsQuery = useMemo(() => {
       if (!firestore || isAdminOrDept || !currentUser?.civilId) return null;
       return query(collection(firestore, 'students'), where('employeeId', '==', currentUser.civilId));
   }, [firestore, isAdminOrDept, currentUser]);
@@ -66,7 +66,7 @@ export default function InternalChatPage() {
 
 
   // Fetch messages only for the selected student
-  const messagesCollection = useMemoFirebase(() => {
+  const messagesCollection = useMemo(() => {
     if (!firestore || !selectedStudentId) return null;
     return collection(firestore, 'chats', selectedStudentId, 'messages');
   }, [firestore, selectedStudentId]);

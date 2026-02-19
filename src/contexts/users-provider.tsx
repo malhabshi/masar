@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useMemo } from 'react';
 import type { User } from '@/lib/types';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection } from '@/firebase';
 import { collection } from 'firebase/firestore';
 
 interface UsersContextType {
@@ -18,7 +18,7 @@ const UsersContext = createContext<UsersContextType>({
 export function UsersProvider({ children }: { children: React.ReactNode }) {
   const { firestore, user } = useFirebase();
 
-  const usersCollection = useMemoFirebase(() => {
+  const usersCollection = useMemo(() => {
     if (!firestore || !user) return null; // Wait for auth
     return collection(firestore, 'users');
   }, [firestore, user]);

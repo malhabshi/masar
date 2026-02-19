@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Search, Loader2 } from 'lucide-react';
 import { FinalizedStudentsTable } from '@/components/dashboard/finalized-students-table';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection } from '@/firebase';
 import { collection, query, where, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 
@@ -27,7 +27,7 @@ interface FinalizedStudent extends Student {
 function AdminFinalizedView({ user, users }: { user: User; users: User[] }) {
   const { firestore } = useFirebase();
 
-  const studentsQuery = useMemoFirebase(() => {
+  const studentsQuery = useMemo(() => {
     if (!firestore) return null;
     return query(collection(firestore, 'students'), where('finalChoiceUniversity', '!=', null));
   }, [firestore]);
@@ -113,7 +113,7 @@ function EmployeeFinalizedView({ user, users }: { user: User; users: User[] }) {
     const { firestore } = useFirebase();
 
     // Fetch ALL finalized students for the current employee
-    const employeeStudentsQuery = useMemoFirebase(() => {
+    const employeeStudentsQuery = useMemo(() => {
         if (!firestore || !user.civilId) return null;
         return query(
             collection(firestore, 'students'), 

@@ -59,7 +59,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 
 const formSchema = z.object({
@@ -200,7 +200,7 @@ export default function RequestSettingsPage() {
   const { firestore } = useFirebase();
   const { toast } = useToast();
 
-  const requestTypesCollection = useMemoFirebase(() => {
+  const requestTypesCollection = useMemo(() => {
     if (!firestore || !currentUser) return null;
     return collection(firestore, 'request_types');
   }, [firestore, currentUser]);

@@ -28,7 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { SharedDocument, Country, ResourceLink } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 import { AddLinkDialog } from '@/components/resources/add-link-dialog';
@@ -39,14 +39,14 @@ export default function ResourcesPage() {
   const { firestore } = useFirebase();
   const { toast } = useToast();
 
-  const sharedDocumentsCollection = useMemoFirebase(() => {
+  const sharedDocumentsCollection = useMemo(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'shared_documents');
   }, [firestore, user]);
 
   const { data: documents, isLoading: documentsLoading } = useCollection<SharedDocument>(sharedDocumentsCollection);
 
-  const resourceLinksCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'resource_links'), [firestore]);
+  const resourceLinksCollection = useMemo(() => !firestore ? null : collection(firestore, 'resource_links'), [firestore]);
   const { data: resourceLinks, isLoading: linksLoading } = useCollection<ResourceLink>(resourceLinksCollection);
 
   const pageIsLoading = isUserLoading || documentsLoading || usersLoading || linksLoading;

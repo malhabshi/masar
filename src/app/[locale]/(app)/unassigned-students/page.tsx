@@ -9,7 +9,7 @@ import type { Student, User } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { TransferStudentDialog } from '@/components/student/transfer-student-dialog';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 
@@ -80,7 +80,7 @@ export default function UnassignedStudentsPage() {
   const { firestore } = useFirebase();
 
   // Step 1: Query ALL unassigned students (simple query, no composite index needed)
-  const studentsQuery = useMemoFirebase(() => {
+  const studentsQuery = useMemo(() => {
     if (!firestore) return null;
     return query(collection(firestore, 'students'), where('employeeId', '==', null));
   }, [firestore]);

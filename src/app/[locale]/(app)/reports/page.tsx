@@ -9,7 +9,7 @@ import { format, formatDistanceStrict } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Clock, MessageSquare, Send, Loader2 } from 'lucide-react';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
@@ -159,11 +159,11 @@ export default function ActivityReports() {
 
     const employees = useMemo(() => users.filter(u => u.role === 'employee'), [users]);
 
-    const studentsCollection = useMemoFirebase(() => !firestore || !user ? null : collection(firestore, 'students'), [firestore, user]);
+    const studentsCollection = useMemo(() => !firestore || !user ? null : collection(firestore, 'students'), [firestore, user]);
     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);
     const students = useMemo(() => studentsData || [], [studentsData]);
 
-    const tasksCollection = useMemoFirebase(() => !firestore || !user ? null : collection(firestore, 'tasks'), [firestore, user]);
+    const tasksCollection = useMemo(() => !firestore || !user ? null : collection(firestore, 'tasks'), [firestore, user]);
     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksCollection);
     const tasks = useMemo(() => tasksData || [], [tasksData]);
     

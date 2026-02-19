@@ -7,7 +7,7 @@ import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { TaskList } from '@/components/dashboard/task-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection } from '@/firebase';
 import { collection, query, where, getDocs, doc, getDoc, documentId, orderBy, limit } from 'firebase/firestore';
 import type { Student, Task, User } from '@/lib/types';
 import { useMemo, useState, useEffect } from 'react';
@@ -16,7 +16,7 @@ import { useUsers } from '@/contexts/users-provider';
 function AdminDepartmentDashboard({ user, users }: { user: User, users: User[] }) {
     const { firestore } = useFirebase();
 
-    const studentsCollection = useMemoFirebase(() => {
+    const studentsCollection = useMemo(() => {
         if (!firestore) return null;
         return collection(firestore, 'students');
     }, [firestore]);
@@ -24,7 +24,7 @@ function AdminDepartmentDashboard({ user, users }: { user: User, users: User[] }
     const students = useMemo(() => studentsData || [], [studentsData]);
     
     // Fetch only the 20 most recent tasks for admin/dept roles.
-    const tasksCollection = useMemoFirebase(() => {
+    const tasksCollection = useMemo(() => {
         if (!firestore) return null;
         return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'), limit(20));
     }, [firestore]);
@@ -76,7 +76,7 @@ function EmployeeDashboard({ user, users }: { user: User, users: User[] }) {
     const { firestore } = useFirebase();
 
     // Fetch students assigned to this employee directly.
-    const employeeStudentsQuery = useMemoFirebase(() => {
+    const employeeStudentsQuery = useMemo(() => {
         if (!firestore || !user.civilId) return null;
         return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
     }, [firestore, user.civilId]);
@@ -84,7 +84,7 @@ function EmployeeDashboard({ user, users }: { user: User, users: User[] }) {
     const { data: employeeStudents, isLoading: studentsLoading } = useCollection<Student>(employeeStudentsQuery);
     
     // Fetch only the 20 most recent relevant tasks for the employee.
-    const employeeTasksQuery = useMemoFirebase(() => {
+    const employeeTasksQuery = useMemo(() => {
         if (!firestore) return null;
         return query(collection(firestore, 'tasks'), where('recipientId', 'in', [user.id, 'all']), orderBy('createdAt', 'desc'), limit(20));
     }, [firestore, user.id]);

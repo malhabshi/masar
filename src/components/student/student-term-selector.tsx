@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { updateStudentTerm } from '@/lib/actions';
 import { CalendarDays, Loader2 } from 'lucide-react';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 
 interface StudentTermSelectorProps {
@@ -39,7 +39,7 @@ export function StudentTermSelector({ student, currentUser }: StudentTermSelecto
   const { toast } = useToast();
   const { firestore } = useFirebase();
   
-  const termsCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'academic_terms'), [firestore]);
+  const termsCollection = useMemo(() => !firestore ? null : collection(firestore, 'academic_terms'), [firestore]);
   const { data: termsData } = useCollection(termsCollection);
   const terms = useMemo(() => termsData?.map(t => t.name).sort() || [], [termsData]);
   

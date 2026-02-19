@@ -19,7 +19,7 @@ import { PlusCircle, Search, Loader2 } from 'lucide-react';
 import { UniversitiesTable } from '@/components/universities/universities-table';
 import { AddUniversityDialog } from '@/components/universities/add-university-dialog';
 import { sendTask } from '@/lib/actions';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { Skeleton } from '../ui/skeleton';
 
@@ -28,7 +28,7 @@ export function ApprovedUniversitiesView() {
   const { toast } = useToast();
   const { firestore } = useFirebase();
 
-  const universitiesCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'approved_universities'), [firestore]);
+  const universitiesCollection = useMemo(() => !firestore ? null : collection(firestore, 'approved_universities'), [firestore]);
   const { data: universitiesData, isLoading: areUniversitiesLoading } = useCollection<ApprovedUniversity>(universitiesCollection);
   
   const isLoading = isUserLoadingHook || areUniversitiesLoading;

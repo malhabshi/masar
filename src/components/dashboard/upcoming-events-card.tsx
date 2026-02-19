@@ -38,7 +38,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import type { UpcomingEvent } from '@/lib/types';
 
@@ -60,7 +60,7 @@ export function UpcomingEventsCard({ currentUser }: UpcomingEventsCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
-  const eventsCollection = useMemoFirebase(() => {
+  const eventsCollection = useMemo(() => {
     if (!firestore) return null;
     return collection(firestore, 'upcoming_events');
   }, [firestore]);

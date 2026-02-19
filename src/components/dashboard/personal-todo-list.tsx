@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 
 export function PersonalTodoList() {
@@ -20,7 +20,7 @@ export function PersonalTodoList() {
     const { toast } = useToast();
     const [newTodo, setNewTodo] = useState('');
 
-    const todosCollection = useMemoFirebase(() => {
+    const todosCollection = useMemo(() => {
         if (!firestore || !user) return null;
         return collection(firestore, 'users', user.uid, 'personal_todos');
     }, [firestore, user]);

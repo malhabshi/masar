@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 
 const taskStatuses: TaskStatus[] = ['new', 'in-progress', 'completed', 'archived'];
@@ -184,7 +184,7 @@ export function TaskManager({ currentUser, users }: TaskManagerProps) {
   const { toast } = useToast();
   const { firestore } = useFirebase();
 
-  const tasksCollection = useMemoFirebase(() => {
+  const tasksCollection = useMemo(() => {
     if (!firestore) return null;
     return collection(firestore, 'tasks');
   }, [firestore]);

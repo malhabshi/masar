@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useMemo } from 'react';
 import type { User, UserRole } from '@/lib/types';
-import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirebase, useDoc } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
 interface UserContextType {
@@ -17,7 +17,7 @@ const UserContext = createContext<UserContextType | null>(null);
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const { firestore, user: authUser, isUserLoading: isAuthLoading } = useFirebase();
 
-  const userDocRef = useMemoFirebase(() => {
+  const userDocRef = useMemo(() => {
     if (!firestore || !authUser) return null;
     return doc(firestore, 'users', authUser.uid);
   }, [firestore, authUser]);
