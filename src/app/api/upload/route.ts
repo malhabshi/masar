@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
     const adminApp = initializeAdmin();
     const bucket = adminApp.storage().bucket();
 
-    // Parse the multipart form data from the request.
+    // Parse the multipart form data from the request just once.
     const formData = await req.formData();
+    
     const file = formData.get('file') as File | null;
     const destination = formData.get('destination') as 'student' | 'shared' | null;
 
@@ -71,29 +72,28 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid destination specified.' }, { status: 400 });
     }
 
+    // Convert the file to a buffer.
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
+    // Get a reference to the file in Firebase Storage.
     const blob = bucket.file(filePath);
     
     // Use the .save() method to upload the file buffer directly.
-    // This is simpler and more robust than using streams for this use case.
+    // This is a robust way to handle the upload and avoids stream-related issues.
     await blob.save(fileBuffer, {
         metadata: {
             contentType: file.type,
         },
     });
 
+    // Make the file public and get its URL.
     await blob.makePublic();
-    const downloadURL = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    const downloadURL = blob.publicUrl();
     
     return NextResponse.json({ downloadURL });
 
   } catch (error: any) {
     console.error('API Upload Error:', error);
-    // The user's original error is a TypeError. Let's make sure our response reflects that.
-    if (error instanceof TypeError) {
-        return NextResponse.json({ error: 'Failed to process upload.', details: 'TypeError: ' + error.message }, { status: 500 });
-    }
     return NextResponse.json({ error: 'Failed to process upload.', details: error.message }, { status: 500 });
   }
 }
