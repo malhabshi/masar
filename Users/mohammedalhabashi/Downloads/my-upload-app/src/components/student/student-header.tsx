@@ -50,7 +50,6 @@ export function StudentHeader({ student, currentUser }: StudentHeaderProps) {
         <div className="flex-1">
           <div className="flex items-center gap-4 flex-wrap">
             <h1 className="text-3xl font-bold">{student.name || 'Unknown Student'}</h1>
-            {student.customId && <BadgeComponent variant="outline" className="text-base font-mono">{student.customId}</BadgeComponent>}
             {student.term && <BadgeComponent variant="secondary" className="text-base">{student.term}</BadgeComponent>}
             {student.transferRequested && (
                 <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3">

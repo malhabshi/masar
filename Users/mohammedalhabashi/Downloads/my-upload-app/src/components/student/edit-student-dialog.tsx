@@ -27,7 +27,6 @@ const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email(),
   phone: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }),
-  customId: z.string().optional(),
 });
 
 interface EditStudentDialogProps {
@@ -46,7 +45,6 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
       name: student.name,
       email: student.email,
       phone: student.phone,
-      customId: student.customId || '',
     },
   });
 
@@ -56,7 +54,6 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
             name: student.name,
             email: student.email,
             phone: student.phone,
-            customId: student.customId || '',
         });
     }
   }, [isOpen, student, form]);
@@ -104,19 +101,6 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
                     <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="customId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Custom Student ID (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., UNI-12345" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

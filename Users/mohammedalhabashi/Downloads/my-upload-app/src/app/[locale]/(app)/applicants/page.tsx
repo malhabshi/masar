@@ -67,8 +67,7 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
             const matchesSearch = !searchQuery ||
                                 (student.name || '').toLowerCase().includes(searchLower) ||
                                 (student.email || '').toLowerCase().includes(searchLower) ||
-                                (student.phone || '').toLowerCase().includes(searchLower) ||
-                                (student.customId || '').toLowerCase().includes(searchLower);
+                                (student.phone || '').toLowerCase().includes(searchLower);
 
             // Term filter
             const matchesTerm = termFilter === 'all' || student.term === termFilter;
@@ -102,23 +101,12 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
             <h2 className="text-2xl font-semibold">All Applicants</h2>
             <div className="flex items-center gap-2">
                 <ImportStudentsDialog currentUser={user} />
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button>
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Add a New Student
-                            <ChevronDown className="ml-2 h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem asChild>
-                            <a href="/new-request">Add and Assign to Me</a>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <a href="/new-request?unassigned=true">Add as Unassigned</a>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <Button asChild>
+                  <a href="/new-request">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add a New Student
+                  </a>
+                </Button>
             </div>
         </div>
         <Card>
@@ -126,7 +114,7 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
                     <div className="relative w-full md:max-w-sm">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input type="search" placeholder="Search by name, email, phone, ID..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <Input type="search" placeholder="Search by name, email, phone..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                     </div>
                     <div className="flex gap-2 w-full flex-wrap md:w-auto justify-end">
                         <Select value={pipelineFilter} onValueChange={setPipelineFilter}><SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by pipeline" /></SelectTrigger><SelectContent><SelectItem value="all">All Pipelines</SelectItem><SelectItem value="green">Green</SelectItem><SelectItem value="orange">Orange</SelectItem><SelectItem value="red">Red</SelectItem><SelectItem value="none">No Status</SelectItem></SelectContent></Select>
@@ -193,8 +181,7 @@ function EmployeeStudentView({ user, users }: { user: User, users: User[] }) {
             const matchesSearch = !searchQuery ||
                                 (student.name || '').toLowerCase().includes(searchLower) ||
                                 (student.email || '').toLowerCase().includes(searchLower) ||
-                                (student.phone || '').toLowerCase().includes(searchLower) ||
-                                (student.customId || '').toLowerCase().includes(searchLower);
+                                (student.phone || '').toLowerCase().includes(searchLower);
 
             const studentPipelineStatus = student.pipelineStatus || 'none';
             const matchesPipeline = pipelineFilter === 'all' || studentPipelineStatus === pipelineFilter;
@@ -254,7 +241,7 @@ function EmployeeStudentView({ user, users }: { user: User, users: User[] }) {
                     <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
                         <div className="relative w-full md:max-w-sm">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input type="search" placeholder="Search by name, email, phone, ID..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                            <Input type="search" placeholder="Search by name, email, phone..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         </div>
                         <div className="flex gap-2 w-full flex-wrap md:w-auto justify-end">
                             <Select value={pipelineFilter} onValueChange={setPipelineFilter}><SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by pipeline" /></SelectTrigger><SelectContent><SelectItem value="all">All Pipelines</SelectItem><SelectItem value="green">Green</SelectItem><SelectItem value="orange">Orange</SelectItem><SelectItem value="red">Red</SelectItem><SelectItem value="none">No Status</SelectItem></SelectContent></Select>
@@ -294,5 +281,3 @@ export default function ApplicantsPage() {
   
   return <EmployeeStudentView user={user} users={users} />;
 }
-
-    

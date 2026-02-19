@@ -29,7 +29,6 @@ import { Checkbox } from './ui/checkbox';
 
 
 const formSchema = z.object({
-  customId: z.string().optional(),
   studentName: z.string().min(2, {
     message: 'Student name must be at least 2 characters.',
   }),
@@ -63,7 +62,6 @@ export function NewRequestForm() {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            customId: '',
             studentName: '',
             studentEmail: '',
             phone: '',
@@ -101,7 +99,6 @@ export function NewRequestForm() {
 
             const newStudentData: Student = {
                 id: newStudentDocRef.id,
-                customId: values.customId || '',
                 name: values.studentName,
                 email: values.studentEmail || '',
                 phone: values.phone,
@@ -186,22 +183,6 @@ export function NewRequestForm() {
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)}>
                     <CardContent className="space-y-6">
-                        <FormField
-                        control={form.control}
-                        name="customId"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Custom Student ID (Optional)</FormLabel>
-                            <FormControl>
-                                <Input placeholder="e.g., UNI-12345" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                                An ID you use to identify students in your own system.
-                            </FormDescription>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
                         <FormField
                         control={form.control}
                         name="studentName"

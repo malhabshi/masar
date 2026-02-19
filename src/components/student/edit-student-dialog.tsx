@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,12 +20,13 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, FilePenLine } from 'lucide-react';
 import type { Student } from '@/lib/types';
-import { updateStudentInfo } from '@/lib/actions';
+import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email(),
-  phone: z.string().min(10, { message: 'Phone number must be at least 10 digits.' }),
+  phone: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }),
 });
 
 interface EditStudentDialogProps {
@@ -35,6 +37,7 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { firestore } = useFirebase();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,23 +47,32 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
       phone: student.phone,
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+        form.reset({
+            name: student.name,
+            email: student.email,
+            phone: student.phone,
+        });
+    }
+  }, [isOpen, student, form]);
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!firestore) return;
     setIsLoading(true);
-    const result = await updateStudentInfo(student.id, values);
-    if (result.success) {
-      toast({
+    const studentDocRef = doc(firestore, 'students', student.id);
+    updateDocumentNonBlocking(studentDocRef, values);
+
+    // Simulate delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    toast({
         title: 'Student Updated',
         description: 'Student information has been successfully updated.',
-      });
-      setIsOpen(false);
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: result.message,
-      });
-    }
+    });
+
+    setIsOpen(false);
     setIsLoading(false);
   }
 

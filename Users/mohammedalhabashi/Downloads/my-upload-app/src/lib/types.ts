@@ -62,7 +62,6 @@ export interface ProfileCompletionStatus {
 
 export interface Student {
   id: string;
-  customId?: string;
   name: string;
   email: string;
   phone: string;
