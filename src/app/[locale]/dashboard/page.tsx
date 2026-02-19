@@ -1,2 +1,2 @@
-import Page from './(app)/dashboard/page';
+import Page from '../(app)/dashboard/page';
 export default Page;

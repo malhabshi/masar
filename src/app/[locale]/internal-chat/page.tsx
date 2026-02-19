@@ -1,2 +1,2 @@
-import Page from './(app)/internal-chat/page';
+import Page from '../(app)/internal-chat/page';
 export default Page;

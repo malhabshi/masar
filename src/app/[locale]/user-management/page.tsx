@@ -1,2 +1,2 @@
-import Page from './(app)/user-management/page';
+import Page from '../(app)/user-management/page';
 export default Page;

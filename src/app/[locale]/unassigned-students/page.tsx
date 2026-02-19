@@ -1,2 +1,2 @@
-import Page from './(app)/unassigned-students/page';
+import Page from '../(app)/unassigned-students/page';
 export default Page;

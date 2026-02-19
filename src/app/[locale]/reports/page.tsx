@@ -1,2 +1,2 @@
-import Page from './(app)/reports/page';
+import Page from '../(app)/reports/page';
 export default Page;
