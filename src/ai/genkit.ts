@@ -1,7 +1,3 @@
-import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/google-genai';
-
-export const ai = genkit({
-  plugins: [googleAI()],
-  model: 'googleai/gemini-1.5-flash-latest',
-});
+// This file is temporarily disabled to resolve dependency issues.
+// The AI object is stubbed to prevent breaking imports, but it has no functionality.
+export const ai = {};
