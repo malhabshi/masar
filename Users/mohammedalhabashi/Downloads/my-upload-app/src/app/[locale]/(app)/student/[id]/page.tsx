@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useParams } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { useFirebase, useDoc, useMemoFirebase, useCollection } from '@/firebase';
+import { useFirebase, useDoc, useCollection } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import type { Student, User, RequestType } from '@/lib/types';
 import { Loader2, AlertTriangle, GitMerge } from 'lucide-react';
@@ -41,18 +42,18 @@ export default function StudentProfilePage() {
   const { firestore } = useFirebase();
 
   // Fetch the current student document
-  const studentDocRef = useMemoFirebase(() => {
+  const studentDocRef = useMemo(() => {
     if (!firestore || !studentId) return null;
     return doc(firestore, 'students', studentId);
   }, [firestore, studentId]);
   const { data: student, isLoading: isStudentLoading } = useDoc<Student>(studentDocRef);
 
   // Fetch request types for the 'New Request' dialog
-  const requestTypesCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'request_types'), [firestore]);
+  const requestTypesCollection = useMemo(() => !firestore ? null : collection(firestore, 'request_types'), [firestore]);
   const { data: requestTypes, isLoading: areRequestTypesLoading } = useCollection<RequestType>(requestTypesCollection);
 
   // Fetch potential duplicate students for the merge functionality
-  const duplicateStudentsQuery = useMemoFirebase(() => {
+  const duplicateStudentsQuery = useMemo(() => {
       if (!firestore || !student?.phone) return null;
       return query(
           collection(firestore, 'students'), 

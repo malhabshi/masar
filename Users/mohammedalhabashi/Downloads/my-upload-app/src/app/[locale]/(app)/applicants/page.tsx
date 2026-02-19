@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ImportStudentsDialog } from '@/components/dashboard/import-students-dialog';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection } from '@/firebase';
 import { collection, query, where, getDocs, doc, getDoc, documentId } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 
@@ -37,12 +37,12 @@ function AdminStudentView({ user, users }: { user: User, users: User[] }) {
     const [ieltsFilter, setIeltsFilter] = useState('all');
     const [termFilter, setTermFilter] = useState('all');
     
-    const termsCollection = useMemoFirebase(() => firestore ? collection(firestore, 'academic_terms') : null, [firestore]);
+    const termsCollection = useMemo(() => firestore ? collection(firestore, 'academic_terms') : null, [firestore]);
     const { data: termsData } = useCollection(termsCollection);
     const terms = useMemo(() => termsData?.map(t => t.name) || [], [termsData]);
     const employees = useMemo(() => users.filter(u => u.role === 'employee'), [users]);
 
-    const studentsQuery = useMemoFirebase(() => {
+    const studentsQuery = useMemo(() => {
         if (!firestore) return null;
         return collection(firestore, 'students');
     }, [firestore]);
@@ -160,12 +160,12 @@ function EmployeeStudentView({ user, users }: { user: User, users: User[] }) {
     const [ieltsFilter, setIeltsFilter] = useState('all');
     const [termFilter, setTermFilter] = useState('all');
 
-    const termsCollection = useMemoFirebase(() => firestore ? collection(firestore, 'academic_terms') : null, [firestore]);
+    const termsCollection = useMemo(() => firestore ? collection(firestore, 'academic_terms') : null, [firestore]);
     const { data: termsData } = useCollection(termsCollection);
     const terms = useMemo(() => termsData?.map(t => t.name) || [], [termsData]);
     
     // Direct query for students assigned to the current employee
-    const studentsQuery = useMemoFirebase(() => {
+    const studentsQuery = useMemo(() => {
         if (!firestore || !user.civilId) return null;
         return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
     }, [firestore, user.civilId]);
