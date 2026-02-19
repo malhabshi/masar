@@ -1,3 +1,2 @@
-// This file is intentionally left blank to resolve a routing conflict.
-// The actual page component is located at /src/app/[locale]/(app)/dashboard/page.tsx
-export {};
+import Page from '../(app)/dashboard/page';
+export default Page;

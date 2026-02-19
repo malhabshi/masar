@@ -1,3 +1,2 @@
-// This file is intentionally left blank to resolve a routing conflict.
-// The actual page component is located at /src/app/[locale]/(app)/finalized-students/page.tsx
-export {};
+import Page from '../(app)/finalized-students/page';
+export default Page;

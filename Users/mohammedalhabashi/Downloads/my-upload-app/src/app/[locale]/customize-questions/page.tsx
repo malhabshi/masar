@@ -1,3 +1,2 @@
-// This file is intentionally left blank to resolve a routing conflict.
-// The actual page component is located at /src/app/[locale]/(app)/customize-questions/page.tsx
-export {};
+import Page from '../(app)/customize-questions/page';
+export default Page;
