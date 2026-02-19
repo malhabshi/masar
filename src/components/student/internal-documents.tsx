@@ -1,13 +1,13 @@
-
 'use client';
 
 import type { Document, User, Student, UserRole } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileText, Download, UploadCloud } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { UploadDocumentDialog } from './upload-document-dialog';
 
 interface InternalDocumentsProps {
   student: Student;
@@ -93,12 +93,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload, us
       </CardContent>
       {allowUpload && (
         <CardFooter className="border-t pt-4">
-            <Button asChild>
-                <a href="https://file-upload-app-omega.vercel.app/upload-page" target="_blank" rel="noopener noreferrer">
-                    <UploadCloud className="mr-2 h-4 w-4" />
-                    Upload Documents
-                </a>
-            </Button>
+           <UploadDocumentDialog student={student} currentUser={currentUser} />
         </CardFooter>
       )}
     </Card>

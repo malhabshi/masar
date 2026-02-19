@@ -7,6 +7,7 @@ import { useFirebase, useDoc, useMemoFirebase, useCollection } from '@/firebase'
 import { doc, collection, query, where } from 'firebase/firestore';
 import type { Student, User, RequestType } from '@/lib/types';
 import { Loader2, AlertTriangle, GitMerge } from 'lucide-react';
+import { useMemo } from 'react';
 
 // Import all the necessary sub-components
 import { StudentHeader } from '@/components/student/student-header';
@@ -52,12 +53,12 @@ export default function StudentProfilePage() {
 
   // Fetch potential duplicate students for the merge functionality
   const duplicateStudentsQuery = useMemoFirebase(() => {
-      if (!firestore || !student || !student.phone) return null;
+      if (!firestore || !student?.phone) return null;
       return query(
           collection(firestore, 'students'), 
           where('phone', '==', student.phone)
       );
-  }, [firestore, student]);
+  }, [firestore, student?.phone]);
   const { data: duplicateStudentsData, isLoading: duplicatesLoading } = useCollection<Student>(duplicateStudentsQuery);
   const duplicateStudents = useMemo(() => duplicateStudentsData?.filter(s => s.id !== studentId), [duplicateStudentsData, studentId]);
 
