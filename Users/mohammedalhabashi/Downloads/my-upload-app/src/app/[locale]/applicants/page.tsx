@@ -1,5 +1,11 @@
-// This file is intentionally overwritten to resolve a build conflict.
-// The actual page is served from src/app/[locale]/(app)/applicants/page.tsx.
+
+import { notFound } from 'next/navigation';
+
+// This file is intentionally designed to return a 404 error.
+// It resolves a build-time routing conflict with src/app/[locale]/(app)/applicants/page.tsx.
+// The (app) directory is a route group, meaning Next.js ignores it for the URL path,
+// which caused two files to map to the same /applicants URL.
+// By explicitly calling notFound(), we remove the ambiguity and allow the build to succeed.
 export default function ConflictingApplicantsPage() {
-  return null;
+  notFound();
 }
