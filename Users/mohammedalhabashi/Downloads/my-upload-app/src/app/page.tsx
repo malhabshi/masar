@@ -1,18 +1,27 @@
-import Link from "next/link";
+'use client';
 
-export default function Home() {
+import { useUser } from '@/hooks/use-user';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
+
+export default function HomePage() {
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isUserLoading) {
+      if (user) {
+        router.replace('/dashboard');
+      } else {
+        router.replace('/login');
+      }
+    }
+  }, [user, isUserLoading, router]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold mb-8">Test Homepage</h1>
-      <p>If you see this, the root page is working.</p>
-      <div className="flex gap-4 mt-4">
-        <Link href="/login" className="text-blue-500 hover:underline">
-          Go to Login Page
-        </Link>
-        <Link href="/dashboard" className="text-blue-500 hover:underline">
-          Go to Dashboard
-        </Link>
-      </div>
-    </main>
+    <div className="flex h-screen w-full items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin" />
+    </div>
   );
 }

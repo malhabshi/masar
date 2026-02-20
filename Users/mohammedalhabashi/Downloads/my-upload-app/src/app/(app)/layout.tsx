@@ -1,18 +1,42 @@
-// This layout is simplified for debugging.
-// The authentication check and sidebar have been temporarily removed.
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@/hooks/use-user';
+import { AppSidebar } from '@/components/sidebar';
+import { Loader2 } from 'lucide-react';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <main className="p-6">
-      <div className="border border-red-500 p-4 rounded-lg mb-4">
-        <h1 className="text-xl font-bold text-red-700">DEBUG MODE</h1>
-        <p className="text-sm">App layout is in debug mode. Authentication and sidebar are disabled.</p>
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isUserLoading, router]);
+
+  if (isUserLoading || !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
-      {children}
-    </main>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+        <div className="flex h-full">
+            <AppSidebar />
+            <main className="flex-1 p-6 overflow-auto">
+                {children}
+            </main>
+        </div>
+    </SidebarProvider>
   );
 }
