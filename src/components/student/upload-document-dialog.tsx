@@ -79,7 +79,7 @@ export function UploadDocumentDialog({ student, currentUser }: UploadDocumentDia
       };
       
       const studentDocRef = doc(firestore, 'students', student.id);
-      const updatedDocuments = [...student.documents, newDocument];
+      const updatedDocuments = [...(student.documents || []), newDocument];
       
       const updates: Partial<Student> = { documents: updatedDocuments };
       if (currentUser.role === 'employee') {

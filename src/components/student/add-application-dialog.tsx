@@ -28,7 +28,7 @@ import { addApplication } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import type { ApprovedUniversity, Student } from '@/lib/types';
-import { useFirebase, useCollection, updateDocumentNonBlocking, useDoc } from '@/firebase';
+import { useFirebase, useCollection, updateDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 
 const formSchema = z.object({
@@ -46,10 +46,10 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
   const { toast } = useToast();
   const { firestore } = useFirebase();
 
-  const studentDocRef = useMemo(() => !firestore ? null : doc(firestore, 'students', studentId), [firestore, studentId]);
+  const studentDocRef = useMemoFirebase(() => !firestore ? null : doc(firestore, 'students', studentId), [firestore, studentId]);
   const { data: student } = useDoc<Student>(studentDocRef);
 
-  const universitiesCollection = useMemo(() => !firestore ? null : collection(firestore, 'approved_universities'), [firestore]);
+  const universitiesCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'approved_universities'), [firestore]);
   const { data: universitiesData } = useCollection<ApprovedUniversity>(universitiesCollection);
   const universities = useMemo(() => universitiesData || [], [universitiesData]);
   
@@ -62,6 +62,7 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
   });
 
   const availableUniversities = useMemo(() => {
+    if(!universities) return [];
     const available = universities.filter(uni => uni.isAvailable);
     const unique: ApprovedUniversity[] = [];
     const seen = new Set<string>();
@@ -96,7 +97,7 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
           status: 'Pending' as const,
           updatedAt: new Date().toISOString(),
       };
-      const updatedApplications = [...student.applications, newApplication];
+      const updatedApplications = [...(student.applications || []), newApplication];
       
       const studentDocRef = doc(firestore, 'students', student.id);
       updateDocumentNonBlocking(studentDocRef, { applications: updatedApplications });

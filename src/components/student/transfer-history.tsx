@@ -14,7 +14,13 @@ interface TransferHistoryProps {
 export function TransferHistory({ transferHistory, users }: TransferHistoryProps) {
   const getEmployee = (employeeId: string | null) => {
     if (!employeeId) return null;
-    return users.find(u => u.id === employeeId);
+    // transferHistory stores the employee's Civil ID
+    return users.find(u => u.civilId === employeeId);
+  }
+  
+  const getAdmin = (adminId: string) => {
+      // transferredBy stores the user's main ID
+      return users.find(u => u.id === adminId);
   }
 
   return (
@@ -26,7 +32,7 @@ export function TransferHistory({ transferHistory, users }: TransferHistoryProps
         {transferHistory.map((transfer, index) => {
           const fromEmployee = getEmployee(transfer.fromEmployeeId);
           const toEmployee = getEmployee(transfer.toEmployeeId);
-          const admin = getEmployee(transfer.transferredBy);
+          const admin = getAdmin(transfer.transferredBy);
 
           return (
             <div key={index} className="flex flex-col">
