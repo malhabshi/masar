@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirebase, useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Student } from '@/lib/types';
 
@@ -25,7 +25,7 @@ export default function StudentDetailPage() {
   const { users, usersLoading } = useUsers();
   const { firestore } = useFirebase();
 
-  const studentDocRef = useMemoFirebase(() => {
+  const studentDocRef = useMemo(() => {
     if (!firestore || !studentId) return null;
     return doc(firestore, 'students', studentId);
   }, [firestore, studentId]);
@@ -47,13 +47,17 @@ export default function StudentDetailPage() {
   }
   
   if (!student || !currentUser) {
+    // This can happen briefly during data loading or if the student doesn't exist.
     return <div>Student not found or you do not have permission to view this page.</div>;
   }
   
   const isAssignedEmployee = student.employeeId === currentUser.civilId;
   const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+
+  // Enforce permissions client-side
   if (currentUser.role === 'employee' && !isAssignedEmployee) {
-      router.push('/applicants'); // Or show an access denied message
+      // Redirect if an employee tries to access a student not assigned to them.
+      router.push('/applicants'); 
       return (
         <div className="flex h-full w-full items-center justify-center">
           <p>Access Denied. You are not assigned to this student.</p>

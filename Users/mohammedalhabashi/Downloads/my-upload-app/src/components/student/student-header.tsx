@@ -1,4 +1,3 @@
-
 import type { Student, User, Country } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';

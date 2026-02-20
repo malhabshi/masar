@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { applicationQuestions as initialQuestions } from '@/lib/data';
 import { Pencil, Trash2, PlusCircle } from 'lucide-react';
 import {
   Dialog,
@@ -27,6 +26,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+
+// This is now a placeholder. In a real app, this would come from a database.
+const initialQuestions: string[] = [
+    "What is your intended major?",
+    "Have you taken an IELTS or TOEFL test?",
+    "What is your budget for tuition fees per year?",
+    "When do you plan to start your studies?",
+];
 
 export function CustomizeQuestionsForm() {
   const [existingQuestions, setExistingQuestions] = useState<string[]>(initialQuestions);

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -19,18 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useFirebase, useCollection, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
 
-
-interface TaskManagerProps {
-    currentUser: User;
-    users: User[];
-}
-
-const taskStatusVariant: { [key in TaskStatus]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
-    'new': 'default',
-    'in-progress': 'secondary',
-    'completed': 'outline',
-    'archived': 'outline',
-};
+const taskStatuses: TaskStatus[] = ['new', 'in-progress', 'completed', 'archived'];
 
 function TaskItem({ 
     task, 
@@ -185,16 +173,9 @@ function TaskItem({
     );
 }
 
-const getTaskTitle = (content: string) => {
-    return content.split('\n')[0];
-}
-
-const getLastUpdateDate = (task: { createdAt: string; replies?: TaskReply[] }) => {
-    if (task.replies && task.replies.length > 0) {
-        const sortedReplies = [...task.replies].sort((a, b) => new Date(b.createdAt).getTime() - new Date(b.createdAt).getTime());
-        return new Date(sortedReplies[0].createdAt);
-    }
-    return new Date(task.createdAt);
+interface TaskManagerProps {
+    currentUser: User;
+    users: User[];
 }
 
 export function TaskManager({ currentUser, users }: TaskManagerProps) {
