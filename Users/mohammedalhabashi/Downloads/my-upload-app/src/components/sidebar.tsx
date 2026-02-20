@@ -82,7 +82,7 @@ export function AppSidebar() {
                 </Link>
             </SidebarMenuItem>
           ))}
-          {(user?.role === 'admin') && <SidebarSeparator />}
+          {(user?.role === 'admin' || user?.role === 'department') && <SidebarSeparator />}
           {user?.role === 'admin' && adminNavItems.map((item) => (
             <SidebarMenuItem key={item.href}>
                 <Link href={item.href} passHref legacyBehavior>
@@ -96,7 +96,6 @@ export function AppSidebar() {
                 </Link>
             </SidebarMenuItem>
           ))}
-           {(user?.role === 'department') && <SidebarSeparator />}
            {user?.role === 'department' && departmentNavItems.map((item) => (
             <SidebarMenuItem key={item.href}>
                 <Link href={item.href} passHref legacyBehavior>
