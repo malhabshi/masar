@@ -1,12 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  typescript: {
-    // Disable type checking during build temporarily
-    // to focus on structural and runtime errors.
-    // This should be re-enabled later.
-    ignoreBuildErrors: true,
-  },
+  // Your Next.js configuration options can be added here.
 };
 
 export default nextConfig;
