@@ -1,7 +1,6 @@
 'use client';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { BarChart, Users, University } from 'lucide-react';
-import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import { Users, University, UserPlus, GraduationCap } from 'lucide-react';
 import { useFirebase, useCollection } from '@/firebase';
 import { useUsers } from '@/contexts/users-provider';
 import { collection } from 'firebase/firestore';
@@ -16,35 +15,26 @@ export default function ReportsPage() {
     const studentsCollection = useMemo(() => !firestore ? null : collection(firestore, 'students'), [firestore]);
     const { data: students, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);
     
-    const applications: Application[] = useMemo(() => students?.flatMap(s => s.applications || []) || [], [students]);
-    
     const isLoading = usersLoading || studentsLoading;
 
-    const totalStudents = students?.length || 0;
-    const totalApplications = applications.length;
-    const totalEmployees = users.filter(u => u.role === 'employee').length || 0;
+    const stats = useMemo(() => {
+        if (!students) return {
+            totalStudents: 0,
+            totalApplications: 0,
+            totalEmployees: 0,
+            unassignedStudents: 0,
+            finalizedStudents: 0,
+        };
 
-    const applicationStatusData = useMemo(() => {
-        if (!applications) return [];
-        const counts = applications.reduce((acc, app) => {
-            acc[app.status] = (acc[app.status] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-        return Object.entries(counts).map(([name, count]) => ({ name, count }));
-    }, [applications]);
-
-    const studentsPerEmployeeData = useMemo(() => {
-        if (!students || !users) return [];
-        const employeeMap = new Map<string, string>();
-        users.filter(u => u.role === 'employee' && u.civilId).forEach(u => employeeMap.set(u.civilId!, u.name));
-
-        const counts = students.reduce((acc, student) => {
-            const employeeName = student.employeeId ? (employeeMap.get(student.employeeId) || 'Unknown') : 'Unassigned';
-            acc[employeeName] = (acc[employeeName] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-
-        return Object.entries(counts).map(([name, count]) => ({ name, count }));
+        const applications: Application[] = students.flatMap(s => s.applications || []);
+        
+        return {
+            totalStudents: students.length,
+            totalApplications: applications.length,
+            totalEmployees: users.filter(u => u.role === 'employee').length,
+            unassignedStudents: students.filter(s => !s.employeeId).length,
+            finalizedStudents: students.filter(s => s.finalChoiceUniversity).length,
+        };
     }, [students, users]);
 
     if (isLoading) {
@@ -53,14 +43,18 @@ export default function ReportsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-3">
+             <CardHeader className="px-0">
+                <CardTitle>Reports</CardTitle>
+                <CardDescription>An overview of key metrics across the application.</CardDescription>
+            </CardHeader>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Students</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{totalStudents}</div>
+                        <div className="text-2xl font-bold">{stats.totalStudents}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -69,7 +63,25 @@ export default function ReportsPage() {
                         <University className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{totalApplications}</div>
+                        <div className="text-2xl font-bold">{stats.totalApplications}</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Unassigned Students</CardTitle>
+                        <UserPlus className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats.unassignedStudents}</div>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Finalized Students</CardTitle>
+                        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats.finalizedStudents}</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -78,45 +90,16 @@ export default function ReportsPage() {
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{totalEmployees}</div>
+                        <div className="text-2xl font-bold">{stats.totalEmployees}</div>
                     </CardContent>
                 </Card>
             </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Application Status</CardTitle>
-                        <CardDescription>A breakdown of all application statuses.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <RechartsBarChart data={applicationStatusData}>
-                                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} />
-                                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                            </RechartsBarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Students per Employee</CardTitle>
-                        <CardDescription>Distribution of students among employees.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={300}>
-                             <RechartsBarChart data={studentsPerEmployeeData}>
-                                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} />
-                                <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-                            </RechartsBarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-            </div>
+            <Card>
+                <CardHeader>
+                    <CardTitle>More Reports Coming Soon</CardTitle>
+                    <CardDescription>Charts and more detailed breakdowns will be added back shortly.</CardDescription>
+                </CardHeader>
+            </Card>
         </div>
     )
 }
