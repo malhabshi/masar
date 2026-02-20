@@ -509,6 +509,18 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "url", "authorId", "createdAt"]
+    },
+    "TimeLog": {
+      "title": "Time Log",
+      "type": "object",
+      "description": "Represents a single clock-in/clock-out session for an employee.",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "clockIn": { "type": "string", "format": "date-time" },
+        "clockOut": { "type": "string", "format": "date-time" }
+      },
+      "required": ["employeeId", "date", "clockIn", "clockOut"]
     }
   },
   "auth": {
@@ -577,6 +589,12 @@
     "/resource_links/{linkId}": {
       "schema": { "$ref": "#/entities/ResourceLink" },
       "description": "Global list of helpful resource links."
+    },
+    "/time_logs/{logId}": {
+      "schema": { "$ref": "#/entities/TimeLog" },
+      "description": "Stores employee clock-in/clock-out time logs for activity reporting."
     }
   }
 }
+
+    
