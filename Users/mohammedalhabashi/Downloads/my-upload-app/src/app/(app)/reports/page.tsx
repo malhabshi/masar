@@ -1,7 +1,6 @@
 'use client';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { BarChart, Users, University } from 'lucide-react';
-import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+import { Users, University } from 'lucide-react';
 import { useFirebase, useCollection } from '@/firebase';
 import { useUsers } from '@/contexts/users-provider';
 import { collection } from 'firebase/firestore';
@@ -23,27 +22,6 @@ export default function ReportsPage() {
     const totalStudents = students?.length || 0;
     const totalApplications = applications.length;
     const totalEmployees = users.filter(u => u.role === 'employee').length || 0;
-
-    const applicationStatusData = useMemo(() => {
-        const counts = applications.reduce((acc, app) => {
-            acc[app.status] = (acc[app.status] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-        return Object.entries(counts).map(([name, value]) => ({ name, count: value }));
-    }, [applications]);
-
-    const studentEmployeeData = useMemo(() => {
-        const employeeMap = new Map<string, string>();
-        users.forEach(u => u.civilId && employeeMap.set(u.civilId, u.name));
-
-        const counts = (students || []).reduce((acc, student) => {
-            const employeeName = student.employeeId ? (employeeMap.get(student.employeeId) || 'Unassigned') : 'Unassigned';
-            acc[employeeName] = (acc[employeeName] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-
-        return Object.entries(counts).map(([name, value]) => ({ name, count: value }));
-    }, [students, users]);
 
     if (isLoading) {
         return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -81,40 +59,15 @@ export default function ReportsPage() {
                 </Card>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Application Status Overview</CardTitle>
-                        <CardDescription>Distribution of application statuses across all students.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <RechartsBarChart data={applicationStatusData}>
-                                <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false}/>
-                                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{fill: 'hsl(var(--muted))'}} />
-                                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                            </RechartsBarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Students per Employee</CardTitle>
-                        <CardDescription>Number of students assigned to each employee.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <RechartsBarChart data={studentEmployeeData}>
-                                <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false}/>
-                                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{fill: 'hsl(var(--muted))'}} />
-                                <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-                            </RechartsBarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-            </div>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Reporting Charts</CardTitle>
+                    <CardDescription>Charts will be re-enabled once the build issues are fully resolved.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-muted-foreground">The application status and students-per-employee charts have been temporarily disabled to resolve a critical build error.</p>
+                </CardContent>
+            </Card>
         </div>
     )
 }
