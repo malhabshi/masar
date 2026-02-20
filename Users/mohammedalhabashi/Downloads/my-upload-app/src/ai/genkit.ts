@@ -1,3 +1,12 @@
-// This file is temporarily disabled to resolve dependency issues.
-// The AI object is stubbed to prevent breaking imports, but it has no functionality.
-export const ai = {};
+'use server';
+
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
+import { firebase } from '@genkit-ai/firebase';
+
+export const ai = genkit({
+    plugins: [
+        googleAI(),
+        firebase(),
+    ],
+});

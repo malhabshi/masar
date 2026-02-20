@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -15,18 +14,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useFirebase } from '@/firebase';
+import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { EditUserDialog } from './edit-user-dialog';
 
 interface UserListProps {
   users: User[];
   currentUser: User;
-  onUpdateUserRole: (userId: string, newRole: UserRole, oldRole?: UserRole) => void;
 }
 
 const userRoles: UserRole[] = ['admin', 'employee', 'department'];
 
-export function UserList({ users, currentUser, onUpdateUserRole }: UserListProps) {
+export function UserList({ users, currentUser }: UserListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const { firestore } = useFirebase();
@@ -48,7 +47,8 @@ export function UserList({ users, currentUser, onUpdateUserRole }: UserListProps
     setIsUpdating(userToUpdate.id);
     
     try {
-        await onUpdateUserRole(userToUpdate.id, newRole, userToUpdate.role);
+        const userDocRef = doc(firestore, 'users', userToUpdate.id);
+        await updateDocumentNonBlocking(userDocRef, { role: newRole });
 
         toast({
             title: 'Role Updated',
