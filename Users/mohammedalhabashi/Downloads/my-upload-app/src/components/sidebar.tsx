@@ -31,11 +31,11 @@ export function AppSidebar() {
     const navItems = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/applicants', label: 'Applicants', icon: Users },
+        { href: '/resources', label: 'Resources', icon: Book },
     ];
     
     const employeeNavItems = [
         { href: '/new-request', label: 'Add Student', icon: PlusCircle },
-        { href: '/resources', label: 'Resources', icon: Book },
     ];
 
     const adminNavItems = [

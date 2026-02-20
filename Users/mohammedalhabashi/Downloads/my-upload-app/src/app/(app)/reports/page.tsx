@@ -21,7 +21,7 @@ export default function ReportsPage() {
     const isLoading = usersLoading || studentsLoading;
 
     const totalStudents = students?.length || 0;
-    const totalApplications = applications.length || 0;
+    const totalApplications = applications.length;
     const totalEmployees = users.filter(u => u.role === 'employee').length || 0;
 
     const applicationStatusData = useMemo(() => {

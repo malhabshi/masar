@@ -37,6 +37,8 @@ function UserManagementContent() {
         );
     }
 
+    const employees = users.filter(u => u.role === 'employee');
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
             <div className="md:col-span-2 space-y-6">
@@ -44,7 +46,7 @@ function UserManagementContent() {
             </div>
             <div className="space-y-6">
                 <CreateUserForm />
-                <BulkTransferForm employees={users.filter(u => u.role === 'employee')} currentUser={currentUser} />
+                <BulkTransferForm employees={employees} currentUser={currentUser} />
             </div>
         </div>
     );
