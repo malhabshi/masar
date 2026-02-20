@@ -127,6 +127,10 @@ service cloud.firestore {
     match /chats/{studentId}/messages/{messageId} {
       allow read, write: if isSignedIn() && (isUserAdmin() || isDepartment() || getUserData().civilId == get(/databases/$(database)/documents/students/$(studentId)).data.employeeId);
     }
+
+    match /time_logs/{logId} {
+        allow read: if isUserAdmin();
+        allow write: if isUserAdmin() || isOwner(request.resource.data.employeeId);
+    }
   }
 }
-    

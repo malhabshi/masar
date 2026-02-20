@@ -72,7 +72,7 @@ function AdminDashboard({ students, tasks, users, currentUser, isLoading }: { st
 
 function EmployeeDashboard({ students, tasks, users, currentUser, isLoading }: { students: Student[], tasks: Task[], users: User[], currentUser: User, isLoading: boolean }) {
     const myStudents = useMemo(() => {
-      if(!students) return [];
+      if(!students || !currentUser.civilId) return [];
       return students.filter(s => s.employeeId === currentUser.civilId)
     }, [students, currentUser.civilId]);
 
