@@ -1,4 +1,3 @@
-
 export type UserRole = 'admin' | 'employee' | 'department';
 
 export interface User {
@@ -95,9 +94,91 @@ export interface Student {
   term?: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  authorId: string;
+  content: string;
+  timestamp: string;
+  document?: {
+    name: string;
+    url: string;
+  };
+}
+
+export interface TimeLog {
+  id: string;
+  employeeId: string;
+  date: string;
+  clockIn: string;
+  clockOut: string;
+}
+
+export interface TaskReply {
+  id: string;
+  authorId: string;
+  content: string;
+  createdAt: string;
+}
+
+export type TaskStatus = 'new' | 'in-progress' | 'completed' | 'archived';
+
+export interface Task {
+  id: string;
+  authorId: string;
+  recipientId: string | 'all';
+  content: string;
+  createdAt: string;
+  status: TaskStatus;
+  replies?: TaskReply[];
+}
+
+export interface ResourceLink {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  authorId: string;
+  createdAt: string;
+}
+
+export interface UpcomingEvent {
+  id: string;
+  title: string;
+  date: string;
+  description: string;
+  authorId: string;
+}
+
+export interface PersonalTodo {
+  id: string;
+  userId: string;
+  content: string;
+  completed: boolean;
+  createdAt: string;
+}
+
+export interface SharedDocument {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  uploadedAt: string;
+  authorId: string;
+  country?: Country;
+}
+
+export interface ApprovedUniversity {
+  id: string;
+  country: Country;
+  name: string;
+  major: string;
+  ieltsScore: number;
+  isAvailable: boolean;
+}
+
 export interface RequestType {
   id: string;
   name: string;
   description: string;
-  defaultRecipientId: string;
+  defaultRecipientId: string; // User ID or 'admins' group
 }

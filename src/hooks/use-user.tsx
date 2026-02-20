@@ -1,18 +1,55 @@
 'use client';
-import { createContext, useContext } from 'react';
-import type { User } from '@/lib/types';
 
-// This is a placeholder context to resolve import errors.
-// The real implementation should provide actual user data.
-const UserContext = createContext<{ user: User | null; isUserLoading: boolean }>({ 
-  user: { id: '1', name: 'Placeholder User', email: 'user@example.com', role: 'admin', civilId: '123456789012', avatarUrl: '' }, 
-  isUserLoading: false 
-});
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useFirebase, useDoc } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { User as AppUser } from '@/lib/types'; // Assuming this is your custom user type
+import type { User as AuthUser } from 'firebase/auth'; // Firebase Auth User
 
-export const UserProvider = ({ children }: { children: React.ReactNode }) => (
-  <UserContext.Provider value={{ user: { id: '1', name: 'Placeholder User', email: 'user@example.com', role: 'admin', civilId: '123456789012', avatarUrl: '' }, isUserLoading: false }}>
-    {children}
-  </UserContext.Provider>
-);
+interface UserContextType {
+  user: AppUser | null;
+  isUserLoading: boolean;
+  userError: Error | null;
+  auth: AuthUser | null;
+}
 
-export const useUser = () => useContext(UserContext);
+const UserContext = createContext<UserContextType | undefined>(undefined);
+
+export const UserProvider = ({ children }: { children: ReactNode }) => {
+  const { user: authUser, isUserLoading: isAuthLoading, userError: authError } = useFirebase();
+  const [appUser, setAppUser] = useState<AppUser | null>(null);
+  const [isAppUserLoading, setAppUserLoading] = useState(true);
+  const { firestore } = useFirebase();
+  
+  const userDocRef = authUser ? doc(firestore, 'users', authUser.uid) : null;
+  const { data: firestoreUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(userDocRef);
+
+  useEffect(() => {
+    setAppUserLoading(isAuthLoading || isFirestoreLoading);
+
+    if (!isAuthLoading && !isFirestoreLoading) {
+      if (firestoreUser) {
+        setAppUser(firestoreUser);
+      } else {
+        setAppUser(null);
+      }
+    }
+  }, [isAuthLoading, isFirestoreLoading, firestoreUser]);
+
+  const value = {
+    user: appUser,
+    isUserLoading: isAppUserLoading,
+    userError: authError,
+    auth: authUser,
+  };
+
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+};
+
+export const useUser = () => {
+  const context = useContext(UserContext);
+  if (context === undefined) {
+    throw new Error('useUser must be used within a UserProvider');
+  }
+  return context;
+};

@@ -1,33 +1,31 @@
-'use client';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { firebaseConfig } from './config';
 import { useMemo } from 'react';
 
-// This is a placeholder file to resolve Firebase-related import errors.
-// It provides dummy hooks that return default values.
+// Export hooks and utilities from other firebase files
+export * from './provider';
+export * from './firestore/use-collection';
+export * from './firestore/use-doc';
+export * from './auth/use-user';
+export * from './non-blocking-updates';
 
-// Dummy data to be returned by hooks
-const placeholderStudent = { 
-  id: '1', 
-  name: 'Placeholder Student', 
-  email: 'student@example.com', 
-  phone: '12345',
-  employeeId: 'emp1',
-  avatarUrl: '',
-  applications: [],
-  notes: [],
-  documents: [],
-  createdAt: new Date().toISOString(),
-};
 
-export const useFirebase = () => {
-    return { firestore: null, auth: null, user: null, isUserLoading: false };
-};
+let firebaseApp: FirebaseApp;
 
-export const useDoc = <T,>(ref: any): { data: T | null; isLoading: boolean } => {
-    // Return a placeholder student object for the student page to use
-    const data = useMemo(() => ({ ...placeholderStudent } as T), []);
-    return { data, isLoading: false };
-};
+// Check if Firebase has already been initialized
+if (!getApps().length) {
+  firebaseApp = initializeApp(firebaseConfig);
+} else {
+  firebaseApp = getApps()[0];
+}
 
-export const useCollection = <T,>(ref: any): { data: T[] | null; isLoading: boolean } => {
-    return { data: [], isLoading: false };
-};
+export function initializeFirebase() {
+    const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+    const auth = getAuth(app);
+    const firestore = getFirestore(app);
+    const storage = getStorage(app);
+    return { firebaseApp: app, auth, firestore, storage };
+}

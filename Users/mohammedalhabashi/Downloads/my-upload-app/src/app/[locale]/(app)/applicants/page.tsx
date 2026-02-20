@@ -1,4 +1,2 @@
-// This file is no longer used and will be removed.
-export default function ApplicantsPage() {
-    return null;
-}
+// This file is obsolete and will be removed.
+export default function Page() { return null; }

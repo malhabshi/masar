@@ -1,6 +1,8 @@
-'use client';
-import type { Student, User } from '@/lib/types';
-
-export function StudentTermSelector({ student, currentUser }: { student: Student, currentUser: User }) {
-    return <div>Student Term Selector Placeholder</div>;
+export function StudentTermSelector({ student, currentUser }: any) {
+  return (
+    <div className="p-4 border rounded">
+      <h2 className="text-lg font-semibold">Term</h2>
+      <p>{student?.term || 'Not set'}</p>
+    </div>
+  );
 }

@@ -1,6 +1,3 @@
-'use client';
-import type { Student, User } from '@/lib/types';
-
-export function InactivityReportDialog({ student, currentUser, users }: { student: Student, currentUser: User, users: User[] }) {
-    return <div>Inactivity Report Dialog Placeholder</div>;
+export function InactivityReportDialog({ student, currentUser, users }: any) {
+  return <button className="ml-2 px-3 py-1 bg-red-500 text-white text-sm rounded">Report</button>;
 }

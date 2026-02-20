@@ -1,6 +1,3 @@
-'use client';
-import type { Student, User } from '@/lib/types';
-
-export function AdminDeleteStudentDialog({ student, users, currentUser }: { student: Student, users: User[], currentUser: User }) {
-    return <div>Admin Delete Student Dialog Placeholder</div>;
+export function AdminDeleteStudentDialog({ student, users, currentUser }: any) {
+  return <button className="px-4 py-2 bg-red-700 text-white rounded">Admin Delete</button>;
 }

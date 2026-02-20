@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useUser } from '@/hooks/use-user';
@@ -11,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronsUpDown, User as UserIcon, LogOut } from 'lucide-react';
+import { ChevronsUpDown, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFirebase } from '@/firebase';
 import { signOut } from 'firebase/auth';
@@ -26,7 +25,7 @@ export function UserSwitcher() {
     try {
         await signOut(auth);
         toast({ title: 'Logged Out', description: 'You have been successfully logged out.'});
-        window.location.href = '/en/login';
+        window.location.href = '/login';
     } catch (error) {
         toast({ variant: 'destructive', title: 'Logout Failed', description: 'An error occurred during logout.' });
     }
@@ -54,10 +53,6 @@ export function UserSwitcher() {
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel>My Account</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-            <UserIcon className="mr-2 h-4 w-4"/>
-            <span>Profile</span>
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4"/>
             <span>Log out</span>

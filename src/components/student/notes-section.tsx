@@ -1,6 +1,8 @@
-'use client';
-import type { Student, User } from '@/lib/types';
-
-export function NotesSection({ student, currentUser, users, title, readOnly, noteFilter }: { student: Student, currentUser: User, users: User[], title: string, readOnly?: boolean, noteFilter: string }) {
-    return <div>Notes Section Placeholder for {title}</div>;
+export function NotesSection({ student, currentUser, users, title, readOnly, noteFilter }: any) {
+  return (
+    <div className="p-4 border rounded">
+      <h2 className="text-lg font-semibold">{title || 'Notes'}</h2>
+      <p className="text-sm text-gray-500 mt-2">Notes will appear here</p>
+    </div>
+  );
 }

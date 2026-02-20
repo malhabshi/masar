@@ -1,6 +1,8 @@
-'use client';
-import type { Student, User } from '@/lib/types';
-
-export function ApplicationStatus({ student, currentUser }: { student: Student, currentUser: User }) {
-    return <div>Application Status Placeholder</div>;
+export function ApplicationStatus({ student, currentUser }: any) {
+  return (
+    <div className="p-4 border rounded">
+      <h2 className="text-lg font-semibold">Applications</h2>
+      <p>{student?.applications?.length || 0} applications</p>
+    </div>
+  );
 }

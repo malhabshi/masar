@@ -1,6 +1,3 @@
-'use client';
-import type { Student, User, RequestType } from '@/lib/types';
-
-export function NewRequestDialog({ student, currentUser, users, requestTypes }: { student: Student, currentUser: User, users: User[], requestTypes: RequestType[] }) {
-    return <div>New Request Dialog Placeholder</div>;
+export function NewRequestDialog({ student, currentUser, users, requestTypes }: any) {
+  return <button className="px-4 py-2 bg-green-500 text-white rounded">New Request</button>;
 }

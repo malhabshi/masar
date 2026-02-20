@@ -1,7 +1,7 @@
-'use client';
-import type { Student, User } from '@/lib/types';
-
-export function StudentHeader({ student, currentUser }: { student: Student, currentUser: User }) {
-    if (!student) return <div>Loading header...</div>
-    return <h1>{student.name}</h1>;
+export function StudentHeader({ student, currentUser }: any) {
+  return (
+    <div className="p-4 border-b">
+      <h1 className="text-2xl font-bold">{student?.name || 'Student'}</h1>
+    </div>
+  );
 }
