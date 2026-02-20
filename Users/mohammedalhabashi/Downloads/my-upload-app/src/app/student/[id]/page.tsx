@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useParams } from 'next/navigation';
@@ -89,11 +88,9 @@ export default function StudentProfilePage() {
   }
 
   if (!currentUser) {
-      // This should be handled by layout, but as a fallback
       return <p>Please log in to view this page.</p>
   }
   
-  // Permission checks
   const isAssignedEmployee = currentUser.civilId === student.employeeId;
   const isAdmin = currentUser.role === 'admin';
   const isDepartment = currentUser.role === 'department';
@@ -113,8 +110,7 @@ export default function StudentProfilePage() {
     );
   }
 
-  // Inactivity check
-  const lastNoteDate = student.notes.length > 0
+  const lastNoteDate = student.notes?.length > 0
     ? new Date(Math.max(...student.notes.map(n => new Date(n.createdAt).getTime())))
     : new Date(student.createdAt);
   const daysSinceLastActivity = (new Date().getTime() - lastNoteDate.getTime()) / (1000 * 3600 * 24);
@@ -156,7 +152,6 @@ export default function StudentProfilePage() {
               </AlertDescription>
           </Alert>
       )}
-
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

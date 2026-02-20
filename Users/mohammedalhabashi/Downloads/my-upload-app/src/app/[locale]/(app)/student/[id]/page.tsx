@@ -1,4 +1,4 @@
-
-export default function Page() {
-  return null;
+// This file is no longer used and will be removed.
+export default function StudentIdPage() {
+    return null;
 }
