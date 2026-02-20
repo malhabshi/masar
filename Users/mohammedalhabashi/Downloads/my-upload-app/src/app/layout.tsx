@@ -24,10 +24,10 @@ export default function RootLayout({
         />
       </head>
       <body className={'font-body antialiased h-full'}>
-        <Providers>
+        {/* <Providers> */}
           {children}
           <Toaster />
-        </Providers>
+        {/* </Providers> */}
       </body>
     </html>
   );
