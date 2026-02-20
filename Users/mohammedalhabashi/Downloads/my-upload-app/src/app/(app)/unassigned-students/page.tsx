@@ -4,20 +4,20 @@ import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
 import type { Student, User } from '@/lib/types';
-import { useFirebase, useCollection } from '@/firebase';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { StudentTable } from '@/components/dashboard/student-table';
-import { TransferStudentDialog } from '@/components/student/transfer-student-dialog';
 
 export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
   const { users, usersLoading } = useUsers();
   const { firestore } = useFirebase();
 
-  const studentsQuery = useMemo(() => {
+  const studentsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
+    // Query for students where employeeId is null or doesn't exist
     return query(collection(firestore, 'students'), where('employeeId', '==', null));
   }, [firestore]);
 
@@ -51,7 +51,6 @@ export default function UnassignedStudentsPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* We reuse StudentTable, but could create a specific one if needed */}
         <StudentTable
             students={unassignedStudents || []}
             users={users}

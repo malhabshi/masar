@@ -183,3 +183,15 @@ export interface RequestType {
   description: string;
   defaultRecipientId: string; // User ID or 'admins' group
 }
+
+export interface ApplicationQuestion {
+  id: string;
+  questionText: string;
+  questionType: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox';
+  options?: string[];
+  isRequired: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt?: string;
+}

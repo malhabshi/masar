@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import type { ApplicationQuestion } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Pencil, Trash2, PlusCircle } from 'lucide-react';
+import { Pencil, Trash2, PlusCircle, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,43 +30,70 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
-// This is now a placeholder. In a real app, this would come from a database.
-const initialQuestions: string[] = [
-    "What is your intended major?",
-    "Have you taken an IELTS or TOEFL test?",
-    "What is your budget for tuition fees per year?",
-    "When do you plan to start your studies?",
-];
-
 export function CustomizeQuestionsForm() {
-  const [existingQuestions, setExistingQuestions] = useState<string[]>(initialQuestions);
+  const { firestore } = useFirebase();
   const { toast } = useToast();
 
+  const questionsCollection = useMemo(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'application_questions');
+  }, [firestore]);
+
+  const { data: questions, isLoading } = useCollection<ApplicationQuestion>(questionsCollection);
+
+  const sortedQuestions = useMemo(() => {
+    if (!questions) return [];
+    return [...questions].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }, [questions]);
+
   const [newQuestion, setNewQuestion] = useState('');
-  const [questionToEdit, setQuestionToEdit] = useState<{ index: number; text: string } | null>(null);
+  const [questionToEdit, setQuestionToEdit] = useState<ApplicationQuestion | null>(null);
   const [editedQuestionText, setEditedQuestionText] = useState('');
 
   const handleAddQuestion = () => {
-    if (!newQuestion.trim()) return;
-    setExistingQuestions(prev => [...prev, newQuestion.trim()]);
+    if (!newQuestion.trim() || !questionsCollection) return;
+    const newQuestionData: Omit<ApplicationQuestion, 'id'> = {
+      questionText: newQuestion.trim(),
+      questionType: 'text',
+      isRequired: true,
+      isActive: true,
+      sortOrder: questions?.length || 0,
+      createdAt: new Date().toISOString(),
+    };
+    addDocumentNonBlocking(questionsCollection, newQuestionData);
     setNewQuestion('');
     toast({ title: 'Question Added' });
   };
 
   const handleUpdateQuestion = () => {
-    if (!questionToEdit || !editedQuestionText.trim()) return;
-    const updated = [...existingQuestions];
-    updated[questionToEdit.index] = editedQuestionText.trim();
-    setExistingQuestions(updated);
+    if (!questionToEdit || !editedQuestionText.trim() || !firestore) return;
+    const questionDocRef = doc(firestore, 'application_questions', questionToEdit.id);
+    updateDocumentNonBlocking(questionDocRef, { questionText: editedQuestionText.trim() });
     setQuestionToEdit(null);
     setEditedQuestionText('');
     toast({ title: 'Question Updated' });
   };
 
-  const handleDeleteQuestion = (indexToDelete: number) => {
-    setExistingQuestions(prev => prev.filter((_, i) => i !== indexToDelete));
+  const handleDeleteQuestion = (questionId: string) => {
+    if (!firestore) return;
+    const questionDocRef = doc(firestore, 'application_questions', questionId);
+    deleteDocumentNonBlocking(questionDocRef);
     toast({ title: 'Question Removed' });
   };
+
+  if (isLoading) {
+    return (
+        <Card className="max-w-3xl mx-auto">
+            <CardHeader>
+                <CardTitle>Application Questions</CardTitle>
+                <CardDescription>Loading questions...</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
+            </CardContent>
+        </Card>
+    );
+  }
 
   return (
     <>
@@ -77,14 +107,14 @@ export function CustomizeQuestionsForm() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {existingQuestions.length > 0 ? (
-                existingQuestions.map((q, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-md group hover:bg-muted/50">
-                    <span className="flex-1 pr-4">{i + 1}. {q}</span>
+              {sortedQuestions.length > 0 ? (
+                sortedQuestions.map((q, i) => (
+                  <div key={q.id} className="flex items-center justify-between p-2 rounded-md group hover:bg-muted/50">
+                    <span className="flex-1 pr-4">{i + 1}. {q.questionText}</span>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                        setQuestionToEdit({ index: i, text: q });
-                        setEditedQuestionText(q);
+                        setQuestionToEdit(q);
+                        setEditedQuestionText(q.questionText);
                       }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -104,7 +134,7 @@ export function CustomizeQuestionsForm() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteQuestion(i)}>Delete</AlertDialogAction>
+                            <AlertDialogAction onClick={() => handleDeleteQuestion(q.id)}>Delete</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
