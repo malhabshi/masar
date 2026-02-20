@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { useFirebase, useDoc, useMemo } from '@/firebase';
+import { useFirebase, useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Student } from '@/lib/types';
 

@@ -15,7 +15,11 @@ import { useUser } from '@/hooks/use-user';
 import {
   LayoutDashboard,
   Users,
-  PlusCircle
+  PlusCircle,
+  Users2,
+  BarChart,
+  Settings,
+  Book,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -31,7 +35,19 @@ export function AppSidebar() {
     
     const employeeNavItems = [
         { href: '/new-request', label: 'Add Student', icon: PlusCircle },
+        { href: '/resources', label: 'Resources', icon: Book },
     ];
+
+    const adminNavItems = [
+        { href: '/user-management', label: 'User Management', icon: Users2 },
+        { href: '/reports', label: 'Reports', icon: BarChart },
+        { href: '/settings', label: 'Settings', icon: Settings },
+    ];
+    
+    const departmentNavItems = [
+         { href: '/reports', label: 'Reports', icon: BarChart },
+    ];
+
 
   return (
     <Sidebar>
@@ -44,7 +60,7 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
               <Link href={item.href} passHref legacyBehavior>
                 <SidebarMenuButton
-                  isActive={pathname === item.href}
+                  isActive={pathname.startsWith(item.href)}
                   asChild
                 >
                   <item.icon />
@@ -57,7 +73,35 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
                 <Link href={item.href} passHref legacyBehavior>
                     <SidebarMenuButton
-                    isActive={pathname === item.href}
+                    isActive={pathname.startsWith(item.href)}
+                    asChild
+                    >
+                    <item.icon />
+                    {item.label}
+                    </SidebarMenuButton>
+                </Link>
+            </SidebarMenuItem>
+          ))}
+          {(user?.role === 'admin') && <SidebarSeparator />}
+          {user?.role === 'admin' && adminNavItems.map((item) => (
+            <SidebarMenuItem key={item.href}>
+                <Link href={item.href} passHref legacyBehavior>
+                    <SidebarMenuButton
+                    isActive={pathname.startsWith(item.href)}
+                    asChild
+                    >
+                    <item.icon />
+                    {item.label}
+                    </SidebarMenuButton>
+                </Link>
+            </SidebarMenuItem>
+          ))}
+           {(user?.role === 'department') && <SidebarSeparator />}
+           {user?.role === 'department' && departmentNavItems.map((item) => (
+            <SidebarMenuItem key={item.href}>
+                <Link href={item.href} passHref legacyBehavior>
+                    <SidebarMenuButton
+                    isActive={pathname.startsWith(item.href)}
                     asChild
                     >
                     <item.icon />
