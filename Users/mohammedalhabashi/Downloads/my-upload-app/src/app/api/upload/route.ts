@@ -45,6 +45,19 @@ export async function POST(req: NextRequest) {
     const adminApp = initializeAdmin();
     const bucket = adminApp.storage().bucket();
 
+    const authorization = req.headers.get('Authorization');
+    if (!authorization?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized: Missing token.' }, { status: 401 });
+    }
+    const idToken = authorization.split('Bearer ')[1];
+
+    try {
+      await adminApp.auth().verifyIdToken(idToken);
+    } catch (error) {
+      console.error('API Upload Auth Error:', error);
+      return NextResponse.json({ error: 'Unauthorized: Invalid token.' }, { status: 401 });
+    }
+
     // Parse the multipart form data from the request just once.
     const formData = await req.formData();
     
