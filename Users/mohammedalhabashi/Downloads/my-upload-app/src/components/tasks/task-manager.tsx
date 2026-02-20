@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirebase, useCollection, updateDocumentNonBlocking } from '@/firebase';
-import { collection, doc, query, where } from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore';
 
 const taskStatuses: TaskStatus[] = ['new', 'in-progress', 'completed', 'archived'];
 
@@ -247,7 +247,6 @@ export function TaskManager({ currentUser, users }: TaskManagerProps) {
   }
 
   const filteredTasks = useMemo(() => {
-    // Both Admin and Department roles should see all tasks on this management page.
     if (currentUser.role === 'admin' || currentUser.role === 'department') {
       return tasks;
     }

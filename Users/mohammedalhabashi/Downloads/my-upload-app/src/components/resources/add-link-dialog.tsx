@@ -48,7 +48,6 @@ export function AddLinkDialog({ children, onAddLink }: AddLinkDialogProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     onAddLink(values);
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 500));
     setIsLoading(false);
     setIsOpen(false);

@@ -24,15 +24,6 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
-    function isStudentAssignedToCurrentUser(studentId) {
-      // Ensure we have a studentId to check and that the user data is available
-      if (studentId == null || getUserData() == null || getUserData().civilId == null) {
-        return false;
-      }
-      let student = get(/databases/$(database)/documents/students/$(studentId)).data;
-      return student.employeeId == getUserData().civilId;
-    }
-
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isUserAdmin() || (isOwner(userId) && (request.resource.data.role != 'admin' || request.resource.data.email == 'admin@uniapply.hub'));
@@ -41,43 +32,38 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Any authenticated user can read student documents. Client-side queries are responsible for filtering.
-      allow read: if isSignedIn();
+      // Admins and departments can read any student.
+      // Employees can only read students assigned to them.
+      allow read: if isSignedIn() && (isUserAdmin() || isDepartment() || resource.data.employeeId == getUserData().civilId);
       
-      // A user can only create a student document if they are signed in.
-      // The `createdBy` field is set by the client and used in other rules/queries.
+      // Any authenticated user can create a student.
       allow create: if isSignedIn();
 
       // An admin, department user, or the assigned employee can update a student.
-      allow update: if isSignedIn() && (isUserAdmin() || isDepartment() || (resource.data.employeeId == getUserData().civilId));
+      allow update: if isSignedIn() && (isUserAdmin() || isDepartment() || resource.data.employeeId == getUserData().civilId);
 
       // Only admins can delete students.
       allow delete: if isUserAdmin();
     }
     
-    match /universities/{universityId} {
-      allow read: if isSignedIn();
-      allow write: if isUserAdmin();
-    }
-
     match /approved_universities/{universityId} {
       allow read: if isSignedIn();
       allow write: if isUserAdmin() || isDepartment();
     }
 
-    match /academic_terms/{termId} {
+    match /application_questions/{questionId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
+      allow write: if isUserAdmin();
     }
 
     match /shared_documents/{documentId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin() || isDepartment();
+      allow write: if isUserAdmin() || isDepartment();
     }
 
     match /request_types/{requestTypeId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
+      allow write: if isUserAdmin();
     }
     
     match /resource_links/{linkId} {
@@ -87,50 +73,34 @@ service cloud.firestore {
     
     match /upcoming_events/{eventId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
-    }
-    
-    match /application_questions/{questionId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
+      allow write: if isUserAdmin();
     }
     
     match /users/{userId}/personal_todos/{todoId} {
       allow read, write: if isOwner(userId);
     }
     
-    match /applications/{applicationId} {
-      // Allow assigned employees, departments, and admins to manage applications.
-      allow read, update: if isSignedIn() && (isUserAdmin() || isDepartment() || isStudentAssignedToCurrentUser(resource.data.studentId));
-      allow create: if isSignedIn() && (isUserAdmin() || isStudentAssignedToCurrentUser(request.resource.data.studentId));
-      allow delete: if isUserAdmin();
-    }
-
-    match /documents/{documentId} {
-      // Allow assigned employees, departments, and admins to manage documents.
-      allow read: if isSignedIn() && (isUserAdmin() || isDepartment() || isStudentAssignedToCurrentUser(resource.data.studentId));
-      allow create: if isSignedIn() && (isUserAdmin() || isStudentAssignedToCurrentUser(request.resource.data.studentId));
-      allow update, delete: if isUserAdmin();
-    }
-
     match /tasks/{taskId} {
-      allow get: if isUserAdmin() || isDepartment() || (request.auth.uid != null && (resource.data.authorId == request.auth.uid || resource.data.recipientId == request.auth.uid));
+      allow get: if isUserAdmin() || isDepartment() || (isSignedIn() && (resource.data.authorId == request.auth.uid || resource.data.recipientId == request.auth.uid));
       allow list: if isUserAdmin() || isDepartment() ||
-        (request.auth.uid != null && request.query.where.authorId == request.auth.uid) ||
-        (request.auth.uid != null && request.query.where.recipientId == request.auth.uid) ||
+        (isSignedIn() && request.query.where.authorId == request.auth.uid) ||
+        (isSignedIn() && request.query.where.recipientId == request.auth.uid) ||
         (isSignedIn() && request.query.where.recipientId == 'all');
-      allow create: if isUserAdmin() || isDepartment() || (request.auth.uid != null && request.resource.data.authorId == request.auth.uid);
-      allow update: if isUserAdmin() || isDepartment() || (request.auth.uid != null && (resource.data.authorId == request.auth.uid || resource.data.recipientId == request.auth.uid));
+      allow create: if isSignedIn();
+      allow update: if isUserAdmin() || isDepartment() || (isSignedIn() && (resource.data.authorId == request.auth.uid || resource.data.recipientId == request.auth.uid));
       allow delete: if isUserAdmin();
     }
 
     match /chats/{studentId}/messages/{messageId} {
-      allow read, write: if isSignedIn() && (isUserAdmin() || isDepartment() || getUserData().civilId == get(/databases/$(database)/documents/students/$(studentId)).data.employeeId);
+      // Users can only access chats for students they have access to.
+      allow read, write: if isSignedIn() && (
+        isUserAdmin() || isDepartment() || (getUserData().civilId == get(/databases/$(database)/documents/students/$(studentId)).data.employeeId)
+      );
     }
 
     match /time_logs/{logId} {
         allow read: if isUserAdmin();
-        allow write: if isUserAdmin() || isOwner(request.resource.data.employeeId);
+        allow write: if isSignedIn();
     }
   }
 }

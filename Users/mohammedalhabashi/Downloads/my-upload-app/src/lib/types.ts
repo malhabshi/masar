@@ -181,7 +181,7 @@ export interface RequestType {
   id: string;
   name: string;
   description: string;
-  defaultRecipientId: string; // User ID or 'admins' group
+  defaultRecipientId: string;
 }
 
 export interface ApplicationQuestion {

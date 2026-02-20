@@ -24,7 +24,7 @@ import { doc } from 'firebase/firestore';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
-  email: z.string().email(),
+  email: z.string().email().or(z.literal('')),
   phone: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }),
 });
 
@@ -63,7 +63,6 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
     const studentDocRef = doc(firestore, 'students', student.id);
     updateDocumentNonBlocking(studentDocRef, values);
 
-    // Simulate delay
     await new Promise(resolve => setTimeout(resolve, 500));
 
     toast({

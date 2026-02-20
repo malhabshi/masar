@@ -54,35 +54,23 @@ export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
         return;
     }
     
-    // Call server action for side-effects like notifications
-    const result = await sendTaskAction(currentUser.id, recipientId!, values.content);
+    const tasksCollection = collection(firestore, 'tasks');
+    const newTask: Omit<Task, 'id'> = {
+      authorId: currentUser.id,
+      recipientId: recipientId!,
+      content: values.content,
+      createdAt: new Date().toISOString(),
+      status: 'new',
+      replies: [],
+    };
+    addDocumentNonBlocking(tasksCollection, newTask);
 
-    if (result.success) {
-      // Add to client-side state
-      const tasksCollection = collection(firestore, 'tasks');
-      const newTask: Omit<Task, 'id'> = {
-        authorId: currentUser.id,
-        recipientId: recipientId!,
-        content: values.content,
-        createdAt: new Date().toISOString(),
-        status: 'new',
-        replies: [],
-      };
-      addDocumentNonBlocking(tasksCollection, newTask);
+    toast({
+      title: 'Update Sent!',
+    });
+    form.reset();
+    setSendTo('all');
 
-      toast({
-        title: 'Update Sent!',
-        description: result.message,
-      });
-      form.reset();
-      setSendTo('all');
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to send update',
-        description: result.message,
-      });
-    }
     setIsLoading(false);
   }
 

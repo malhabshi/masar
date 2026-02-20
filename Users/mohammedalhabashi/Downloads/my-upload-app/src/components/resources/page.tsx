@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useUsers } from '@/contexts/users-provider';
@@ -68,14 +68,14 @@ export default function ResourcesPage() {
   const [file, setFile] = useState<File | null>(null);
   const [country, setCountry] = useState<string>('all');
 
-  const sharedDocumentsCollection = useMemo(() => {
+  const sharedDocumentsCollection = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'shared_documents');
   }, [firestore, user]);
 
   const { data: documents, isLoading: documentsLoading } = useCollection<SharedDocument>(sharedDocumentsCollection);
 
-  const resourceLinksCollection = useMemo(() => !firestore ? null : collection(firestore, 'resource_links'), [firestore]);
+  const resourceLinksCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'resource_links'), [firestore]);
   const { data: resourceLinks, isLoading: linksLoading } = useCollection<ResourceLink>(resourceLinksCollection);
 
   const pageIsLoading = isUserLoading || documentsLoading || usersLoading || linksLoading;
@@ -94,15 +94,25 @@ export default function ResourcesPage() {
     setIsUploading(true);
 
     try {
-        const filePath = `shared_documents/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, filePath);
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('destination', 'shared');
+
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to upload file.');
+        }
 
         const newDoc: Omit<SharedDocument, 'id'> = {
             name,
             description,
-            url: downloadURL,
+            url: result.downloadURL,
             authorId: user.id,
             uploadedAt: new Date().toISOString(),
             ...(country !== 'all' && { country: country as Country }),
@@ -122,11 +132,10 @@ export default function ResourcesPage() {
         setIsDialogOpen(false);
     } catch (error: any) {
         console.error("Shared document upload error:", error);
-        const errorMessage = error.code ? `${error.code}: ${error.message}` : error.message || 'Could not upload the file to storage.';
         toast({
             variant: 'destructive',
             title: 'Upload failed',
-            description: errorMessage
+            description: error.message || 'Could not upload the file to storage.'
         });
     } finally {
         setIsUploading(false);

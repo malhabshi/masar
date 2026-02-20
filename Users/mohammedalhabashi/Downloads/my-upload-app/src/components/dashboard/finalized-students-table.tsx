@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Student, User } from '@/lib/types';
 import { Plane } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 interface FinalizedStudent extends Student {
   finalChoiceUniversity: string;
@@ -59,7 +60,7 @@ export function FinalizedStudentsTable({ students, users, showEmployee = true }:
                     </Avatar>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{student.name}</span>
+                        <Link href={`/student/${student.id}`} className="font-medium hover:underline">{student.name}</Link>
                         {student.profileCompletionStatus?.readyToTravel && (
                             <Badge variant="outline" className="border-success text-success font-normal">
                                 <Plane className="mr-1 h-3 w-3" />

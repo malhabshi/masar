@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -75,11 +74,14 @@
         },
         "employeeId": {
           "type": "string",
-          "description": "Reference to the User (employee) who is assigned to manage this student's applications. This is the employee's Civil ID. (Relationship: User 1:N Student)"
+          "description": "Reference to the User (employee) who is assigned to manage this student's applications. This is the employee's Civil ID."
         },
         "notes": {
-          "type": "string",
-          "description": "A free-form text field for employees and admins to add notes about the student."
+          "type": "array",
+          "description": "A list of notes (objects with id, authorId, content, createdAt) about the student.",
+          "items": {
+              "type": "object"
+          }
         },
         "createdAt": {
           "type": "string",
@@ -117,32 +119,12 @@
         "country": {
           "type": "string",
           "description": "The country where the university is located (e.g., UK, USA, Australia, New Zealand)."
-        },
-        "city": {
-          "type": "string",
-          "description": "The city where the university is located."
-        },
-        "website": {
-          "type": "string",
-          "description": "The official website URL of the university.",
-          "format": "uri"
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the university record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the university record was last updated.",
-          "format": "date-time"
         }
       },
       "required": [
         "id",
         "name",
-        "country",
-        "createdAt"
+        "country"
       ]
     },
     "Application": {
@@ -151,39 +133,18 @@
       "type": "object",
       "description": "Represents a specific university application submitted on behalf of a student, tracking its status and details.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Application entity."
+        "university": {
+          "type": "string"
         },
-        "studentId": {
-          "type": "string",
-          "description": "Reference to the Student associated with this application. (Relationship: Student 1:N Application)"
+        "major": {
+          "type": "string"
         },
-        "universityId": {
-          "type": "string",
-          "description": "Reference to the University to which the student is applying. (Relationship: University 1:N Application)"
-        },
-        "applicationDate": {
-          "type": "string",
-          "description": "The date when the application was officially submitted or initiated.",
-          "format": "date"
+        "country": {
+            "type": "string"
         },
         "status": {
           "type": "string",
-          "description": "The current status of the application (e.g., 'Draft', 'Submitted', 'Pending Decision', 'Accepted', 'Rejected', 'Withdrawn')."
-        },
-        "submissionDetails": {
-          "type": "string",
-          "description": "A JSON string or object containing responses to customizable application questions for this specific application."
-        },
-        "adminNotes": {
-          "type": "string",
-          "description": "Notes added by an administrator specific to this application."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the application record was created.",
-          "format": "date-time"
+          "description": "The current status of the application (e.g., 'Pending', 'Submitted', 'In Review', 'Accepted', 'Rejected')."
         },
         "updatedAt": {
           "type": "string",
@@ -192,74 +153,46 @@
         }
       },
       "required": [
-        "id",
-        "studentId",
-        "universityId",
-        "applicationDate",
+        "university",
+        "major",
+        "country",
         "status",
-        "createdAt"
+        "updatedAt"
       ]
     },
     "Document": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Document",
       "type": "object",
-      "description": "Represents a document uploaded by an employee or admin for a student or a specific university application.",
+      "description": "Represents a document uploaded by an employee or admin for a student.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the Document entity."
+          "type": "string"
         },
-        "studentId": {
-          "type": "string",
-          "description": "Reference to the Student whom this document belongs to. (Relationship: Student 1:N Document)"
+        "name": {
+          "type": "string"
         },
-        "applicationId": {
+        "url": {
           "type": "string",
-          "description": "Optional reference to an Application if the document is specific to a particular university application. (Relationship: Application 1:N Document)"
-        },
-        "fileName": {
-          "type": "string",
-          "description": "The original file name of the uploaded document."
-        },
-        "fileUrl": {
-          "type": "string",
-          "description": "The URL or path where the document is stored.",
           "format": "uri"
         },
-        "documentType": {
+        "uploadedAt": {
           "type": "string",
-          "description": "The category or type of the document (e.g., 'Transcript', 'Passport', 'SOP', 'LOR')."
-        },
-        "uploadedByUserId": {
-          "type": "string",
-          "description": "Reference to the User (employee or admin) who uploaded this document. (Relationship: User 1:N Document)"
-        },
-        "uploadDate": {
-          "type": "string",
-          "description": "The date when the document was uploaded.",
-          "format": "date"
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the document record was created.",
           "format": "date-time"
         },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the document record was last updated.",
-          "format": "date-time"
+        "authorId": {
+          "type": "string"
+        },
+        "isNew": {
+            "type": "boolean"
         }
       },
       "required": [
         "id",
-        "studentId",
-        "fileName",
-        "fileUrl",
-        "documentType",
-        "uploadedByUserId",
-        "uploadDate",
-        "createdAt"
+        "name",
+        "url",
+        "uploadedAt",
+        "authorId"
       ]
     },
     "Task": {
@@ -269,55 +202,34 @@
       "description": "Represents a specific task related to a student's application process, typically assigned by an admin to an employee.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the Task entity."
+          "type": "string"
         },
-        "applicationId": {
-          "type": "string",
-          "description": "Reference to the Application this task is associated with. (Relationship: Application 1:N Task)"
+        "authorId": {
+          "type": "string"
         },
-        "assignedToUserId": {
-          "type": "string",
-          "description": "Reference to the User (employee) who is assigned to complete this task. (Relationship: User 1:N Task)"
+        "recipientId": {
+          "type": "string"
         },
-        "assignedByUserId": {
-          "type": "string",
-          "description": "Reference to the User (admin) who assigned this task. (Relationship: User 1:N Task)"
+        "content": {
+          "type": "string"
         },
-        "title": {
+        "createdAt": {
           "type": "string",
-          "description": "A brief title or summary of the task."
-        },
-        "description": {
-          "type": "string",
-          "description": "A detailed description of the task."
-        },
-        "dueDate": {
-          "type": "string",
-          "description": "The deadline by which the task should be completed.",
           "format": "date-time"
         },
         "status": {
           "type": "string",
-          "description": "The current status of the task (e.g., 'Pending', 'In Progress', 'Completed', 'Overdue')."
+          "description": "The current status of the task (e.g., 'new', 'in-progress', 'completed', 'archived')."
         },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the task was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the task was last updated.",
-          "format": "date-time"
+        "replies": {
+            "type": "array"
         }
       },
       "required": [
         "id",
-        "applicationId",
-        "assignedToUserId",
-        "assignedByUserId",
-        "title",
+        "authorId",
+        "recipientId",
+        "content",
         "status",
         "createdAt"
       ]
@@ -329,48 +241,24 @@
       "description": "Represents a message exchanged within the real-time chatbot between an employee and an admin regarding a specific student's application.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the ChatMessage entity."
+          "type": "string"
         },
-        "studentId": {
-          "type": "string",
-          "description": "Reference to the Student that this chat message pertains to. (Relationship: Student 1:N ChatMessage)"
+        "authorId": {
+          "type": "string"
         },
-        "senderId": {
-          "type": "string",
-          "description": "Reference to the User who sent the message. (Relationship: User 1:N ChatMessage)"
-        },
-        "receiverId": {
-          "type": "string",
-          "description": "Reference to the User who is the intended recipient of the message. (Relationship: User 1:N ChatMessage)"
-        },
-        "messageContent": {
-          "type": "string",
-          "description": "The actual text content of the chat message."
+        "content": {
+          "type": "string"
         },
         "timestamp": {
           "type": "string",
-          "description": "Timestamp indicating when the message was sent.",
-          "format": "date-time"
-        },
-        "isRead": {
-          "type": "boolean",
-          "description": "A boolean indicating whether the message has been read by the receiver."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the chat message record was created.",
           "format": "date-time"
         }
       },
       "required": [
         "id",
-        "studentId",
-        "senderId",
-        "receiverId",
-        "messageContent",
-        "timestamp",
-        "createdAt"
+        "authorId",
+        "content",
+        "timestamp"
       ]
     },
     "ApplicationQuestion": {
@@ -380,44 +268,25 @@
       "description": "Represents a customizable question that an admin can define to be part of the student application forms.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the ApplicationQuestion entity."
+          "type": "string"
         },
         "questionText": {
-          "type": "string",
-          "description": "The actual text of the question to be displayed on the form."
+          "type": "string"
         },
         "questionType": {
-          "type": "string",
-          "description": "The expected input type for the question (e.g., 'text', 'textarea', 'number', 'date', 'select', 'checkbox')."
-        },
-        "options": {
-          "type": "array",
-          "description": "An array of possible answer options, primarily used for 'select' or 'checkbox' question types.",
-          "items": {
-            "type": "string"
-          }
+          "type": "string"
         },
         "isRequired": {
-          "type": "boolean",
-          "description": "Indicates whether answering this question is mandatory for the application."
+          "type": "boolean"
         },
         "isActive": {
-          "type": "boolean",
-          "description": "Indicates whether the question is currently active and should be included in application forms."
+          "type": "boolean"
         },
         "sortOrder": {
-          "type": "number",
-          "description": "A numeric value to define the display order of the question within a form."
+          "type": "number"
         },
         "createdAt": {
           "type": "string",
-          "description": "Timestamp indicating when the application question was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the application question was last updated.",
           "format": "date-time"
         }
       },
@@ -441,15 +310,6 @@
         "authorId": { "type": "string" }
       },
       "required": ["title", "date", "authorId"]
-    },
-    "AcademicTerm": {
-      "title": "Academic Term",
-      "type": "object",
-      "description": "Represents a single academic term.",
-      "properties": {
-        "name": { "type": "string" }
-      },
-      "required": ["name"]
     },
     "SharedDocument": {
       "title": "Shared Document",
@@ -488,16 +348,6 @@
       },
       "required": ["userId", "content", "completed", "createdAt"]
     },
-    "StudentAssignment": {
-      "title": "Student Assignment",
-      "type": "object",
-      "description": "A mapping document indicating that a student is assigned to an employee.",
-      "properties": {
-        "studentId": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["studentId", "createdAt"]
-    },
     "ResourceLink": {
       "title": "Resource Link",
       "type": "object",
@@ -524,76 +374,43 @@
       "required": ["employeeId", "date", "clockIn", "clockOut"]
     }
   },
-  "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
-  },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
-      "description": "Stores individual user profiles (employees and admins). The 'role' field within this document is the single source of truth for a user's permissions."
+      "description": "Stores individual user profiles (employees and admins). The 'role' field is the source of truth for permissions."
     },
     "/users/{userId}/personal_todos/{todoId}": {
-      "schema": { "$ref": "#/entities/PersonalTodo" },
-      "description": "A subcollection for a user's personal to-do items."
-    },
-    "/employees/{userId}/students/{studentId}": {
-      "schema": { "$ref": "#/entities/StudentAssignment" },
-      "description": "A mapping collection to link employees to their assigned students. The {userId} is the employee's Civil ID. This is used for security rules."
-    },
-    "/universities/{universityId}": {
-      "schema": { "$ref": "#/entities/University" },
-      "description": "A global collection of all universities available in the system. Admins can manage these, and employees can read them for application submission."
-    },
-    "/application_questions/{questionId}": {
-      "schema": { "$ref": "#/entities/ApplicationQuestion" },
-      "description": "A global collection of customizable application questions defined by administrators. Admins can manage these, and employees can read them to build application forms."
+      "schema": { "$ref": "#/entities/PersonalTodo" }
     },
     "/students/{studentId}": {
-      "schema": { "$ref": "#/entities/Student" },
-      "description": "Stores records for all students. Each document includes 'employeeId' for authorization, allowing employees to access only their assigned students and admins to access all students. Supports listing of students based on 'employeeId'."
+      "schema": { "$ref": "#/entities/Student" }
     },
-    "/applications/{applicationId}": {
-      "schema": { "$ref": "#/entities/Application" },
-      "description": "Stores individual university application records. Includes denormalized 'studentEmployeeId' for Authorization Independence, linking directly to the employee managing the student. This allows employees to access only applications for their students and enables secure 'list' operations."
+    "/approved_universities/{universityId}": {
+      "schema": { "$ref": "#/entities/University" }
     },
-    "/documents/{documentId}": {
-      "schema": { "$ref": "#/entities/Document" },
-      "description": "Stores records of documents uploaded for students or applications. Includes denormalized 'studentEmployeeId' for Authorization Independence, allowing employees to access documents related to their assigned students. Supports secure 'list' operations for employees."
+    "/application_questions/{questionId}": {
+      "schema": { "$ref": "#/entities/ApplicationQuestion" }
     },
     "/tasks/{taskId}": {
-      "schema": { "$ref": "#/entities/Task" },
-      "description": "Manages tasks assigned to employees for specific applications. Each document contains 'assignedToUserId' and 'assignedByUserId' for direct authorization checks, allowing employees to access tasks assigned to them and admins to manage all tasks. Supports secure 'list' operations for employees."
+      "schema": { "$ref": "#/entities/Task" }
     },
     "/chats/{studentId}/messages/{messageId}": {
-      "schema": { "$ref": "#/entities/ChatMessage" },
-      "description": "Stores real-time chat messages between an employee and an admin regarding a specific student. Messages are nested under a 'chats' collection identified by 'studentId'. Each message includes denormalized 'studentEmployeeId', 'senderId', and 'receiverId' for Authorization Independence, ensuring only relevant parties (admin, student's employee, sender, receiver) can access. Supports secure 'list' operations for specific student chats."
+      "schema": { "$ref": "#/entities/ChatMessage" }
     },
     "/upcoming_events/{eventId}": {
-      "schema": { "$ref": "#/entities/UpcomingEvent" },
-      "description": "Global list of upcoming events for all users."
-    },
-    "/academic_terms/{termId}": {
-      "schema": { "$ref": "#/entities/AcademicTerm" },
-      "description": "Global list of academic terms."
+      "schema": { "$ref": "#/entities/UpcomingEvent" }
     },
     "/shared_documents/{documentId}": {
-      "schema": { "$ref": "#/entities/SharedDocument" },
-      "description": "Global list of shared documents."
+      "schema": { "$ref": "#/entities/SharedDocument" }
     },
     "/request_types/{requestTypeId}": {
-      "schema": { "$ref": "#/entities/RequestType" },
-      "description": "Global list of request types."
+      "schema": { "$ref": "#/entities/RequestType" }
     },
     "/resource_links/{linkId}": {
-      "schema": { "$ref": "#/entities/ResourceLink" },
-      "description": "Global list of helpful resource links."
+      "schema": { "$ref": "#/entities/ResourceLink" }
     },
     "/time_logs/{logId}": {
-      "schema": { "$ref": "#/entities/TimeLog" },
-      "description": "Stores employee clock-in/clock-out time logs for activity reporting."
+      "schema": { "$ref": "#/entities/TimeLog" }
     }
   }
 }

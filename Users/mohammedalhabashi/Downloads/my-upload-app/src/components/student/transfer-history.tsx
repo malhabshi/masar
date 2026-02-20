@@ -14,12 +14,10 @@ interface TransferHistoryProps {
 export function TransferHistory({ transferHistory, users }: TransferHistoryProps) {
   const getEmployee = (employeeId: string | null) => {
     if (!employeeId) return null;
-    // transferHistory stores the employee's Civil ID
     return users.find(u => u.civilId === employeeId);
   }
   
   const getAdmin = (adminId: string) => {
-      // transferredBy stores the user's main ID
       return users.find(u => u.id === adminId);
   }
 

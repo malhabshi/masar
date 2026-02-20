@@ -42,7 +42,6 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   const handleStatusUpdate = async (university: string, major: string, newStatus: ApplicationStatus) => {
     if (!firestore) return;
     
-    // Call server action (for notifications, etc.)
     const result = await updateApplicationStatus(student.id, university, major, newStatus, student.name, student.employeeId);
 
     if (result.success) {
@@ -73,7 +72,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
         <CardTitle>University Applications</CardTitle>
       </CardHeader>
       <CardContent>
-        {student.applications.length > 0 ? (
+        {student.applications && student.applications.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow>

@@ -62,6 +62,7 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
   });
 
   const availableUniversities = useMemo(() => {
+    if(!universities) return [];
     const available = universities.filter(uni => uni.isAvailable);
     const unique: ApprovedUniversity[] = [];
     const seen = new Set<string>();
@@ -71,7 +72,7 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
             unique.push(uni);
         }
     }
-    return unique;
+    return unique.sort((a, b) => a.name.localeCompare(b.name));
   }, [universities]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -85,7 +86,6 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
       return;
     }
     
-    // Server action
     const result = await addApplication(student.id, university.name, university.country, values.major, student.name, student.employeeId);
     
     if (result.success) {

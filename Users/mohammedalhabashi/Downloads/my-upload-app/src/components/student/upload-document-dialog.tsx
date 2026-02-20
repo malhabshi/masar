@@ -75,7 +75,7 @@ export function UploadDocumentDialog({ student, currentUser }: UploadDocumentDia
         url: downloadURL,
         authorId: currentUser.id,
         uploadedAt: new Date().toISOString(),
-        isNew: true, // Flag for notifications
+        isNew: true,
       };
       
       const studentDocRef = doc(firestore, 'students', student.id);

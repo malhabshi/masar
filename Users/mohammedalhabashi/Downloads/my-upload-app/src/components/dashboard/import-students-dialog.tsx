@@ -52,6 +52,8 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
     }
 
     setIsLoading(true);
+    // This is now a mock action since the backend logic for excel parsing isn't implemented.
+    // It creates a task for the admin to manually process.
     const result = await importStudentsFromExcel(currentUser.id, file.name);
 
     if (result.success) {
@@ -66,7 +68,7 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
       }
 
       toast({
-        title: 'Import Successful',
+        title: 'Import Task Created',
         description: result.message,
       });
       setIsOpen(false);
@@ -100,7 +102,7 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
           <Alert>
             <AlertTitle>File Format</AlertTitle>
             <AlertDescription>
-                Ensure your file has columns for 'Name', 'Email', and 'Phone'. Any additional columns will be ignored.
+                Ensure your file has columns for 'Name', 'Email', and 'Phone'. Any additional columns will be ignored. This will create a task for an admin to complete the import.
             </AlertDescription>
           </Alert>
           <div className="space-y-2">

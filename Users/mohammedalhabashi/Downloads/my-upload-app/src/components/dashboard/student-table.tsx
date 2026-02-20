@@ -61,7 +61,6 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
-    // The employeeId on a student record is the employee's Civil ID
     return users.find(u => u.civilId === employeeId)?.name || 'Unknown Employee';
   };
 
@@ -100,7 +99,7 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
           {students.length > 0 ? (
             students.map((student) => {
               const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
-              const applicationCountries = Array.from(new Set(student.applications.map(app => app.country))).join(', ');
+              const applicationCountries = Array.from(new Set(student.applications?.map(app => app.country))).join(', ');
               const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
               const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
 
@@ -176,7 +175,7 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
                 </TableCell>
                 {showApplicationCount && (
                   <TableCell>
-                    <div className="text-center font-medium">{student.applications.length}</div>
+                    <div className="text-center font-medium">{student.applications?.length || 0}</div>
                   </TableCell>
                 )}
                 {showPipelineStatus && (

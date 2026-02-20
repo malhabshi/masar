@@ -8,6 +8,9 @@ import { FileText, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
+import { format } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { Skeleton } from '../ui/skeleton';
 
 interface InternalDocumentsProps {
   student: Student;
@@ -18,13 +21,18 @@ interface InternalDocumentsProps {
 }
 
 export function InternalDocuments({ student, currentUser, title, allowUpload, users }: InternalDocumentsProps) {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const getAuthor = (authorId: string) => {
     return users.find(u => u.id === authorId);
   };
   
   const managementRoles: UserRole[] = ['admin', 'department'];
 
-  const documents = student.documents.filter(doc => {
+  const documents = (student.documents || []).filter(doc => {
       const isEmployeeSection = title === 'Employee Documents';
       const author = getAuthor(doc.authorId);
 
@@ -74,7 +82,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload, us
                         <span className="text-muted-foreground">Student</span>
                       )}
                     </TableCell>
-                    <TableCell>{new Date(doc.uploadedAt).toLocaleDateString()}</TableCell>
+                    <TableCell>{isClient ? format(new Date(doc.uploadedAt), 'PP') : <Skeleton className="h-4 w-20" />}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" asChild>
                         <a href={doc.url} download={doc.name} target="_blank" rel="noopener noreferrer">

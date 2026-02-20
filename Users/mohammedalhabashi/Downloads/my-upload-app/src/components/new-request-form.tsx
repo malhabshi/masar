@@ -94,7 +94,7 @@ export function NewRequestForm() {
         
         try {
             const studentsCollectionRef = collection(firestore, 'students');
-            const newStudentDocRef = doc(studentsCollectionRef); // Create a reference with a new auto-generated ID
+            const newStudentDocRef = doc(studentsCollectionRef); 
 
             const newStudentData: Student = {
                 id: newStudentDocRef.id,
@@ -123,7 +123,6 @@ export function NewRequestForm() {
                 },
             };
 
-            // Create the main student document
             await setDoc(newStudentDocRef, newStudentData);
             
             const returnTo = shouldBeAssigned ? '/applicants' : '/unassigned-students';

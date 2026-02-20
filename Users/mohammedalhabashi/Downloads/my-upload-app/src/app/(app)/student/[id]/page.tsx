@@ -47,16 +47,13 @@ export default function StudentDetailPage() {
   }
   
   if (!student || !currentUser) {
-    // This can happen briefly during data loading or if the student doesn't exist.
     return <div>Student not found or you do not have permission to view this page.</div>;
   }
   
   const isAssignedEmployee = student.employeeId === currentUser.civilId;
   const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
 
-  // Enforce permissions client-side
   if (currentUser.role === 'employee' && !isAssignedEmployee) {
-      // Redirect if an employee tries to access a student not assigned to them.
       router.push('/applicants'); 
       return (
         <div className="flex h-full w-full items-center justify-center">

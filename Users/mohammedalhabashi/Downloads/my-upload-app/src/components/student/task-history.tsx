@@ -1,8 +1,8 @@
 'use client';
 import type { Student, User, Task, TaskStatus, TaskReply } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ListChecks, MessageSquare, Send, Loader2 } from 'lucide-react';
-import { format, formatDistanceToNow, formatDistanceStrict } from 'date-fns';
+import { ListChecks, Send, Loader2 } from 'lucide-react';
+import { format, formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { useMemo, useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { addReplyToTask } from '@/lib/actions';
-import { useFirebase, useCollection, updateDocumentNonBlocking } from '@/firebase';
+import { useFirebase, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
 
 
@@ -57,51 +57,18 @@ export function TaskHistory({ student, users, currentUser }: TaskHistoryProps) {
     setIsClient(true);
   }, []);
 
-  const isEmployee = currentUser.role === 'employee';
-
-  // For Admins/Depts, fetch all tasks
-  const allTasksQuery = useMemo(() => {
-    if (!firestore || isEmployee) return null;
-    return collection(firestore, 'tasks');
-  }, [firestore, isEmployee]);
+  const allTasksQuery = useMemoFirebase(() => !firestore ? null : collection(firestore, 'tasks'), [firestore]);
   const { data: allTasksData, isLoading: allTasksLoading } = useCollection<Task>(allTasksQuery);
 
-  // For Employees, fetch tasks they are involved in via two separate queries
-  const authoredTasksQuery = useMemo(() => {
-    if (!firestore || !isEmployee) return null;
-    return query(collection(firestore, 'tasks'), where('authorId', '==', currentUser.id));
-  }, [firestore, isEmployee, currentUser.id]);
-  const { data: authoredTasksData, isLoading: authoredLoading } = useCollection<Task>(authoredTasksQuery);
-
-  const receivedTasksQuery = useMemo(() => {
-    if (!firestore || !isEmployee) return null;
-    return query(collection(firestore, 'tasks'), where('recipientId', '==', currentUser.id));
-  }, [firestore, isEmployee, currentUser.id]);
-  const { data: receivedTasksData, isLoading: receivedLoading } = useCollection<Task>(receivedTasksQuery);
-
-  // Merge employee tasks client-side
-  const employeeTasks = useMemo(() => {
-    if (!isEmployee) return [];
-    const tasksMap = new Map<string, Task>();
-    (authoredTasksData || []).forEach(task => tasksMap.set(task.id, task));
-    (receivedTasksData || []).forEach(task => tasksMap.set(task.id, task));
-    return Array.from(tasksMap.values());
-  }, [isEmployee, authoredTasksData, receivedTasksData]);
-  
-  // Determine the final list of tasks and loading state based on role
-  const tasks = isEmployee ? employeeTasks : (allTasksData || []);
-  const isLoading = isEmployee ? (authoredLoading || receivedLoading) : allTasksLoading;
-  
   const studentTasks = useMemo(() => {
-    if (isLoading) return [];
-    return tasks
-      .filter(task => task.content.includes(student.name))
+    if (allTasksLoading || !allTasksData) return [];
+    return allTasksData
+      .filter(task => task.content.includes(student.name) || task.content.includes(student.id))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [student.name, tasks, isLoading]);
+  }, [student.name, student.id, allTasksData, allTasksLoading]);
   
-  const getEmployee = (employeeId: string | null): User | undefined => {
-    if (!employeeId) return undefined;
-    return users.find(u => u.id === employeeId);
+  const getAuthor = (authorId: string): User | undefined => {
+    return users.find(u => u.id === authorId);
   }
 
   const handleReply = async (taskId: string) => {
@@ -111,7 +78,7 @@ export function TaskHistory({ student, users, currentUser }: TaskHistoryProps) {
 
     setIsReplying(taskId);
 
-    const task = tasks.find(t => t.id === taskId);
+    const task = allTasksData?.find(t => t.id === taskId);
     if (!task) {
       toast({ variant: 'destructive', title: 'Error', description: 'Task not found.' });
       setIsReplying(null);
@@ -147,7 +114,7 @@ export function TaskHistory({ student, users, currentUser }: TaskHistoryProps) {
         <CardDescription>A log of all tasks related to this student. Click a task to see details and add replies.</CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {allTasksLoading ? (
           <div className="flex justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
@@ -155,10 +122,10 @@ export function TaskHistory({ student, users, currentUser }: TaskHistoryProps) {
           <Accordion type="single" collapsible className="w-full space-y-2">
             {studentTasks.map((task) => {
               const lastUpdate = getLastUpdateDate(task);
-              const author = getEmployee(task.authorId);
+              const author = getAuthor(task.authorId);
               const recipientName = task.recipientId === 'all' 
                     ? 'All Employees' 
-                    : (getEmployee(task.recipientId)?.name || 'Unknown');
+                    : (getAuthor(task.recipientId)?.name || 'Unknown');
               
               const isReplyingToThisTask = isReplying === task.id;
 
@@ -192,7 +159,7 @@ export function TaskHistory({ student, users, currentUser }: TaskHistoryProps) {
                             </div>
                         </div>
                         {task.replies && task.replies.map((reply) => {
-                          const replyAuthor = getEmployee(reply.authorId);
+                          const replyAuthor = getAuthor(reply.authorId);
                           return (
                               <div key={reply.id} className="flex gap-4 relative">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-card border z-10 shrink-0">

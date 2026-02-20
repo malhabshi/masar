@@ -14,10 +14,10 @@ interface StudentHeaderProps {
 
 export function StudentHeader({ student, currentUser }: StudentHeaderProps) {
   const cleanPhoneNumber = (student.phone || '').replace(/\D/g, '');
-  const whatsappLink = `https://wa.me/${cleanPhoneNumber}`;
+  const whatsappLink = `https://wa.me/965${cleanPhoneNumber}`; // Assuming Kuwait country code
   const canEdit = currentUser.role === 'admin' || currentUser.civilId === student.employeeId;
   
-  const countryEmojis: Record<Country, string> = {
+  const countryEmojis: Record<string, string> = {
     UK: '🇬🇧',
     USA: '🇺🇸',
     Australia: '🇦🇺',
@@ -25,7 +25,7 @@ export function StudentHeader({ student, currentUser }: StudentHeaderProps) {
   };
 
   const targetCountriesFromProps = student.targetCountries || [];
-  const applicationCountries = student.applications.map(app => app.country);
+  const applicationCountries = student.applications?.map(app => app.country) || [];
   const allCountries = [...new Set([...targetCountriesFromProps, ...applicationCountries])];
 
   return (

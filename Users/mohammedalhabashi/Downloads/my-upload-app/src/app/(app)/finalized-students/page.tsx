@@ -19,16 +19,7 @@ export default function FinalizedStudentsPage() {
   const { users, usersLoading } = useUsers();
   const { firestore } = useFirebase();
 
-  const studentsQuery = useMemoFirebase(() => {
-    if (!firestore || !currentUser || currentUser.role === 'employee') return null;
-    // Firestore does not support != queries directly in this manner.
-    // A better approach would be to query for documents where the field exists.
-    // However, for this use case, we can fetch all and filter client side, or ensure the field is either a string or null.
-    // Assuming `finalChoiceUniversity` is either a string or not present/null.
-    return query(collection(firestore, 'students'), where('finalChoiceUniversity', '!=', null));
-  }, [firestore, currentUser]);
-
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(collection(firestore, 'students'));
+  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(useMemoFirebase(() => !firestore ? null : collection(firestore, 'students'), [firestore]));
 
   const finalizedStudents = useMemo(() => {
     if (!allStudents) return [];

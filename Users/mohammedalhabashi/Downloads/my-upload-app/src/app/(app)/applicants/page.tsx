@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
 import type { Student, User, PipelineStatus } from '@/lib/types';
-import { useFirebase, useCollection } from '@/firebase';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -32,7 +32,7 @@ export default function ApplicantsPage() {
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [termFilter, setTermFilter] = useState('all');
 
-  const studentsQuery = useMemo(() => {
+  const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !currentUser) return null;
 
     if (currentUser.role === 'employee' && currentUser.civilId) {
@@ -52,7 +52,7 @@ export default function ApplicantsPage() {
   const academicTerms = useMemo(() => {
     if (!students) return [];
     const terms = students.map(s => s.term).filter(Boolean);
-    return [...new Set(terms)];
+    return [...new Set(terms as string[])];
   }, [students]);
 
   const filteredStudents = useMemo(() => {
@@ -62,18 +62,18 @@ export default function ApplicantsPage() {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch =
         student.name.toLowerCase().includes(searchLower) ||
-        student.email.toLowerCase().includes(searchLower) ||
-        student.phone.toLowerCase().includes(searchLower);
+        (student.email && student.email.toLowerCase().includes(searchLower)) ||
+        (student.phone && student.phone.toLowerCase().includes(searchLower));
       
       const matchesPipeline =
-        pipelineFilter === 'all' || student.pipelineStatus === pipelineFilter;
+        pipelineFilter === 'all' || student.pipelineStatus === pipelineFilter || (pipelineFilter === 'none' && !student.pipelineStatus);
 
       const studentEmployeeId = student.employeeId || 'unassigned';
       const matchesEmployee =
         employeeFilter === 'all' || studentEmployeeId === employeeFilter;
       
       const matchesTerm =
-        termFilter === 'all' || student.term === termFilter;
+        termFilter === 'all' || !student.term || student.term === termFilter;
 
       return matchesSearch && matchesPipeline && matchesEmployee && matchesTerm;
     });

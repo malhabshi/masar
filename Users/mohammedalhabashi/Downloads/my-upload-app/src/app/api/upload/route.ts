@@ -77,8 +77,6 @@ export async function POST(req: NextRequest) {
     // Get a reference to the file in Firebase Storage.
     const blob = bucket.file(filePath);
     
-    // Use the .save() method to upload the file buffer directly.
-    // This is a robust way to handle the upload and avoids stream-related issues.
     await blob.save(fileBuffer, {
         metadata: {
             contentType: file.type,
