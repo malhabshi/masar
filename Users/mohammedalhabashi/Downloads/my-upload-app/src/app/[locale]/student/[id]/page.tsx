@@ -1,2 +1,4 @@
-import Page from '../../(app)/student/[id]/page';
-export default Page;
+
+export default function Page() {
+  return null;
+}

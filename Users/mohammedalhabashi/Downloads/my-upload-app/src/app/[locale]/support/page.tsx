@@ -1,6 +1,5 @@
-// This file is intentionally left blank to resolve a routing conflict.
-// The actual page component is in the (app) group, but a support page doesn't exist there yet.
-// This prevents a 404 error for the support link in the sidebar.
+
+'use client';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { LifeBuoy } from 'lucide-react';
 

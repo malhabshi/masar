@@ -1,2 +1,6 @@
-import Page from '../(app)/new-request/page';
-export default Page;
+
+import { NewRequestForm } from '@/components/new-request-form';
+
+export default function NewRequestPage() {
+  return <NewRequestForm />;
+}

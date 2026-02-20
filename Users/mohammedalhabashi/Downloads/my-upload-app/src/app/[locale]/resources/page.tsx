@@ -1,2 +1,4 @@
-import Page from '../(app)/resources/page';
-export default Page;
+
+import ResourcesPage from '@/components/resources/page';
+
+export default ResourcesPage;

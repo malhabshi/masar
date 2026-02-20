@@ -1,2 +1,2 @@
-import Page from '../(app)/approved-universities/page';
-export default Page;
+
+export { ApprovedUniversitiesView as default } from '@/components/universities/approved-universities-view';

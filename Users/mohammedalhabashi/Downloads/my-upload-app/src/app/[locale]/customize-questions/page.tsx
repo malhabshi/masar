@@ -1,2 +1,6 @@
-import Page from '../(app)/customize-questions/page';
-export default Page;
+
+import { CustomizeQuestionsForm } from '@/components/customize-questions-form';
+
+export default function CustomizeQuestionsPage() {
+  return <CustomizeQuestionsForm />;
+}
