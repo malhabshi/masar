@@ -33,7 +33,7 @@ service cloud.firestore {
 
     match /students/{studentId} {
       // Admins and departments can read any student.
-      // Employees can only read students assigned to them.
+      // Employees can only read students assigned to them via their civilId.
       allow read: if isSignedIn() && (isUserAdmin() || isDepartment() || resource.data.employeeId == getUserData().civilId);
       
       // Any authenticated user can create a student.
@@ -100,7 +100,8 @@ service cloud.firestore {
 
     match /time_logs/{logId} {
         allow read: if isUserAdmin();
-        allow write: if isSignedIn();
+        // Only admins can create logs, or employees can create their own logs.
+        allow write: if isUserAdmin() || request.resource.data.employeeId == request.auth.uid;
     }
   }
 }
