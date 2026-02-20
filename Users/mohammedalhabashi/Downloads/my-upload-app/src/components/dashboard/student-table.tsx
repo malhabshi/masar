@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {
   Table,
   TableBody,
@@ -9,7 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle } from 'lucide-react';
 import type { Student, User, PipelineStatus } from '@/lib/types';
@@ -108,11 +109,11 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      
+                       <AvatarImage src={student.avatarUrl} alt={student.name} />
                       <AvatarFallback>{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <a href={`/student/${student.id}`} className="hover:underline">
+                      <Link href={`/student/${student.id}`} className="hover:underline">
                         <div className="font-medium flex items-center gap-2 flex-wrap">
                           <span>{student.name || 'Unknown Student'}</span>
                           {isCurrentUserAssigned && student.isNewForEmployee && (
@@ -161,7 +162,7 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
                               </Badge>
                           )}
                         </div>
-                      </a>
+                      </Link>
                       <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
                       <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
                       {student.finalChoiceUniversity && (
@@ -226,7 +227,7 @@ export function StudentTable({ students, users, currentUser, showEmployee = fals
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                  <a href={`/student/${student.id}`}>View Details</a>
+                                  <Link href={`/student/${student.id}`}>View Details</Link>
                               </DropdownMenuItem>
                               {currentUser?.role === 'employee' && (
                                   <>

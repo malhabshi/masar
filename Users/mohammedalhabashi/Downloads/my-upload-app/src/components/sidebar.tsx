@@ -15,6 +15,7 @@ import { useUser } from '@/hooks/use-user';
 import {
   LayoutDashboard,
   Users,
+  PlusCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -26,6 +27,10 @@ export function AppSidebar() {
     const navItems = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/applicants', label: 'Applicants', icon: Users },
+    ];
+    
+    const employeeNavItems = [
+        { href: '/new-request', label: 'Add Student', icon: PlusCircle },
     ];
 
   return (
@@ -46,6 +51,19 @@ export function AppSidebar() {
                   {item.label}
                 </SidebarMenuButton>
               </Link>
+            </SidebarMenuItem>
+          ))}
+          {user?.role === 'employee' && employeeNavItems.map((item) => (
+            <SidebarMenuItem key={item.href}>
+                <Link href={item.href} passHref legacyBehavior>
+                    <SidebarMenuButton
+                    isActive={pathname === item.href}
+                    asChild
+                    >
+                    <item.icon />
+                    {item.label}
+                    </SidebarMenuButton>
+                </Link>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
