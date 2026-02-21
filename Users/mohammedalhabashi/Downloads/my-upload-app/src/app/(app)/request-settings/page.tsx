@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
@@ -37,6 +36,7 @@ import * as z from 'zod';
 import { useUsers } from '@/contexts/users-provider';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import React from 'react';
 
 const requestTypeSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters.'),
@@ -283,5 +283,3 @@ export default function RequestSettingsPage() {
     </>
   );
 }
-
-    
