@@ -60,6 +60,13 @@ export interface ProfileCompletionStatus {
   readyToTravel: boolean;
 }
 
+export interface StudentTransfer {
+    fromEmployeeId: string | null;
+    toEmployeeId: string;
+    date: string;
+    transferredBy: string;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -75,12 +82,7 @@ export interface Student {
   targetCountries?: Country[];
   missingItems?: string[];
   pipelineStatus?: PipelineStatus;
-  transferHistory?: {
-    fromEmployeeId: string | null;
-    toEmployeeId: string;
-    date: string;
-    transferredBy: string;
-  }[];
+  transferHistory?: StudentTransfer[];
   unreadUpdates?: number;
   employeeUnreadMessages?: number;
   newDocumentsForEmployee?: number;

@@ -1,308 +1,185 @@
+
 {
   "entities": {
     "User": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents an individual user within the UniApply Hub system, either an employee or an administrator. This entity stores core user information and their role.",
+      "description": "Represents an individual user within the UniApply Hub system.",
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "The full name of the user."
-        },
-        "email": {
-          "type": "string",
-          "description": "The email address of the user, used for identification and communication.",
-          "format": "email"
-        },
-        "phone": {
-          "type": "string",
-          "description": "The phone number of the user, potentially used for WhatsApp notifications."
-        },
-        "role": {
-          "type": "string",
-          "description": "The role of the user within the system (e.g., 'admin', 'employee')."
-        },
-        "civilId": {
-            "type": "string"
-        },
-        "employeeId": {
-            "type": "string"
-        },
-        "avatarUrl": {
-            "type": "string",
-            "format": "uri"
-        }
+        "name": { "type": "string", "description": "The full name of the user." },
+        "email": { "type": "string", "description": "The email address of the user.", "format": "email" },
+        "phone": { "type": "string", "description": "The phone number of the user." },
+        "role": { "type": "string", "description": "The role of the user within the system.", "enum": ["admin", "employee", "department"] },
+        "civilId": { "type": "string", "description": "The user's Civil ID number." },
+        "employeeId": { "type": "string", "description": "A shorter, derived employee ID." },
+        "avatarUrl": { "type": "string", "description": "URL to the user's avatar image.", "format": "uri" }
       },
-      "required": [
-        "name",
-        "email",
-        "role"
-      ]
+      "required": ["name", "email", "role"]
     },
     "Student": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Student",
       "type": "object",
-      "description": "Represents a student whose university applications are being managed through the UniApply Hub by an employee.",
+      "description": "Represents a student applicant being managed by the agency.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Student entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The full name of the student."
-        },
-        "email": {
-          "type": "string",
-          "description": "The email address of the student, used for communication and detecting shared students.",
-          "format": "email"
-        },
-        "phone": {
-          "type": "string",
-          "description": "The phone number of the student, used for communication and detecting shared students."
-        },
-        "nationality": {
-          "type": "string",
-          "description": "The nationality of the student."
-        },
-        "dateOfBirth": {
-          "type": "string",
-          "description": "The student's date of birth.",
-          "format": "date"
-        },
-        "employeeId": {
-          "type": "string",
-          "description": "Reference to the User (employee) who is assigned to manage this student's applications. This is the employee's Civil ID."
-        },
-        "notes": {
-          "type": "array",
-          "description": "A list of notes (objects with id, authorId, content, createdAt) about the student.",
-          "items": {
-              "type": "object"
-          }
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the student record was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the student record was last updated.",
-          "format": "date-time"
-        }
+        "id": { "type": "string", "description": "Unique identifier for the student." },
+        "name": { "type": "string", "description": "The full name of the student." },
+        "email": { "type": "string", "description": "The email address of the student.", "format": "email" },
+        "phone": { "type": "string", "description": "The phone number of the student." },
+        "employeeId": { "type": "string", "description": "The Civil ID of the employee assigned to this student." },
+        "avatarUrl": { "type": "string", "description": "URL to the student's avatar image.", "format": "uri" },
+        "applications": { "type": "array", "items": { "$ref": "#/entities/Application" } },
+        "notes": { "type": "array", "items": { "$ref": "#/entities/Note" } },
+        "documents": { "type": "array", "items": { "$ref": "#/entities/Document" } },
+        "createdAt": { "type": "string", "description": "Timestamp when the student was created.", "format": "date-time" },
+        "createdBy": { "type": "string", "description": "The ID of the user who created the student." },
+        "targetCountries": { "type": "array", "items": { "type": "string" } },
+        "missingItems": { "type": "array", "items": { "type": "string" } },
+        "pipelineStatus": { "type": "string", "enum": ["green", "orange", "red", "none"] },
+        "transferHistory": { "type": "array", "items": { "$ref": "#/entities/StudentTransfer" } },
+        "unreadUpdates": { "type": "number", "description": "Counter for unread updates for admin/dept." },
+        "employeeUnreadMessages": { "type": "number", "description": "Counter for unread chat messages for the employee." },
+        "newDocumentsForEmployee": { "type": "number" },
+        "newDocumentsForAdmin": { "type": "number" },
+        "newMissingItemsForEmployee": { "type": "number" },
+        "finalChoiceUniversity": { "type": "string" },
+        "ielts": { "$ref": "#/entities/IeltsScore" },
+        "profileCompletionStatus": { "$ref": "#/entities/ProfileCompletionStatus" },
+        "transferRequested": { "type": "boolean" },
+        "deletionRequested": { "type": "boolean" },
+        "isNewForEmployee": { "type": "boolean" },
+        "term": { "type": "string" }
       },
-      "required": [
-        "id",
-        "name",
-        "email",
-        "phone",
-        "createdAt"
-      ]
-    },
-    "University": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "University",
-      "type": "object",
-      "description": "Represents a university to which students can apply through the UniApply Hub.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the University entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The full name of the university."
-        },
-        "country": {
-          "type": "string",
-          "description": "The country where the university is located (e.g., UK, USA, Australia, New Zealand)."
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "country"
-      ]
+      "required": ["id", "name", "email", "phone", "createdAt"]
     },
     "Application": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Application",
       "type": "object",
-      "description": "Represents a specific university application submitted on behalf of a student, tracking its status and details.",
+      "description": "Represents a university application for a student.",
       "properties": {
-        "university": {
-          "type": "string"
-        },
-        "major": {
-          "type": "string"
-        },
-        "country": {
-            "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the application (e.g., 'Pending', 'Submitted', 'In Review', 'Accepted', 'Rejected')."
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the application record was last updated.",
-          "format": "date-time"
-        }
+        "university": { "type": "string" },
+        "major": { "type": "string" },
+        "country": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Submitted", "In Review", "Accepted", "Rejected"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "university",
-        "major",
-        "country",
-        "status",
-        "updatedAt"
-      ]
+      "required": ["university", "major", "country", "status", "updatedAt"]
+    },
+    "Note": {
+      "title": "Note",
+      "type": "object",
+      "description": "A note or comment about a student.",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "authorId", "content", "createdAt"]
     },
     "Document": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Document",
       "type": "object",
-      "description": "Represents a document uploaded by an employee or admin for a student.",
+      "description": "Represents a file uploaded for a student.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri"
-        },
-        "uploadedAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "authorId": {
-          "type": "string"
-        },
-        "isNew": {
-            "type": "boolean"
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "uploadedAt": { "type": "string", "format": "date-time" },
+        "authorId": { "type": "string" },
+        "isNew": { "type": "boolean" }
       },
-      "required": [
-        "id",
-        "name",
-        "url",
-        "uploadedAt",
-        "authorId"
-      ]
+      "required": ["id", "name", "url", "uploadedAt", "authorId"]
     },
-    "Task": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Task",
+    "IeltsScore": {
+      "title": "IELTS Score",
       "type": "object",
-      "description": "Represents a specific task related to a student's application process, typically assigned by an admin to an employee.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "authorId": {
-          "type": "string"
-        },
-        "recipientId": {
-          "type": "string"
-        },
-        "content": {
-          "type": "string"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the task (e.g., 'new', 'in-progress', 'completed', 'archived')."
-        },
-        "replies": {
-            "type": "array"
-        }
-      },
-      "required": [
-        "id",
-        "authorId",
-        "recipientId",
-        "content",
-        "status",
-        "createdAt"
-      ]
+        "overall": { "type": "number" },
+        "listening": { "type": "number" },
+        "reading": { "type": "number" },
+        "writing": { "type": "number" },
+        "speaking": { "type": "number" },
+        "uploadedDocumentId": { "type": "string" }
+      }
+    },
+    "ProfileCompletionStatus": {
+      "title": "Profile Completion Status",
+      "type": "object",
+      "properties": {
+        "submitUniversityApplication": { "type": "boolean" },
+        "applyMoheScholarship": { "type": "boolean" },
+        "submitKcoRequest": { "type": "boolean" },
+        "receivedCasOrI20": { "type": "boolean" },
+        "appliedForVisa": { "type": "boolean" },
+        "documentsSubmittedToMohe": { "type": "boolean" },
+        "readyToTravel": { "type": "boolean" }
+      }
+    },
+    "StudentTransfer": {
+      "title": "Student Transfer",
+      "type": "object",
+      "properties": {
+        "fromEmployeeId": { "type": "string" },
+        "toEmployeeId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "transferredBy": { "type": "string" }
+      }
     },
     "ChatMessage": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ChatMessage",
+      "title": "Chat Message",
       "type": "object",
-      "description": "Represents a message exchanged within the real-time chatbot between an employee and an admin regarding a specific student's application.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "authorId": {
-          "type": "string"
-        },
-        "content": {
-          "type": "string"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "document": { "type": "object", "properties": { "name": { "type": "string" }, "url": { "type": "string" } } }
       },
-      "required": [
-        "id",
-        "authorId",
-        "content",
-        "timestamp"
-      ]
+      "required": ["id", "authorId", "content", "timestamp"]
+    },
+    "Task": {
+      "title": "Task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["new", "in-progress", "completed", "archived"] },
+        "replies": { "type": "array", "items": { "$ref": "#/entities/TaskReply" } }
+      },
+      "required": ["id", "authorId", "recipientId", "content", "status", "createdAt"]
+    },
+    "TaskReply": {
+      "title": "Task Reply",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "authorId", "content", "createdAt"]
     },
     "ApplicationQuestion": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ApplicationQuestion",
+      "title": "Application Question",
       "type": "object",
-      "description": "Represents a customizable question that an admin can define to be part of the student application forms.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "questionText": {
-          "type": "string"
-        },
-        "questionType": {
-          "type": "string"
-        },
-        "isRequired": {
-          "type": "boolean"
-        },
-        "isActive": {
-          "type": "boolean"
-        },
-        "sortOrder": {
-          "type": "number"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "id": { "type": "string" },
+        "questionText": { "type": "string" },
+        "questionType": { "type": "string", "enum": ["text", "textarea", "number", "date", "select", "checkbox"] },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "isRequired": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "id",
-        "questionText",
-        "questionType",
-        "isRequired",
-        "isActive",
-        "createdAt"
-      ]
+      "required": ["id", "questionText", "questionType", "isRequired", "isActive", "createdAt"]
     },
     "UpcomingEvent": {
       "title": "Upcoming Event",
       "type": "object",
-      "description": "Represents an upcoming event for all users.",
       "properties": {
         "title": { "type": "string" },
         "description": { "type": "string" },
@@ -314,7 +191,6 @@
     "SharedDocument": {
       "title": "Shared Document",
       "type": "object",
-      "description": "Represents a document shared with all users.",
       "properties": {
         "name": { "type": "string" },
         "description": { "type": "string" },
@@ -328,7 +204,6 @@
     "RequestType": {
       "title": "Request Type",
       "type": "object",
-      "description": "Defines a type of request an employee can make.",
       "properties": {
         "name": { "type": "string" },
         "description": { "type": "string" },
@@ -339,7 +214,6 @@
     "PersonalTodo": {
       "title": "Personal Todo",
       "type": "object",
-      "description": "A personal to-do item for a user.",
       "properties": {
         "userId": { "type": "string" },
         "content": { "type": "string" },
@@ -351,7 +225,6 @@
     "ResourceLink": {
       "title": "Resource Link",
       "type": "object",
-      "description": "Represents a helpful external link shared with all users.",
       "properties": {
         "title": { "type": "string" },
         "description": { "type": "string" },
@@ -364,7 +237,6 @@
     "TimeLog": {
       "title": "Time Log",
       "type": "object",
-      "description": "Represents a single clock-in/clock-out session for an employee.",
       "properties": {
         "employeeId": { "type": "string" },
         "date": { "type": "string", "format": "date" },
@@ -372,45 +244,33 @@
         "clockOut": { "type": "string", "format": "date-time" }
       },
       "required": ["employeeId", "date", "clockIn", "clockOut"]
+    },
+    "ApprovedUniversity": {
+      "title": "Approved University",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "major": { "type": "string" },
+        "country": { "type": "string" },
+        "ieltsScore": { "type": "number" },
+        "isAvailable": { "type": "boolean" }
+      },
+      "required": ["id", "name", "major", "country", "ieltsScore", "isAvailable"]
     }
   },
   "firestore": {
-    "/users/{userId}": {
-      "schema": { "$ref": "#/entities/User" },
-      "description": "Stores individual user profiles (employees and admins). The 'role' field is the source of truth for permissions."
-    },
-    "/users/{userId}/personal_todos/{todoId}": {
-      "schema": { "$ref": "#/entities/PersonalTodo" }
-    },
-    "/students/{studentId}": {
-      "schema": { "$ref": "#/entities/Student" }
-    },
-    "/approved_universities/{universityId}": {
-      "schema": { "$ref": "#/entities/University" }
-    },
-    "/application_questions/{questionId}": {
-      "schema": { "$ref": "#/entities/ApplicationQuestion" }
-    },
-    "/tasks/{taskId}": {
-      "schema": { "$ref": "#/entities/Task" }
-    },
-    "/chats/{studentId}/messages/{messageId}": {
-      "schema": { "$ref": "#/entities/ChatMessage" }
-    },
-    "/upcoming_events/{eventId}": {
-      "schema": { "$ref": "#/entities/UpcomingEvent" }
-    },
-    "/shared_documents/{documentId}": {
-      "schema": { "$ref": "#/entities/SharedDocument" }
-    },
-    "/request_types/{requestTypeId}": {
-      "schema": { "$ref": "#/entities/RequestType" }
-    },
-    "/resource_links/{linkId}": {
-      "schema": { "$ref": "#/entities/ResourceLink" }
-    },
-    "/time_logs/{logId}": {
-      "schema": { "$ref": "#/entities/TimeLog" }
-    }
+    "/users/{userId}": { "schema": { "$ref": "#/entities/User" }, "description": "Stores individual user profiles." },
+    "/users/{userId}/personal_todos/{todoId}": { "schema": { "$ref": "#/entities/PersonalTodo" } },
+    "/students/{studentId}": { "schema": { "$ref": "#/entities/Student" } },
+    "/approved_universities/{universityId}": { "schema": { "$ref": "#/entities/ApprovedUniversity" } },
+    "/application_questions/{questionId}": { "schema": { "$ref": "#/entities/ApplicationQuestion" } },
+    "/tasks/{taskId}": { "schema": { "$ref": "#/entities/Task" } },
+    "/chats/{studentId}/messages/{messageId}": { "schema": { "$ref": "#/entities/ChatMessage" } },
+    "/upcoming_events/{eventId}": { "schema": { "$ref": "#/entities/UpcomingEvent" } },
+    "/shared_documents/{documentId}": { "schema": { "$ref": "#/entities/SharedDocument" } },
+    "/request_types/{requestTypeId}": { "schema": { "$ref": "#/entities/RequestType" } },
+    "/resource_links/{linkId}": { "schema": { "$ref": "#/entities/ResourceLink" } },
+    "/time_logs/{logId}": { "schema": { "$ref": "#/entities/TimeLog" } }
   }
 }
