@@ -10,7 +10,6 @@
 // the notification-sending parts have been commented out. The core logic of each action remains.
 
 import type { ApplicationStatus, PipelineStatus, Task, TaskReply, TaskStatus, User, UserRole, Country, IeltsScore, ProfileCompletionStatus, RequestType, Student } from './types';
-import { requestTypes } from './data';
 import { NotificationType, sendTypedWhatsAppMessage } from './whatsapp-templates';
 
 export async function updateApplicationStatus(
