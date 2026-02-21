@@ -12,6 +12,10 @@ export * from './firestore/use-doc';
 export * from './auth/use-user';
 export * from './non-blocking-updates';
 
+// Add the missing useMemoFirebase hook
+export function useMemoFirebase<T>(factory: () => T, deps: any[]): T {
+  return useMemo(factory, deps);
+}
 
 let firebaseApp: FirebaseApp;
 
