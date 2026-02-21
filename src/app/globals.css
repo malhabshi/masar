@@ -2,39 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: var(--font-body);
-}
-
 @layer base {
   :root {
-    --background: 231 60% 95%;
+    --background: 231 60% 95%; /* #E8EAF6 */
     --foreground: 231 48% 20%;
+
     --card: 0 0% 100%;
     --card-foreground: 231 48% 20%;
+
     --popover: 0 0% 100%;
     --popover-foreground: 231 48% 20%;
-    --primary: 231 48% 48%;
+
+    --primary: 231 48% 48%; /* #3F51B5 */
     --primary-foreground: 0 0% 98%;
+
     --secondary: 231 50% 90%;
     --secondary-foreground: 231 48% 30%;
+
     --muted: 231 50% 92%;
     --muted-foreground: 231 30% 55%;
-    --accent: 265 39% 55%;
+
+    --accent: 265 39% 55%; /* #7E57C2 */
     --accent-foreground: 0 0% 98%;
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+    
     --success: 142 76% 36%;
     --success-foreground: 0 0% 98%;
+
     --border: 231 40% 88%;
     --input: 231 40% 90%;
     --ring: 231 48% 48%;
-    --chart-1: 231 48% 48%;
-    --chart-2: 265 39% 55%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+
     --radius: 0.5rem;
+
+    /* Sidebar Theme */
     --sidebar-background: 231 48% 28%;
     --sidebar-foreground: 231 60% 95%;
     --sidebar-primary: 231 60% 95%;
@@ -44,7 +47,9 @@ body {
     --sidebar-border: 231 48% 35%;
     --sidebar-ring: 231 60% 95%;
   }
+
   .dark {
+    /* Keeping dark theme consistent for now, but can be customized */
     --background: 231 20% 12%;
     --foreground: 231 60% 95%;
     --card: 231 20% 15%;
@@ -66,11 +71,6 @@ body {
     --border: 231 20% 25%;
     --input: 231 20% 25%;
     --ring: 231 48% 58%;
-    --chart-1: 231 48% 58%;
-    --chart-2: 265 39% 65%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
     --sidebar-background: 231 20% 15%;
     --sidebar-foreground: 231 60% 95%;
     --sidebar-primary: 231 48% 58%;
