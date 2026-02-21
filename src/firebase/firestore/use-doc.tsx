@@ -10,6 +10,32 @@ import {
   DocumentSnapshot,
 } from 'firebase/firestore';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { toDate } from '@/lib/timestamp-utils';
+
+// Recursively convert all Timestamps to Date objects
+function convertTimestamps(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  
+  if (obj && typeof obj.toDate === 'function' && !(obj instanceof Date)) {
+    return toDate(obj);
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertTimestamps(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const converted: any = {};
+    for (const key in obj) {
+      if(Object.prototype.hasOwnProperty.call(obj, key)) {
+          converted[key] = convertTimestamps(obj[key]);
+      }
+    }
+    return converted;
+  }
+  
+  return obj;
+}
 
 /** Utility type to add an 'id' field to a given type T. */
 type WithId<T> = T & { id: string };
@@ -63,7 +89,9 @@ export function useDoc<T = any>(
       memoizedDocRef,
       (snapshot: DocumentSnapshot<DocumentData>) => {
         if (snapshot.exists()) {
-          setData({ ...(snapshot.data() as T), id: snapshot.id });
+          const docData = snapshot.data();
+          const convertedData = convertTimestamps(docData);
+          setData({ ...(convertedData as T), id: snapshot.id });
         } else {
           // Document does not exist
           setData(null);

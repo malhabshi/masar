@@ -7,6 +7,7 @@ import { useFirebase, useCollection } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Student, Task, User } from '@/lib/types';
 import { Loader2, Users, FileText, UserPlus } from 'lucide-react';
+import { sortByDate } from '@/lib/timestamp-utils';
 
 // Components
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -90,7 +91,7 @@ function EmployeeDashboard({ students, tasks, users, currentUser, isLoading }: {
             task.recipientId === currentUser.id || 
             task.recipientId === 'all' || 
             task.authorId === currentUser.id
-        ).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        ).sort((a,b) => sortByDate(a,b));
     }, [tasks, currentUser.id]);
 
     return (
@@ -187,7 +188,7 @@ export default function DashboardPage() {
     
     const sortedTasks = useMemo(() => {
         if (!tasks) return [];
-        return tasks.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        return tasks.sort((a,b) => sortByDate(a,b));
     }, [tasks]);
 
     switch (currentUser.role) {

@@ -10,9 +10,9 @@ import {
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { TimeLog, User } from '@/lib/types';
-import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect } from 'react';
+import { formatDate, toDate } from '@/lib/timestamp-utils';
 
 interface EmployeeActivityTableProps {
   timeLogs: TimeLog[];
@@ -31,9 +31,9 @@ export function EmployeeActivityTable({ timeLogs, users }: EmployeeActivityTable
   };
 
   const calculateTotalTime = (clockIn: string, clockOut: string) => {
-    const start = new Date(clockIn);
-    const end = new Date(clockOut);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    const start = toDate(clockIn);
+    const end = toDate(clockOut);
+    if (!start || !end) {
       return 'Invalid Time';
     }
     const diff = end.getTime() - start.getTime();
@@ -42,7 +42,11 @@ export function EmployeeActivityTable({ timeLogs, users }: EmployeeActivityTable
     return `${hours}h ${minutes}m`;
   };
 
-  const sortedTimeLogs = [...timeLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedTimeLogs = [...timeLogs].sort((a, b) => {
+    const dateA = toDate(b.date)?.getTime() || 0;
+    const dateB = toDate(a.date)?.getTime() || 0;
+    return dateA - dateB;
+  });
 
   return (
     <div className="rounded-lg border">
@@ -75,9 +79,9 @@ export function EmployeeActivityTable({ timeLogs, users }: EmployeeActivityTable
                     </div>
                   ) : 'Unknown Employee'}
                 </TableCell>
-                <TableCell>{isClient ? format(new Date(log.date), 'PPP') : <Skeleton className="h-4 w-24" />}</TableCell>
-                <TableCell>{isClient ? format(new Date(log.clockIn), 'p') : <Skeleton className="h-4 w-16" />}</TableCell>
-                <TableCell>{isClient ? format(new Date(log.clockOut), 'p') : <Skeleton className="h-4 w-16" />}</TableCell>
+                <TableCell>{isClient ? formatDate(log.date) : <Skeleton className="h-4 w-24" />}</TableCell>
+                <TableCell>{isClient ? toDate(log.clockIn)?.toLocaleTimeString() : <Skeleton className="h-4 w-16" />}</TableCell>
+                <TableCell>{isClient ? toDate(log.clockOut)?.toLocaleTimeString() : <Skeleton className="h-4 w-16" />}</TableCell>
                 <TableCell>{isClient ? calculateTotalTime(log.clockIn, log.clockOut) : <Skeleton className="h-4 w-12" />}</TableCell>
               </TableRow>
             );

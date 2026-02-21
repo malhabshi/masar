@@ -4,7 +4,7 @@ import type { Student, User } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDate } from '@/lib/timestamp-utils';
 
 interface TransferHistoryProps {
   transferHistory: NonNullable<Student['transferHistory']>;
@@ -64,7 +64,7 @@ export function TransferHistory({ transferHistory, users }: TransferHistoryProps
                     </div>
                 </div>
                 <div className="text-xs text-muted-foreground mt-2 pl-1">
-                    Transferred on {format(new Date(transfer.date), 'PPP')} by {admin?.name || 'Admin'}
+                    Transferred on {formatDate(transfer.date)} by {admin?.name || 'Admin'}
                 </div>
             </div>
           );

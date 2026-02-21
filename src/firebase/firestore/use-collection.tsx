@@ -13,6 +13,32 @@ import {
   where,
 } from 'firebase/firestore';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { toDate } from '@/lib/timestamp-utils';
+
+// Recursively convert all Timestamps to Date objects
+function convertTimestamps(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  
+  if (obj && typeof obj.toDate === 'function' && !(obj instanceof Date)) {
+    return toDate(obj);
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertTimestamps(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const converted: any = {};
+    for (const key in obj) {
+      if(Object.prototype.hasOwnProperty.call(obj, key)) {
+          converted[key] = convertTimestamps(obj[key]);
+      }
+    }
+    return converted;
+  }
+  
+  return obj;
+}
 
 /** Utility type to add an 'id' field to a given type T. */
 export type WithId<T> = T & { id: string };
@@ -80,7 +106,9 @@ export function useCollection<T = any>(
       (snapshot: QuerySnapshot<DocumentData>) => {
         const results: ResultItemType[] = [];
         for (const doc of snapshot.docs) {
-          results.push({ ...(doc.data() as T), id: doc.id });
+          const docData = doc.data();
+          const convertedData = convertTimestamps(docData);
+          results.push({ ...(convertedData as T), id: doc.id });
         }
         setData(results);
         setError(null);

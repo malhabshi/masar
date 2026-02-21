@@ -8,6 +8,7 @@ import { FileText, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
+import { formatDate } from '@/lib/timestamp-utils';
 
 interface InternalDocumentsProps {
   student: Student;
@@ -76,7 +77,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload, us
                         <span className="text-muted-foreground">Student</span>
                       )}
                     </TableCell>
-                    <TableCell>{new Date(doc.uploadedAt).toLocaleDateString()}</TableCell>
+                    <TableCell>{formatDate(doc.uploadedAt)}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" asChild>
                         <a href={doc.url} download={doc.name} target="_blank" rel="noopener noreferrer">

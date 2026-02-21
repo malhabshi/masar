@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Loader2, Send } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format, formatDistanceToNow, formatDistanceStrict } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFirebase, useCollection, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
+import { formatDate, formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 
 const taskStatuses: TaskStatus[] = ['new', 'in-progress', 'completed', 'archived'];
 
@@ -60,7 +60,12 @@ function TaskItem({
         if (!task.replies || task.replies.length === 0) return null;
         const sortedReplies = [...task.replies].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         const firstReply = sortedReplies[0];
-        return formatDistanceStrict(new Date(firstReply.createdAt), new Date(task.createdAt));
+        // Note: date-fns formatDistanceStrict would be more precise
+        const diffMs = new Date(firstReply.createdAt).getTime() - new Date(task.createdAt).getTime();
+        const diffMins = Math.round(diffMs / 60000);
+        if (diffMins < 60) return `${diffMins} minutes`;
+        const diffHours = Math.round(diffMins / 60);
+        return `${diffHours} hours`;
     };
 
     const responseTime = getResponseTime(task);
@@ -85,7 +90,7 @@ function TaskItem({
                         </div>
                         <div className="text-xs text-muted-foreground text-right">
                            {isClient ? (
-                               <span>{format(new Date(task.createdAt), 'PPP p')}</span>
+                               <span>{formatDate(task.createdAt)}</span>
                            ) : (
                                <Skeleton className="h-4 w-36" />
                            )}
@@ -116,7 +121,7 @@ function TaskItem({
                                             <div className="flex items-center justify-between">
                                                 <span className="font-semibold">{replyAuthor?.name}</span>
                                                 <span className="text-xs text-muted-foreground">
-                                                    {isClient ? formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true }) : <Skeleton className="h-4 w-20" />}
+                                                    {isClient ? formatRelativeTime(reply.createdAt) : <Skeleton className="h-4 w-20" />}
                                                 </span>
                                             </div>
                                             <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{reply.content}</p>
@@ -254,8 +259,8 @@ export function TaskManager({ currentUser, users }: TaskManagerProps) {
     return [];
   }, [tasks, currentUser]);
 
-  const activeTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new' || t.status === 'in-progress').sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [filteredTasks]);
-  const archivedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed' || t.status === 'archived').sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [filteredTasks]);
+  const activeTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new' || t.status === 'in-progress').sort((a,b) => sortByDate(a,b)), [filteredTasks]);
+  const archivedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed' || t.status === 'archived').sort((a,b) => sortByDate(a,b)), [filteredTasks]);
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
 
   return (

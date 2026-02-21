@@ -1,29 +1,15 @@
-
 'use client';
 
-import type { Task, User, TaskStatus } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { formatDistanceToNow } from 'date-fns';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bell, Trash2, Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Button } from '../ui/button';
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { deleteTask as deleteTaskAction } from '@/lib/actions';
-import { useFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { Loader2, Send } from 'lucide-react';
+import { formatRelativeTime } from '@/lib/timestamp-utils';
+import type { Task, User, TaskReply } from '@/lib/types';
 
 interface TaskListProps {
   tasks: Task[];
@@ -32,105 +18,111 @@ interface TaskListProps {
   isLoading: boolean;
 }
 
-const statusVariant: { [key in TaskStatus]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
-    'new': 'default',
-    'in-progress': 'secondary',
-    'completed': 'outline',
-    'archived': 'outline',
-};
-
 export function TaskList({ tasks, users, currentUser, isLoading }: TaskListProps) {
-  const { toast } = useToast();
+  const [replyContent, setReplyContent] = useState<Record<string, string>>({});
+  const [isReplying, setIsReplying] = useState<Record<string, boolean>>({});
   const { firestore } = useFirebase();
+  const { toast } = useToast();
 
-  const getAuthor = (authorId: string) => {
-    return users.find(u => u.id === authorId);
+  const getUserName = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    return user?.name || 'Unknown User';
   };
-  
-  const handleDelete = async (taskId: string) => {
-    if (!firestore) return;
-    const result = await deleteTaskAction(taskId);
-    if(result.success) {
-      const taskDocRef = doc(firestore, 'tasks', taskId);
-      deleteDocumentNonBlocking(taskDocRef);
-      toast({ title: "Update Deleted" });
-    } else {
-      toast({ variant: 'destructive', title: "Deletion failed" });
+
+  const handleReply = async (taskId: string) => {
+    if (!replyContent[taskId]?.trim() || !firestore) return;
+    
+    setIsReplying(prev => ({ ...prev, [taskId]: true }));
+    
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Task not found.' });
+        setIsReplying(prev => ({ ...prev, [taskId]: false }));
+        return;
     }
+
+    const newReply: TaskReply = {
+      id: `reply-${Date.now()}`,
+      authorId: currentUser.id,
+      content: replyContent[taskId].trim(),
+      createdAt: new Date().toISOString(),
+    };
+    
+    const taskDocRef = doc(firestore, 'tasks', taskId);
+    const updatedReplies = [...(task.replies || []), newReply];
+    updateDocumentNonBlocking(taskDocRef, { replies: updatedReplies });
+    
+    setReplyContent(prev => ({ ...prev, [taskId]: '' }));
+    setIsReplying(prev => ({ ...prev, [taskId]: false }));
+    toast({ title: 'Reply sent' });
   };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Task Feed</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Updates</CardTitle>
-        <CardDescription>Recent updates, tasks, and notifications.</CardDescription>
+        <CardTitle>Task Feed</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-72">
-          {isLoading ? (
-            <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
-          ) : (
-            <div className="space-y-4 pr-4">
-              {tasks.length > 0 ? (
-                tasks.map(task => {
-                  const author = getAuthor(task.authorId);
-                  return (
-                    <div key={task.id} className="flex items-start gap-3 group">
-                      <Avatar className="h-9 w-9 border">
-                        {author ? (
-                          <>
-                            <AvatarImage src={author.avatarUrl} alt={author.name} />
-                            <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
-                          </>
-                        ) : (
-                          <AvatarFallback><Bell className="h-4 w-4" /></AvatarFallback>
-                        )}
-                      </Avatar>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                              <span className="font-semibold">{author?.name || 'System'}</span>
-                              <Badge variant={statusVariant[task.status] ?? 'secondary'} className="capitalize">{task.status}</Badge>
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">{task.content}</p>
-                      </div>
-                      {currentUser?.role === 'admin' && (
-                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will permanently delete this update.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(task.id)}>Delete</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                      )}
+      <CardContent className="space-y-6">
+        {tasks.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No tasks found.</p>
+        ) : (
+          tasks.map((task) => (
+            <div key={task.id} className="space-y-4 border-b pb-4 last:border-0">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-medium">{task.content}</p>
+                  <p className="text-sm text-muted-foreground">
+                    From: {getUserName(task.authorId)} • {formatRelativeTime(task.createdAt)}
+                  </p>
+                </div>
+              </div>
+              
+              {task.replies && task.replies.length > 0 && (
+                <div className="ml-4 space-y-2 border-l-2 pl-4">
+                  {task.replies.map((reply) => (
+                    <div key={reply.id} className="text-sm">
+                      <p>{reply.content}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {getUserName(reply.authorId)} • {formatRelativeTime(reply.createdAt)}
+                      </p>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="text-center text-sm text-muted-foreground py-10">
-                  <Bell className="mx-auto h-8 w-8 mb-2" />
-                  No new tasks or notifications.
+                  ))}
                 </div>
               )}
+              
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Write a reply..."
+                  value={replyContent[task.id] || ''}
+                  onChange={(e) => setReplyContent(prev => ({ ...prev, [task.id]: e.target.value }))}
+                  className="flex-1"
+                />
+                <Button 
+                  size="sm" 
+                  onClick={() => handleReply(task.id)}
+                  disabled={isReplying[task.id] || !replyContent[task.id]?.trim()}
+                >
+                  {isReplying[task.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
-          )}
-        </ScrollArea>
+          ))
+        )}
       </CardContent>
     </Card>
   );

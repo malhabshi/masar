@@ -7,9 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { formatDistanceToNow } from 'date-fns';
 import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 
 interface NotesSectionProps {
   student: Student;
@@ -27,7 +27,7 @@ export function NotesSection({ student, currentUser, users, title, readOnly }: N
 
   const sortedNotes = useMemo(() => {
     if (!student.notes) return [];
-    return [...student.notes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return [...student.notes].sort((a,b) => sortByDate(a,b));
   }, [student.notes]);
 
   const getAuthor = (authorId: string) => users.find(u => u.id === authorId);
@@ -80,7 +80,7 @@ export function NotesSection({ student, currentUser, users, title, readOnly }: N
                   <div className="flex-1 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">{author?.name || 'Unknown'}</span>
-                      <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}</span>
+                      <span className="text-xs text-muted-foreground">{formatRelativeTime(note.createdAt)}</span>
                     </div>
                     <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{note.content}</p>
                   </div>
