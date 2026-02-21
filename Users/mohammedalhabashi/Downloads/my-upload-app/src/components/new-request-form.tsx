@@ -7,8 +7,8 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import type { Country, Student } from '@/lib/types';
-import { useFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { useFirebase, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -123,7 +123,7 @@ export function NewRequestForm() {
                 },
             };
 
-            await setDoc(newStudentDocRef, newStudentData);
+            setDocumentNonBlocking(newStudentDocRef, newStudentData);
             
             const returnTo = shouldBeAssigned ? '/applicants' : '/unassigned-students';
             router.push(`/student-added?studentName=${encodeURIComponent(values.studentName)}&returnTo=${returnTo}`);
