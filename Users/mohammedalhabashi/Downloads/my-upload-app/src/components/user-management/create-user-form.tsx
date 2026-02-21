@@ -12,9 +12,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { User, UserRole } from '@/lib/types';
-import { useFirebase, setDocumentNonBlocking } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -58,7 +58,7 @@ export function CreateUserForm() {
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
         const authUser = userCredential.user;
 
-        // 2. Create user document in Firestore (WITHOUT password)
+        // 2. Prepare user document for Firestore (WITHOUT password)
         const employeeId = values.civilId.slice(-5);
         const newUserForDb: Omit<User, 'id'> = {
             name: values.name,
@@ -70,20 +70,34 @@ export function CreateUserForm() {
             employeeId: employeeId,
         };
         
-        // Use non-blocking setDoc with the user's UID as the document ID
-        setDocumentNonBlocking(doc(firestore, "users", authUser.uid), newUserForDb);
-        
-        toast({
-            title: 'User Created!',
-            description: `${values.name} has been added to the system.`,
-        });
-        form.reset();
+        const userDocRef = doc(firestore, "users", authUser.uid);
 
-    } catch (error: any) {
-        let description = 'An unexpected error occurred.';
-        if (error.code === 'auth/email-already-in-use') {
+        // 3. Set document in a non-blocking way
+        setDoc(userDocRef, newUserForDb)
+          .then(() => {
+            toast({
+                title: 'User Created!',
+                description: `${values.name} has been added to the system.`,
+            });
+            form.reset();
+          })
+          .catch((dbError) => {
+            console.error("Firestore write failed:", dbError);
+            toast({
+                variant: 'destructive',
+                title: 'Failed to save user data',
+                description: dbError.message || "Could not save the user's profile to the database."
+            });
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
+
+    } catch (authError: any) {
+        let description = 'An unexpected error occurred during sign-up.';
+        if (authError.code === 'auth/email-already-in-use') {
             description = 'This email address is already in use by another account.';
-        } else if (error.code === 'auth/weak-password') {
+        } else if (authError.code === 'auth/weak-password') {
             description = 'The password must be at least 8 characters long.';
         }
         toast({
@@ -91,7 +105,6 @@ export function CreateUserForm() {
             title: 'Failed to create user',
             description: description,
         });
-    } finally {
         setIsLoading(false);
     }
   }

@@ -7,8 +7,8 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import type { Country, Student } from '@/lib/types';
-import { useFirebase, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useFirebase } from '@/firebase';
+import { collection, doc, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ export function NewRequestForm() {
     });
 
 
-    async function onSubmit(values: z.infer<typeof formSchema>) {
+    function onSubmit(values: z.infer<typeof formSchema>) {
         setIsSubmitting(true);
 
         if (!currentUser || !firestore) {
@@ -92,52 +92,52 @@ export function NewRequestForm() {
             finalTargetCountries = [...finalTargetCountries, values.otherCountry.trim()];
         }
         
-        try {
-            const studentsCollectionRef = collection(firestore, 'students');
-            const newStudentDocRef = doc(studentsCollectionRef); 
+        const studentsCollectionRef = collection(firestore, 'students');
+        const newStudentDocRef = doc(studentsCollectionRef); 
 
-            const newStudentData: Student = {
-                id: newStudentDocRef.id,
-                name: values.studentName,
-                email: values.studentEmail || '',
-                phone: values.phone,
-                employeeId: shouldBeAssigned ? currentUser.civilId! : null,
-                ...(shouldBeAssigned && { isNewForEmployee: true }),
-                avatarUrl: `https://picsum.photos/seed/s${Date.now()}/100/100`,
-                applications: [],
-                notes: values.notes ? [{ id: `note-${Date.now()}`, authorId: currentUser.id, content: values.notes, createdAt: new Date().toISOString() }] : [],
-                documents: [],
-                createdAt: new Date().toISOString(),
-                createdBy: currentUser.id,
-                targetCountries: finalTargetCountries as Country[],
-                missingItems: [],
-                pipelineStatus: 'none',
-                profileCompletionStatus: {
-                    submitUniversityApplication: false,
-                    applyMoheScholarship: false,
-                    submitKcoRequest: false,
-                    receivedCasOrI20: false,
-                    appliedForVisa: false,
-                    documentsSubmittedToMohe: false,
-                    readyToTravel: false,
-                },
-            };
+        const newStudentData: Student = {
+            id: newStudentDocRef.id,
+            name: values.studentName,
+            email: values.studentEmail || '',
+            phone: values.phone,
+            employeeId: shouldBeAssigned ? currentUser.civilId! : null,
+            ...(shouldBeAssigned && { isNewForEmployee: true }),
+            avatarUrl: `https://picsum.photos/seed/s${Date.now()}/100/100`,
+            applications: [],
+            notes: values.notes ? [{ id: `note-${Date.now()}`, authorId: currentUser.id, content: values.notes, createdAt: new Date().toISOString() }] : [],
+            documents: [],
+            createdAt: new Date().toISOString(),
+            createdBy: currentUser.id,
+            targetCountries: finalTargetCountries as Country[],
+            missingItems: [],
+            pipelineStatus: 'none',
+            profileCompletionStatus: {
+                submitUniversityApplication: false,
+                applyMoheScholarship: false,
+                submitKcoRequest: false,
+                receivedCasOrI20: false,
+                appliedForVisa: false,
+                documentsSubmittedToMohe: false,
+                readyToTravel: false,
+            },
+        };
 
-            setDocumentNonBlocking(newStudentDocRef, newStudentData);
-            
-            const returnTo = shouldBeAssigned ? '/applicants' : '/unassigned-students';
-            router.push(`/student-added?studentName=${encodeURIComponent(values.studentName)}&returnTo=${returnTo}`);
-
-        } catch (error) {
-            console.error("Failed to create student:", error);
-            toast({
-                variant: "destructive",
-                title: "Submission Failed",
-                description: "Could not save the new student to the database. Please try again."
+        setDoc(newStudentDocRef, newStudentData)
+            .then(() => {
+                const returnTo = shouldBeAssigned ? '/applicants' : '/unassigned-students';
+                router.push(`/student-added?studentName=${encodeURIComponent(values.studentName)}&returnTo=${returnTo}`);
+            })
+            .catch((error) => {
+                console.error("Failed to create student:", error);
+                toast({
+                    variant: "destructive",
+                    title: "Submission Failed",
+                    description: "Could not save the new student to the database. Please try again."
+                });
+            })
+            .finally(() => {
+                setIsSubmitting(false);
             });
-        } finally {
-            setIsSubmitting(false);
-        }
     }
 
     if (isUserLoading) {
