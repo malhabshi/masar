@@ -21,9 +21,9 @@ export function PersonalTodoList() {
     const [newTodo, setNewTodo] = useState('');
 
     const todosCollection = useMemo(() => {
-        if (!firestore || !user?.auth) return null;
-        return collection(firestore, 'users', user.auth.uid, 'personal_todos');
-    }, [firestore, user?.auth]);
+        if (!firestore || !user?.id) return null;
+        return collection(firestore, 'users', user.id, 'personal_todos');
+    }, [firestore, user?.id]);
 
     const { data: todosData, isLoading: areTodosLoading } = useCollection<PersonalTodo>(todosCollection);
 
@@ -38,10 +38,10 @@ export function PersonalTodoList() {
     }, [todosData]);
 
     const handleAddTodo = () => {
-        if (!newTodo.trim() || !user?.auth || !todosCollection) return;
+        if (!newTodo.trim() || !user?.id || !todosCollection) return;
 
         const newTodoItem: Omit<PersonalTodo, 'id'> = {
-            userId: user.auth.uid,
+            userId: user.id,
             content: newTodo.trim(),
             completed: false,
             createdAt: new Date().toISOString(),
