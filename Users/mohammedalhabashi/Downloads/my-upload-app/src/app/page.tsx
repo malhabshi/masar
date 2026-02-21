@@ -3,7 +3,6 @@
 import { useUser } from '@/hooks/use-user';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
 
 export default function HomePage() {
   const { user, isUserLoading } = useUser();
@@ -19,9 +18,7 @@ export default function HomePage() {
     }
   }, [user, isUserLoading, router]);
 
-  return (
-    <div className="flex h-screen w-full items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin" />
-    </div>
-  );
+  // Return null to avoid rendering anything until the redirect is triggered.
+  // This is a robust way to prevent hydration mismatches on a purely redirecting page.
+  return null;
 }
