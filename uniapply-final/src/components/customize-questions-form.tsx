@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useMemo } from 'react';
+import { useUser } from '@/hooks/use-user';
+import { useFirebase, useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import type { Question } from '@/lib/types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { applicationQuestions as initialQuestions } from '@/lib/data';
-import { Pencil, Trash2, PlusCircle } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, Pencil } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,126 +30,282 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import React from 'react';
 
-export function CustomizeQuestionsForm() {
-  const [existingQuestions, setExistingQuestions] = useState<string[]>(initialQuestions);
-  const { toast } = useToast();
+const questionSchema = z.object({
+  label: z.string().min(3, 'Question text must be at least 3 characters.'),
+  type: z.enum(['text', 'textarea', 'select', 'radio', 'checkbox']),
+  options: z.string().optional(),
+  required: z.boolean().default(false),
+  order: z.number().default(0),
+});
 
-  const [newQuestion, setNewQuestion] = useState('');
-  const [questionToEdit, setQuestionToEdit] = useState<{ index: number; text: string } | null>(null);
-  const [editedQuestionText, setEditedQuestionText] = useState('');
+function QuestionDialog({
+  isOpen,
+  setIsOpen,
+  question,
+  onSubmit,
+}: {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  question?: Question;
+  onSubmit: (values: z.infer<typeof questionSchema>) => void;
+}) {
+  const form = useForm<z.infer<typeof questionSchema>>({
+    resolver: zodResolver(questionSchema),
+    defaultValues: question || {
+      label: '',
+      type: 'text',
+      options: '',
+      required: false,
+      order: 0,
+    },
+  });
 
-  const handleAddQuestion = () => {
-    if (!newQuestion.trim()) return;
-    setExistingQuestions(prev => [...prev, newQuestion.trim()]);
-    setNewQuestion('');
-    toast({ title: 'Question Added' });
-  };
+  React.useEffect(() => {
+    if (isOpen) {
+      form.reset(question || {
+        label: '',
+        type: 'text',
+        options: '',
+        required: false,
+        order: 0,
+      });
+    }
+  }, [isOpen, form, question]);
 
-  const handleUpdateQuestion = () => {
-    if (!questionToEdit || !editedQuestionText.trim()) return;
-    const updated = [...existingQuestions];
-    updated[questionToEdit.index] = editedQuestionText.trim();
-    setExistingQuestions(updated);
-    setQuestionToEdit(null);
-    setEditedQuestionText('');
-    toast({ title: 'Question Updated' });
-  };
-
-  const handleDeleteQuestion = (indexToDelete: number) => {
-    setExistingQuestions(prev => prev.filter((_, i) => i !== indexToDelete));
-    toast({ title: 'Question Removed' });
+  const handleSubmit = (values: z.infer<typeof questionSchema>) => {
+    onSubmit(values);
+    setIsOpen(false);
   };
 
   return (
-    <>
-      <div className="max-w-3xl mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle>Application Questions</CardTitle>
-            <CardDescription>
-              Add, edit, or delete questions for the new student application form.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {existingQuestions.length > 0 ? (
-                existingQuestions.map((q, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-md group hover:bg-muted/50">
-                    <span className="flex-1 pr-4">{i + 1}. {q}</span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                        setQuestionToEdit({ index: i, text: q });
-                        setEditedQuestionText(q);
-                      }}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action will permanently delete this question.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteQuestion(i)}>Delete</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No questions have been added yet.</p>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{question ? 'Edit' : 'Add'} Question</DialogTitle>
+          <DialogDescription>
+            Customize the questions that appear on the new student application form.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4">
+            <FormField
+              control={form.control}
+              name="label"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Question Text</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Enter the question text..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
-          </CardContent>
-          <CardFooter className="border-t pt-4">
-            <div className="flex w-full items-center space-x-2">
-              <Input
-                placeholder="Add a new question..."
-                value={newQuestion}
-                onChange={(e) => setNewQuestion(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddQuestion() }}
-              />
-              <Button onClick={handleAddQuestion} disabled={!newQuestion.trim()}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add
-              </Button>
-            </div>
-          </CardFooter>
-        </Card>
-      </div>
-
-      <Dialog open={!!questionToEdit} onOpenChange={(isOpen) => !isOpen && setQuestionToEdit(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Question</DialogTitle>
-            <DialogDescription>
-              Make changes to the question below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Textarea
-              value={editedQuestionText}
-              onChange={(e) => setEditedQuestionText(e.target.value)}
-              className="min-h-[100px]"
             />
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Question Type</FormLabel>
+                  <FormControl>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={field.value}
+                      onChange={field.onChange}
+                    >
+                      <option value="text">Text (short answer)</option>
+                      <option value="textarea">Textarea (long answer)</option>
+                      <option value="select">Select (dropdown)</option>
+                      <option value="radio">Radio (single choice)</option>
+                      <option value="checkbox">Checkbox (multiple choice)</option>
+                    </select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {['select', 'radio', 'checkbox'].includes(form.watch('type')) && (
+              <FormField
+                control={form.control}
+                name="options"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Options (one per line)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Option 1&#10;Option 2&#10;Option 3"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            <FormField
+              control={form.control}
+              name="required"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      checked={field.value}
+                      onChange={field.onChange}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                  </FormControl>
+                  <FormLabel>Required field</FormLabel>
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function CustomizeQuestionsForm() {
+  const { user: currentUser, isUserLoading } = useUser();
+  const { firestore } = useFirebase();
+  const { toast } = useToast();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | undefined>(undefined);
+
+  const questionsCollection = useMemo(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'application_questions');
+  }, [firestore]);
+
+  const { data: questions, isLoading: questionsAreLoading } = useCollection<Question>(questionsCollection);
+  
+  const isLoading = isUserLoading || questionsAreLoading;
+
+  const handleAddOrUpdateQuestion = (values: z.infer<typeof questionSchema>) => {
+    if (!firestore || !questionsCollection) return;
+    
+    const questionData = {
+      ...values,
+      options: values.options ? values.options.split('\n').filter(Boolean) : [],
+    };
+
+    if (editingQuestion) {
+      const docRef = doc(firestore, 'application_questions', editingQuestion.id);
+      updateDocumentNonBlocking(docRef, questionData);
+      toast({ title: 'Success', description: 'Question updated.' });
+    } else {
+      addDocumentNonBlocking(questionsCollection, questionData);
+      toast({ title: 'Success', description: 'New question added.' });
+    }
+    setEditingQuestion(undefined);
+  };
+
+  const handleDeleteQuestion = (questionId: string) => {
+    if (!firestore) return;
+    const docRef = doc(firestore, 'application_questions', questionId);
+    deleteDocumentNonBlocking(docRef);
+    toast({ title: 'Success', description: 'Question deleted.' });
+  };
+  
+  if (isLoading) {
+    return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
+  
+  if (currentUser?.role !== 'admin') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Access Denied</CardTitle>
+          <CardDescription>You do not have permission to customize questions.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Customize Application Questions</CardTitle>
+            <CardDescription>
+              Add, edit, or remove questions from the new student application form.
+            </CardDescription>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setQuestionToEdit(null)}>Cancel</Button>
-            <Button onClick={handleUpdateQuestion}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Button onClick={() => { setEditingQuestion(undefined); setIsDialogOpen(true); }}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Question
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {questions && questions.length > 0 ? (
+              questions.sort((a, b) => (a.order || 0) - (b.order || 0)).map((q) => (
+                <Card key={q.id}>
+                  <CardHeader className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-base">{q.label}</CardTitle>
+                        <CardDescription>
+                          Type: {q.type} | Required: {q.required ? 'Yes' : 'No'}
+                          {q.options && q.options.length > 0 && (
+                            <> | Options: {q.options.join(', ')}</>
+                          )}
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => { setEditingQuestion(q); setIsDialogOpen(true); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Question</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this question? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteQuestion(q.id)}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+              ))
+            ) : (
+              <p className="text-center text-muted-foreground py-8">No questions configured.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      <QuestionDialog
+        isOpen={isDialogOpen}
+        setIsOpen={setIsDialogOpen}
+        question={editingQuestion}
+        onSubmit={handleAddOrUpdateQuestion}
+      />
     </>
   );
 }

@@ -1,3 +1,4 @@
+
 export type UserRole = 'admin' | 'employee' | 'department';
 
 export interface User {
@@ -180,5 +181,17 @@ export interface RequestType {
   id: string;
   name: string;
   description: string;
-  defaultRecipientId: string; // User ID or 'admins' group
+  defaultRecipientId: string;
+}
+
+export interface ApplicationQuestion {
+  id: string;
+  questionText: string;
+  questionType: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox';
+  options?: string[];
+  isRequired: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt?: string;
 }
