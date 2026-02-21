@@ -1,39 +1,21 @@
+
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, UserPlus } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { User, UserRole } from '@/lib/types';
 import { useFirebase } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { setDoc, doc } from 'firebase/firestore';
-import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -47,11 +29,10 @@ const formSchema = z.object({
   role: z.enum(['admin', 'employee', 'department']),
 });
 
-export default function CreateUserForm() {
-  const [isLoading, setIsLoading] = useState(false);
+export function CreateUserForm() {
   const { toast } = useToast();
-  const router = useRouter();
-  const { firestore, auth } = useFirebase();
+  const [isLoading, setIsLoading] = useState(false);
+  const { auth, firestore } = useFirebase();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -65,67 +46,56 @@ export default function CreateUserForm() {
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    
+    if (!auth || !firestore) {
+        toast({ variant: 'destructive', title: 'Firebase not initialized.' });
+        setIsLoading(false);
+        return;
+    }
+
     try {
-      // Create authentication user first
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        values.email,
-        values.password
-      );
-      const authUser = userCredential.user;
+        // 1. Create user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+        const authUser = userCredential.user;
 
-      // Prepare user data for Firestore
-      const newUserForDb = {
-        name: values.name,
-        email: values.email,
-        civilId: values.civilId,
-        phone: values.phone,
-        role: values.role,
-        createdAt: new Date(),
-        createdBy: 'admin', // This should be the current admin's ID
-      };
-
-      // Use non-blocking setDoc with the user's UID as the document ID
-      setDoc(doc(firestore, "users", authUser.uid), newUserForDb)
-        .then(() => {
-          toast({
+        // 2. Create user document in Firestore (WITHOUT password)
+        const employeeId = values.civilId.slice(-5);
+        const newUserForDb: Omit<User, 'id'> = {
+            name: values.name,
+            email: values.email,
+            phone: values.phone,
+            role: values.role,
+            avatarUrl: `https://picsum.photos/seed/u${Date.now()}/100/100`,
+            civilId: values.civilId,
+            employeeId: employeeId,
+        };
+        
+        // Use setDoc with the user's UID as the document ID
+        await setDoc(doc(firestore, "users", authUser.uid), newUserForDb);
+        
+        toast({
             title: 'User Created!',
             description: `${values.name} has been added to the system.`,
-          });
-          form.reset();
-          router.push('/user-management');
-        })
-        .catch((error) => {
-          console.error("Error creating user document:", error);
-          let description = 'An unexpected error occurred.';
-          toast({
+        });
+        form.reset();
+
+    } catch (error: any) {
+        let description = 'An unexpected error occurred.';
+        if (error.code === 'auth/email-already-in-use') {
+            description = 'This email address is already in use by another account.';
+        } else if (error.code === 'auth/weak-password') {
+            description = 'The password must be at least 8 characters long.';
+        }
+        toast({
             variant: 'destructive',
             title: 'Failed to create user',
             description: description,
-          });
-        })
-        .finally(() => {
-          setIsLoading(false);
         });
-
-    } catch (error: any) {
-      setIsLoading(false);
-      let description = 'An unexpected error occurred.';
-      if (error.code === 'auth/email-already-in-use') {
-        description = 'This email address is already in use by another account.';
-      } else if (error.code === 'auth/weak-password') {
-        description = 'The password must be at least 8 characters long.';
-      }
-      toast({
-        variant: 'destructive',
-        title: 'Failed to create user',
-        description: description,
-      });
+    } finally {
+        setIsLoading(false);
     }
-  };
+  }
 
   return (
     <Card>
@@ -143,7 +113,7 @@ export default function CreateUserForm() {
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="John Doe" {...field} />
+                    <Input placeholder="e.g., Jane Smith" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -154,9 +124,9 @@ export default function CreateUserForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>Email Address</FormLabel>
                   <FormControl>
-                    <Input placeholder="john@example.com" type="email" {...field} />
+                    <Input type="email" placeholder="user@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -169,20 +139,20 @@ export default function CreateUserForm() {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input placeholder="••••••••" type="password" {...field} />
+                    <Input type="password" placeholder="••••••••" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
+             <FormField
               control={form.control}
               name="civilId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Civil ID</FormLabel>
                   <FormControl>
-                    <Input placeholder="123456789012" {...field} />
+                    <Input placeholder="Enter 12-digit Civil ID" {...field} maxLength={12} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -195,7 +165,7 @@ export default function CreateUserForm() {
                 <FormItem>
                   <FormLabel>Phone Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="+965 1234 5678" {...field} />
+                    <Input type="tel" placeholder="+1 234 567 890" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -224,22 +194,15 @@ export default function CreateUserForm() {
               )}
             />
           </CardContent>
-          <div className="flex items-center justify-end gap-4 p-6 pt-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <CardFooter>
+            <Button type="submit" disabled={isLoading} className="w-full">
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
               Create User
             </Button>
-          </div>
+          </CardFooter>
         </form>
       </Form>
     </Card>
   );
 }
+    
