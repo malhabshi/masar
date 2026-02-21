@@ -1,7 +1,7 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useUser } from '@/hooks/use-user';
 import type { PersonalTodo } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,14 +16,16 @@ import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBl
 import { collection, doc } from 'firebase/firestore';
 
 export function PersonalTodoList() {
-    const { user, firestore, isUserLoading } = useFirebase();
+    const { user, isUserLoading } = useUser();
+    const { firestore } = useFirebase();
     const { toast } = useToast();
     const [newTodo, setNewTodo] = useState('');
 
+    // Use user.id from Firestore, not user.uid
     const todosCollection = useMemo(() => {
-        if (!firestore || !user) return null;
-        return collection(firestore, 'users', user.uid, 'personal_todos');
-    }, [firestore, user]);
+        if (!firestore || !user?.id) return null;
+        return collection(firestore, 'users', user.id, 'personal_todos');
+    }, [firestore, user?.id]);
 
     const { data: todosData, isLoading: areTodosLoading } = useCollection<PersonalTodo>(todosCollection);
 
@@ -38,10 +40,10 @@ export function PersonalTodoList() {
     }, [todosData]);
 
     const handleAddTodo = () => {
-        if (!newTodo.trim() || !user || !todosCollection) return;
+        if (!newTodo.trim() || !user?.id || !todosCollection) return;
 
         const newTodoItem: Omit<PersonalTodo, 'id'> = {
-            userId: user.uid,
+            userId: user.id,
             content: newTodo.trim(),
             completed: false,
             createdAt: new Date().toISOString(),
