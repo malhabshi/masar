@@ -1,13 +1,31 @@
-import Link from 'next/link';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@/hooks/use-user';
+import { Loader2 } from 'lucide-react';
 
 export default function HomePage() {
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Wait until the user's auth state is determined
+    if (!isUserLoading) {
+      if (user) {
+        // If user is logged in, redirect to the dashboard
+        router.replace('/dashboard');
+      } else {
+        // If user is not logged in, redirect to the login page
+        router.replace('/login');
+      }
+    }
+  }, [user, isUserLoading, router]);
+
+  // Show a loading spinner while determining auth state
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold mb-8">Welcome to UniApply Hub</h1>
-      <p className="mb-4">If you are seeing this page, the application has started correctly.</p>
-      <Link href="/login" className="text-primary hover:underline">
-        Proceed to Login
-      </Link>
-    </main>
+    <div className="flex h-screen w-full items-center justify-center">
+      <Loader2 className="h-16 w-16 animate-spin text-primary" />
+    </div>
   );
 }
