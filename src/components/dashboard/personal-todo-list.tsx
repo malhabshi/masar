@@ -13,17 +13,12 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { useUser } from '@/hooks/use-user';
-import { collection, doc, query } from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore';
 
 export function PersonalTodoList() {
     const { user, isUserLoading } = useUser();
     const { toast } = useToast();
     const [newTodo, setNewTodo] = useState('');
-
-    const todosQuery = useMemo(() => {
-      if (!user) return [];
-      return [collection(firestore, 'users', user.id, 'personal_todos')];
-    }, [user]);
 
     const { data: todosData, isLoading: areTodosLoading } = useCollection<PersonalTodo>(
         user ? `users/${user.id}/personal_todos` : ''

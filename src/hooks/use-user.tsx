@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as AuthUser } from 'firebase/auth';
 import { auth } from '@/firebase'; // Import from the central file
-import { useDoc } from '@/firebase/firestore/use-doc'; // Import the correct hook
+import { useDoc } from '@/firebase/firestore/use-doc';
 
 export interface AppUser {
   id: string;
@@ -45,14 +45,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  // CRITICAL FIX: Use the string-based path for the useDoc hook
-  const userDocPath = authUser ? `users` : '';
-  const userDocId = authUser ? authUser.uid : '';
-  const { data: appUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(userDocPath, userDocId);
-
+  const { data: appUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(
+    authUser ? 'users' : '', 
+    authUser ? authUser.uid : ''
+  );
+  
   const value = {
     user: appUser,
-    isUserLoading: isAuthLoading || (authUser && isFirestoreLoading),
+    isUserLoading: isAuthLoading || (!!authUser && isFirestoreLoading),
     userError: authError,
     auth: authUser,
   };
