@@ -28,7 +28,7 @@ import { addApplication } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import type { ApprovedUniversity, Student } from '@/lib/types';
-import { useFirebase, useCollection, updateDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
+import { firestore, useCollection, updateDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 
 const formSchema = z.object({
@@ -44,12 +44,11 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { firestore } = useFirebase();
 
-  const studentDocRef = useMemoFirebase(() => !firestore ? null : doc(firestore, 'students', studentId), [firestore, studentId]);
+  const studentDocRef = useMemoFirebase(() => doc(firestore, 'students', studentId), [studentId]);
   const { data: student } = useDoc<Student>(studentDocRef);
 
-  const universitiesCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'approved_universities'), [firestore]);
+  const universitiesCollection = useMemoFirebase(() => collection(firestore, 'approved_universities'), []);
   const { data: universitiesData } = useCollection<ApprovedUniversity>(universitiesCollection);
   const universities = useMemo(() => universitiesData || [], [universitiesData]);
   
@@ -76,7 +75,7 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
   }, [universities]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!student || !firestore) return;
+    if (!student) return;
 
     setIsLoading(true);
     const university = universities.find(uni => uni.name === values.universityName);

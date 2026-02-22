@@ -1,10 +1,20 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useFirebase, useDoc } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { User as AppUser } from '@/lib/types'; // Assuming this is your custom user type
-import type { User as AuthUser } from 'firebase/auth'; // Firebase Auth User
+import { onAuthStateChanged, User as AuthUser } from 'firebase/auth';
+import { auth } from '@/firebase'; // Import from the central file
+import { useDoc } from '@/firebase/firestore/use-doc'; // Import the correct hook
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'employee' | 'department';
+  avatarUrl?: string;
+  phone?: string;
+  civilId?: string;
+  employeeId?: string;
+}
 
 interface UserContextType {
   user: AppUser | null;
@@ -16,29 +26,32 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-  const { user: authUser, isUserLoading: isAuthLoading, userError: authError } = useFirebase();
-  const [appUser, setAppUser] = useState<AppUser | null>(null);
-  const [isAppUserLoading, setAppUserLoading] = useState(true);
-  const { firestore } = useFirebase();
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<Error | null>(null);
   
-  const userDocRef = authUser ? doc(firestore, 'users', authUser.uid) : null;
-  const { data: firestoreUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(userDocRef);
-
   useEffect(() => {
-    setAppUserLoading(isAuthLoading || isFirestoreLoading);
-
-    if (!isAuthLoading && !isFirestoreLoading) {
-      if (firestoreUser) {
-        setAppUser(firestoreUser);
-      } else {
-        setAppUser(null);
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        setAuthUser(user);
+        setIsAuthLoading(false);
+      },
+      (error) => {
+        setAuthError(error);
+        setIsAuthLoading(false);
       }
-    }
-  }, [isAuthLoading, isFirestoreLoading, firestoreUser]);
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // CRITICAL FIX: Use the string-based path for the useDoc hook
+  const userDocPath = authUser ? `users/${authUser.uid}` : '';
+  const { data: appUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(userDocPath);
 
   const value = {
     user: appUser,
-    isUserLoading: isAppUserLoading,
+    isUserLoading: isAuthLoading || isFirestoreLoading,
     userError: authError,
     auth: authUser,
   };

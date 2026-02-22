@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
 import type { Student } from '@/lib/types';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { firestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -17,16 +17,15 @@ interface FinalizedStudent extends Student {
 export default function FinalizedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
   const { users, usersLoading } = useUsers();
-  const { firestore } = useFirebase();
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!firestore || !currentUser || currentUser.role === 'employee') return null;
+    if (!currentUser || currentUser.role === 'employee') return null;
     // Firestore does not support != queries directly in this manner.
     // A better approach would be to query for documents where the field exists.
     // However, for this use case, we can fetch all and filter client side, or ensure the field is either a string or null.
     // Assuming `finalChoiceUniversity` is either a string or not present/null.
     return query(collection(firestore, 'students'), where('finalChoiceUniversity', '!=', null));
-  }, [firestore, currentUser]);
+  }, [currentUser]);
 
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(collection(firestore, 'students'));
 

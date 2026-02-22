@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 
 interface StudentChatProps {
@@ -28,7 +28,6 @@ interface StudentChatProps {
 
 export function StudentChat({ student, currentUser, users }: StudentChatProps) {
   const { toast } = useToast();
-  const { firestore } = useFirebase();
   const studentId = student.id;
 
   const [newMessage, setNewMessage] = useState('');
@@ -38,9 +37,8 @@ export function StudentChat({ student, currentUser, users }: StudentChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const messagesCollection = useMemoFirebase(() => {
-    if (!firestore) return null;
     return collection(firestore, 'chats', studentId, 'messages');
-  }, [firestore, studentId]);
+  }, [studentId]);
 
   const { data: messagesData } = useCollection<ChatMessage>(messagesCollection);
 
@@ -67,7 +65,7 @@ export function StudentChat({ student, currentUser, users }: StudentChatProps) {
 
   const handleSendMessage = () => {
     if (!newMessage.trim() && !file) return;
-    if (!firestore || !messagesCollection) return;
+    if (!messagesCollection) return;
 
     let finalMessageContent = newMessage;
     const recipientUser = recipientId ? users.find(u => u.id === recipientId) : null;

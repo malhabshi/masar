@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, FilePenLine } from 'lucide-react';
 import type { Student } from '@/lib/types';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 
 const formSchema = z.object({
@@ -36,7 +36,6 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { firestore } = useFirebase();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -58,7 +57,6 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
   }, [isOpen, student, form]);
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!firestore) return;
     setIsLoading(true);
     const studentDocRef = doc(firestore, 'students', student.id);
     updateDocumentNonBlocking(studentDocRef, values);

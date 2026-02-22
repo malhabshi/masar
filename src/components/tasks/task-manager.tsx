@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { formatDate, formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 
@@ -187,19 +187,15 @@ export function TaskManager({ currentUser, users }: TaskManagerProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const [isReplying, setIsReplying] = useState<string | null>(null);
   const { toast } = useToast();
-  const { firestore } = useFirebase();
 
-  const tasksCollection = useMemo(() => {
-    if (!firestore) return null;
-    return collection(firestore, 'tasks');
-  }, [firestore]);
+  const tasksCollection = useMemoFirebase(() => collection(firestore, 'tasks'), []);
   const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksCollection);
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 
   const handleStatusChange = async (taskId: string, status: TaskStatus) => {
       setIsUpdatingStatus(taskId);
       const task = tasks.find(t => t.id === taskId);
-      if (!task || !firestore) {
+      if (!task) {
         toast({ variant: 'destructive', title: 'Error', description: 'Task not found or database not available.' });
         setIsUpdatingStatus(null);
         return;
@@ -223,7 +219,7 @@ export function TaskManager({ currentUser, users }: TaskManagerProps) {
   }
 
   const handleReply = async (taskId: string, content: string) => {
-    if (!currentUser || !firestore) return;
+    if (!currentUser) return;
     setIsReplying(taskId);
     const task = tasks.find(t => t.id === taskId);
     if (!task) {

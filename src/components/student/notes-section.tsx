@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 
@@ -23,7 +23,6 @@ export function NotesSection({ student, currentUser, users, title, readOnly }: N
   const [newNote, setNewNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { firestore } = useFirebase();
 
   const sortedNotes = useMemo(() => {
     if (!student.notes) return [];
@@ -33,7 +32,7 @@ export function NotesSection({ student, currentUser, users, title, readOnly }: N
   const getAuthor = (authorId: string) => users.find(u => u.id === authorId);
 
   const handleAddNote = async () => {
-    if (!newNote.trim() || !currentUser || !firestore) return;
+    if (!newNote.trim() || !currentUser) return;
 
     setIsLoading(true);
 

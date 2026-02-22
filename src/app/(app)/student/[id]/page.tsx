@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { useFirebase, useDoc } from '@/firebase';
+import { firestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Student } from '@/lib/types';
 
@@ -23,12 +23,11 @@ export default function StudentDetailPage() {
 
   const { user: currentUser, isUserLoading } = useUser();
   const { users, usersLoading } = useUsers();
-  const { firestore } = useFirebase();
 
-  const studentDocRef = useMemo(() => {
-    if (!firestore || !studentId) return null;
+  const studentDocRef = useMemoFirebase(() => {
+    if (!studentId) return null;
     return doc(firestore, 'students', studentId);
-  }, [firestore, studentId]);
+  }, [studentId]);
 
   const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>(studentDocRef);
   

@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { transferStudent } from '@/lib/actions';
 import type { Student, User, Note } from '@/lib/types';
 import { Loader2, Users } from 'lucide-react';
-import { useFirebase, updateDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 
 interface TransferStudentDialogProps {
@@ -34,7 +34,6 @@ interface TransferStudentDialogProps {
 
 export function TransferStudentDialog({ student, employees, currentUser }: TransferStudentDialogProps) {
   const { toast } = useToast();
-  const { firestore } = useFirebase();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
@@ -45,7 +44,7 @@ export function TransferStudentDialog({ student, employees, currentUser }: Trans
   const currentEmployee = employees.find(e => e.civilId === student.employeeId);
 
   const handleTransfer = async () => {
-    if (!selectedEmployeeId || !firestore) {
+    if (!selectedEmployeeId) {
       toast({ variant: 'destructive', title: 'Error', description: 'Please select an employee.' });
       return;
     }

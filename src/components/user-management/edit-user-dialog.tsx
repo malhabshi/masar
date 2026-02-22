@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, FilePenLine } from 'lucide-react';
 import type { User } from '@/lib/types';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,7 +39,6 @@ interface EditUserDialogProps {
 export function EditUserDialog({ user }: EditUserDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { firestore } = useFirebase();
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -62,7 +61,6 @@ export function EditUserDialog({ user }: EditUserDialogProps) {
   }, [isOpen, user, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!firestore) return;
     setIsLoading(true);
     
     const userDocRef = doc(firestore, 'users', user.id);

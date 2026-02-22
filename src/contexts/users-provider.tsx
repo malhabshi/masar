@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
-import { useCollection, useFirebase } from '@/firebase';
+import { useCollection, firestore, useMemoFirebase } from '@/firebase';
 import type { User } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 
@@ -13,8 +13,7 @@ interface UsersContextType {
 const UsersContext = createContext<UsersContextType>({ users: [], usersLoading: true });
 
 export const UsersProvider = ({ children }: { children: React.ReactNode }) => {
-  const { firestore } = useFirebase();
-  const usersCollection = useMemo(() => !firestore ? null : collection(firestore, 'users'), [firestore]);
+  const usersCollection = useMemoFirebase(() => collection(firestore, 'users'), []);
   const { data: users, isLoading } = useCollection<User>(usersCollection);
 
   const value = {

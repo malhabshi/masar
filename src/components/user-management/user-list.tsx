@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { EditUserDialog } from './edit-user-dialog';
 
@@ -28,7 +28,6 @@ const userRoles: UserRole[] = ['admin', 'employee', 'department'];
 export function UserList({ users, currentUser }: UserListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
-  const { firestore } = useFirebase();
 
   const handleRoleChange = async (userToUpdate: User, newRole: UserRole) => {
     if (userToUpdate.id === currentUser.id) {
@@ -37,10 +36,6 @@ export function UserList({ users, currentUser }: UserListProps) {
             title: "Action not allowed",
             description: "You cannot change your own role.",
         });
-        return;
-    }
-    if (!firestore) {
-        toast({ variant: 'destructive', title: 'Database not available' });
         return;
     }
     

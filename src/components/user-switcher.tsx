@@ -12,13 +12,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ChevronsUpDown, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useFirebase } from '@/firebase';
+import { auth } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
 export function UserSwitcher() {
   const { user, isUserLoading } = useUser();
-  const { auth } = useFirebase();
   const { toast } = useToast();
 
   const handleLogout = async () => {

@@ -16,7 +16,7 @@ import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
 import { updateApplicationStatus } from '@/lib/actions';
 import { AddApplicationDialog } from './add-application-dialog';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 
 interface StudentApplicationsProps {
@@ -33,14 +33,12 @@ const statusColors: Record<ApplicationStatus, string> = {
 
 export function StudentApplications({ student }: StudentApplicationsProps) {
   const { user: currentUser } = useUser();
-  const { firestore } = useFirebase();
   const { toast } = useToast();
 
   const canManageApplications = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const canAddApplications = currentUser?.role === 'admin' || currentUser?.civilId === student.employeeId;
 
   const handleStatusUpdate = async (university: string, major: string, newStatus: ApplicationStatus) => {
-    if (!firestore) return;
     
     // Call server action (for notifications, etc.)
     const result = await updateApplicationStatus(student.id, university, major, newStatus, student.name, student.employeeId);

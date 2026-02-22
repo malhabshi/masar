@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { User, Student, Document as StudentDocument } from '@/lib/types';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 
 interface UploadDocumentDialogProps {
@@ -30,7 +30,6 @@ export function UploadDocumentDialog({ student, currentUser }: UploadDocumentDia
   const [file, setFile] = useState<File | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { firestore } = useFirebase();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -43,7 +42,7 @@ export function UploadDocumentDialog({ student, currentUser }: UploadDocumentDia
       toast({ variant: 'destructive', title: 'No file selected' });
       return;
     }
-    if (!currentUser || !firestore) {
+    if (!currentUser) {
       toast({ variant: 'destructive', title: 'Authentication or database error' });
       return;
     }

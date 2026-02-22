@@ -27,7 +27,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/hooks/use-user';
 import { Loader2, LogIn, GraduationCap } from 'lucide-react';
-import { useFirebase } from '@/firebase';
+import { auth, firestore } from '@/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { setDoc, doc } from 'firebase/firestore';
 import type { User } from '@/lib/types';
@@ -41,7 +41,6 @@ const formSchema = z.object({
 export function LoginForm() {
   const { toast } = useToast();
   const { user } = useUser();
-  const { auth, firestore } = useFirebase();
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
@@ -61,12 +60,6 @@ export function LoginForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-
-    if (!auth || !firestore) {
-        toast({ variant: 'destructive', title: 'Firebase not initialized.' });
-        setIsLoading(false);
-        return;
-    }
 
     try {
         await signInWithEmailAndPassword(auth, values.email, values.password);

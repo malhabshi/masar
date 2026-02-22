@@ -20,7 +20,7 @@ import { importStudentsFromExcel } from '@/lib/actions';
 import { Loader2, FileUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { useUsers } from '@/contexts/users-provider';
-import { useFirebase, addDocumentNonBlocking } from '@/firebase';
+import { firestore, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 
 interface ImportStudentsDialogProps {
@@ -33,7 +33,6 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { users } = useUsers();
-  const { firestore } = useFirebase();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -46,7 +45,7 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
       toast({ variant: 'destructive', title: 'No file selected', description: 'Please select an Excel file to import.' });
       return;
     }
-    if (!currentUser || !firestore) {
+    if (!currentUser) {
         toast({ variant: 'destructive', title: 'Authentication error', description: 'Could not identify the current user or database.' });
         return;
     }

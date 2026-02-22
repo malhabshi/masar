@@ -12,7 +12,7 @@ import { Loader2, ArrowRightLeft } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { User, Task } from '@/lib/types';
-import { useFirebase, addDocumentNonBlocking } from '@/firebase';
+import { firestore, addDocumentNonBlocking } from '@/firebase';
 import { collection } from 'firebase/firestore';
 
 const formSchema = z.object({
@@ -30,7 +30,6 @@ interface BulkTransferFormProps {
 
 export function BulkTransferForm({ employees, currentUser }: BulkTransferFormProps) {
   const { toast } = useToast();
-  const { firestore } = useFirebase();
   const [isLoading, setIsLoading] = useState(false);
   
   const employeeOptions = employees.filter(e => e.role === 'employee');
@@ -49,7 +48,7 @@ export function BulkTransferForm({ employees, currentUser }: BulkTransferFormPro
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    if (!currentUser || !firestore) {
+    if (!currentUser) {
         toast({ variant: 'destructive', title: 'Error', description: 'User or database not available.' });
         setIsLoading(false);
         return;

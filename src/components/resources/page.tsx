@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { firestore, storage, useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useUsers } from '@/contexts/users-provider';
@@ -57,7 +57,6 @@ import { AddLinkDialog } from '@/components/resources/add-link-dialog';
 export default function ResourcesPage() {
   const { user, isUserLoading } = useUser();
   const { users: allUsers, usersLoading } = useUsers();
-  const { firestore, storage } = useFirebase();
   const { toast } = useToast();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -69,13 +68,13 @@ export default function ResourcesPage() {
   const [country, setCountry] = useState<string>('all');
 
   const sharedDocumentsCollection = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!user) return null;
     return collection(firestore, 'shared_documents');
-  }, [firestore, user]);
+  }, [user]);
 
   const { data: documents, isLoading: documentsLoading } = useCollection<SharedDocument>(sharedDocumentsCollection);
 
-  const resourceLinksCollection = useMemoFirebase(() => !firestore ? null : collection(firestore, 'resource_links'), [firestore]);
+  const resourceLinksCollection = useMemoFirebase(() => collection(firestore, 'resource_links'), []);
   const { data: resourceLinks, isLoading: linksLoading } = useCollection<ResourceLink>(resourceLinksCollection);
 
   const pageIsLoading = isUserLoading || documentsLoading || usersLoading || linksLoading;
@@ -83,7 +82,7 @@ export default function ResourcesPage() {
   const canManage = user?.role === 'admin' || user?.role === 'department';
 
   const handleUpload = async () => {
-    if (!name || !description || !file || !user || !sharedDocumentsCollection || !storage) {
+    if (!name || !description || !file || !user || !sharedDocumentsCollection) {
       toast({
         variant: 'destructive',
         title: 'Missing information',
@@ -134,7 +133,7 @@ export default function ResourcesPage() {
   };
   
   const handleAddLink = (link: Omit<ResourceLink, 'id' | 'authorId' | 'createdAt'>) => {
-    if (!firestore || !user || !resourceLinksCollection) return;
+    if (!user || !resourceLinksCollection) return;
     const newLink = {
       ...link,
       authorId: user.id,
@@ -148,7 +147,6 @@ export default function ResourcesPage() {
   }
 
   const handleDeleteLink = (linkId: string) => {
-    if (!firestore) return;
     const linkDocRef = doc(firestore, 'resource_links', linkId);
     deleteDocumentNonBlocking(linkDocRef);
     toast({
@@ -158,7 +156,6 @@ export default function ResourcesPage() {
   };
 
   const handleDeleteDocument = (docId: string) => {
-    if (!firestore) return;
     const docRef = doc(firestore, 'shared_documents', docId);
     deleteDocumentNonBlocking(docRef);
     toast({

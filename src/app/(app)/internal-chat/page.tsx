@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
 import type { Student } from '@/lib/types';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { firestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StudentTable } from '@/components/dashboard/student-table';
@@ -13,13 +13,12 @@ import { Loader2 } from 'lucide-react';
 export default function InternalChatPage() {
   const { user: currentUser, isUserLoading } = useUser();
   const { users, usersLoading } = useUsers();
-  const { firestore } = useFirebase();
 
   // Query for students with unread messages for admins/depts.
   const studentsQuery = useMemoFirebase(() => {
-    if (!firestore || !currentUser || !['admin', 'department'].includes(currentUser.role)) return null;
+    if (!currentUser || !['admin', 'department'].includes(currentUser.role)) return null;
     return query(collection(firestore, 'students'), where('unreadUpdates', '>', 0));
-  }, [firestore, currentUser]);
+  }, [currentUser]);
 
   const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>(studentsQuery);
   

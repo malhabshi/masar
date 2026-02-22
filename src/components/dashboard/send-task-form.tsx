@@ -15,7 +15,7 @@ import type { User, Task } from '@/lib/types';
 import { sendTask as sendTaskAction } from '@/lib/actions';
 import { Loader2, Send } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useFirebase, addDocumentNonBlocking } from '@/firebase';
+import { firestore, addDocumentNonBlocking } from '@/firebase';
 import { collection } from 'firebase/firestore';
 
 interface SendTaskFormProps {
@@ -32,7 +32,6 @@ export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
   const { toast } = useToast();
   const [sendTo, setSendTo] = useState<'all' | 'specific'>('all');
   const [isLoading, setIsLoading] = useState(false);
-  const { firestore } = useFirebase();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -43,7 +42,7 @@ export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!currentUser || !firestore) return;
+    if (!currentUser) return;
 
     setIsLoading(true);
     const recipientId = sendTo === 'all' ? 'all' : values.recipient;

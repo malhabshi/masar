@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useUser } from '@/hooks/use-user';
-import { useFirebase, useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import type { ApplicationQuestion } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -191,22 +191,18 @@ function QuestionDialog({
 
 export default function CustomizeQuestionsForm() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { firestore } = useFirebase();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<ApplicationQuestion | undefined>(undefined);
 
-  const questionsCollection = useMemo(() => {
-    if (!firestore) return null;
-    return collection(firestore, 'application_questions');
-  }, [firestore]);
+  const questionsCollection = useMemoFirebase(() => collection(firestore, 'application_questions'), []);
 
   const { data: questions, isLoading: questionsAreLoading } = useCollection<ApplicationQuestion>(questionsCollection);
   
   const isLoading = isUserLoading || questionsAreLoading;
 
   const handleAddOrUpdateQuestion = (values: z.infer<typeof questionSchema>) => {
-    if (!firestore || !questionsCollection) return;
+    if (!questionsCollection) return;
     
     const questionData = {
       questionText: values.questionText,
@@ -231,7 +227,6 @@ export default function CustomizeQuestionsForm() {
   };
 
   const handleDeleteQuestion = (questionId: string) => {
-    if (!firestore) return;
     const docRef = doc(firestore, 'application_questions', questionId);
     deleteDocumentNonBlocking(docRef);
     toast({ title: 'Success', description: 'Question deleted.' });

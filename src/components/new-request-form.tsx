@@ -7,8 +7,8 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import type { Country, Student } from '@/lib/types';
-import { useFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { firestore, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,6 @@ const formSchema = z.object({
 
 export function NewRequestForm() {
     const { user: currentUser, isUserLoading } = useUser();
-    const { firestore } = useFirebase();
     const { toast } = useToast();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -74,7 +73,7 @@ export function NewRequestForm() {
     async function onSubmit(values: z.infer<typeof formSchema>) {
         setIsSubmitting(true);
 
-        if (!currentUser || !firestore) {
+        if (!currentUser) {
             toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to create a student.' });
             setIsSubmitting(false);
             return;
@@ -124,7 +123,7 @@ export function NewRequestForm() {
             };
 
             // Create the main student document
-            await setDoc(newStudentDocRef, newStudentData);
+            setDocumentNonBlocking(newStudentDocRef, newStudentData);
             
             const returnTo = shouldBeAssigned ? '/applicants' : '/unassigned-students';
             router.push(`/student-added?studentName=${encodeURIComponent(values.studentName)}&returnTo=${returnTo}`);

@@ -12,8 +12,8 @@ import { Loader2, UserPlus } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { User, UserRole } from '@/lib/types';
-import { useFirebase } from '@/firebase';
+import type { User } from '@/lib/types';
+import { auth, firestore } from '@/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { setDoc, doc } from 'firebase/firestore';
 
@@ -32,7 +32,6 @@ const formSchema = z.object({
 export function CreateUserForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const { auth, firestore } = useFirebase();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,12 +47,7 @@ export function CreateUserForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    if (!auth || !firestore) {
-        toast({ variant: 'destructive', title: 'Firebase not initialized.' });
-        setIsLoading(false);
-        return;
-    }
-
+    
     try {
         // 1. Create user in Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);

@@ -11,25 +11,26 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFirebase, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { useUser } from '@/hooks/use-user';
 import { collection, doc } from 'firebase/firestore';
 
 export function PersonalTodoList() {
-    const { user, firestore, isUserLoading } = useFirebase();
+    const { user, isUserLoading } = useUser();
     const { toast } = useToast();
     const [newTodo, setNewTodo] = useState('');
 
-    const todosCollection = useMemo(() => {
-        if (!firestore || !user) return null;
-        return collection(firestore, 'users', user.uid, 'personal_todos');
-    }, [firestore, user]);
+    const todosCollection = useMemoFirebase(() => {
+      if (!user) return null;
+      return collection(firestore, 'users', user.id, 'personal_todos');
+    }, [user]);
 
     const { data: todosData, isLoading: areTodosLoading } = useCollection<PersonalTodo>(todosCollection);
 
     const userTodos = useMemo(() => {
         if (!todosData) return [];
-        return todosData.sort((a, b) => {
-             if (a.completed === b.completed) {
+        return todosData.sort((a: PersonalTodo, b: PersonalTodo) => {
+            if (a.completed === b.completed) {
                 return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
             }
             return a.completed ? 1 : -1;
@@ -40,7 +41,7 @@ export function PersonalTodoList() {
         if (!newTodo.trim() || !user || !todosCollection) return;
 
         const newTodoItem: Omit<PersonalTodo, 'id'> = {
-            userId: user.uid,
+            userId: user.id,
             content: newTodo.trim(),
             completed: false,
             createdAt: new Date().toISOString(),
@@ -52,15 +53,15 @@ export function PersonalTodoList() {
     };
 
     const handleToggleTodo = (todoId: string, completed: boolean) => {
-        if (!firestore || !todosCollection) return;
-        const todoDocRef = doc(todosCollection, todoId);
-        updateDocumentNonBlocking(todoDocRef, { completed: !completed });
+        if (!user) return;
+        const docRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
+        updateDocumentNonBlocking(docRef, { completed: !completed });
     };
     
     const handleDeleteTodo = (todoId: string) => {
-        if (!firestore || !todosCollection) return;
-        const todoDocRef = doc(todosCollection, todoId);
-        deleteDocumentNonBlocking(todoDocRef);
+        if (!user) return;
+        const docRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
+        deleteDocumentNonBlocking(docRef);
         toast({ title: 'To-do removed.' });
     };
     
@@ -88,7 +89,7 @@ export function PersonalTodoList() {
                      </div>
                 </CardFooter>
             </Card>
-        )
+        );
     }
 
     return (
@@ -101,7 +102,7 @@ export function PersonalTodoList() {
                 <ScrollArea className="h-72">
                     <div className="space-y-3 pr-4">
                         {userTodos.length > 0 ? (
-                            userTodos.map(todo => (
+                            userTodos.map((todo: PersonalTodo) => (
                                 <div key={todo.id} className="flex items-center gap-3 p-2 rounded-md transition-colors hover:bg-muted/50">
                                     <Checkbox 
                                         id={`todo-${todo.id}`}
@@ -137,7 +138,7 @@ export function PersonalTodoList() {
                         placeholder="Add a new to-do..."
                         value={newTodo}
                         onChange={(e) => setNewTodo(e.target.value)}
-                        onKeyDown={(e) => {if (e.key === 'Enter') handleAddTodo()}}
+                        onKeyDown={(e) => {if (e.key === 'Enter') handleAddTodo();}}
                     />
                     <Button onClick={handleAddTodo} disabled={!newTodo.trim()}>
                         <PlusCircle className="mr-2 h-4 w-4" />

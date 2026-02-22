@@ -2,7 +2,7 @@
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { BarChart, Users, University } from 'lucide-react';
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
-import { useFirebase, useCollection } from '@/firebase';
+import { firestore, useCollection, useMemoFirebase } from '@/firebase';
 import { useUsers } from '@/contexts/users-provider';
 import { collection } from 'firebase/firestore';
 import { useMemo } from 'react';
@@ -10,10 +10,9 @@ import type { Student, Application } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
 export default function ReportsPage() {
-    const { firestore } = useFirebase();
     const { users, usersLoading } = useUsers();
     
-    const studentsCollection = useMemo(() => !firestore ? null : collection(firestore, 'students'), [firestore]);
+    const studentsCollection = useMemoFirebase(() => collection(firestore, 'students'), []);
     const { data: students, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);
     
     const applications: Application[] = useMemo(() => students?.flatMap(s => s.applications || []) || [], [students]);
