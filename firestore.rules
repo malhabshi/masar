@@ -45,7 +45,6 @@ service cloud.firestore {
       allow read: if isSignedIn();
       
       // A user can only create a student document if they are signed in.
-      // The `createdBy` field is set by the client and used in other rules/queries.
       allow create: if isSignedIn();
 
       // An admin, department user, or the assigned employee can update a student.
@@ -100,10 +99,8 @@ service cloud.firestore {
     }
     
     match /applications/{applicationId} {
-      // Allow assigned employees, departments, and admins to manage applications.
-      allow read, update: if isSignedIn() && (isUserAdmin() || isDepartment() || isStudentAssignedToCurrentUser(resource.data.studentId));
-      allow create: if isSignedIn() && (isUserAdmin() || isStudentAssignedToCurrentUser(request.resource.data.studentId));
-      allow delete: if isUserAdmin();
+      // Allow any authenticated user to read/write applications
+      allow read, write: if isSignedIn();
     }
 
     match /documents/{documentId} {
@@ -114,10 +111,8 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow read: if isSignedIn();
-      allow create: if isUserAdmin() || isDepartment() || (request.auth.uid != null && request.resource.data.authorId == request.auth.uid);
-      allow update: if isUserAdmin() || isDepartment() || (request.auth.uid != null && (resource.data.authorId == request.auth.uid || resource.data.recipientId == request.auth.uid));
-      allow delete: if isUserAdmin();
+      // Allow any authenticated user to read/write tasks
+      allow read, write: if isSignedIn();
     }
 
     match /chats/{studentId}/messages/{messageId} {
