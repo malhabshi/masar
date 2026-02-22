@@ -1,4 +1,4 @@
-// FORCE REBUILD - 2026-02-22T01:32:27Z
+// FORCE REBUILD - 2026-02-22T01:32:28Z
 import type {Config} from 'tailwindcss';
 
 export default {
