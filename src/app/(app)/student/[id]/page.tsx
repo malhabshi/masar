@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useDoc, useCollection } from '@/firebase/client';
-import type { Student, Task, User } from '@/lib/types';
+import type { Student, Task } from '@/lib/types';
 
 import { Loader2 } from 'lucide-react';
 import { StudentHeader } from '@/components/student/student-header';
@@ -13,6 +13,7 @@ import { InternalDocuments } from '@/components/student/internal-documents';
 import { NotesSection } from '@/components/student/notes-section';
 import { TaskHistory } from '@/components/student/task-history';
 import { TransferHistory } from '@/components/student/transfer-history';
+import { useUsers } from '@/contexts/users-provider';
 
 
 export default function StudentDetailPage() {
@@ -21,8 +22,7 @@ export default function StudentDetailPage() {
   const router = useRouter();
 
   const { user: currentUser, isUserLoading } = useUser();
-  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
-  const users = usersData || [];
+  const { usersLoading } = useUsers();
 
   const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>('students', studentId);
   const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
@@ -67,19 +67,19 @@ export default function StudentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
            <StudentApplications student={student} />
-           <InternalDocuments student={student} currentUser={currentUser} users={users} title="Employee Documents" allowUpload={isAssignedEmployee} />
-           <InternalDocuments student={student} currentUser={currentUser} users={users} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
+           <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} />
+           <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
         </div>
 
         <div className="space-y-6">
-            <NotesSection student={student} currentUser={currentUser} users={users} title="Notes" readOnly={false} />
+            <NotesSection student={student} currentUser={currentUser} title="Notes" readOnly={false} />
             {student.transferHistory && student.transferHistory.length > 0 && (
-                <TransferHistory transferHistory={student.transferHistory} users={users} />
+                <TransferHistory transferHistory={student.transferHistory} />
             )}
         </div>
       </div>
       
-      <TaskHistory tasks={tasks || []} users={users} studentId={student.id} />
+      <TaskHistory tasks={tasks || []} studentId={student.id} />
     </div>
   );
 }

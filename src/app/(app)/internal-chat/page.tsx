@@ -2,17 +2,17 @@
 
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { Student, User } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { query, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Loader2 } from 'lucide-react';
+import { useUsers } from '@/contexts/users-provider';
 
 export default function InternalChatPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
-  const users = usersData || [];
+  const { usersLoading } = useUsers();
 
   // Query for students with unread messages for admins/depts.
   const studentsQuery = useMemo(() => {
@@ -50,7 +50,6 @@ export default function InternalChatPage() {
       <CardContent>
         <StudentTable 
             students={studentsWithUnread || []} 
-            users={users} 
             currentUser={currentUser}
             showEmployee
             emptyStateMessage="No students have unread messages."

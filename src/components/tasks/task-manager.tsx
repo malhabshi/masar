@@ -17,19 +17,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { firestore, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { collection, doc } from 'firebase/firestore';
 import { formatDate, formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
+import { useUsers } from '@/contexts/users-provider';
 
 const taskStatuses: TaskStatus[] = ['new', 'in-progress', 'completed', 'archived'];
 
 function TaskItem({ 
     task, 
-    users,
     onStatusChange, 
     isUpdatingStatus, 
     onReply, 
     isReplying,
 }: { 
     task: Task, 
-    users: User[],
     onStatusChange: (taskId: string, status: TaskStatus) => void, 
     isUpdatingStatus: boolean,
     onReply: (taskId: string, reply: string) => void,
@@ -37,6 +36,7 @@ function TaskItem({
 }) {
     const [replyContent, setReplyContent] = useState('');
     const [isClient, setIsClient] = useState(false);
+    const { getUserById } = useUsers();
 
     useEffect(() => {
         setIsClient(true);
@@ -44,11 +44,10 @@ function TaskItem({
     
     const getRecipientName = (recipientId: string) => {
         if (recipientId === 'all') return 'All Employees';
-        return users.find(u => u.id === recipientId)?.name || 'Unknown';
+        return getUserById(recipientId)?.name || 'Unknown';
     }
-    const getAuthor = (authorId: string) => users.find(u => u.id === authorId);
-
-    const author = getAuthor(task.authorId);
+    
+    const author = getUserById(task.authorId);
 
     const handleReplyClick = () => {
         if (!replyContent.trim()) return;
@@ -106,7 +105,7 @@ function TaskItem({
                     {task.replies && task.replies.length > 0 && (
                         <div className="space-y-4">
                              {task.replies.map((reply) => {
-                                const replyAuthor = getAuthor(reply.authorId);
+                                const replyAuthor = getUserById(reply.authorId);
                                 return (
                                     <div key={reply.id} className="flex items-start gap-3">
                                         <Avatar className="h-8 w-8">
@@ -180,10 +179,9 @@ function TaskItem({
 
 interface TaskManagerProps {
     currentUser: User;
-    users: User[];
 }
 
-export function TaskManager({ currentUser, users }: TaskManagerProps) {
+export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const [isReplying, setIsReplying] = useState<string | null>(null);
   const { toast } = useToast();
@@ -277,7 +275,7 @@ export function TaskManager({ currentUser, users }: TaskManagerProps) {
                 <TabsContent value="active" className="mt-4">
                     <div className="space-y-4">
                         {activeTasks.length > 0 ? (
-                            activeTasks.map(task => <TaskItem key={task.id} task={task} users={users} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} />)
+                            activeTasks.map(task => <TaskItem key={task.id} task={task} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} />)
                         ) : (
                             <p className="p-8 text-center text-muted-foreground">No active tasks.</p>
                         )}
@@ -286,7 +284,7 @@ export function TaskManager({ currentUser, users }: TaskManagerProps) {
                 <TabsContent value="archived" className="mt-4">
                      <div className="space-y-4">
                         {archivedTasks.length > 0 ? (
-                            archivedTasks.map(task => <TaskItem key={task.id} task={task} users={users} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} />)
+                            archivedTasks.map(task => <TaskItem key={task.id} task={task} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} />)
                         ) : (
                             <p className="p-8 text-center text-muted-foreground">No archived tasks.</p>
                         )}

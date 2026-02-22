@@ -26,11 +26,11 @@ import { updateStudentPipelineStatus } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
+import { useUsers } from '@/contexts/users-provider';
 
 
 interface StudentTableProps {
   students: Student[];
-  users: User[];
   currentUser: User;
   showEmployee?: boolean;
   showPipelineStatus?: boolean;
@@ -55,13 +55,13 @@ const pipelineStatusLabels: { [key: string]: string } = {
 };
 
 
-export function StudentTable({ students, users, currentUser, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false }: StudentTableProps) {
+export function StudentTable({ students, currentUser, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false }: StudentTableProps) {
   const { toast } = useToast();
+  const { getUserByCivilId } = useUsers();
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
-    // The employeeId on a student record is the employee's Civil ID
-    return users.find(u => u.civilId === employeeId)?.name || 'Unknown Employee';
+    return getUserByCivilId(employeeId)?.name || 'Unknown Employee';
   };
 
   const handlePipelineStatusChange = async (studentId: string, status: PipelineStatus) => {

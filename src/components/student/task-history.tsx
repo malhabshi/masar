@@ -2,17 +2,19 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatRelativeTime, sortByDate, toDate } from '@/lib/timestamp-utils';
-import type { Task, User } from '@/lib/types';
+import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
+import type { Task } from '@/lib/types';
 import { CheckCircle, Clock, AlertCircle, MessageSquare } from 'lucide-react';
+import { useUsers } from '@/contexts/users-provider';
 
 interface TaskHistoryProps {
   tasks: Task[];
-  users: User[];
   studentId?: string;
 }
 
-export function TaskHistory({ tasks, users, studentId }: TaskHistoryProps) {
+export function TaskHistory({ tasks, studentId }: TaskHistoryProps) {
+  const { getUserById } = useUsers();
+
   const relevantTasks = useMemo(() => {
     if (!tasks) return [];
     
@@ -42,8 +44,7 @@ export function TaskHistory({ tasks, users, studentId }: TaskHistoryProps) {
   };
 
   const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user?.name || 'Unknown User';
+    return getUserById(userId)?.name || 'Unknown User';
   };
 
   if (relevantTasks.length === 0) {

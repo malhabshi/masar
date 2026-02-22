@@ -19,15 +19,16 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { firestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
 import { collection, doc } from 'firebase/firestore';
+import { useUsers } from '@/contexts/users-provider';
 
 interface StudentChatProps {
   student: Student;
   currentUser: User;
-  users: User[];
 }
 
-export function StudentChat({ student, currentUser, users }: StudentChatProps) {
+export function StudentChat({ student, currentUser }: StudentChatProps) {
   const { toast } = useToast();
+  const { users, getUserById } = useUsers();
   const studentId = student.id;
 
   const [newMessage, setNewMessage] = useState('');
@@ -54,8 +55,6 @@ export function StudentChat({ student, currentUser, users }: StudentChatProps) {
   const managementUsers = useMemo(() => users.filter(u => ['admin', 'department'].includes(u.role)), [users]);
   const hasMultipleAdmins = useMemo(() => users.filter(u => u.role === 'admin').length > 1, [users]);
   const hasDepartments = useMemo(() => users.some(u => u.role === 'department'), [users]);
-
-  const getAuthor = (authorId: string) => users.find(u => u.id === authorId);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -133,7 +132,7 @@ export function StudentChat({ student, currentUser, users }: StudentChatProps) {
         <ScrollArea className="h-80 pr-4">
           <div className="space-y-4">
             {messages.map(message => {
-              const author = getAuthor(message.authorId);
+              const author = getUserById(message.authorId);
               const isCurrentUser = author?.id === currentUser.id;
               return (
                 <div

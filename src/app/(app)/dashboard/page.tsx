@@ -15,8 +15,12 @@ import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { ImportStudentsDialog } from '@/components/dashboard/import-students-dialog';
+import { useUsers } from '@/contexts/users-provider';
 
-function AdminDashboard({ students, tasks, users, currentUser, isLoading }: { students: Student[], tasks: Task[], users: User[], currentUser: User, isLoading: boolean }) {
+function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoading }: { students: Student[], tasks: Task[], currentUser: User, isLoading: boolean }) {
+  const { users, usersLoading } = useUsers();
+  const isLoading = isParentLoading || usersLoading;
+
   const stats = useMemo(() => {
     if (!students) return { totalStudents: 0, unassignedStudents: 0, totalApplications: 0 };
     const totalStudents = students.length;
@@ -59,7 +63,7 @@ function AdminDashboard({ students, tasks, users, currentUser, isLoading }: { st
             </Card>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TaskList tasks={tasks} users={users} currentUser={currentUser} isLoading={isLoading} />
+            <TaskList tasks={tasks} currentUser={currentUser} isLoading={isLoading} />
             <SendTaskForm recipients={employeeRecipients} currentUser={currentUser} />
         </div>
         <UpcomingEventsCard currentUser={currentUser} />
@@ -70,23 +74,25 @@ function AdminDashboard({ students, tasks, users, currentUser, isLoading }: { st
   );
 }
 
-function EmployeeDashboard({ currentUser, users }: { currentUser: User, users: User[] }) {
+function EmployeeDashboard({ currentUser }: { currentUser: User }) {
+    const { usersLoading } = useUsers();
+
     const { data: myStudentsData, isLoading: studentsLoading } = useCollection<Student>(
         'students', 
         where('employeeId', '==', currentUser.civilId || '___') // Use a value that won't match if civilId is missing
     );
     const myStudents = myStudentsData || [];
 
-    const { data: tasksToMeData } = useCollection<Task>('tasks', where('recipientId', '==', currentUser.id));
-    const { data: tasksToAllData } = useCollection<Task>('tasks', where('recipientId', '==', 'all'));
-    const { data: tasksByMeData } = useCollection<Task>('tasks', where('authorId', '==', currentUser.id));
+    const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>('tasks', where('recipientId', '==', currentUser.id));
+    const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>('tasks', where('recipientId', '==', 'all'));
+    const { data: tasksByMeData, isLoading: tasksByMeLoading } = useCollection<Task>('tasks', where('authorId', '==', currentUser.id));
 
     const tasksToMe = tasksToMeData || [];
     const tasksToAll = tasksToAllData || [];
     const tasksByMe = tasksByMeData || [];
     
-    const tasksLoading = !tasksToMeData || !tasksToAllData || !tasksByMeData;
-    const isLoading = studentsLoading || tasksLoading;
+    const tasksDataLoading = tasksToMeLoading || tasksToAllLoading || tasksByMeLoading;
+    const isLoading = studentsLoading || tasksDataLoading || usersLoading;
 
     const relevantTasks = useMemo(() => {
         const allTasks = [...tasksToMe, ...tasksToAll, ...tasksByMe];
@@ -126,7 +132,7 @@ function EmployeeDashboard({ currentUser, users }: { currentUser: User, users: U
                 </Card>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <TaskList tasks={relevantTasks} users={users} currentUser={currentUser} isLoading={isLoading} />
+                <TaskList tasks={relevantTasks} currentUser={currentUser} isLoading={isLoading} />
                 <PersonalTodoList />
             </div>
             <UpcomingEventsCard currentUser={currentUser} />
@@ -134,7 +140,10 @@ function EmployeeDashboard({ currentUser, users }: { currentUser: User, users: U
     );
 }
 
-function DepartmentDashboard({ students, tasks, users, currentUser, isLoading }: { students: Student[], tasks: Task[], users: User[], currentUser: User, isLoading: boolean }) {
+function DepartmentDashboard({ students, tasks, currentUser, isLoading: isParentLoading }: { students: Student[], tasks: Task[], currentUser: User, isLoading: boolean }) {
+     const { usersLoading } = useUsers();
+     const isLoading = isParentLoading || usersLoading;
+
      const stats = useMemo(() => {
         if(!students) return { totalStudents: 0, totalApplications: 0 };
         const totalStudents = students.length;
@@ -165,7 +174,7 @@ function DepartmentDashboard({ students, tasks, users, currentUser, isLoading }:
                 </Card>
             </div>
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <TaskList tasks={tasks} users={users} currentUser={currentUser} isLoading={isLoading} />
+                <TaskList tasks={tasks} currentUser={currentUser} isLoading={isLoading} />
                 <UpcomingEventsCard currentUser={currentUser} />
             </div>
         </div>
@@ -174,9 +183,8 @@ function DepartmentDashboard({ students, tasks, users, currentUser, isLoading }:
 
 function DashboardPageContent() {
     const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
-    const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
     
-    // Admins and Departments fetch all data
+    // Admins and Departments fetch all student and task data at this top level.
     const { data: allStudents, isLoading: studentsLoading } = useCollection<Student>(
         (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'students' : ''
     );
@@ -184,11 +192,12 @@ function DashboardPageContent() {
         (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'tasks' : ''
     );
 
-    const users = usersData || [];
     const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
-    const isLoading = isCurrentUserLoading || usersLoading || (isAdminOrDept && (studentsLoading || tasksLoading));
+    // This loading state is only for the data fetched in this parent component.
+    const isParentLoading = isCurrentUserLoading || (isAdminOrDept && (studentsLoading || tasksLoading));
 
-    if (isLoading && !users.length) {
+    // The initial spinner only waits for the user to be identified.
+    if (isCurrentUserLoading) {
         return (
             <div className="flex h-full w-full items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -203,13 +212,15 @@ function DashboardPageContent() {
         return allTasks.sort((a,b) => sortByDate(a,b));
     }, [allTasks]);
 
+    // Render the appropriate dashboard based on the user's role.
+    // Each dashboard component is now responsible for its own user list and detailed loading states.
     switch (currentUser.role) {
         case 'admin':
-            return <AdminDashboard students={allStudents || []} tasks={sortedTasks} users={users} currentUser={currentUser} isLoading={isLoading} />;
+            return <AdminDashboard students={allStudents || []} tasks={sortedTasks} currentUser={currentUser} isLoading={isParentLoading} />;
         case 'employee':
-            return <EmployeeDashboard currentUser={currentUser} users={users} />;
+            return <EmployeeDashboard currentUser={currentUser} />;
         case 'department':
-            return <DepartmentDashboard students={allStudents || []} tasks={sortedTasks} users={users} currentUser={currentUser} isLoading={isLoading} />;
+            return <DepartmentDashboard students={allStudents || []} tasks={sortedTasks} currentUser={currentUser} isLoading={isParentLoading} />;
         default:
             return <p>Unknown user role. Cannot display dashboard.</p>;
     }

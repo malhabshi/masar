@@ -10,26 +10,25 @@ import { useToast } from '@/hooks/use-toast';
 import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
+import { useUsers } from '@/contexts/users-provider';
 
 interface NotesSectionProps {
   student: Student;
   currentUser: User;
-  users: User[];
   title: string;
   readOnly: boolean;
 }
 
-export function NotesSection({ student, currentUser, users, title, readOnly }: NotesSectionProps) {
+export function NotesSection({ student, currentUser, title, readOnly }: NotesSectionProps) {
   const [newNote, setNewNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { getUserById } = useUsers();
 
   const sortedNotes = useMemo(() => {
     if (!student.notes) return [];
     return [...student.notes].sort((a,b) => sortByDate(a,b));
   }, [student.notes]);
-
-  const getAuthor = (authorId: string) => users.find(u => u.id === authorId);
 
   const handleAddNote = async () => {
     if (!newNote.trim() || !currentUser) return;
@@ -65,7 +64,7 @@ export function NotesSection({ student, currentUser, users, title, readOnly }: N
         <div className="space-y-4">
           {sortedNotes.length > 0 ? (
             sortedNotes.map(note => {
-              const author = getAuthor(note.authorId);
+              const author = getUserById(note.authorId);
               return (
                 <div key={note.id} className="flex items-start gap-3">
                   <Avatar className="h-8 w-8 border">

@@ -5,12 +5,12 @@ import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, T
 import { firestore, useCollection, useMemoFirebase } from '@/firebase/client';
 import { collection } from 'firebase/firestore';
 import { useMemo } from 'react';
-import type { Student, Application, User } from '@/lib/types';
+import type { Student, Application } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { useUsers } from '@/contexts/users-provider';
 
 export default function ReportsPage() {
-    const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
-    const users = usersData || [];
+    const { users, usersLoading } = useUsers();
     
     const studentsCollection = useMemoFirebase(() => collection(firestore, 'students'), []);
     const { data: students, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);

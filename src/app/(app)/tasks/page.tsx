@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/ca
 
 export default function TasksPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { users, usersLoading } = useUsers();
+  const { usersLoading } = useUsers();
 
   const isLoading = isUserLoading || usersLoading;
 
@@ -27,5 +27,5 @@ export default function TasksPage() {
         );
   }
 
-  return <TaskManager currentUser={currentUser} users={users} />;
+  return <TaskManager currentUser={currentUser} />;
 }

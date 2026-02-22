@@ -10,22 +10,22 @@ import { doc } from 'firebase/firestore';
 import { Loader2, Send } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import type { Task, User, TaskReply } from '@/lib/types';
+import { useUsers } from '@/contexts/users-provider';
 
 interface TaskListProps {
   tasks: Task[];
-  users: User[];
   currentUser: User;
   isLoading: boolean;
 }
 
-export function TaskList({ tasks, users, currentUser, isLoading }: TaskListProps) {
+export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  const { getUserById } = useUsers();
 
   const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user?.name || 'Unknown User';
+    return getUserById(userId)?.name || 'Unknown User';
   };
 
   const handleReply = async (taskId: string) => {

@@ -9,25 +9,23 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
 import { formatDate } from '@/lib/timestamp-utils';
+import { useUsers } from '@/contexts/users-provider';
 
 interface InternalDocumentsProps {
   student: Student;
   currentUser: User;
   title: string;
   allowUpload: boolean;
-  users: User[];
 }
 
-export function InternalDocuments({ student, currentUser, title, allowUpload, users }: InternalDocumentsProps) {
-  const getAuthor = (authorId: string) => {
-    return users.find(u => u.id === authorId);
-  };
+export function InternalDocuments({ student, currentUser, title, allowUpload }: InternalDocumentsProps) {
+  const { getUserById } = useUsers();
   
   const managementRoles: UserRole[] = ['admin', 'department'];
 
   const documents = (student.documents || []).filter(doc => {
       const isEmployeeSection = title === 'Employee Documents';
-      const author = getAuthor(doc.authorId);
+      const author = getUserById(doc.authorId);
 
       if (isEmployeeSection) {
           // Show documents created by employees (or if author can't be determined, assume it might be older data)
@@ -56,7 +54,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload, us
             </TableHeader>
             <TableBody>
               {documents.slice().sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()).map((doc) => {
-                const author = getAuthor(doc.authorId);
+                const author = getUserById(doc.authorId);
                 return (
                   <TableRow key={doc.id}>
                     <TableCell className="flex items-center gap-2">

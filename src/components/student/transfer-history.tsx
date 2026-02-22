@@ -1,27 +1,18 @@
 'use client';
 
-import type { Student, User } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowRight } from 'lucide-react';
 import { formatDate } from '@/lib/timestamp-utils';
+import { useUsers } from '@/contexts/users-provider';
 
 interface TransferHistoryProps {
   transferHistory: NonNullable<Student['transferHistory']>;
-  users: User[];
 }
 
-export function TransferHistory({ transferHistory, users }: TransferHistoryProps) {
-  const getEmployee = (employeeId: string | null) => {
-    if (!employeeId) return null;
-    // transferHistory stores the employee's Civil ID
-    return users.find(u => u.civilId === employeeId);
-  }
-  
-  const getAdmin = (adminId: string) => {
-      // transferredBy stores the user's main ID
-      return users.find(u => u.id === adminId);
-  }
+export function TransferHistory({ transferHistory }: TransferHistoryProps) {
+  const { getUserByCivilId, getUserById } = useUsers();
 
   return (
     <Card>
@@ -30,9 +21,9 @@ export function TransferHistory({ transferHistory, users }: TransferHistoryProps
       </CardHeader>
       <CardContent className="space-y-4">
         {transferHistory.map((transfer, index) => {
-          const fromEmployee = getEmployee(transfer.fromEmployeeId);
-          const toEmployee = getEmployee(transfer.toEmployeeId);
-          const admin = getAdmin(transfer.transferredBy);
+          const fromEmployee = getUserByCivilId(transfer.fromEmployeeId);
+          const toEmployee = getUserByCivilId(transfer.toEmployeeId);
+          const admin = getUserById(transfer.transferredBy);
 
           return (
             <div key={index} className="flex flex-col">

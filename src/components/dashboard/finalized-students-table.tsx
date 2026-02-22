@@ -10,9 +10,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { Student, User } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import { Plane } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useUsers } from '@/contexts/users-provider';
 
 interface FinalizedStudent extends Student {
   finalChoiceUniversity: string;
@@ -20,15 +21,15 @@ interface FinalizedStudent extends Student {
 
 interface FinalizedStudentsTableProps {
   students: FinalizedStudent[];
-  users: User[];
   showEmployee?: boolean;
 }
 
-export function FinalizedStudentsTable({ students, users, showEmployee = true }: FinalizedStudentsTableProps) {
+export function FinalizedStudentsTable({ students, showEmployee = true }: FinalizedStudentsTableProps) {
+  const { getUserByCivilId } = useUsers();
+  
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
-    // The employeeId on a student record is the employee's Civil ID
-    const employee = users.find(u => u.civilId === employeeId);
+    const employee = getUserByCivilId(employeeId);
     return employee?.name || 'Unknown Employee';
   };
 

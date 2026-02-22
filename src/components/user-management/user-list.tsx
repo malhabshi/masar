@@ -17,17 +17,18 @@ import { Loader2 } from 'lucide-react';
 import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 import { EditUserDialog } from './edit-user-dialog';
+import { useUsers } from '@/contexts/users-provider';
 
 interface UserListProps {
-  users: User[];
   currentUser: User;
 }
 
 const userRoles: UserRole[] = ['admin', 'employee', 'department'];
 
-export function UserList({ users, currentUser }: UserListProps) {
+export function UserList({ currentUser }: UserListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const { users } = useUsers();
 
   const handleRoleChange = async (userToUpdate: User, newRole: UserRole) => {
     if (userToUpdate.id === currentUser.id) {

@@ -2,11 +2,12 @@
 
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { Student, User } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { FinalizedStudentsTable } from '@/components/dashboard/finalized-students-table';
+import { useUsers } from '@/contexts/users-provider';
 
 interface FinalizedStudent extends Student {
     finalChoiceUniversity: string;
@@ -14,8 +15,7 @@ interface FinalizedStudent extends Student {
 
 export default function FinalizedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
-  const users = usersData || [];
+  const { usersLoading } = useUsers();
 
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>('students');
 
@@ -53,7 +53,6 @@ export default function FinalizedStudentsPage() {
       <CardContent>
         <FinalizedStudentsTable
           students={finalizedStudents}
-          users={users}
           showEmployee={currentUser.role !== 'employee'}
         />
       </CardContent>
