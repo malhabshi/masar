@@ -1,13 +1,28 @@
 'use client';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { BarChart, Users, University } from 'lucide-react';
-import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
-import { firestore, useCollection, useMemoFirebase } from '@/firebase/client';
+import { Users, University } from 'lucide-react';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { collection } from 'firebase/firestore';
 import { useMemo } from 'react';
 import type { Student, Application } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
-import { useUsers } from '@/contexts/users-provider';
+import { useUsers } from '@/hooks/use-users';
+import dynamic from 'next/dynamic';
+
+// Lazy load the recharts components
+const ResponsiveContainer = dynamic(
+    () => import('recharts').then((mod) => mod.ResponsiveContainer),
+    { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse bg-muted rounded-lg" /> }
+);
+const RechartsBarChart = dynamic(
+    () => import('recharts').then((mod) => mod.BarChart),
+    { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse bg-muted rounded-lg" /> }
+);
+const XAxis = dynamic(() => import('recharts').then((mod) => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then((mod) => mod.YAxis), { ssr: false });
+const Tooltip = dynamic(() => import('recharts').then((mod) => mod.Tooltip), { ssr: false });
+const Bar = dynamic(() => import('recharts').then((mod) => mod.Bar), { ssr: false });
+
 
 export default function ReportsPage() {
     const { users, usersLoading } = useUsers();
@@ -21,7 +36,7 @@ export default function ReportsPage() {
 
     const totalStudents = useMemo(() => students?.length || 0, [students]);
     const totalApplications = useMemo(() => applications.length, [applications]);
-    const totalEmployees = useMemo(() => users.filter(u => u.role === 'employee').length || 0, [users]);
+    const totalEmployees = useMemo(() => users?.filter(u => u.role === 'employee').length || 0, [users]);
 
     const applicationStatusData = useMemo(() => {
         const counts = applications.reduce((acc, app) => {
@@ -32,6 +47,7 @@ export default function ReportsPage() {
     }, [applications]);
 
     const studentEmployeeData = useMemo(() => {
+        if (!users) return [];
         const employeeMap = new Map<string, string>();
         users.forEach(u => u.civilId && employeeMap.set(u.civilId, u.name));
 
