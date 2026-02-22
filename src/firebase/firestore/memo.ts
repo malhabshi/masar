@@ -1,3 +1,5 @@
+'use client';
+
 import { useMemo } from 'react';
 
 // A helper to memoize Firebase queries and references.
