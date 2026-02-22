@@ -63,7 +63,7 @@ function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoadi
             <TaskList tasks={tasks} currentUser={currentUser} isLoading={isLoading} />
             <SendTaskForm currentUser={currentUser} />
         </div>
-        <UpcomingEventsCard currentUser={currentUser} />
+        <UpcomingEventsCard />
         <div className="flex justify-end">
             <ImportStudentsDialog currentUser={currentUser} />
         </div>
@@ -130,7 +130,7 @@ function EmployeeDashboard({ currentUser }: { currentUser: User }) {
                 <TaskList tasks={relevantTasks} currentUser={currentUser} isLoading={isLoading} />
                 <PersonalTodoList />
             </div>
-            <UpcomingEventsCard currentUser={currentUser} />
+            <UpcomingEventsCard />
         </div>
     );
 }
@@ -169,7 +169,7 @@ function DepartmentDashboard({ students, tasks, currentUser, isLoading: isParent
             </div>
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TaskList tasks={tasks} currentUser={currentUser} isLoading={isLoading} />
-                <UpcomingEventsCard currentUser={currentUser} />
+                <UpcomingEventsCard />
             </div>
         </div>
     )

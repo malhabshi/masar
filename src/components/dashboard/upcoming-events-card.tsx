@@ -3,17 +3,17 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCollection } from '@/firebase/client';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Loader2 } from 'lucide-react';
 import { formatDate, sortByDate } from '@/lib/timestamp-utils';
-import type { UpcomingEvent, User } from '@/lib/types';
-
-interface UpcomingEventsCardProps {
-  currentUser: User;
-}
+import type { UpcomingEvent } from '@/lib/types';
+import { useUser } from '@/hooks/use-user';
 
 
-export function UpcomingEventsCard({currentUser}: UpcomingEventsCardProps) {
-  const { data: events, isLoading } = useCollection<UpcomingEvent>('upcoming_events');
+export function UpcomingEventsCard() {
+  const { isUserLoading } = useUser();
+  const { data: events, isLoading: areEventsLoading } = useCollection<UpcomingEvent>('upcoming_events');
+  
+  const isLoading = isUserLoading || areEventsLoading;
   
   const sortedEvents = useMemo(() => {
     if (!events) return [];
@@ -27,10 +27,9 @@ export function UpcomingEventsCard({currentUser}: UpcomingEventsCardProps) {
           <CardTitle>Upcoming Events</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <div className="h-4 w-full bg-muted animate-pulse rounded" />
-            <div className="h-4 w-full bg-muted animate-pulse rounded" />
-          </div>
+            <div className="flex justify-center items-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
         </CardContent>
       </Card>
     );
