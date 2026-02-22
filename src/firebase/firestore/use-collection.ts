@@ -58,30 +58,38 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       return;
     }
 
+    let isMounted = true;
     setIsLoading(true);
     const unsubscribe = onSnapshot(memoizedQuery, 
       (snapshot) => {
-        const items = snapshot.docs.map(doc => {
-          const docData = doc.data();
-          const converted = convertTimestamps<DocumentData>(docData);
-          return { id: doc.id, ...converted } as T;
-        });
-        setData(items);
-        setIsLoading(false);
-        setError(null);
+        if (isMounted) {
+            const items = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            const converted = convertTimestamps<DocumentData>(docData);
+            return { id: doc.id, ...converted } as T;
+            });
+            setData(items);
+            setIsLoading(false);
+            setError(null);
+        }
       },
       (err) => {
-        const permissionError = new FirestorePermissionError({
-            path: (memoizedQuery as any)._query.path.segments.join('/'),
-            operation: 'list'
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        setError(err);
-        setIsLoading(false);
+        if (isMounted) {
+            const permissionError = new FirestorePermissionError({
+                path: (memoizedQuery as any)._query.path.segments.join('/'),
+                operation: 'list'
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            setError(err);
+            setIsLoading(false);
+        }
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+        isMounted = false;
+        unsubscribe();
+    };
   }, [memoizedQuery]);
 
   return { data, isLoading, error };
