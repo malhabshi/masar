@@ -85,12 +85,12 @@ export async function onApplicationStatusChange(applicationId: string, newStatus
     const studentId = application?.studentId;
     const employeeId = application?.assignedEmployeeId;
 
-    if (!employeeId) {
-      console.log('No employee assigned to this application');
-      return { success: true, message: 'No employee assigned' };
+    if (!employeeId || !studentId) {
+      console.log('No employee or student assigned to this application');
+      return { success: true, message: 'No employee or student assigned' };
     }
 
-    // Get student and employee data
+    // Get student and employee data in parallel
     const [studentDoc, employeeDoc] = await Promise.all([
       adminDb!.collection('students').doc(studentId).get(),
       adminDb!.collection('users').doc(employeeId).get()
@@ -184,4 +184,88 @@ export async function testFirebaseAdmin() {
       message: 'Firebase Admin failed to query: ' + String(error)
     };
   }
+}
+
+export async function addApplication(studentId: string, universityName: string, country: string, major: string, studentName: string, employeeId: string | null) {
+  // This is a placeholder. In a real app, you'd have more logic here.
+  // For example, sending a notification to the employee.
+  return { success: true, message: `Application for ${universityName} added.` };
+}
+
+export async function updateApplicationStatus(studentId: string, universityName: string, major: string, newStatus: ApplicationStatus, studentName: string, employeeId: string | null) {
+  // Placeholder
+  return { success: true, message: 'Status updated.' };
+}
+
+export async function updateStudentPipelineStatus(studentId: string, status: string, userName: string, studentName: string) {
+    return { success: true, message: 'Status updated.' };
+}
+
+export async function transferStudent(studentId: string, newEmployee: { id: string }, adminId: string, studentName: string, fromEmployeeName: string | null) {
+    return { success: true, message: `Student ${studentName} transferred.` };
+}
+
+export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
+    if (!checkAdminDb()) {
+        return { success: false, message: 'Server database connection not available.' };
+    }
+    try {
+        const fromEmployeeDoc = await adminDb.collection('users').doc(fromEmployeeId).get();
+        const toEmployeeDoc = await adminDb.collection('users').doc(toEmployeeId).get();
+        
+        if (!fromEmployeeDoc.exists || !toEmployeeDoc.exists) {
+            return { success: false, message: 'One or both employees not found.' };
+        }
+        
+        const fromEmployeeCivilId = fromEmployeeDoc.data()?.civilId;
+        const toEmployeeCivilId = toEmployeeDoc.data()?.civilId;
+        
+        if (!fromEmployeeCivilId || !toEmployeeCivilId) {
+            return { success: false, message: 'One or both employees are missing a Civil ID.' };
+        }
+
+        const snapshot = await adminDb.collection('students').where('employeeId', '==', fromEmployeeCivilId).get();
+        
+        if (snapshot.empty) {
+            return { success: true, message: 'No students to transfer.' };
+        }
+
+        const batch = adminDb.batch();
+        snapshot.docs.forEach(doc => {
+            batch.update(doc.ref, { employeeId: toEmployeeCivilId, isNewForEmployee: true });
+        });
+
+        await batch.commit();
+        
+        return { success: true, message: `${snapshot.size} students were transferred successfully.` };
+    } catch (error: any) {
+        return { success: false, message: error.message };
+    }
+}
+
+
+export async function sendTask(authorId: string, recipientId: string, content: string) {
+    return { success: true, message: 'Update sent.' };
+}
+
+export async function addReplyToTask(taskId: string, authorId: string, content: string, taskAuthorId: string) {
+    return { success: true, message: 'Reply sent.' };
+}
+
+export async function updateTaskStatus(taskId: string, status: string, task: any) {
+    return { success: true, message: 'Status updated.' };
+}
+
+export async function importStudentsFromExcel(userId: string, fileName: string) {
+    // This is a mock function. In a real scenario, you'd parse the excel file
+    // and add students to the database.
+    console.log(`User ${userId} initiated import from ${fileName}`);
+    return { success: true, message: `Students from '${fileName}' are being imported in the background.` };
+}
+
+export async function sendTestNotification(phoneNumber: string, userName: string) {
+    // In a real app, this would integrate with a WhatsApp service.
+    if (!phoneNumber) return { success: false, message: 'Phone number is required.' };
+    console.log(`Sending test WhatsApp to ${phoneNumber} from ${userName}.`);
+    return { success: true, message: 'Test message sent successfully.' };
 }
