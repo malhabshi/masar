@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { doc, onSnapshot, DocumentReference, DocumentData } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { doc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { toDate } from '@/lib/timestamp-utils';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
+import { useMemoFirebase } from './memo';
 
 // Recursively convert all Timestamps to Date objects
 function convertTimestamps<T>(data: any): T {
@@ -38,7 +39,7 @@ export function useDoc<T>(path: string, ...pathSegments: string[]) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  const memoizedDocRef = useMemo(() => {
+  const memoizedDocRef = useMemoFirebase(() => {
     // Ensure path segments are valid before creating a reference
     if (!path || pathSegments.some(segment => !segment)) {
         return null;
@@ -49,8 +50,7 @@ export function useDoc<T>(path: string, ...pathSegments: string[]) {
         console.error("Failed to create document reference:", e);
         return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, JSON.stringify(pathSegments)]);
+  }, [path, ...pathSegments]);
 
 
   useEffect(() => {
@@ -86,7 +86,7 @@ export function useDoc<T>(path: string, ...pathSegments: string[]) {
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef, path]);
+  }, [memoizedDocRef]);
 
   return { data, isLoading, error };
 }

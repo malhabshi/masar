@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import type { Student, Task, User } from '@/lib/types';
 import { Loader2, Users, FileText, UserPlus } from 'lucide-react';
@@ -71,7 +71,7 @@ function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoadi
 }
 
 function EmployeeDashboard({ currentUser }: { currentUser: User }) {
-    const myStudentsConstraints = useMemo(() => {
+    const myStudentsConstraints = useMemoFirebase(() => {
         return currentUser.civilId ? [where('employeeId', '==', currentUser.civilId)] : [];
     }, [currentUser.civilId]);
 
@@ -81,13 +81,13 @@ function EmployeeDashboard({ currentUser }: { currentUser: User }) {
     );
     const myStudents = useMemo(() => myStudentsData || [], [myStudentsData]);
 
-    const tasksToMeConstraints = useMemo(() => [where('recipientId', '==', currentUser.id)], [currentUser.id]);
+    const tasksToMeConstraints = useMemoFirebase(() => [where('recipientId', '==', currentUser.id)], [currentUser.id]);
     const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>('tasks', ...tasksToMeConstraints);
 
-    const tasksToAllConstraints = useMemo(() => [where('recipientId', '==', 'all')], []);
+    const tasksToAllConstraints = useMemoFirebase(() => [where('recipientId', '==', 'all')], []);
     const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>('tasks', ...tasksToAllConstraints);
 
-    const tasksByMeConstraints = useMemo(() => [where('authorId', '==', currentUser.id)], [currentUser.id]);
+    const tasksByMeConstraints = useMemoFirebase(() => [where('authorId', '==', currentUser.id)], [currentUser.id]);
     const { data: tasksByMeData, isLoading: tasksByMeLoading } = useCollection<Task>('tasks', ...tasksByMeConstraints);
 
     const tasksToMe = useMemo(() => tasksToMeData || [], [tasksToMeData]);

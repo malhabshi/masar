@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, QueryConstraint, Firestore, DocumentData } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { collection, onSnapshot, query, QueryConstraint, DocumentData } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { toDate } from '@/lib/timestamp-utils';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
+import { useMemoFirebase } from './memo';
 
 // Recursively convert all Timestamps to Date objects
 function convertTimestamps<T>(data: any): T {
@@ -37,7 +38,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const memoizedQuery = useMemo(() => {
+  const memoizedQuery = useMemoFirebase(() => {
     if (!path) return null;
     try {
         const collectionRef = collection(firestore, path);
@@ -46,8 +47,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         console.error("Failed to create query:", e);
         return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, JSON.stringify(queryConstraints)]);
+  }, [path, ...queryConstraints]);
 
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     );
 
     return () => unsubscribe();
-  }, [memoizedQuery, path]);
+  }, [memoizedQuery]);
 
   return { data, isLoading, error };
 }
