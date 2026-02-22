@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { ApprovedUniversity, Country } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -31,13 +31,24 @@ export function ApprovedUniversitiesView() {
   const isLoading = isUserLoadingHook || areUniversitiesLoading;
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
   const [countryFilter, setCountryFilter] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
 
   const filteredUniversities = useMemo(() => {
     if (!universitiesData) return [];
     return universitiesData.filter(uni => {
-      const searchLower = searchQuery.toLowerCase();
+      const searchLower = debouncedSearchQuery.toLowerCase();
       const matchesSearch =
         uni.name.toLowerCase().includes(searchLower) ||
         uni.major.toLowerCase().includes(searchLower);
@@ -51,7 +62,7 @@ export function ApprovedUniversitiesView() {
 
       return matchesSearch && matchesCountry && matchesAvailability;
     });
-  }, [searchQuery, countryFilter, availabilityFilter, universitiesData]);
+  }, [debouncedSearchQuery, countryFilter, availabilityFilter, universitiesData]);
 
   if (isLoading) {
     return (

@@ -19,9 +19,9 @@ export default function ReportsPage() {
     
     const isLoading = usersLoading || studentsLoading;
 
-    const totalStudents = students?.length || 0;
-    const totalApplications = applications.length;
-    const totalEmployees = users.filter(u => u.role === 'employee').length || 0;
+    const totalStudents = useMemo(() => students?.length || 0, [students]);
+    const totalApplications = useMemo(() => applications.length, [applications]);
+    const totalEmployees = useMemo(() => users.filter(u => u.role === 'employee').length || 0, [users]);
 
     const applicationStatusData = useMemo(() => {
         const counts = applications.reduce((acc, app) => {

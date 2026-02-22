@@ -79,7 +79,7 @@ function EmployeeDashboard({ currentUser }: { currentUser: User }) {
         currentUser.civilId ? 'students' : '', 
         ...myStudentsConstraints
     );
-    const myStudents = myStudentsData || [];
+    const myStudents = useMemo(() => myStudentsData || [], [myStudentsData]);
 
     const tasksToMeConstraints = useMemo(() => [where('recipientId', '==', currentUser.id)], [currentUser.id]);
     const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>('tasks', ...tasksToMeConstraints);
@@ -90,9 +90,9 @@ function EmployeeDashboard({ currentUser }: { currentUser: User }) {
     const tasksByMeConstraints = useMemo(() => [where('authorId', '==', currentUser.id)], [currentUser.id]);
     const { data: tasksByMeData, isLoading: tasksByMeLoading } = useCollection<Task>('tasks', ...tasksByMeConstraints);
 
-    const tasksToMe = tasksToMeData || [];
-    const tasksToAll = tasksToAllData || [];
-    const tasksByMe = tasksByMeData || [];
+    const tasksToMe = useMemo(() => tasksToMeData || [], [tasksToMeData]);
+    const tasksToAll = useMemo(() => tasksToAllData || [], [tasksToAllData]);
+    const tasksByMe = useMemo(() => tasksByMeData || [], [tasksByMeData]);
     
     const tasksDataLoading = tasksToMeLoading || tasksToAllLoading || tasksByMeLoading;
     const isLoading = studentsLoading || tasksDataLoading;
@@ -187,12 +187,15 @@ function DashboardPageContent() {
     const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
     
     // Admins and Departments fetch all student and task data at this top level.
-    const { data: allStudents, isLoading: studentsLoading } = useCollection<Student>(
+    const { data: allStudentsData, isLoading: studentsLoading } = useCollection<Student>(
         (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'students' : ''
     );
-    const { data: allTasks, isLoading: tasksLoading } = useCollection<Task>(
+    const { data: allTasksData, isLoading: tasksLoading } = useCollection<Task>(
         (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'tasks' : ''
     );
+
+    const allStudents = useMemo(() => allStudentsData || [], [allStudentsData]);
+    const allTasks = useMemo(() => allTasksData || [], [allTasksData]);
 
     const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
     // This loading state is only for the data fetched in this parent component.
@@ -211,18 +214,18 @@ function DashboardPageContent() {
     
     const sortedTasks = useMemo(() => {
         if (!allTasks) return [];
-        return allTasks.sort((a,b) => sortByDate(a,b));
+        return [...allTasks].sort((a,b) => sortByDate(a,b));
     }, [allTasks]);
 
     // Render the appropriate dashboard based on the user's role.
     // Each dashboard component is now responsible for its own user list and detailed loading states.
     switch (currentUser.role) {
         case 'admin':
-            return <AdminDashboard students={allStudents || []} tasks={sortedTasks} currentUser={currentUser} isLoading={isParentLoading} />;
+            return <AdminDashboard students={allStudents} tasks={sortedTasks} currentUser={currentUser} isLoading={isParentLoading} />;
         case 'employee':
             return <EmployeeDashboard currentUser={currentUser} />;
         case 'department':
-            return <DepartmentDashboard students={allStudents || []} tasks={sortedTasks} currentUser={currentUser} isLoading={isParentLoading} />;
+            return <DepartmentDashboard students={allStudents} tasks={sortedTasks} currentUser={currentUser} isLoading={isParentLoading} />;
         default:
             return <p>Unknown user role. Cannot display dashboard.</p>;
     }
