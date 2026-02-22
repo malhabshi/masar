@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { useUsers } from '@/contexts/users-provider';
 import { useCollection } from '@/firebase/client';
 import type { Student, Task, User } from '@/lib/types';
 import { Loader2, Users, FileText, UserPlus } from 'lucide-react';
@@ -164,10 +163,12 @@ function DepartmentDashboard({ students, tasks, users, currentUser, isLoading }:
 
 export default function DashboardPage() {
     const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
-    const { users, usersLoading } = useUsers();
+    const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
 
     const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
     const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
+    
+    const users = usersData || [];
 
     const isLoading = isCurrentUserLoading || usersLoading || studentsLoading || tasksLoading;
 

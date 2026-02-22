@@ -1,7 +1,8 @@
 'use client';
 
 import { useUser } from '@/hooks/use-user';
-import { useUsers } from '@/contexts/users-provider';
+import { useCollection } from '@/firebase/client';
+import type { User } from '@/lib/types';
 import { CreateUserForm } from '@/components/user-management/create-user-form';
 import { UserList } from '@/components/user-management/user-list';
 import { BulkTransferForm } from '@/components/user-management/bulk-transfer-form';
@@ -10,7 +11,8 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/ca
 
 function UserManagementContent() {
     const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
-    const { users, usersLoading } = useUsers();
+    const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+    const users = usersData || [];
 
     if (isCurrentUserLoading || usersLoading) {
         return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;

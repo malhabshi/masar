@@ -3,9 +3,8 @@
 import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
-import { useUsers } from '@/contexts/users-provider';
 import { useDoc, useCollection } from '@/firebase/client';
-import type { Student, Task } from '@/lib/types';
+import type { Student, Task, User } from '@/lib/types';
 
 import { Loader2 } from 'lucide-react';
 import { StudentHeader } from '@/components/student/student-header';
@@ -22,7 +21,8 @@ export default function StudentDetailPage() {
   const router = useRouter();
 
   const { user: currentUser, isUserLoading } = useUser();
-  const { users, usersLoading } = useUsers();
+  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+  const users = usersData || [];
 
   const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>('students', studentId);
   const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');

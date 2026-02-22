@@ -2,8 +2,7 @@
 
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { useUsers } from '@/contexts/users-provider';
-import type { Student } from '@/lib/types';
+import type { Student, User } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { query, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -12,7 +11,8 @@ import { Loader2 } from 'lucide-react';
 
 export default function InternalChatPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { users, usersLoading } = useUsers();
+  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+  const users = usersData || [];
 
   // Query for students with unread messages for admins/depts.
   const studentsQuery = useMemo(() => {

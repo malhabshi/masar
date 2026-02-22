@@ -3,14 +3,14 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { BarChart, Users, University } from 'lucide-react';
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { firestore, useCollection, useMemoFirebase } from '@/firebase/client';
-import { useUsers } from '@/contexts/users-provider';
 import { collection } from 'firebase/firestore';
 import { useMemo } from 'react';
-import type { Student, Application } from '@/lib/types';
+import type { Student, Application, User } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
 export default function ReportsPage() {
-    const { users, usersLoading } = useUsers();
+    const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+    const users = usersData || [];
     
     const studentsCollection = useMemoFirebase(() => collection(firestore, 'students'), []);
     const { data: students, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);
