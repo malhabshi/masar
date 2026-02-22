@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ChevronsUpDown, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { auth } from '@/firebase/client';
+import { auth } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
