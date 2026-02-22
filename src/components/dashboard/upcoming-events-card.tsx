@@ -2,21 +2,18 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useFirebase, useCollection } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { useCollection } from '@/firebase';
 import { CalendarDays } from 'lucide-react';
 import { formatDate, sortByDate } from '@/lib/timestamp-utils';
-import type { UpcomingEvent } from '@/lib/types';
+import type { UpcomingEvent, User } from '@/lib/types';
 
-export function UpcomingEventsCard() {
-  const { firestore } = useFirebase();
-  
-  const eventsCollection = useMemo(() => 
-    firestore ? collection(firestore, 'upcoming_events') : null, 
-    [firestore]
-  );
-  
-  const { data: events, isLoading } = useCollection<UpcomingEvent>(eventsCollection);
+interface UpcomingEventsCardProps {
+  currentUser: User;
+}
+
+
+export function UpcomingEventsCard({currentUser}: UpcomingEventsCardProps) {
+  const { data: events, isLoading } = useCollection<UpcomingEvent>('upcoming_events');
   
   const sortedEvents = useMemo(() => {
     if (!events) return [];

@@ -28,8 +28,8 @@ import { addApplication } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import type { ApprovedUniversity, Student } from '@/lib/types';
-import { firestore, useCollection, updateDocumentNonBlocking, useDoc, useMemoFirebase } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { firestore, useCollection, updateDocumentNonBlocking, useDoc } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 const formSchema = z.object({
   universityName: z.string().min(1, { message: 'Please select a university.' }),
@@ -45,11 +45,9 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const studentDocRef = useMemoFirebase(() => doc(firestore, 'students', studentId), [studentId]);
-  const { data: student } = useDoc<Student>(studentDocRef);
-
-  const universitiesCollection = useMemoFirebase(() => collection(firestore, 'approved_universities'), []);
-  const { data: universitiesData } = useCollection<ApprovedUniversity>(universitiesCollection);
+  const { data: student } = useDoc<Student>('students', studentId);
+  const { data: universitiesData } = useCollection<ApprovedUniversity>('approved_universities');
+  
   const universities = useMemo(() => universitiesData || [], [universitiesData]);
   
   const form = useForm<z.infer<typeof formSchema>>({

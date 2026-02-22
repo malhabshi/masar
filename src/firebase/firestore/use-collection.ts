@@ -1,69 +1,88 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, QueryConstraint } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useState, useEffect, useMemo } from 'react';
+import { collection, onSnapshot, query, QueryConstraint, Firestore, DocumentData } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 import { toDate } from '@/lib/timestamp-utils';
+import { errorEmitter } from '../error-emitter';
+import { FirestorePermissionError } from '../errors';
 
 // Recursively convert all Timestamps to Date objects
-function convertTimestamps(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
+function convertTimestamps<T>(data: any): T {
+  if (!data) return data;
   
-  if (obj && typeof obj.toDate === 'function' && !(obj instanceof Date)) {
-    return toDate(obj);
+  if (data && typeof data.toDate === 'function' && !(data instanceof Date)) {
+    return toDate(data);
   }
   
-  if (Array.isArray(obj)) {
-    return obj.map(item => convertTimestamps(item));
+  if (Array.isArray(data)) {
+    return data.map(item => convertTimestamps(item)) as any;
   }
   
-  if (typeof obj === 'object') {
+  if (typeof data === 'object') {
     const converted: any = {};
-    for (const key in obj) {
-      if(Object.prototype.hasOwnProperty.call(obj, key)) {
-          converted[key] = convertTimestamps(obj[key]);
+    for (const key in data) {
+      if(Object.prototype.hasOwnProperty.call(data, key)) {
+          converted[key] = convertTimestamps(data[key]);
       }
     }
     return converted;
   }
   
-  return obj;
+  return data;
 }
 
-export function useCollection<T>(collectionPath: string, ...queryConstraints: QueryConstraint[]) {
+export function useCollection<T>(path: string, ...queryConstraints: QueryConstraint[]) {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const { firestore } = useFirebase();
+
+  const memoizedQuery = useMemo(() => {
+    if (!path) return null;
+    try {
+        const collectionRef = collection(firestore, path);
+        return query(collectionRef, ...queryConstraints);
+    } catch(e) {
+        console.error("Failed to create query:", e);
+        return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, JSON.stringify(queryConstraints)]);
+
 
   useEffect(() => {
-    if (!firestore || !collectionPath) {
-      setIsLoading(false);
+    if (!memoizedQuery) {
+        if(path) { // Only set loading to false if path was provided but query failed
+            setIsLoading(false);
+        }
       return;
     }
 
-    const q = query(collection(firestore, collectionPath), ...queryConstraints);
-
-    const unsubscribe = onSnapshot(q, 
+    setIsLoading(true);
+    const unsubscribe = onSnapshot(memoizedQuery, 
       (snapshot) => {
         const items = snapshot.docs.map(doc => {
           const docData = doc.data();
-          // Convert all timestamps in the document
-          const converted = convertTimestamps(docData);
+          const converted = convertTimestamps<DocumentData>(docData);
           return { id: doc.id, ...converted } as T;
         });
         setData(items);
         setIsLoading(false);
+        setError(null);
       },
       (err) => {
-        console.error('Error fetching collection:', err);
+        const permissionError = new FirestorePermissionError({
+            path: (memoizedQuery as any)._query.path.segments.join('/'),
+            operation: 'list'
+        });
+        errorEmitter.emit('permission-error', permissionError);
         setError(err);
         setIsLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [firestore, collectionPath, JSON.stringify(queryConstraints)]);
+  }, [memoizedQuery, path]);
 
   return { data, isLoading, error };
 }

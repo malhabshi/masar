@@ -11,21 +11,23 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { useUser } from '@/hooks/use-user';
-import { collection, doc } from 'firebase/firestore';
+import { collection, doc, query } from 'firebase/firestore';
 
 export function PersonalTodoList() {
     const { user, isUserLoading } = useUser();
     const { toast } = useToast();
     const [newTodo, setNewTodo] = useState('');
 
-    const todosCollection = useMemoFirebase(() => {
-      if (!user) return null;
-      return collection(firestore, 'users', user.id, 'personal_todos');
+    const todosQuery = useMemo(() => {
+      if (!user) return [];
+      return [collection(firestore, 'users', user.id, 'personal_todos')];
     }, [user]);
 
-    const { data: todosData, isLoading: areTodosLoading } = useCollection<PersonalTodo>(todosCollection);
+    const { data: todosData, isLoading: areTodosLoading } = useCollection<PersonalTodo>(
+        user ? `users/${user.id}/personal_todos` : ''
+    );
 
     const userTodos = useMemo(() => {
         if (!todosData) return [];
@@ -38,7 +40,8 @@ export function PersonalTodoList() {
     }, [todosData]);
 
     const handleAddTodo = () => {
-        if (!newTodo.trim() || !user || !todosCollection) return;
+        if (!newTodo.trim() || !user ) return;
+        const todosCollection = collection(firestore, 'users', user.id, 'personal_todos');
 
         const newTodoItem: Omit<PersonalTodo, 'id'> = {
             userId: user.id,

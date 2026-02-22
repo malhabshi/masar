@@ -21,7 +21,6 @@ export function TaskHistory({ tasks, users, studentId }: TaskHistoryProps) {
     if (studentId) {
       filtered = tasks.filter(task => 
         task.content.includes(studentId) || 
-        task.content.includes('student') ||
         (task.replies && task.replies.some(r => r.content.includes(studentId)))
       );
     }
@@ -54,7 +53,7 @@ export function TaskHistory({ tasks, users, studentId }: TaskHistoryProps) {
           <CardTitle>Task History</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No task history found.</p>
+          <p className="text-muted-foreground">No task history found for this student.</p>
         </CardContent>
       </Card>
     );

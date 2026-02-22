@@ -18,7 +18,7 @@ import { PlusCircle, Search, Loader2 } from 'lucide-react';
 import { UniversitiesTable } from '@/components/universities/universities-table';
 import { AddUniversityDialog } from '@/components/universities/add-university-dialog';
 import { sendTask } from '@/lib/actions';
-import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { Skeleton } from '../ui/skeleton';
 
@@ -26,8 +26,7 @@ export function ApprovedUniversitiesView() {
   const { user, isUserLoading: isUserLoadingHook } = useUser();
   const { toast } = useToast();
 
-  const universitiesCollection = useMemoFirebase(() => collection(firestore, 'approved_universities'), []);
-  const { data: universitiesData, isLoading: areUniversitiesLoading } = useCollection<ApprovedUniversity>(universitiesCollection);
+  const { data: universitiesData, isLoading: areUniversitiesLoading } = useCollection<ApprovedUniversity>('approved_universities');
   
   const isLoading = isUserLoadingHook || areUniversitiesLoading;
 
@@ -84,7 +83,7 @@ export function ApprovedUniversitiesView() {
   const canManage = user.role === 'admin' || user.role === 'department';
 
   const handleAddUniversity = async (newUniversity: Omit<ApprovedUniversity, 'id'>) => {
-    if (!universitiesCollection) return;
+    const universitiesCollection = collection(firestore, 'approved_universities');
     addDocumentNonBlocking(universitiesCollection, newUniversity);
 
     toast({

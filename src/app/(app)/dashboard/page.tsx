@@ -167,11 +167,8 @@ export default function DashboardPage() {
     const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
     const { users, usersLoading } = useUsers();
 
-    const studentsCollection = useMemoFirebase(() => collection(firestore, 'students'), []);
-    const { data: students, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);
-    
-    const tasksCollection = useMemoFirebase(() => collection(firestore, 'tasks'), []);
-    const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(tasksCollection);
+    const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
+    const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
 
     const isLoading = isCurrentUserLoading || usersLoading || studentsLoading || tasksLoading;
 

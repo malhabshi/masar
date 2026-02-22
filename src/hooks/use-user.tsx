@@ -46,12 +46,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // CRITICAL FIX: Use the string-based path for the useDoc hook
-  const userDocPath = authUser ? `users/${authUser.uid}` : '';
-  const { data: appUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(userDocPath);
+  const userDocPath = authUser ? `users` : '';
+  const userDocId = authUser ? authUser.uid : '';
+  const { data: appUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(userDocPath, userDocId);
 
   const value = {
     user: appUser,
-    isUserLoading: isAuthLoading || isFirestoreLoading,
+    isUserLoading: isAuthLoading || (authUser && isFirestoreLoading),
     userError: authError,
     auth: authUser,
   };

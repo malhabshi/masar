@@ -4,8 +4,7 @@ import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { firestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useDoc } from '@/firebase';
 import type { Student } from '@/lib/types';
 
 import { Loader2 } from 'lucide-react';
@@ -15,6 +14,9 @@ import { InternalDocuments } from '@/components/student/internal-documents';
 import { NotesSection } from '@/components/student/notes-section';
 import { TaskHistory } from '@/components/student/task-history';
 import { TransferHistory } from '@/components/student/transfer-history';
+import { useCollection } from '@/firebase';
+import { Task } from '@/lib/types';
+
 
 export default function StudentDetailPage() {
   const params = useParams();
@@ -24,14 +26,10 @@ export default function StudentDetailPage() {
   const { user: currentUser, isUserLoading } = useUser();
   const { users, usersLoading } = useUsers();
 
-  const studentDocRef = useMemoFirebase(() => {
-    if (!studentId) return null;
-    return doc(firestore, 'students', studentId);
-  }, [studentId]);
-
-  const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>(studentDocRef);
+  const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>('students', studentId);
+  const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
   
-  const isLoading = isUserLoading || usersLoading || studentIsLoading;
+  const isLoading = isUserLoading || usersLoading || studentIsLoading || tasksLoading;
 
   if (isLoading) {
     return (
@@ -83,7 +81,7 @@ export default function StudentDetailPage() {
         </div>
       </div>
       
-      <TaskHistory student={student} currentUser={currentUser} users={users} />
+      <TaskHistory tasks={tasks || []} users={users} studentId={student.id} />
     </div>
   );
 }

@@ -3,8 +3,7 @@
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { useFirebase, useCollection } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { useCollection } from '@/firebase';
 import type { Student, Task, User } from '@/lib/types';
 import { Loader2, Users, FileText, UserPlus } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
@@ -166,13 +165,9 @@ function DepartmentDashboard({ students, tasks, users, currentUser, isLoading }:
 export default function DashboardPage() {
     const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
     const { users, usersLoading } = useUsers();
-    const { firestore } = useFirebase();
 
-    const studentsCollection = useMemo(() => !firestore ? null : collection(firestore, 'students'), [firestore]);
-    const { data: students, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);
-    
-    const tasksCollection = useMemo(() => !firestore ? null : collection(firestore, 'tasks'), [firestore]);
-    const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(tasksCollection);
+    const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
+    const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
 
     const isLoading = isCurrentUserLoading || usersLoading || studentsLoading || tasksLoading;
 

@@ -1,67 +1,92 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useState, useEffect, useMemo } from 'react';
+import { doc, onSnapshot, DocumentReference, DocumentData } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 import { toDate } from '@/lib/timestamp-utils';
-
+import { errorEmitter } from '../error-emitter';
+import { FirestorePermissionError } from '../errors';
 
 // Recursively convert all Timestamps to Date objects
 function convertTimestamps<T>(data: any): T {
   if (!data) return data;
   
-  const converted: any = Array.isArray(data) ? [] : {};
-  
-  for (const key in data) {
-    if(Object.prototype.hasOwnProperty.call(data, key)) {
-        const value = data[key];
-        
-        if (value && typeof value.toDate === 'function' && !(value instanceof Date)) {
-          converted[key] = toDate(value);
-        } else if (value && typeof value === 'object') {
-          converted[key] = convertTimestamps(value);
-        } else {
-          converted[key] = value;
-        }
-    }
+  if (data && typeof data.toDate === 'function' && !(data instanceof Date)) {
+    return toDate(data);
   }
   
-  return converted;
+  if (Array.isArray(data)) {
+    return data.map(item => convertTimestamps(item)) as any;
+  }
+  
+  if (typeof data === 'object') {
+    const converted: any = {};
+    for (const key in data) {
+      if(Object.prototype.hasOwnProperty.call(data, key)) {
+          const value = data[key];
+          converted[key] = convertTimestamps(value);
+      }
+    }
+    return converted;
+  }
+  
+  return data;
 }
-
 
 export function useDoc<T>(path: string, ...pathSegments: string[]) {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const { firestore } = useFirebase();
+  
+  const memoizedDocRef = useMemo(() => {
+    // Ensure path segments are valid before creating a reference
+    if (!path || pathSegments.some(segment => !segment)) {
+        return null;
+    }
+    try {
+        return doc(firestore, path, ...pathSegments);
+    } catch(e) {
+        console.error("Failed to create document reference:", e);
+        return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, JSON.stringify(pathSegments)]);
+
 
   useEffect(() => {
-    if (!firestore || !path) {
-      setIsLoading(false);
+    if (!memoizedDocRef) {
+      if (path) { // Only stop loading if path was provided but ref failed
+        setIsLoading(false);
+      }
       return;
     }
-
-    const docRef = doc(firestore, path, ...pathSegments);
-
-    const unsubscribe = onSnapshot(docRef, 
+    
+    setIsLoading(true);
+    const unsubscribe = onSnapshot(memoizedDocRef, 
       (snapshot) => {
         if (snapshot.exists()) {
-          setData(convertTimestamps<T>({ id: snapshot.id, ...snapshot.data() }));
+          const docData = snapshot.data();
+          const converted = convertTimestamps<DocumentData>(docData);
+          setData({ id: snapshot.id, ...converted } as T);
         } else {
           setData(null);
         }
         setIsLoading(false);
+        setError(null);
       },
       (err) => {
-        console.error('Error fetching document:', err);
+        const permissionError = new FirestorePermissionError({
+            path: memoizedDocRef.path,
+            operation: 'get'
+        });
+        errorEmitter.emit('permission-error', permissionError);
         setError(err);
         setIsLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [firestore, path, JSON.stringify(pathSegments)]);
+  }, [memoizedDocRef, path]);
 
   return { data, isLoading, error };
 }

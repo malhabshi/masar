@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2, Send } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
@@ -21,7 +21,6 @@ interface TaskListProps {
 export function TaskList({ tasks, users, currentUser, isLoading }: TaskListProps) {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({});
-  const { firestore } = useFirebase();
   const { toast } = useToast();
 
   const getUserName = (userId: string) => {
@@ -30,7 +29,7 @@ export function TaskList({ tasks, users, currentUser, isLoading }: TaskListProps
   };
 
   const handleReply = async (taskId: string) => {
-    if (!replyContent[taskId]?.trim() || !firestore) return;
+    if (!replyContent[taskId]?.trim()) return;
     
     setIsReplying(prev => ({ ...prev, [taskId]: true }));
     
