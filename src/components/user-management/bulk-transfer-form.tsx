@@ -12,7 +12,7 @@ import { Loader2, ArrowRightLeft } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { User, Task } from '@/lib/types';
-import { firestore, addDocumentNonBlocking } from '@/firebase';
+import { firestore, addDocumentNonBlocking } from '@/firebase/client';
 import { collection } from 'firebase/firestore';
 
 const formSchema = z.object({

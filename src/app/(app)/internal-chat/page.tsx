@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
 import type { Student } from '@/lib/types';
-import { useCollection } from '@/firebase';
+import { useCollection } from '@/firebase/client';
 import { query, where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StudentTable } from '@/components/dashboard/student-table';

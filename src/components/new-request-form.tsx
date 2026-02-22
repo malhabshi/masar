@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import type { Country, Student } from '@/lib/types';
-import { firestore, setDocumentNonBlocking } from '@/firebase';
+import { firestore, setDocumentNonBlocking } from '@/firebase/client';
 import { collection, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';

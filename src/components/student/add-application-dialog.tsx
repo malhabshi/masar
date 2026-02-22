@@ -28,7 +28,7 @@ import { addApplication } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import type { ApprovedUniversity, Student } from '@/lib/types';
-import { firestore, useCollection, updateDocumentNonBlocking, useDoc } from '@/firebase';
+import { firestore, useCollection, updateDocumentNonBlocking, useDoc } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 
 const formSchema = z.object({

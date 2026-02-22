@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { useDoc } from '@/firebase';
-import type { Student } from '@/lib/types';
+import { useDoc, useCollection } from '@/firebase/client';
+import type { Student, Task } from '@/lib/types';
 
 import { Loader2 } from 'lucide-react';
 import { StudentHeader } from '@/components/student/student-header';
@@ -14,8 +14,6 @@ import { InternalDocuments } from '@/components/student/internal-documents';
 import { NotesSection } from '@/components/student/notes-section';
 import { TaskHistory } from '@/components/student/task-history';
 import { TransferHistory } from '@/components/student/transfer-history';
-import { useCollection } from '@/firebase';
-import { Task } from '@/lib/types';
 
 
 export default function StudentDetailPage() {

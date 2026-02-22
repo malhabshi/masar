@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { firestore, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 

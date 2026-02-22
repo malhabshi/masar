@@ -18,7 +18,7 @@ import { PlusCircle, Search, Loader2 } from 'lucide-react';
 import { UniversitiesTable } from '@/components/universities/universities-table';
 import { AddUniversityDialog } from '@/components/universities/add-university-dialog';
 import { sendTask } from '@/lib/actions';
-import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
 import { collection, doc } from 'firebase/firestore';
 import { Skeleton } from '../ui/skeleton';
 

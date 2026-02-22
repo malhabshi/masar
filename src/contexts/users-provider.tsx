@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { useCollection } from '@/firebase';
+import { useCollection } from '@/firebase/client';
 import type { User } from '@/lib/types';
 
 interface UsersContextType {

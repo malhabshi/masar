@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { firestore, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { firestore, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { collection, doc } from 'firebase/firestore';
 import { formatDate, formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 

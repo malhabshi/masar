@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { firestore, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 import { Loader2, Send } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/timestamp-utils';

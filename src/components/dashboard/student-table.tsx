@@ -24,7 +24,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { updateStudentPipelineStatus } from '@/lib/actions';
 import { cn } from '@/lib/utils';
-import { useFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 
 
@@ -57,7 +57,6 @@ const pipelineStatusLabels: { [key: string]: string } = {
 
 export function StudentTable({ students, users, currentUser, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false }: StudentTableProps) {
   const { toast } = useToast();
-  const { firestore } = useFirebase();
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';

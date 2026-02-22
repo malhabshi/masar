@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { transferStudent } from '@/lib/actions';
 import type { Student, User, Note } from '@/lib/types';
 import { Loader2, Users } from 'lucide-react';
-import { firestore, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 
 interface TransferStudentDialogProps {

@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useCollection } from '@/firebase';
+import { useCollection } from '@/firebase/client';
 import { CalendarDays } from 'lucide-react';
 import { formatDate, sortByDate } from '@/lib/timestamp-utils';
 import type { UpcomingEvent, User } from '@/lib/types';

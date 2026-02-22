@@ -21,10 +21,8 @@ const firestore: Firestore = getFirestore(firebaseApp);
 const storage: FirebaseStorage = getStorage(firebaseApp);
 
 // --- Exports ---
+// These are safe for both server and client environments.
 export { firebaseApp, auth, firestore, storage };
 
-// Re-export hooks and utilities for a single entry point
-export * from './firestore/use-collection';
-export * from './firestore/use-doc';
-export * from './firestore/non-blocking-updates';
-export * from './firestore/memo';
+// Client-side hooks and utilities are NOT exported from this file.
+// They are exported from './client.ts' to prevent bundling client-code in server components.

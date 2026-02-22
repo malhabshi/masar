@@ -3,8 +3,7 @@
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
-import { firestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { useCollection } from '@/firebase/client';
 import type { Student, Task, User } from '@/lib/types';
 import { Loader2, Users, FileText, UserPlus } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';

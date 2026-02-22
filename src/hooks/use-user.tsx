@@ -1,9 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, User as AuthUser } from 'firebase/auth';
-import { auth } from '@/firebase'; // Import from the central file
-import { useDoc } from '@/firebase/firestore/use-doc';
+import { User as AuthUser } from 'firebase/auth';
+import { auth, useDoc } from '@/firebase/client'; // Import from the new client barrel file
 
 export interface AppUser {
   id: string;
@@ -31,8 +30,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [authError, setAuthError] = useState<Error | null>(null);
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
+    const unsubscribe = auth.onAuthStateChanged(
       (user) => {
         setAuthUser(user);
         setIsAuthLoading(false);

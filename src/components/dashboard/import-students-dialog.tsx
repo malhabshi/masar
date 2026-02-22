@@ -20,7 +20,7 @@ import { importStudentsFromExcel } from '@/lib/actions';
 import { Loader2, FileUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { useUsers } from '@/contexts/users-provider';
-import { firestore, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { firestore, addDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { collection } from 'firebase/firestore';
 
 interface ImportStudentsDialogProps {

@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, FilePenLine } from 'lucide-react';
 import type { Student } from '@/lib/types';
-import { firestore, updateDocumentNonBlocking } from '@/firebase';
+import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 
 const formSchema = z.object({

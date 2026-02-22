@@ -2,7 +2,7 @@
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { BarChart, Users, University } from 'lucide-react';
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
-import { firestore, useCollection, useMemoFirebase } from '@/firebase';
+import { firestore, useCollection, useMemoFirebase } from '@/firebase/client';
 import { useUsers } from '@/contexts/users-provider';
 import { collection } from 'firebase/firestore';
 import { useMemo } from 'react';
