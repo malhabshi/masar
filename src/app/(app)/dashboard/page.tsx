@@ -71,15 +71,24 @@ function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoadi
 }
 
 function EmployeeDashboard({ currentUser }: { currentUser: User }) {
+    const myStudentsConstraints = useMemo(() => {
+        return currentUser.civilId ? [where('employeeId', '==', currentUser.civilId)] : [];
+    }, [currentUser.civilId]);
+
     const { data: myStudentsData, isLoading: studentsLoading } = useCollection<Student>(
-        'students', 
-        where('employeeId', '==', currentUser.civilId || '___') // Use a value that won't match if civilId is missing
+        currentUser.civilId ? 'students' : '', 
+        ...myStudentsConstraints
     );
     const myStudents = myStudentsData || [];
 
-    const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>('tasks', where('recipientId', '==', currentUser.id));
-    const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>('tasks', where('recipientId', '==', 'all'));
-    const { data: tasksByMeData, isLoading: tasksByMeLoading } = useCollection<Task>('tasks', where('authorId', '==', currentUser.id));
+    const tasksToMeConstraints = useMemo(() => [where('recipientId', '==', currentUser.id)], [currentUser.id]);
+    const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>('tasks', ...tasksToMeConstraints);
+
+    const tasksToAllConstraints = useMemo(() => [where('recipientId', '==', 'all')], []);
+    const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>('tasks', ...tasksToAllConstraints);
+
+    const tasksByMeConstraints = useMemo(() => [where('authorId', '==', currentUser.id)], [currentUser.id]);
+    const { data: tasksByMeData, isLoading: tasksByMeLoading } = useCollection<Task>('tasks', ...tasksByMeConstraints);
 
     const tasksToMe = tasksToMeData || [];
     const tasksToAll = tasksToAllData || [];
