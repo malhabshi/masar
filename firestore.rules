@@ -114,11 +114,7 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow get: if isUserAdmin() || isDepartment() || (request.auth.uid != null && (resource.data.authorId == request.auth.uid || resource.data.recipientId == request.auth.uid));
-      allow list: if isUserAdmin() || isDepartment() ||
-        (request.auth.uid != null && request.query.where.authorId == request.auth.uid) ||
-        (request.auth.uid != null && request.query.where.recipientId == request.auth.uid) ||
-        (isSignedIn() && request.query.where.recipientId == 'all');
+      allow read: if isSignedIn();
       allow create: if isUserAdmin() || isDepartment() || (request.auth.uid != null && request.resource.data.authorId == request.auth.uid);
       allow update: if isUserAdmin() || isDepartment() || (request.auth.uid != null && (resource.data.authorId == request.auth.uid || resource.data.recipientId == request.auth.uid));
       allow delete: if isUserAdmin();
