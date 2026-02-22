@@ -1,12 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useDoc, useCollection } from '@/firebase/client';
 import type { Student, Task } from '@/lib/types';
 
-import { Loader2 } from 'lucide-react';
 import { StudentHeader } from '@/components/student/student-header';
 import { StudentApplications } from '@/components/student/student-applications';
 import { InternalDocuments } from '@/components/student/internal-documents';
@@ -14,6 +12,32 @@ import { NotesSection } from '@/components/student/notes-section';
 import { TaskHistory } from '@/components/student/task-history';
 import { TransferHistory } from '@/components/student/transfer-history';
 import { useUsers } from '@/contexts/users-provider';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+
+
+function StudentPageContentSkeleton() {
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+                <Card>
+                    <CardHeader><Skeleton className="h-7 w-48" /></CardHeader>
+                    <CardContent><Skeleton className="h-32 w-full" /></CardContent>
+                </Card>
+                <Card>
+                    <CardHeader><Skeleton className="h-7 w-48" /></CardHeader>
+                    <CardContent><Skeleton className="h-32 w-full" /></CardContent>
+                </Card>
+            </div>
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
+                    <CardContent><Skeleton className="h-48 w-full" /></CardContent>
+                </Card>
+            </div>
+      </div>
+    )
+}
 
 
 export default function StudentDetailPage() {
@@ -29,57 +53,58 @@ export default function StudentDetailPage() {
   
   const isLoading = isUserLoading || usersLoading || studentIsLoading || tasksLoading;
 
-  if (isLoading) {
-    return (
-      <div className="flex h-full w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
   if (studentError) {
     return <div className="text-destructive">Error: {studentError.message}</div>
   }
   
-  if (!student || !currentUser) {
-    // This can happen briefly during data loading or if the student doesn't exist.
+  // This check happens after loading, if the student is truly not found or permissions fail
+  if (!isLoading && !student) {
     return <div>Student not found or you do not have permission to view this page.</div>;
   }
   
-  const isAssignedEmployee = student.employeeId === currentUser.civilId;
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
-
-  // Enforce permissions client-side
-  if (currentUser.role === 'employee' && !isAssignedEmployee) {
-      // Redirect if an employee tries to access a student not assigned to them.
-      router.push('/applicants'); 
-      return (
-        <div className="flex h-full w-full items-center justify-center">
-          <p>Access Denied. You are not assigned to this student.</p>
-        </div>
-      );
+  // Client-side permission check (will run once student data is loaded)
+  if (!isLoading && student && currentUser) {
+    const isAssignedEmployee = student.employeeId === currentUser.civilId;
+    if (currentUser.role === 'employee' && !isAssignedEmployee) {
+        router.push('/applicants'); 
+        return (
+          <div className="flex h-full w-full items-center justify-center">
+            <p>Access Denied. You are not assigned to this student.</p>
+          </div>
+        );
+    }
   }
+
+  const canRenderContent = !isLoading && student && currentUser;
+  const isAssignedEmployee = canRenderContent && student.employeeId === currentUser.civilId;
+  const isAdminOrDept = canRenderContent && ['admin', 'department'].includes(currentUser.role);
 
   return (
     <div className="space-y-6">
-      <StudentHeader student={student} currentUser={currentUser} />
+      <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-           <StudentApplications student={student} />
-           <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} />
-           <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
-        </div>
+      {isLoading ? <StudentPageContentSkeleton /> : (
+        <>
+            {canRenderContent && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                    <StudentApplications student={student} />
+                    <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} />
+                    <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
+                    </div>
 
-        <div className="space-y-6">
-            <NotesSection student={student} currentUser={currentUser} title="Notes" readOnly={false} />
-            {student.transferHistory && student.transferHistory.length > 0 && (
-                <TransferHistory transferHistory={student.transferHistory} />
+                    <div className="space-y-6">
+                        <NotesSection student={student} currentUser={currentUser} title="Notes" readOnly={false} />
+                        {student.transferHistory && student.transferHistory.length > 0 && (
+                            <TransferHistory transferHistory={student.transferHistory} />
+                        )}
+                    </div>
+                </div>
             )}
-        </div>
-      </div>
-      
-      <TaskHistory tasks={tasks || []} studentId={student.id} />
+            
+            <TaskHistory tasks={tasks || []} studentId={studentId} />
+        </>
+      )}
     </div>
   );
 }

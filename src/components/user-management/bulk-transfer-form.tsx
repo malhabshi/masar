@@ -15,6 +15,7 @@ import type { User, Task } from '@/lib/types';
 import { firestore, addDocumentNonBlocking } from '@/firebase/client';
 import { collection } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
+import { Skeleton } from '../ui/skeleton';
 
 const formSchema = z.object({
   fromEmployeeId: z.string().min(1, { message: 'Please select an employee to transfer from.' }),
@@ -31,7 +32,7 @@ interface BulkTransferFormProps {
 export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const { users } = useUsers();
+  const { users, usersLoading } = useUsers();
   
   const employeeOptions = users.filter(e => e.role === 'employee');
 
@@ -84,6 +85,33 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
       });
     }
     setIsLoading(false);
+  }
+
+  if (usersLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Student Transfer</CardTitle>
+          <CardDescription>Transfer all assigned students from one employee to another.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-full" />
+            </div>
+        </CardContent>
+        <CardFooter>
+            <Button disabled className="w-full">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading Employees...
+            </Button>
+        </CardFooter>
+      </Card>
+    );
   }
 
   return (

@@ -7,14 +7,38 @@ import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { WhatsAppIcon } from '@/components/icons/whatsapp-icon';
 import { EditStudentDialog } from './edit-student-dialog';
+import { Skeleton } from '../ui/skeleton';
 
 
 interface StudentHeaderProps {
-  student: Student;
-  currentUser: User;
+  student: Student | null; // Allow null for loading state
+  currentUser: User | null; // Allow null for loading state
+  isLoading?: boolean;
 }
 
-export function StudentHeader({ student, currentUser }: StudentHeaderProps) {
+function StudentHeaderSkeleton() {
+    return (
+        <div className="mb-6">
+            <div className="flex flex-col md:flex-row items-start gap-6">
+                <Skeleton className="w-24 h-24 rounded-full" />
+                <div className="flex-1 space-y-2">
+                    <Skeleton className="h-8 w-64" />
+                    <Skeleton className="h-5 w-48" />
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2">
+                        <Skeleton className="h-5 w-40" />
+                        <Skeleton className="h-5 w-32" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
+  if (isLoading || !student || !currentUser) {
+    return <StudentHeaderSkeleton />;
+  }
+
   const cleanPhoneNumber = (student.phone || '').replace(/\D/g, '');
   const whatsappLink = `https://wa.me/965${cleanPhoneNumber}`; // Assuming Kuwait country code
   const canEdit = currentUser.role === 'admin' || currentUser.civilId === student.employeeId;
