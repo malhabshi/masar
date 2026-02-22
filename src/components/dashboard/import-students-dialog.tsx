@@ -19,8 +19,9 @@ import type { User } from '@/lib/types';
 import { importStudentsFromExcel } from '@/lib/actions';
 import { Loader2, FileUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
-import { firestore, addDocumentNonBlocking, useCollection } from '@/firebase/client';
+import { firestore, addDocumentNonBlocking } from '@/firebase/client';
 import { collection } from 'firebase/firestore';
+import { useUsers } from '@/contexts/users-provider';
 
 interface ImportStudentsDialogProps {
   currentUser: User;
@@ -31,8 +32,7 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
   const [file, setFile] = useState<File | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { data: usersData } = useCollection<User>('users');
-  const users = usersData || [];
+  const { users } = useUsers();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {

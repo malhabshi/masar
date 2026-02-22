@@ -1,21 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { User } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 
-interface UsersContextType {
-  users: User[];
-  usersLoading: boolean;
-  usersById: Map<string, User>;
-  usersByCivilId: Map<string, User>;
-  getUserById: (id: string) => User | undefined;
-  getUserByCivilId: (civilId: string | null) => User | undefined;
-}
-
-const UsersContext = createContext<UsersContextType | undefined>(undefined);
-
-export function UsersProvider({ children }: { children: React.ReactNode }) {
+export function useUsers() {
   const { data, isLoading } = useCollection<User>('users');
   const users = data || [];
 
@@ -36,7 +25,7 @@ export function UsersProvider({ children }: { children: React.ReactNode }) {
   const getUserById = (id: string) => usersById.get(id);
   const getUserByCivilId = (civilId: string | null) => civilId ? usersByCivilId.get(civilId) : undefined;
 
-  const value = {
+  return {
     users,
     usersLoading: isLoading,
     usersById,
@@ -44,14 +33,4 @@ export function UsersProvider({ children }: { children: React.ReactNode }) {
     getUserById,
     getUserByCivilId,
   };
-
-  return <UsersContext.Provider value={value}>{children}</UsersContext.Provider>;
-}
-
-export function useUsers() {
-  const context = useContext(UsersContext);
-  if (context === undefined) {
-    throw new Error('useUsers must be used within a UsersProvider');
-  }
-  return context;
 }

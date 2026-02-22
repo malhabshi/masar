@@ -38,7 +38,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { SharedDocument, Country, ResourceLink, User } from '@/lib/types';
+import type { SharedDocument, Country, ResourceLink } from '@/lib/types';
 import {
   Select,
   SelectContent,
@@ -51,12 +51,12 @@ import { firestore, storage, useCollection, useMemoFirebase, addDocumentNonBlock
 import { collection, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { AddLinkDialog } from '@/components/resources/add-link-dialog';
+import { useUsers } from '@/contexts/users-provider';
 
 
 export default function ResourcesPage() {
   const { user, isUserLoading } = useUser();
-  const { data: allUsersData, isLoading: usersLoading } = useCollection<User>('users');
-  const allUsers = allUsersData || [];
+  const { users: allUsers, usersLoading } = useUsers();
   const { toast } = useToast();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
