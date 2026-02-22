@@ -9,26 +9,23 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { TimeLog, User } from '@/lib/types';
+import type { TimeLog } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect } from 'react';
 import { formatDate, toDate } from '@/lib/timestamp-utils';
+import { useUsers } from '@/contexts/users-provider';
 
 interface EmployeeActivityTableProps {
   timeLogs: TimeLog[];
-  users: User[];
 }
 
-export function EmployeeActivityTable({ timeLogs, users }: EmployeeActivityTableProps) {
+export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) {
   const [isClient, setIsClient] = useState(false);
+  const { getUserById } = useUsers();
 
   useEffect(() => {
     setIsClient(true);
   }, []);
-  
-  const getEmployee = (employeeId: string) => {
-    return users.find(u => u.id === employeeId);
-  };
 
   const calculateTotalTime = (clockIn: string, clockOut: string) => {
     const start = toDate(clockIn);
@@ -62,7 +59,7 @@ export function EmployeeActivityTable({ timeLogs, users }: EmployeeActivityTable
         </TableHeader>
         <TableBody>
           {sortedTimeLogs.map((log) => {
-            const employee = getEmployee(log.employeeId);
+            const employee = getUserById(log.employeeId);
             return (
               <TableRow key={log.id}>
                 <TableCell>

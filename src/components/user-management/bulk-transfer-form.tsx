@@ -32,7 +32,7 @@ interface BulkTransferFormProps {
 export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const { users, usersLoading } = useUsers();
+  const { users, usersLoading, getUserById } = useUsers();
   
   const employeeOptions = users.filter(e => e.role === 'employee');
 
@@ -58,7 +58,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
     const result = await bulkTransferStudents(values.fromEmployeeId, values.toEmployeeId, currentUser.id);
 
     if (result.success) {
-      const fromEmployee = users.find(u => u.id === values.fromEmployeeId);
+      const fromEmployee = getUserById(values.fromEmployeeId);
       const taskContent = `All students from ${fromEmployee?.name} have been transferred to you.`;
       
       const tasksCollection = collection(firestore, 'tasks');
