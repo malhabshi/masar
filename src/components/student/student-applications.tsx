@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import type { Student, Application, ApplicationStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -38,7 +39,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   const canManageApplications = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const canAddApplications = currentUser?.role === 'admin' || currentUser?.civilId === student.employeeId;
 
-  const handleStatusUpdate = async (university: string, major: string, newStatus: ApplicationStatus) => {
+  const handleStatusUpdate = useCallback(async (university: string, major: string, newStatus: ApplicationStatus) => {
     
     // Call server action (for notifications, etc.)
     const result = await updateApplicationStatus(student.id, university, major, newStatus, student.name, student.employeeId);
@@ -63,7 +64,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
         description: result.message
       });
     }
-  };
+  }, [student, toast]);
 
   return (
     <Card>

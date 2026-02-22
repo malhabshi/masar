@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { ApprovedUniversity, Country } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -64,6 +64,54 @@ export function ApprovedUniversitiesView() {
     });
   }, [debouncedSearchQuery, countryFilter, availabilityFilter, universitiesData]);
 
+  const canManage = user?.role === 'admin' || user?.role === 'department';
+
+  const handleAddUniversity = useCallback(async (newUniversity: Omit<ApprovedUniversity, 'id'>) => {
+    if (!user) return;
+    const universitiesCollection = collection(firestore, 'approved_universities');
+    addDocumentNonBlocking(universitiesCollection, newUniversity);
+
+    toast({
+        title: "University Added",
+        description: `${newUniversity.name} has been added to the list.`
+    });
+
+    const taskContent = `New approved university added: ${newUniversity.name} (${newUniversity.major}).`;
+    await sendTask(user.id, 'all', taskContent);
+    
+    const tasksCollection = collection(firestore, 'tasks');
+    addDocumentNonBlocking(tasksCollection, { authorId: user.id, recipientId: 'all', content: taskContent, createdAt: new Date().toISOString(), status: 'new' as const, replies: [] });
+
+    toast({
+      title: "Employees Notified",
+      description: "A task has been sent to all employees about the new university."
+    });
+  }, [user, toast]);
+
+  const handleUpdateUniversity = useCallback(async (updatedUniversity: ApprovedUniversity) => {
+    if (!user) return;
+    const uniDocRef = doc(firestore, 'approved_universities', updatedUniversity.id);
+    updateDocumentNonBlocking(uniDocRef, updatedUniversity);
+
+    toast({
+        title: "University Updated",
+        description: `${updatedUniversity.name} has been updated.`
+    });
+
+    const taskContent = `Approved university updated: ${updatedUniversity.name} (${updatedUniversity.major}). Please review the changes.`;
+    await sendTask(user.id, 'all', taskContent);
+    
+    const tasksCollection = collection(firestore, 'tasks');
+    addDocumentNonBlocking(tasksCollection, { authorId: user.id, recipientId: 'all', content: taskContent, createdAt: new Date().toISOString(), status: 'new' as const, replies: [] });
+
+    toast({
+      title: "Employees Notified",
+      description: "A task has been sent to all employees about the university update."
+    });
+  }, [user, toast]);
+
+  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+
   if (isLoading) {
     return (
       <Card>
@@ -90,52 +138,6 @@ export function ApprovedUniversitiesView() {
         </Card>
     )
   }
-
-  const canManage = user.role === 'admin' || user.role === 'department';
-
-  const handleAddUniversity = async (newUniversity: Omit<ApprovedUniversity, 'id'>) => {
-    const universitiesCollection = collection(firestore, 'approved_universities');
-    addDocumentNonBlocking(universitiesCollection, newUniversity);
-
-    toast({
-        title: "University Added",
-        description: `${newUniversity.name} has been added to the list.`
-    });
-
-    const taskContent = `New approved university added: ${newUniversity.name} (${newUniversity.major}).`;
-    await sendTask(user.id, 'all', taskContent);
-    
-    const tasksCollection = collection(firestore, 'tasks');
-    addDocumentNonBlocking(tasksCollection, { authorId: user.id, recipientId: 'all', content: taskContent, createdAt: new Date().toISOString(), status: 'new', replies: [] });
-
-    toast({
-      title: "Employees Notified",
-      description: "A task has been sent to all employees about the new university."
-    });
-  };
-
-  const handleUpdateUniversity = async (updatedUniversity: ApprovedUniversity) => {
-    const uniDocRef = doc(firestore, 'approved_universities', updatedUniversity.id);
-    updateDocumentNonBlocking(uniDocRef, updatedUniversity);
-
-    toast({
-        title: "University Updated",
-        description: `${updatedUniversity.name} has been updated.`
-    });
-
-    const taskContent = `Approved university updated: ${updatedUniversity.name} (${updatedUniversity.major}). Please review the changes.`;
-    await sendTask(user.id, 'all', taskContent);
-    
-    const tasksCollection = collection(firestore, 'tasks');
-    addDocumentNonBlocking(tasksCollection, { authorId: user.id, recipientId: 'all', content: taskContent, createdAt: new Date().toISOString(), status: 'new', replies: [] });
-
-    toast({
-      title: "Employees Notified",
-      description: "A task has been sent to all employees about the university update."
-    });
-  };
-
-  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
 
   return (
     <Card>
