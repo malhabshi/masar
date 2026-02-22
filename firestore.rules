@@ -115,9 +115,12 @@ service cloud.firestore {
       allow update, delete: if isUserAdmin();
     }
 
+    match /tasks {
+        allow list: if isSignedIn();
+    }
     match /tasks/{taskId} {
-      // Allow any authenticated user to read/write tasks
-      allow read, write: if isSignedIn();
+      // Allow any authenticated user to get/write a task
+      allow get, write: if isSignedIn();
     }
 
     match /chats/{studentId}/messages/{messageId} {
