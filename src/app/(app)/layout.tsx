@@ -6,6 +6,7 @@ import { useUser } from '@/hooks/use-user';
 import { AppSidebar } from '@/components/sidebar';
 import { Loader2 } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { UsersProvider } from '@/contexts/users-provider';
 
 export default function AuthenticatedLayout({
   children,
@@ -31,12 +32,14 @@ export default function AuthenticatedLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex h-full">
-          <AppSidebar />
-          <main className="flex-1 p-6 overflow-auto">
-              {children}
-          </main>
-      </div>
+      <UsersProvider>
+        <div className="flex h-full">
+            <AppSidebar />
+            <main className="flex-1 p-6 overflow-auto">
+                {children}
+            </main>
+        </div>
+      </UsersProvider>
     </SidebarProvider>
   );
 }

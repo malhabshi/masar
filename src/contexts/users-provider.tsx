@@ -1,10 +1,21 @@
 'use client';
 
-import { useMemo } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import type { User } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 
-export function useUsers() {
+interface UsersContextType {
+  users: User[];
+  usersLoading: boolean;
+  usersById: Map<string, User>;
+  usersByCivilId: Map<string, User>;
+  getUserById: (id: string) => User | undefined;
+  getUserByCivilId: (civilId: string | null) => User | undefined;
+}
+
+const UsersContext = createContext<UsersContextType | undefined>(undefined);
+
+export function UsersProvider({ children }: { children: React.ReactNode }) {
   const { data, isLoading } = useCollection<User>('users');
   const users = data || [];
 
@@ -22,10 +33,15 @@ export function useUsers() {
     return map;
   }, [users]);
 
-  const getUserById = (id: string) => usersById.get(id);
-  const getUserByCivilId = (civilId: string | null) => civilId ? usersByCivilId.get(civilId) : undefined;
+  const getUserById = (id: string): User | undefined => {
+    return usersById.get(id);
+  }
 
-  return {
+  const getUserByCivilId = (civilId: string | null): User | undefined => {
+    return civilId ? usersByCivilId.get(civilId) : undefined;
+  }
+
+  const value = {
     users,
     usersLoading: isLoading,
     usersById,
@@ -33,4 +49,18 @@ export function useUsers() {
     getUserById,
     getUserByCivilId,
   };
+
+  return (
+    <UsersContext.Provider value={value}>
+      {children}
+    </UsersContext.Provider>
+  );
+}
+
+export function useUsers() {
+  const context = useContext(UsersContext);
+  if (context === undefined) {
+    throw new Error('useUsers must be used within a UsersProvider');
+  }
+  return context;
 }
