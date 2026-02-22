@@ -40,9 +40,14 @@ service cloud.firestore {
       allow delete: if isUserAdmin();
     }
 
+    match /students {
+      // Any authenticated user can list all students. Client-side queries are responsible for filtering.
+      allow list: if isSignedIn();
+    }
+
     match /students/{studentId} {
-      // Any authenticated user can read student documents. Client-side queries are responsible for filtering.
-      allow read: if isSignedIn();
+      // Any authenticated user can read a single student document.
+      allow get: if isSignedIn();
       
       // A user can only create a student document if they are signed in.
       allow create: if isSignedIn();
