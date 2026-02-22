@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -15,11 +16,9 @@ import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { ImportStudentsDialog } from '@/components/dashboard/import-students-dialog';
-import { useUsers } from '@/contexts/users-provider';
 
 function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoading }: { students: Student[], tasks: Task[], currentUser: User, isLoading: boolean }) {
-  const { users, usersLoading } = useUsers();
-  const isLoading = isParentLoading || usersLoading;
+  const isLoading = isParentLoading;
 
   const stats = useMemo(() => {
     if (!students) return { totalStudents: 0, unassignedStudents: 0, totalApplications: 0 };
@@ -28,8 +27,6 @@ function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoadi
     const totalApplications = students.reduce((acc, s) => acc + (s.applications?.length || 0), 0);
     return { totalStudents, unassignedStudents, totalApplications };
   }, [students]);
-
-  const employeeRecipients = useMemo(() => users.filter(u => u.role === 'employee' || u.role === 'department'), [users]);
 
   return (
     <div className="space-y-6">
@@ -64,7 +61,7 @@ function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoadi
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <TaskList tasks={tasks} currentUser={currentUser} isLoading={isLoading} />
-            <SendTaskForm recipients={employeeRecipients} currentUser={currentUser} />
+            <SendTaskForm currentUser={currentUser} />
         </div>
         <UpcomingEventsCard currentUser={currentUser} />
         <div className="flex justify-end">
@@ -75,8 +72,6 @@ function AdminDashboard({ students, tasks, currentUser, isLoading: isParentLoadi
 }
 
 function EmployeeDashboard({ currentUser }: { currentUser: User }) {
-    const { usersLoading } = useUsers();
-
     const { data: myStudentsData, isLoading: studentsLoading } = useCollection<Student>(
         'students', 
         where('employeeId', '==', currentUser.civilId || '___') // Use a value that won't match if civilId is missing
@@ -92,7 +87,7 @@ function EmployeeDashboard({ currentUser }: { currentUser: User }) {
     const tasksByMe = tasksByMeData || [];
     
     const tasksDataLoading = tasksToMeLoading || tasksToAllLoading || tasksByMeLoading;
-    const isLoading = studentsLoading || tasksDataLoading || usersLoading;
+    const isLoading = studentsLoading || tasksDataLoading;
 
     const relevantTasks = useMemo(() => {
         const allTasks = [...tasksToMe, ...tasksToAll, ...tasksByMe];
@@ -141,8 +136,7 @@ function EmployeeDashboard({ currentUser }: { currentUser: User }) {
 }
 
 function DepartmentDashboard({ students, tasks, currentUser, isLoading: isParentLoading }: { students: Student[], tasks: Task[], currentUser: User, isLoading: boolean }) {
-     const { usersLoading } = useUsers();
-     const isLoading = isParentLoading || usersLoading;
+     const isLoading = isParentLoading;
 
      const stats = useMemo(() => {
         if(!students) return { totalStudents: 0, totalApplications: 0 };
@@ -229,3 +223,4 @@ function DashboardPageContent() {
 export default function DashboardPage() {
     return <DashboardPageContent />;
 }
+    

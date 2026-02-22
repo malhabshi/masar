@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,11 +16,10 @@ import type { User, Task } from '@/lib/types';
 import { sendTask as sendTaskAction } from '@/lib/actions';
 import { Loader2, Send } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { firestore, addDocumentNonBlocking } from '@/firebase/client';
+import { firestore, addDocumentNonBlocking, useCollection } from '@/firebase/client';
 import { collection } from 'firebase/firestore';
 
 interface SendTaskFormProps {
-  recipients: User[];
   currentUser: User;
 }
 
@@ -28,10 +28,13 @@ const formSchema = z.object({
   recipient: z.string().optional(),
 });
 
-export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
+export function SendTaskForm({ currentUser }: SendTaskFormProps) {
   const { toast } = useToast();
   const [sendTo, setSendTo] = useState<'all' | 'specific'>('all');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+  const recipients = useMemo(() => (usersData || []).filter(u => u.role === 'employee' || u.role === 'department'), [usersData]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,12 +47,12 @@ export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!currentUser) return;
 
-    setIsLoading(true);
+    setIsSubmitting(true);
     const recipientId = sendTo === 'all' ? 'all' : values.recipient;
     
     if (sendTo === 'specific' && !recipientId) {
         toast({ variant: 'destructive', title: 'Error', description: 'Please select a recipient.' });
-        setIsLoading(false);
+        setIsSubmitting(false);
         return;
     }
     
@@ -82,8 +85,10 @@ export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
         description: result.message,
       });
     }
-    setIsLoading(false);
+    setIsSubmitting(false);
   }
+
+  const isLoading = isSubmitting || usersLoading;
 
   return (
     <Card>
@@ -122,8 +127,8 @@ export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
                       <FormLabel>Recipient</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                          <SelectTrigger>
-                              <SelectValue placeholder="Select a recipient" />
+                          <SelectTrigger disabled={usersLoading}>
+                              <SelectValue placeholder={usersLoading ? "Loading users..." : "Select a recipient"} />
                           </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -166,3 +171,4 @@ export function SendTaskForm({ recipients, currentUser }: SendTaskFormProps) {
     </Card>
   );
 }
+    
