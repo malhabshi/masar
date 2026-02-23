@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import type { Document, Student, UserRole } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -11,6 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
 import { formatDate } from '@/lib/timestamp-utils';
 import { useUsers } from '@/contexts/users-provider';
+import { doc } from 'firebase/firestore';
+import { firestore } from '@/firebase';
+import { updateDocumentNonBlocking } from '@/firebase/client';
 
 interface InternalDocumentsProps {
   student: Student;
@@ -36,6 +40,28 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
           return author && managementRoles.includes(author.role);
       }
   });
+
+  // Effect to clear document notification counters upon viewing.
+  useEffect(() => {
+    if (!student || !currentUser) return;
+    const studentDocRef = doc(firestore, 'students', student.id);
+    const isAdminDept = ['admin', 'department'].includes(currentUser.role);
+    const isEmployee = currentUser.role === 'employee';
+    const updates: Partial<Student> = {};
+
+    if (isEmployee && student.newDocumentsForEmployee && student.newDocumentsForEmployee > 0) {
+      updates.newDocumentsForEmployee = 0;
+    }
+    if (isAdminDept && student.newDocumentsForAdmin && student.newDocumentsForAdmin > 0) {
+      updates.newDocumentsForAdmin = 0;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      updateDocumentNonBlocking(studentDocRef, updates);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student?.id, currentUser?.id]);
+
 
   return (
     <Card>

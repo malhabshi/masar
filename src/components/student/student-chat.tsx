@@ -50,6 +50,22 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // This useEffect will clear the unread message counters when the user views the chat.
+  useEffect(() => {
+    if (!student || !currentUser) return;
+    const studentDocRef = doc(firestore, 'students', student.id);
+    const isAdminDept = ['admin', 'department'].includes(currentUser.role);
+    const isEmployee = currentUser.role === 'employee';
+
+    if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0) {
+      updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: 0 });
+    } else if (isAdminDept && student.unreadUpdates && student.unreadUpdates > 0) {
+      updateDocumentNonBlocking(studentDocRef, { unreadUpdates: 0 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student?.id, currentUser?.id]);
+
+
   const managementUsers = useMemo(() => users.filter(u => ['admin', 'department'].includes(u.role)), [users]);
   const hasMultipleAdmins = useMemo(() => users.filter(u => u.role === 'admin').length > 1, [users]);
   const hasDepartments = useMemo(() => users.some(u => u.role === 'department'), [users]);
