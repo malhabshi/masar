@@ -4,7 +4,7 @@
 
 UniApply Hub is a web-based platform designed for educational agencies to manage the university application process for students. It provides a collaborative environment for different user roles (admins, employees, and departments) to track student progress, manage applications, handle documentation, and communicate effectively.
 
-The system is built on a modern tech stack including Next.js, React, TypeScript, and Firebase (for database, authentication, and security). It also integrates Generative AI for administrative tasks and WhatsApp for real-time notifications.
+The system is built on a modern tech stack including Next.js, React, TypeScript, and Firebase (for database, authentication, and security).
 
 ---
 
@@ -16,7 +16,7 @@ The application has three distinct user roles, each with specific permissions:
 The superuser with full control over the entire system.
 - **Can do everything an Employee and Department can.**
 - **User Management:** Create, edit, and manage user accounts and their roles. Can perform bulk student transfers between employees.
-- **System Configuration:** Customize the application's appearance (theme, logo), manage global settings like approved universities and application questions, and configure WhatsApp notification settings.
+- **System Configuration:** Customize the application's appearance (theme, logo), and manage global settings like approved universities and application questions.
 - **Full Data Access:** Has read/write access to all student profiles, applications, documents, and chats.
 - **Reporting:** Can view department-wide performance reports and employee activity logs.
 
@@ -63,8 +63,8 @@ A specialized role, often for internal review or management, with broader read a
 - **User Management:** A dedicated page to create new user accounts and change the roles of existing users.
 - **Bulk Transfer:** A tool to transfer all students from one employee to another, useful for off-boarding.
 - **Activity Reports:** A reporting dashboard showing daily and monthly employee activity (e.g., time logged, tasks sent, profiles visited) and department-wide performance metrics.
-- **AI-Powered Customization:** A page where admins can manage the questions for the new student application form, with an option to use Generative AI to suggest new questions based on requirements.
-- **System Settings:** A page to customize the application's theme colors, upload a custom logo, and configure WhatsApp API settings.
+- **Application Questions:** A page where admins can manage the questions for the new student application form.
+- **System Settings:** A page to customize the application's theme colors and upload a custom logo.
 
 ---
 
@@ -75,10 +75,6 @@ A specialized role, often for internal review or management, with broader read a
   - **Firestore:** A NoSQL database for storing all application data (users, students, applications, etc.).
   - **Firebase Authentication:** Handles user sign-up, login, and session management.
   - **Firestore Security Rules:** Provides granular, server-side enforcement of user permissions.
-- **AI Integration:** Google's Genkit is used to create server-side AI flows for features like:
-  - Extracting information from uploaded documents (Passports, IELTS reports).
-  - Generating new application questions based on admin input.
-- **Notifications:** The system integrates with a third-party service (WANotifier.com) to send transactional WhatsApp messages for important events.
 
 ### Firestore Data Model
 The database is structured around several key collections:
