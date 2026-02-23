@@ -15,7 +15,6 @@ import { InternalDocuments } from '@/components/student/internal-documents';
 import { NotesSection } from '@/components/student/notes-section';
 import { TaskHistory } from '@/components/student/task-history';
 import { TransferHistory } from '@/components/student/transfer-history';
-import { useUsers } from '@/contexts/users-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentChat } from '@/components/student/student-chat';
@@ -57,12 +56,11 @@ export default function StudentDetailPage() {
   const router = useRouter();
 
   const { user: currentUser, isUserLoading } = useUser();
-  const { usersLoading } = useUsers();
 
   const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>('students', studentId);
   const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
   
-  const isLoading = isUserLoading || usersLoading || studentIsLoading || tasksLoading;
+  const isLoading = isUserLoading || studentIsLoading || tasksLoading;
 
   useEffect(() => {
     // When the assigned employee views the page, mark the student as "viewed"
