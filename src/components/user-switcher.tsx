@@ -16,6 +16,7 @@ import { auth } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { handleEmployeeLogout } from '@/lib/actions';
 
 export function UserSwitcher() {
   const { user, isUserLoading } = useUser();
@@ -23,7 +24,13 @@ export function UserSwitcher() {
   const router = useRouter();
 
   const handleLogout = async () => {
+    if (!user) return;
     try {
+        // Automatically clock out the employee if they are one
+        if (user.role === 'employee') {
+          await handleEmployeeLogout(user.id);
+        }
+
         await signOut(auth);
         toast({ title: 'Logged Out', description: 'You have been successfully logged out.'});
         router.push('/login');

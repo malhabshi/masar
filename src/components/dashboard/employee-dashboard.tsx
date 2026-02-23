@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -14,7 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
-import { ClockInOut } from './clock-in-out';
 
 export default function EmployeeDashboard({ currentUser }: { currentUser: AppUser }) {
     const myStudentsConstraints = useMemoFirebase(() => {
@@ -60,7 +58,6 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
 
     return (
         <div className="space-y-6">
-            <ClockInOut />
             <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

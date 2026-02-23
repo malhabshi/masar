@@ -960,68 +960,77 @@ export async function deleteStudent(studentId: string, adminId: string) {
     }
 }
 
-// --- TIME LOG ACTIONS ---
-
-export async function clockIn(employeeId: string) {
+export async function handleEmployeeLogin(userId: string) {
   if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
   
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const user = await getUser(userId);
+    if (!user || user.role !== 'employee') {
+      // Not an employee, so no time tracking needed.
+      return { success: true, message: 'Not an employee.' };
+    }
+
     const timeLogsRef = adminDb!.collection('time_logs');
     
-    const existingLogQuery = await timeLogsRef
-      .where('employeeId', '==', employeeId)
+    // Safety check: Find and close any dangling open sessions for this user
+    const activeLogQuery = await timeLogsRef
+      .where('employeeId', '==', userId)
       .where('clockOut', '==', null)
-      .limit(1)
       .get();
       
-    if (!existingLogQuery.empty) {
-      return { success: false, message: 'You have an active clock-in session. Please clock out first.' };
+    if (!activeLogQuery.empty) {
+      const batch = adminDb!.batch();
+      activeLogQuery.docs.forEach(doc => {
+        batch.update(doc.ref, { clockOut: new Date().toISOString() });
+      });
+      await batch.commit();
+      console.warn(`Closed ${activeLogQuery.size} dangling session(s) for employee ${userId}.`);
     }
     
+    // Create new clock-in record
     const newLog = {
-      employeeId,
-      date: today,
+      employeeId: userId,
+      date: new Date().toISOString().split('T')[0],
       clockIn: new Date().toISOString(),
       clockOut: null,
-      notes: '',
+      notes: 'Automatic session tracking.',
     };
     
     await timeLogsRef.add(newLog);
     
-    return { success: true, message: 'Clocked in successfully.' };
+    return { success: true, message: 'Login session started.' };
   } catch (error) {
-    console.error('clockIn error:', error);
-    return { success: false, message: 'Failed to clock in.' };
+    console.error('handleEmployeeLogin error:', error);
+    return { success: false, message: 'Failed to start login session.' };
   }
 }
 
-export async function clockOut(employeeId: string, notes?: string) {
+export async function handleEmployeeLogout(userId: string) {
   if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
   
   try {
     const timeLogsRef = adminDb!.collection('time_logs');
     
     const activeLogQuery = await timeLogsRef
-      .where('employeeId', '==', employeeId)
+      .where('employeeId', '==', userId)
       .where('clockOut', '==', null)
+      .orderBy('clockIn', 'desc')
       .limit(1)
       .get();
       
     if (activeLogQuery.empty) {
-      return { success: false, message: 'No active clock-in session found to clock out from.' };
+      return { success: true, message: 'No active session found to close.' };
     }
     
     const logDoc = activeLogQuery.docs[0];
     await logDoc.ref.update({
       clockOut: new Date().toISOString(),
-      notes: notes || '',
     });
     
-    return { success: true, message: 'Clocked out successfully.' };
+    return { success: true, message: 'Session ended.' };
   } catch (error) {
-    console.error('clockOut error:', error);
-    return { success: false, message: 'Failed to clock out.' };
+    console.error('handleEmployeeLogout error:', error);
+    return { success: false, message: 'Failed to end session.' };
   }
 }
 
@@ -1155,5 +1164,3 @@ export async function getReportStats(dateRange: {
     return { success: false, message: 'An error occurred while generating the report data.' };
   }
 }
-
-    

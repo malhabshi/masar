@@ -28,9 +28,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/hooks/use-user';
 import { Loader2, LogIn, GraduationCap } from 'lucide-react';
 import { auth } from '@/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { setDoc, doc } from 'firebase/firestore';
-import type { User } from '@/lib/types';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { handleEmployeeLogin } from '@/lib/actions';
 
 
 const formSchema = z.object({
@@ -62,11 +61,18 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-        await signInWithEmailAndPassword(auth, values.email, values.password);
+        const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
+
+        if (userCredential.user) {
+            // This action will check if the user is an employee and handle the time log.
+            handleEmployeeLogin(userCredential.user.uid);
+        }
+
         toast({
           title: 'Login Successful',
           description: `Welcome back!`,
         });
+        // Redirect is handled by the useEffect hook watching the `user` state.
     } catch (error: any) {
         toast({
             variant: 'destructive',
