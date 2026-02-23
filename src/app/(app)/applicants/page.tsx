@@ -9,9 +9,7 @@ import { StudentTable } from '@/components/dashboard/student-table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { useUsers } from '@/contexts/users-provider';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { PlusCircle } from 'lucide-react';
+import { AddStudentDialog } from '@/components/student/add-student-dialog';
 
 export default function ApplicantsPage() {
   const { user: currentUser, isUserLoading } = useUser();
@@ -67,14 +65,7 @@ export default function ApplicantsPage() {
             <CardTitle>Applicants</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          {currentUser.role === 'employee' && (
-             <Link href="/new-request">
-                <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add New Student
-                </Button>
-            </Link>
-          )}
+          <AddStudentDialog />
         </CardHeader>
         <CardContent>
           <StudentTable
