@@ -12,8 +12,9 @@ import { NotesSection } from '@/components/student/notes-section';
 import { TaskHistory } from '@/components/student/task-history';
 import { TransferHistory } from '@/components/student/transfer-history';
 import { useUsers } from '@/contexts/users-provider';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StudentChat } from '@/components/student/student-chat';
 
 
 function StudentPageContentSkeleton() {
@@ -31,6 +32,10 @@ function StudentPageContentSkeleton() {
             </div>
             <div className="space-y-6">
                 <Card>
+                    <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
+                    <CardContent><Skeleton className="h-48 w-full" /></CardContent>
+                </Card>
+                 <Card>
                     <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
                     <CardContent><Skeleton className="h-48 w-full" /></CardContent>
                 </Card>
@@ -95,6 +100,12 @@ export default function StudentDetailPage() {
 
                     <div className="space-y-6">
                         <NotesSection student={student} currentUser={currentUser} title="Notes" readOnly={false} />
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Internal Chat</CardTitle>
+                            </CardHeader>
+                            <StudentChat student={student} currentUser={currentUser} />
+                        </Card>
                         {student.transferHistory && student.transferHistory.length > 0 && (
                             <TransferHistory transferHistory={student.transferHistory} />
                         )}
