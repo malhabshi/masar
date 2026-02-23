@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 // Parse the base64 service account from environment
 const getServiceAccount = () => {
@@ -31,5 +32,6 @@ if (!getApps().length && serviceAccount) {
   }
 }
 
-// Export admin database (will be undefined if initialization failed)
+// Export admin services (will be null if initialization failed)
 export const adminDb = getApps().length ? getFirestore() : null;
+export const storage = getApps().length ? getStorage() : null;

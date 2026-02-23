@@ -1,18 +1,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, storage } from '@/lib/firebase/admin';
 
 export async function POST(req: NextRequest) {
   try {
     // Check if the centralized Firebase Admin SDK has been initialized.
-    if (!adminDb) {
+    if (!adminDb || !storage) {
       console.error('Firebase Admin has not been initialized. Check service account key environment variable.');
       return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 });
     }
 
     // Get the storage bucket from the now-centralized admin app instance.
     // The bucket name must be specified if it's not set during initialization.
-    const bucket = adminDb.app.storage().bucket('studio-9484431255-91d96.appspot.com');
+    const bucket = storage.bucket('studio-9484431255-91d96.appspot.com');
 
     // Parse the multipart form data from the request just once.
     const formData = await req.formData();
