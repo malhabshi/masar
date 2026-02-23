@@ -1,72 +1,68 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { createContext, useContext, useCallback, ReactNode } from 'react';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { User } from '@/lib/types';
 
 interface UsersContextType {
-  users: User[];
-  usersLoading: boolean;
-  usersById: Map<string, User>;
-  usersByCivilId: Map<string, User>;
-  getUserById: (id: string) => User | undefined;
-  getUserByCivilId: (civilId: string | null) => User | undefined;
-  error: Error | null;
+  fetchUsersById: (ids: string[]) => Promise<Map<string, User>>;
+  fetchUsersByCivilId: (civilIds: string[]) => Promise<Map<string, User>>;
 }
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
 export function UsersProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  
+  const fetchUsersById = useCallback(async (ids: string[]): Promise<Map<string, User>> => {
+      const usersMap = new Map<string, User>();
+      if (!ids || ids.length === 0) return usersMap;
+      
+      const uniqueIds = [...new Set(ids.filter(id => id))];
+      if (uniqueIds.length === 0) return usersMap;
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const usersCol = collection(firestore, 'users');
-        const snapshot = await getDocs(usersCol);
-        const usersData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as User[];
-        setUsers(usersData);
-      } catch (err) {
-        setError(err as Error);
-        console.error("Failed to fetch users:", err);
-      } finally {
-        setIsLoading(false);
+      // Firestore 'in' query limit is 30. We'll chunk the requests.
+      const chunks: string[][] = [];
+      for (let i = 0; i < uniqueIds.length; i += 30) {
+          chunks.push(uniqueIds.slice(i, i + 30));
       }
-    };
 
-    fetchUsers();
+      for (const chunk of chunks) {
+        const q = query(collection(firestore, 'users'), where('__name__', 'in', chunk));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => {
+            usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+        });
+      }
+      return usersMap;
   }, []);
 
-  const usersById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
-  
-  const usersByCivilId = useMemo(() => {
-    const map = new Map<string, User>();
-    users.forEach(user => {
-      if (user.civilId) {
-        map.set(user.civilId, user);
+  const fetchUsersByCivilId = useCallback(async (civilIds: string[]): Promise<Map<string, User>> => {
+      const usersMap = new Map<string, User>();
+      if (!civilIds || civilIds.length === 0) return usersMap;
+      
+      const uniqueIds = [...new Set(civilIds.filter(id => id))];
+      if (uniqueIds.length === 0) return usersMap;
+
+      const chunks: string[][] = [];
+      for (let i = 0; i < uniqueIds.length; i += 30) {
+          chunks.push(uniqueIds.slice(i, i + 30));
       }
-    });
-    return map;
-  }, [users]);
 
-  const getUserById = (id: string): User | undefined => usersById.get(id);
-  const getUserByCivilId = (civilId: string | null): User | undefined => civilId ? usersByCivilId.get(civilId) : undefined;
+      for (const chunk of chunks) {
+        const q = query(collection(firestore, 'users'), where('civilId', 'in', chunk));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => {
+            const user = { id: doc.id, ...doc.data() } as User;
+            if (user.civilId) {
+               usersMap.set(user.civilId, user);
+            }
+        });
+      }
+      return usersMap;
+  }, []);
 
-  const value: UsersContextType = { 
-    users, 
-    usersLoading: isLoading, 
-    usersById, 
-    usersByCivilId,
-    getUserById,
-    getUserByCivilId,
-    error 
-  };
+  const value = { fetchUsersById, fetchUsersByCivilId };
 
   return (
     <UsersContext.Provider value={value}>

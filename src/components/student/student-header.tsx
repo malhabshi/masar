@@ -2,7 +2,8 @@
 
 'use client';
 
-import type { Student, Country } from '@/lib/types';
+import { useMemo } from 'react';
+import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';
@@ -14,8 +15,8 @@ import { Skeleton } from '../ui/skeleton';
 import { FinalizeStudentDialog } from './finalize-student-dialog';
 import { RequestTransferDialog } from './request-transfer-dialog';
 import { TransferStudentDialog } from './transfer-student-dialog';
-import { useUsers } from '@/contexts/users-provider';
 import { DeleteStudentDialog } from './delete-student-dialog';
+import { useCollection } from '@/firebase/client';
 
 
 interface StudentHeaderProps {
@@ -43,7 +44,7 @@ function StudentHeaderSkeleton() {
 }
 
 export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
-  const { users, usersLoading } = useUsers();
+  const { data: users, isLoading: usersLoading } = useCollection<User>('users');
 
   if (isLoading || !student || !currentUser || usersLoading) {
     return <StudentHeaderSkeleton />;
@@ -60,7 +61,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const canRequestTransfer = isAssignedEmployee && !student.transferRequested;
   const canApproveTransfer = canManage && student.transferRequested;
   const canFinalize = canManage && !student.finalChoiceUniversity;
-  const employeeUsers = users.filter(u => u.role === 'employee');
+  const employeeUsers = (users || []).filter(u => u.role === 'employee');
 
   const countryEmojis: Record<Country, string> = {
     UK: '🇬🇧',

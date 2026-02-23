@@ -13,13 +13,13 @@ import type { User, UserRole } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { updateDocumentNonBlocking } from '@/firebase/client';
+import { updateDocumentNonBlocking, useCollection } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { EditUserDialog } from './edit-user-dialog';
-import { useUsers } from '@/contexts/users-provider';
+import { Skeleton } from '../ui/skeleton';
 
 interface UserListProps {
   currentUser: AppUser;
@@ -30,7 +30,9 @@ const userRoles: UserRole[] = ['admin', 'employee', 'department'];
 export function UserList({ currentUser }: UserListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
-  const { users } = useUsers();
+  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+  const users = useMemo(() => usersData || [], [usersData]);
+
 
   const handleRoleChange = async (userToUpdate: User, newRole: UserRole) => {
     if (userToUpdate.id === currentUser.id) {
@@ -63,6 +65,31 @@ export function UserList({ currentUser }: UserListProps) {
         setIsUpdating(null);
     }
   };
+
+  if (usersLoading) {
+      return (
+          <div className="rounded-lg border">
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead>User</TableHead>
+                          <TableHead>Contact & Civil ID</TableHead>
+                          <TableHead className="text-right">Role & Actions</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {[...Array(3)].map((_, i) => (
+                          <TableRow key={i}>
+                              <TableCell><Skeleton className="h-10 w-32" /></TableCell>
+                              <TableCell><div className="space-y-1"><Skeleton className="h-4 w-40" /><Skeleton className="h-4 w-24" /></div></TableCell>
+                              <TableCell className="text-right"><Skeleton className="h-10 w-32 ml-auto" /></TableCell>
+                          </TableRow>
+                      ))}
+                  </TableBody>
+              </Table>
+          </div>
+      );
+  }
 
   return (
     <div className="rounded-lg border">

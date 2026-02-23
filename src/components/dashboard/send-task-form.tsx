@@ -16,10 +16,9 @@ import type { User, Task } from '@/lib/types';
 import { sendTask as sendTaskAction } from '@/lib/actions';
 import { Loader2, Send } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { addDocumentNonBlocking } from '@/firebase/client';
+import { addDocumentNonBlocking, useCollection } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
-import { useUsers } from '@/contexts/users-provider';
 import type { AppUser } from '@/hooks/use-user';
 
 interface SendTaskFormProps {
@@ -36,8 +35,8 @@ export function SendTaskForm({ currentUser }: SendTaskFormProps) {
   const [sendTo, setSendTo] = useState<'all' | 'specific'>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { users, usersLoading } = useUsers();
-  const recipients = useMemo(() => users.filter(u => u.role === 'employee' || u.role === 'department'), [users]);
+  const { data: users, isLoading: usersLoading } = useCollection<User>('users');
+  const recipients = useMemo(() => (users || []).filter(u => u.role === 'employee' || u.role === 'department'), [users]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

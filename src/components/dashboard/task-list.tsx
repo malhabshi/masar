@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Loader2, Send } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import type { Task, TaskReply } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { useUsers } from '@/contexts/users-provider';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 interface TaskListProps {
   tasks: Task[];
@@ -24,10 +24,20 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
-  const { getUserById } = useUsers();
+
+  const allUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    (tasks || []).forEach(task => {
+        ids.add(task.authorId);
+        (task.replies || []).forEach(reply => ids.add(reply.authorId));
+    });
+    return Array.from(ids);
+  }, [tasks]);
+
+  const { userMap } = useUserCacheById(allUserIds);
 
   const getUserName = (userId: string) => {
-    return getUserById(userId)?.name || 'Unknown User';
+    return userMap.get(userId)?.name || '...';
   };
 
   const handleReply = async (taskId: string) => {

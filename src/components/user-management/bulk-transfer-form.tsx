@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,10 +13,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { User, Task } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { addDocumentNonBlocking } from '@/firebase/client';
+import { addDocumentNonBlocking, useCollection } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import { useUsers } from '@/contexts/users-provider';
+import { collection, doc, getDoc } from 'firebase/firestore';
 import { Skeleton } from '../ui/skeleton';
 
 const formSchema = z.object({
@@ -34,9 +33,9 @@ interface BulkTransferFormProps {
 export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const { users, usersLoading, getUserById } = useUsers();
-  
-  const employeeOptions = users.filter(e => e.role === 'employee');
+  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+
+  const employeeOptions = useMemo(() => (usersData || []).filter(u => u.role === 'employee'), [usersData]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -60,8 +59,9 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
     const result = await bulkTransferStudents(values.fromEmployeeId, values.toEmployeeId, currentUser.id);
 
     if (result.success) {
-      const fromEmployee = getUserById(values.fromEmployeeId);
-      const taskContent = `All students from ${fromEmployee?.name} have been transferred to you.`;
+      const fromUserDoc = await getDoc(doc(firestore, 'users', values.fromEmployeeId));
+      const fromEmployee = fromUserDoc.data();
+      const taskContent = `All students from ${fromEmployee?.name || 'an employee'} have been transferred to you.`;
       
       const tasksCollection = collection(firestore, 'tasks');
       const newTask: Omit<Task, 'id'> = {

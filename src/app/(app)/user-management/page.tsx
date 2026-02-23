@@ -6,13 +6,11 @@ import { UserList } from '@/components/user-management/user-list';
 import { BulkTransferForm } from '@/components/user-management/bulk-transfer-form';
 import { Loader2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useUsers } from '@/contexts/users-provider';
 
 function UserManagementContent() {
     const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
-    const { usersLoading } = useUsers();
 
-    if (isCurrentUserLoading || usersLoading) {
+    if (isCurrentUserLoading) {
         return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 

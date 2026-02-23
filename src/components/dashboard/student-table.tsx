@@ -29,8 +29,8 @@ import { cn } from '@/lib/utils';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { useUsers } from '@/contexts/users-provider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 
 
 interface StudentTableProps {
@@ -62,8 +62,14 @@ const pipelineStatusLabels: { [key: string]: string } = {
 
 export function StudentTable({ students, currentUser, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false, showAssignedFilter = false }: StudentTableProps) {
   const { toast } = useToast();
-  const { getUserByCivilId } = useUsers();
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine'>('all');
+
+  const employeeCivilIds = useMemo(() => {
+    if (!showEmployee) return [];
+    return [...new Set(students.map(s => s.employeeId).filter((id): id is string => !!id))];
+  }, [students, showEmployee]);
+
+  const { userMap: employeeMap } = useUserCacheByCivilId(employeeCivilIds);
 
   const displayedStudents = useMemo(() => {
     if (showAssignedFilter && assignedFilter === 'mine' && currentUser?.civilId) {
@@ -74,7 +80,7 @@ export function StudentTable({ students, currentUser, showEmployee = false, show
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
-    return getUserByCivilId(employeeId)?.name || 'Unknown Employee';
+    return employeeMap.get(employeeId)?.name || '...';
   };
 
   const handlePipelineStatusChange = async (studentId: string, status: PipelineStatus) => {

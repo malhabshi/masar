@@ -14,12 +14,10 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import { useUsers } from '@/contexts/users-provider';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 
 export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { usersLoading } = useUsers();
 
   // Define the query to fetch students where employeeId is null
   const unassignedQuery = useMemo(() => [where('employeeId', '==', null)], []);
@@ -33,7 +31,7 @@ export default function UnassignedStudentsPage() {
       ...unassignedQuery
     );
 
-  const isLoading = isUserLoading || studentsAreLoading || usersLoading;
+  const isLoading = isUserLoading || studentsAreLoading;
 
   if (isLoading) {
     return (

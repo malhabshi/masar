@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { Document, Student, UserRole } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -11,10 +11,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
 import { formatDate } from '@/lib/timestamp-utils';
-import { useUsers } from '@/contexts/users-provider';
 import { doc } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { updateDocumentNonBlocking } from '@/firebase/client';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 interface InternalDocumentsProps {
   student: Student;
@@ -24,13 +24,16 @@ interface InternalDocumentsProps {
 }
 
 export function InternalDocuments({ student, currentUser, title, allowUpload }: InternalDocumentsProps) {
-  const { getUserById } = useUsers();
+  const authorIds = useMemo(() => {
+    return (student.documents || []).map(doc => doc.authorId);
+  }, [student.documents]);
+  const { userMap } = useUserCacheById(authorIds);
   
   const managementRoles: UserRole[] = ['admin', 'department'];
 
   const documents = (student.documents || []).filter(doc => {
       const isEmployeeSection = title === 'Employee Documents';
-      const author = getUserById(doc.authorId);
+      const author = userMap.get(doc.authorId);
 
       if (isEmployeeSection) {
           // Show documents created by employees (or if author can't be determined, assume it might be older data)
@@ -81,7 +84,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
             </TableHeader>
             <TableBody>
               {documents.slice().sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()).map((doc) => {
-                const author = getUserById(doc.authorId);
+                const author = userMap.get(doc.authorId);
                 return (
                   <TableRow key={doc.id}>
                     <TableCell className="flex items-center gap-2">

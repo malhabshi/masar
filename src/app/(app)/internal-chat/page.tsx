@@ -4,15 +4,13 @@ import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
-import { query, where } from 'firebase/firestore';
+import { where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Loader2 } from 'lucide-react';
-import { useUsers } from '@/contexts/users-provider';
 
 export default function InternalChatPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { usersLoading } = useUsers();
 
   // Query for students with unread messages for admins/depts.
   const studentsQuery = useMemo(() => {
@@ -22,7 +20,7 @@ export default function InternalChatPage() {
 
   const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>('students', ...studentsQuery);
   
-  const isLoading = isUserLoading || usersLoading || studentsAreLoading;
+  const isLoading = isUserLoading || studentsAreLoading;
 
   if (isLoading) {
     return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>

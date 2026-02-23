@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 import type { Task } from '@/lib/types';
 import { CheckCircle, Clock, AlertCircle, MessageSquare } from 'lucide-react';
-import { useUsers } from '@/contexts/users-provider';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 interface TaskHistoryProps {
   tasks: Task[];
@@ -13,8 +13,6 @@ interface TaskHistoryProps {
 }
 
 export function TaskHistory({ tasks, studentId }: TaskHistoryProps) {
-  const { getUserById } = useUsers();
-
   const relevantTasks = useMemo(() => {
     if (!tasks) return [];
     
@@ -30,6 +28,17 @@ export function TaskHistory({ tasks, studentId }: TaskHistoryProps) {
     return filtered.sort((a, b) => sortByDate(a,b));
   }, [tasks, studentId]);
 
+  const authorIds = useMemo(() => {
+    const ids = new Set<string>();
+    relevantTasks.forEach(task => {
+        ids.add(task.authorId);
+        (task.replies || []).forEach(reply => ids.add(reply.authorId));
+    });
+    return Array.from(ids);
+  }, [relevantTasks]);
+
+  const { userMap } = useUserCacheById(authorIds);
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -44,7 +53,7 @@ export function TaskHistory({ tasks, studentId }: TaskHistoryProps) {
   };
 
   const getUserName = (userId: string) => {
-    return getUserById(userId)?.name || 'Unknown User';
+    return userMap.get(userId)?.name || '...';
   };
 
   if (relevantTasks.length === 0) {

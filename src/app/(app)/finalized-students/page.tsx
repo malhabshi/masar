@@ -7,7 +7,6 @@ import { useCollection } from '@/firebase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { FinalizedStudentsTable } from '@/components/dashboard/finalized-students-table';
-import { useUsers } from '@/contexts/users-provider';
 
 interface FinalizedStudent extends Student {
     finalChoiceUniversity: string;
@@ -15,8 +14,6 @@ interface FinalizedStudent extends Student {
 
 export default function FinalizedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { usersLoading } = useUsers();
-
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>('students');
 
   const finalizedStudents = useMemo(() => {
@@ -25,7 +22,7 @@ export default function FinalizedStudentsPage() {
     return allStudents.filter(s => s.finalChoiceUniversity) as FinalizedStudent[];
   }, [allStudents]);
 
-  const isLoading = isUserLoading || usersLoading || studentsAreLoading;
+  const isLoading = isUserLoading || studentsAreLoading;
 
   if (isLoading) {
     return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>

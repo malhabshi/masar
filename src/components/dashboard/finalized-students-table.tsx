@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -13,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Student } from '@/lib/types';
 import { Plane } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useUsers } from '@/contexts/users-provider';
+import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 
 interface FinalizedStudent extends Student {
   finalChoiceUniversity: string;
@@ -25,12 +26,17 @@ interface FinalizedStudentsTableProps {
 }
 
 export function FinalizedStudentsTable({ students, showEmployee = true }: FinalizedStudentsTableProps) {
-  const { getUserByCivilId } = useUsers();
-  
+  const employeeCivilIds = useMemo(() => {
+    if (!showEmployee) return [];
+    return [...new Set(students.map(s => s.employeeId).filter((id): id is string => !!id))];
+  }, [students, showEmployee]);
+
+  const { userMap: employeeMap } = useUserCacheByCivilId(employeeCivilIds);
+
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
-    const employee = getUserByCivilId(employeeId);
-    return employee?.name || 'Unknown Employee';
+    const employee = employeeMap.get(employeeId);
+    return employee?.name || '...';
   };
 
   const getUniversityCountry = (student: FinalizedStudent) => {

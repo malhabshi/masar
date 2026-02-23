@@ -10,11 +10,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { TimeLog } from '@/lib/types';
+import type { TimeLog, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { formatDate, toDate } from '@/lib/timestamp-utils';
-import { useUsers } from '@/contexts/users-provider';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 interface EmployeeActivityTableProps {
   timeLogs: TimeLog[];
@@ -22,7 +22,12 @@ interface EmployeeActivityTableProps {
 
 export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) {
   const [isClient, setIsClient] = useState(false);
-  const { getUserById } = useUsers();
+  
+  const employeeIds = useMemo(() => {
+    return [...new Set(timeLogs.map(log => log.employeeId))];
+  }, [timeLogs]);
+
+  const { userMap } = useUserCacheById(employeeIds);
 
   useEffect(() => {
     setIsClient(true);
@@ -61,7 +66,7 @@ export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) 
         </TableHeader>
         <TableBody>
           {sortedTimeLogs.map((log) => {
-            const employee = getUserById(log.employeeId);
+            const employee = userMap.get(log.employeeId);
             return (
               <TableRow key={log.id}>
                 <TableCell>
@@ -76,7 +81,7 @@ export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) 
                         <div className="text-sm text-muted-foreground">{employee.email}</div>
                       </div>
                     </div>
-                  ) : 'Unknown Employee'}
+                  ) : <Skeleton className="h-10 w-40" />}
                 </TableCell>
                 <TableCell>{isClient ? formatDate(log.date) : <Skeleton className="h-4 w-24" />}</TableCell>
                 <TableCell>{isClient ? toDate(log.clockIn)?.toLocaleTimeString() : <Skeleton className="h-4 w-16" />}</TableCell>

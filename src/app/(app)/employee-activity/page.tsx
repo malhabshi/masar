@@ -3,7 +3,6 @@
 
 import { useState, useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { useUsers } from '@/contexts/users-provider';
 import type { TimeLog } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
@@ -20,10 +19,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { toDate } from '@/lib/timestamp-utils';
+import { useCollection as useUsersCollection } from '@/firebase/client';
+import type { User } from '@/lib/types';
 
 export default function EmployeeActivityPage() {
     const { user: currentUser, isUserLoading } = useUser();
-    const { users, usersLoading } = useUsers();
+    const { data: users, isLoading: usersLoading } = useUsersCollection<User>('users');
     
     // State for filters
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
@@ -211,7 +212,7 @@ export default function EmployeeActivityPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Employees</SelectItem>
-                                    {users.filter(u => u.role === 'employee').map(emp => (
+                                    {(users || []).filter(u => u.role === 'employee').map(emp => (
                                         <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
                                     ))}
                                 </SelectContent>

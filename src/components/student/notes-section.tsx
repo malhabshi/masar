@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
-import { useUsers } from '@/contexts/users-provider';
 import { addNoteToStudent } from '@/lib/actions';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 interface NotesSectionProps {
   student: Student;
@@ -23,7 +23,9 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
   const [newNote, setNewNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { getUserById } = useUsers();
+
+  const authorIds = useMemo(() => (student.notes || []).map(note => note.authorId), [student.notes]);
+  const { userMap } = useUserCacheById(authorIds);
 
   const sortedNotes = useMemo(() => {
     if (!student.notes) return [];
@@ -61,7 +63,7 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
         <div className="space-y-4">
           {sortedNotes.length > 0 ? (
             sortedNotes.map(note => {
-              const author = getUserById(note.authorId);
+              const author = userMap.get(note.authorId);
               return (
                 <div key={note.id} className="flex items-start gap-3">
                   <Avatar className="h-8 w-8 border">
@@ -74,7 +76,7 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
                   </Avatar>
                   <div className="flex-1 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">{author?.name || 'Unknown'}</span>
+                      <span className="font-semibold">{author?.name || '...'}</span>
                       <span className="text-xs text-muted-foreground">{formatRelativeTime(note.createdAt)}</span>
                     </div>
                     <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{note.content}</p>

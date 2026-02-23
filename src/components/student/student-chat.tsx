@@ -20,9 +20,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { useUsers } from '@/contexts/users-provider';
 import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 
 interface StudentChatProps {
@@ -32,7 +32,6 @@ interface StudentChatProps {
 
 export function StudentChat({ student, currentUser }: StudentChatProps) {
   const { toast } = useToast();
-  const { users, getUserById } = useUsers();
   const { auth: authUser } = useUser();
   const studentId = student.id;
 
@@ -51,6 +50,14 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     return messagesData.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [messagesData]);
   
+  const authorIds = useMemo(() => (messages || []).map(m => m.authorId), [messages]);
+  const { userMap } = useUserCacheById(authorIds);
+
+  const { data: allUsers, isLoading: usersLoading } = useCollection<User>('users');
+  const managementUsers = useMemo(() => (allUsers || []).filter(u => ['admin', 'department'].includes(u.role)), [allUsers]);
+  const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);
+  const hasDepartments = useMemo(() => (allUsers || []).some(u => u.role === 'department'), [allUsers]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -69,10 +76,6 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, currentUser?.id]);
 
-
-  const managementUsers = useMemo(() => users.filter(u => ['admin', 'department'].includes(u.role)), [users]);
-  const hasMultipleAdmins = useMemo(() => users.filter(u => u.role === 'admin').length > 1, [users]);
-  const hasDepartments = useMemo(() => users.some(u => u.role === 'department'), [users]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -127,7 +130,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
 
         // 2. Prepare and send the message
         let finalMessageContent = newMessage.trim();
-        const recipientUser = recipientId ? users.find(u => u.id === recipientId) : null;
+        const recipientUser = recipientId ? managementUsers.find(u => u.id === recipientId) : null;
         let toastDescription = 'Your message has been added to the chat.';
 
         if (currentUser.role === 'employee' && recipientId) {
@@ -186,7 +189,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         <ScrollArea className="h-80 pr-4">
           <div className="space-y-4">
             {messages.map(message => {
-              const author = getUserById(message.authorId);
+              const author = userMap.get(message.authorId);
               const isCurrentUser = author?.id === currentUser.id;
               return (
                 <div
@@ -252,8 +255,8 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         <div className="w-full space-y-2">
           {currentUser.role === 'employee' && (
             <Select onValueChange={setRecipientId} value={recipientId}>
-              <SelectTrigger disabled={isLoading}>
-                <SelectValue placeholder="Address message to..." />
+              <SelectTrigger disabled={isLoading || usersLoading}>
+                <SelectValue placeholder={usersLoading ? "Loading..." : "Address message to..."} />
               </SelectTrigger>
               <SelectContent>
                 {hasMultipleAdmins && (

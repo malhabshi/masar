@@ -3,10 +3,10 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Users, University } from 'lucide-react';
 import { useCollection } from '@/firebase/client';
 import { useMemo } from 'react';
-import type { Student, Application } from '@/lib/types';
+import type { Student, Application, User } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
-import { useUsers } from '@/hooks/use-users';
 import dynamic from 'next/dynamic';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 // Lazy load the recharts components
 const ResponsiveContainer = dynamic(
@@ -24,8 +24,7 @@ const Bar = dynamic(() => import('recharts').then((mod) => mod.Bar), { ssr: fals
 
 
 export default function ReportsPage() {
-    const { users, usersLoading } = useUsers();
-    
+    const { data: users, isLoading: usersLoading } = useCollection<User>('users');
     const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
     
     const applications: Application[] = useMemo(() => students?.flatMap(s => s.applications || []) || [], [students]);
@@ -34,7 +33,7 @@ export default function ReportsPage() {
 
     const totalStudents = useMemo(() => students?.length || 0, [students]);
     const totalApplications = useMemo(() => applications.length, [applications]);
-    const totalEmployees = useMemo(() => users?.filter(u => u.role === 'employee').length || 0, [users]);
+    const totalEmployees = useMemo(() => (users || []).filter(u => u.role === 'employee').length || 0, [users]);
 
     const applicationStatusData = useMemo(() => {
         const counts = applications.reduce((acc, app) => {

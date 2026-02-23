@@ -8,12 +8,10 @@ import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import { useUsers } from '@/contexts/users-provider';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 
 export default function ApplicantsPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { usersLoading } = useUsers();
 
   // Define constraints for the query based on the user's role
   const studentsQuery = useMemo(() => {
@@ -32,7 +30,7 @@ export default function ApplicantsPage() {
     ...studentsQuery
   );
 
-  const isLoading = isUserLoading || usersLoading || studentsAreLoading;
+  const isLoading = isUserLoading || studentsAreLoading;
 
   if (isLoading) {
     return (

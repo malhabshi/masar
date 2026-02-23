@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
 import { useUser } from '@/hooks/use-user';
-import { useUsers } from '@/contexts/users-provider';
 import { useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
@@ -119,7 +118,7 @@ function RequestTypeDialog({
 
 export default function RequestSettingsPage() {
     const { user: currentUser, isUserLoading } = useUser();
-    const { users, usersLoading } = useUsers();
+    const { data: users, isLoading: usersLoading } = useCollection<User>('users');
     const { toast } = useToast();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingRequestType, setEditingRequestType] = useState<RequestType | undefined>(undefined);
@@ -234,7 +233,7 @@ export default function RequestSettingsPage() {
                     setIsOpen={setIsDialogOpen}
                     requestType={editingRequestType}
                     onSubmit={handleAddOrUpdate}
-                    users={users}
+                    users={users || []}
                 />
             )}
         </>
