@@ -330,6 +330,50 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
     }
 }
 
+// --- TODO ACTIONS ---
+
+export async function addTodo(userId: string, content: string) {
+  if (!checkAdminDb()) return { success: false, message: 'DB not available' };
+  
+  try {
+    const todoCollRef = adminDb!.collection('users').doc(userId).collection('personal_todos');
+    await todoCollRef.add({
+        userId,
+        content,
+        completed: false,
+        createdAt: new Date().toISOString()
+    });
+    return { success: true, message: "To-do added." };
+  } catch (error) {
+    console.error('addTodo error:', error);
+    return { success: false, message: 'Failed to add to-do.' };
+  }
+}
+
+export async function toggleTodo(userId: string, todoId: string, completed: boolean) {
+    if (!checkAdminDb()) return { success: false, message: 'DB not available' };
+    try {
+        const todoRef = adminDb!.collection('users').doc(userId).collection('personal_todos').doc(todoId);
+        await todoRef.update({ completed: !completed });
+        return { success: true, message: 'To-do updated.' };
+    } catch (error) {
+        console.error('toggleTodo error:', error);
+        return { success: false, message: 'Failed to update to-do.' };
+    }
+}
+
+export async function deleteTodo(userId: string, todoId: string) {
+    if (!checkAdminDb()) return { success: false, message: 'DB not available' };
+    try {
+        const todoRef = adminDb!.collection('users').doc(userId).collection('personal_todos').doc(todoId);
+        await todoRef.delete();
+        return { success: true, message: 'To-do deleted.' };
+    } catch (error) {
+        console.error('deleteTodo error:', error);
+        return { success: false, message: 'Failed to delete to-do.' };
+    }
+}
+
 // --- MISC ACTIONS ---
 
 export async function importStudentsFromExcel(userId: string, fileName: string) {

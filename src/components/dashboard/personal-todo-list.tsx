@@ -6,21 +6,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Trash2, ListTodo } from 'lucide-react';
+import { PlusCircle, Trash2, ListTodo, Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
+import { useCollection } from '@/firebase/client';
 import { useUser } from '@/hooks/use-user';
-import { collection, doc } from 'firebase/firestore';
 import { sortByDate } from '@/lib/timestamp-utils';
+import { addTodo, toggleTodo, deleteTodo } from '@/lib/actions';
 
 export function PersonalTodoList() {
     const { user, isUserLoading } = useUser();
     const { toast } = useToast();
     const [newTodo, setNewTodo] = useState('');
+    const [isMutating, setIsMutating] = useState(false);
 
     const todosCollectionPath = user ? `users/${user.id}/personal_todos` : '';
     const { data: todos, isLoading: areTodosLoading, error } = useCollection<PersonalTodo>(todosCollectionPath);
@@ -30,33 +30,40 @@ export function PersonalTodoList() {
     const sortedTodos = (todos || []).sort((a,b) => sortByDate(a,b, 'createdAt', 'asc'));
 
     const handleAddTodo = async () => {
-        if (!newTodo.trim() || !user) return;
+        if (!newTodo.trim() || !user || isMutating) return;
         
-        const todosCollectionRef = collection(firestore, 'users', user.id, 'personal_todos');
-
-        const newTodoItem: Omit<PersonalTodo, 'id'> = {
-            userId: user.id,
-            content: newTodo.trim(),
-            completed: false,
-            createdAt: new Date().toISOString(),
-        };
+        setIsMutating(true);
+        const result = await addTodo(user.id, newTodo.trim());
         
-        addDocumentNonBlocking(todosCollectionRef, newTodoItem);
-        setNewTodo('');
-        toast({ title: 'To-do added!' });
+        if (result.success) {
+            setNewTodo('');
+            toast({ title: 'To-do added!' });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message });
+        }
+        setIsMutating(false);
     };
 
-    const handleToggleTodo = (todoId: string, completed: boolean) => {
-        if (!user) return;
-        const todoRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
-        updateDocumentNonBlocking(todoRef, { completed: !completed });
+    const handleToggleTodo = async (todoId: string, completed: boolean) => {
+        if (!user || isMutating) return;
+        setIsMutating(true);
+        const result = await toggleTodo(user.id, todoId, completed);
+        if (!result.success) {
+            toast({ variant: 'destructive', title: 'Error', description: result.message });
+        }
+        setIsMutating(false);
     };
     
-    const handleDeleteTodo = (todoId: string) => {
-        if (!user) return;
-        const todoRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
-        deleteDocumentNonBlocking(todoRef);
-        toast({ title: 'To-do removed.' });
+    const handleDeleteTodo = async (todoId: string) => {
+        if (!user || isMutating) return;
+        setIsMutating(true);
+        const result = await deleteTodo(user.id, todoId);
+        if (result.success) {
+            toast({ title: 'To-do removed.' });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message });
+        }
+        setIsMutating(false);
     };
     
     if (isLoading) {
@@ -103,6 +110,7 @@ export function PersonalTodoList() {
                                         id={`todo-${todo.id}`}
                                         checked={todo.completed} 
                                         onCheckedChange={() => handleToggleTodo(todo.id, todo.completed)} 
+                                        disabled={isMutating}
                                     />
                                     <label 
                                         htmlFor={`todo-${todo.id}`}
@@ -113,7 +121,7 @@ export function PersonalTodoList() {
                                     >
                                         {todo.content}
                                     </label>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleDeleteTodo(todo.id)}>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleDeleteTodo(todo.id)} disabled={isMutating}>
                                         <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </div>
@@ -136,9 +144,10 @@ export function PersonalTodoList() {
                         value={newTodo}
                         onChange={(e) => setNewTodo(e.target.value)}
                         onKeyDown={(e) => {if (e.key === 'Enter') handleAddTodo();}}
+                        disabled={isMutating}
                     />
-                    <Button onClick={handleAddTodo} disabled={!newTodo.trim()}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
+                    <Button onClick={handleAddTodo} disabled={!newTodo.trim() || isMutating}>
+                        {isMutating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                         Add
                     </Button>
                 </div>
