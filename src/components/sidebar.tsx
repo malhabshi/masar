@@ -58,7 +58,7 @@ export function AppSidebar() {
     const adminNav = [
         { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin', 'department'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
-        { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
+        { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin', 'department'] },
         { href: '/customize-questions', label: 'Questions', icon: Wrench, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },
     ];

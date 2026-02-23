@@ -256,9 +256,11 @@
       "properties": {
         "name": { "type": "string" },
         "description": { "type": "string" },
-        "defaultRecipientId": { "type": "string" }
+        "defaultRecipientId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "requiredFields": { "type": "array", "items": { "type": "string" } }
       },
-      "required": ["name", "description", "defaultRecipientId"]
+      "required": ["name", "description", "defaultRecipientId", "isActive"]
     },
     "PersonalTodo": {
       "title": "Personal Todo",

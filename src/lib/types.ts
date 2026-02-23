@@ -185,6 +185,8 @@ export interface RequestType {
   name: string;
   description: string;
   defaultRecipientId: string;
+  isActive: boolean;
+  requiredFields: string[];
 }
 
 export interface ApplicationQuestion {
