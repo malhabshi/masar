@@ -486,7 +486,7 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
         return { success: true, message: `${snapshot.size} students were transferred successfully.` };
     } catch (error: any) {
         console.error('bulkTransferStudents error:', error);
-        return { success: false, message: error.message };
+        return { success: false, message: 'An unexpected error occurred during the bulk transfer.' };
     }
 }
 
@@ -1110,6 +1110,6 @@ export async function getReportStats(dateRange: {
     return { success: true, data: stats };
   } catch (error: any) {
     console.error('getReportStats error:', error);
-    return { success: false, message: error.message };
+    return { success: false, message: 'An error occurred while generating the report data.' };
   }
 }
