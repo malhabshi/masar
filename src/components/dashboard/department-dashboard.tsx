@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -57,12 +56,12 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                     </CardContent>
                 </Card>
             </div>
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <div className="lg:col-span-2 space-y-6">
+                    <SendTaskForm currentUser={currentUser} />
                     <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
                 </div>
                 <div className="space-y-6">
-                    <SendTaskForm currentUser={currentUser} />
                     <UpcomingEventsCard />
                 </div>
             </div>

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/client';
 import type { Student, Task } from '@/lib/types';
-import { Loader2, Users, FileText, UserPlus } from 'lucide-react';
+import { Users, FileText, UserPlus } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 
 // Components
@@ -67,13 +67,15 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                 </CardContent>
             </Card>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
-            <SendTaskForm currentUser={currentUser} />
-        </div>
-        <UpcomingEventsCard />
-        <div className="flex justify-end">
-            <ImportStudentsDialog currentUser={currentUser} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <div className="lg:col-span-2 space-y-6">
+                <SendTaskForm currentUser={currentUser} />
+                <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
+            </div>
+            <div className="space-y-6">
+                <UpcomingEventsCard />
+                <ImportStudentsDialog currentUser={currentUser} />
+            </div>
         </div>
     </div>
   );
