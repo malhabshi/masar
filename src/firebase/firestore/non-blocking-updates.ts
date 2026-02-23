@@ -13,7 +13,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 
 // Non-blocking add document
-export function addDocumentNonBlocking<T>(
+export function addDocumentNonBlocking<T extends Record<string, any>>(
   collectionRef: CollectionReference, 
   data: T
 ) {
