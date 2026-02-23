@@ -25,7 +25,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { updateStudentPipelineStatus } from '@/lib/actions';
 import { cn } from '@/lib/utils';
-import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
+import { updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 
