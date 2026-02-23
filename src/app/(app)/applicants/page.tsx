@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -14,7 +13,7 @@ export default function ApplicantsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   // Define constraints for the query based on the user's role
-  const studentsQuery = useMemo(() => {
+  const studentsQuery = useMemoFirebase(() => {
     if (!currentUser) return []; // No query if user isn't loaded
     if (currentUser.role === 'employee' && currentUser.civilId) {
       // Employees see only their assigned students
@@ -22,7 +21,7 @@ export default function ApplicantsPage() {
     }
     // Admins and Departments see all students, so no extra constraints
     return [];
-  }, [currentUser]);
+  }, [currentUser?.role, currentUser?.civilId]);
 
   // Use the useCollection hook with the defined constraints
   const { data: students, isLoading: studentsAreLoading } = useCollection<Student>(

@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StudentTable } from '@/components/dashboard/student-table';
@@ -13,10 +12,10 @@ export default function InternalChatPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   // Query for students with unread messages for admins/depts.
-  const studentsQuery = useMemo(() => {
+  const studentsQuery = useMemoFirebase(() => {
     if (!currentUser || !['admin', 'department'].includes(currentUser.role)) return [];
     return [where('unreadUpdates', '>', 0)];
-  }, [currentUser]);
+  }, [currentUser?.role]);
 
   const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>('students', ...studentsQuery);
   

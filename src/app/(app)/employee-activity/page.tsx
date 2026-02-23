@@ -36,12 +36,12 @@ export default function EmployeeActivityPage() {
     // Determine the query based on user role
     const timeLogsQuery = useMemoFirebase(() => {
         if (!currentUser) return [];
-        if (currentUser.role === 'employee') {
+        if (currentUser.role === 'employee' && currentUser.id) {
             return [where('employeeId', '==', currentUser.id)];
         }
         // Admins and departments can see all logs
         return [];
-    }, [currentUser]);
+    }, [currentUser?.role, currentUser?.id]);
 
     const { data: allTimeLogs, isLoading: timeLogsLoading } = useCollection<TimeLog>(
         currentUser ? 'time_logs' : '', 
