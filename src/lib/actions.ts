@@ -607,6 +607,67 @@ export async function deleteTodo(userId: string, todoId: string) {
 
 // --- MISC ACTIONS ---
 
+export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database not available.' };
+    }
+
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        // Use dot notation to update a field in a map
+        await studentRef.update({
+            [`profileCompletionStatus.${itemKey}`]: value
+        });
+        return { success: true, message: 'Checklist updated.' };
+    } catch (error) {
+        console.error('updateChecklistItem error:', error);
+        return { success: false, message: 'Failed to update checklist item.' };
+    }
+}
+
+export async function updateFinalChoice(studentId: string, universityName: string, adminId: string, studentName: string, employeeId: string | null) {
+  if (!checkAdminServices()) {
+    return { success: false, message: 'Server database not available.' };
+  }
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    
+    const newNote: Note = {
+      id: `note-finalize-${Date.now()}`,
+      authorId: adminId,
+      content: `Final university choice set to: ${universityName}.`,
+      createdAt: new Date().toISOString(),
+    };
+
+    const studentDoc = await studentRef.get();
+    const studentData = studentDoc.data() as Student;
+    const updatedNotes = [...(studentData.notes || []), newNote];
+
+    await studentRef.update({
+      finalChoiceUniversity: universityName,
+      notes: updatedNotes,
+    });
+    
+    // Notify the assigned employee
+    if (employeeId) {
+        const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
+        if (!employeeQuery.empty) {
+            const employeeDoc = employeeQuery.docs[0];
+            const employee = { id: employeeDoc.id, ...employeeDoc.data() } as User;
+            if (employee.phone) {
+                await sendWhatsAppMessage(employee.id, NotificationType.GENERIC_NOTIFICATION, { "1": employee.name });
+                console.log(`Sent final choice notification to ${employee.name}`);
+            }
+        }
+    }
+
+    return { success: true, message: `Final choice for ${studentName} set to ${universityName}.` };
+  } catch (error) {
+    console.error('updateFinalChoice error:', error);
+    return { success: false, message: 'Failed to update final choice.' };
+  }
+}
+
 export async function importStudentsFromExcel(formData: FormData) {
   if (!checkAdminServices()) {
     return { success: false, message: 'Server database not available.' };
@@ -674,6 +735,8 @@ export async function importStudentsFromExcel(formData: FormData) {
             appliedForVisa: false,
             documentsSubmittedToMohe: false,
             readyToTravel: false,
+            financialStatementsProvided: false,
+            visaGranted: false,
         },
       };
 
@@ -760,22 +823,4 @@ export async function onDocumentUploaded(documentId: string, studentId: string, 
     console.error('Error in onDocumentUploaded:', error);
     return { success: false, message: String(error) };
   }
-}
-
-export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean) {
-    if (!checkAdminServices()) {
-        return { success: false, message: 'Server database not available.' };
-    }
-
-    try {
-        const studentRef = adminDb!.collection('students').doc(studentId);
-        // Use dot notation to update a field in a map
-        await studentRef.update({
-            [`profileCompletionStatus.${itemKey}`]: value
-        });
-        return { success: true, message: 'Checklist updated.' };
-    } catch (error) {
-        console.error('updateChecklistItem error:', error);
-        return { success: false, message: 'Failed to update checklist item.' };
-    }
 }

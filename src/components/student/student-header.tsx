@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { WhatsAppIcon } from '@/components/icons/whatsapp-icon';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
+import { FinalizeStudentDialog } from './finalize-student-dialog';
 
 
 interface StudentHeaderProps {
@@ -43,6 +44,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const cleanPhoneNumber = (student.phone || '').replace(/\D/g, '');
   const whatsappLink = `https://wa.me/965${cleanPhoneNumber}`; // Assuming Kuwait country code
   const canEdit = currentUser.role === 'admin' || currentUser.civilId === student.employeeId;
+  const canFinalize = (currentUser.role === 'admin' || currentUser.role === 'department') && !student.finalChoiceUniversity;
   
   const countryEmojis: Record<Country, string> = {
     UK: '🇬🇧',
@@ -84,6 +86,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 </BadgeComponent>
             )}
             {canEdit && <EditStudentDialog student={student} />}
+            {canFinalize && <FinalizeStudentDialog student={student} currentUser={currentUser} />}
           </div>
           {student.finalChoiceUniversity && (
             <div className="flex items-center gap-2 mt-2 text-lg font-semibold text-success">
