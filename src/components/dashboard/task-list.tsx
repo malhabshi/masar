@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -13,6 +14,7 @@ import { formatRelativeTime } from '@/lib/timestamp-utils';
 import type { Task, TaskReply } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { addReplyToTask } from '@/lib/actions';
 
 interface TaskListProps {
   tasks: Task[];
@@ -51,21 +53,29 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
         setIsReplying(prev => ({ ...prev, [taskId]: false }));
         return;
     }
+    
+    // Server action to handle permissions and notifications
+    const result = await addReplyToTask(taskId, currentUser.id, replyContent[taskId].trim(), task.authorId);
 
-    const newReply: TaskReply = {
-      id: `reply-${Date.now()}`,
-      authorId: currentUser.id,
-      content: replyContent[taskId].trim(),
-      createdAt: new Date().toISOString(),
-    };
-    
-    const taskDocRef = doc(firestore, 'tasks', taskId);
-    const updatedReplies = [...(task.replies || []), newReply];
-    updateDocumentNonBlocking(taskDocRef, { replies: updatedReplies });
-    
-    setReplyContent(prev => ({ ...prev, [taskId]: '' }));
+    if (result.success) {
+      const newReply: TaskReply = {
+        id: `reply-${Date.now()}`,
+        authorId: currentUser.id,
+        content: replyContent[taskId].trim(),
+        createdAt: new Date().toISOString(),
+      };
+      
+      const taskDocRef = doc(firestore, 'tasks', taskId);
+      const updatedReplies = [...(task.replies || []), newReply];
+      updateDocumentNonBlocking(taskDocRef, { replies: updatedReplies });
+      
+      setReplyContent(prev => ({ ...prev, [taskId]: '' }));
+      toast({ title: 'Reply sent' });
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: result.message });
+    }
+
     setIsReplying(prev => ({ ...prev, [taskId]: false }));
-    toast({ title: 'Reply sent' });
   };
 
   if (isLoading) {
@@ -116,21 +126,23 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
                 </div>
               )}
               
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Write a reply..."
-                  value={replyContent[task.id] || ''}
-                  onChange={(e) => setReplyContent(prev => ({ ...prev, [task.id]: e.target.value }))}
-                  className="flex-1"
-                />
-                <Button 
-                  size="sm" 
-                  onClick={() => handleReply(task.id)}
-                  disabled={isReplying[task.id] || !replyContent[task.id]?.trim()}
-                >
-                  {isReplying[task.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
-              </div>
+              {currentUser.role !== 'employee' && (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Write a reply..."
+                    value={replyContent[task.id] || ''}
+                    onChange={(e) => setReplyContent(prev => ({ ...prev, [task.id]: e.target.value }))}
+                    className="flex-1"
+                  />
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleReply(task.id)}
+                    disabled={isReplying[task.id] || !replyContent[task.id]?.trim()}
+                  >
+                    {isReplying[task.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+              )}
             </div>
           ))
         )}

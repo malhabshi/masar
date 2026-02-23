@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -211,13 +212,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
   const handleStatusChange = async (taskId: string, status: TaskStatus) => {
       setIsUpdatingStatus(taskId);
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Task not found or database not available.' });
-        setIsUpdatingStatus(null);
-        return;
-      }
-      const result = await updateTaskStatus(taskId, status, task);
+      const result = await updateTaskStatus(taskId, status, currentUser.id);
       if (result.success) {
           toast({
               title: "Task Status Updated",
@@ -229,7 +224,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
           toast({
               variant: 'destructive',
               title: "Error",
-              description: "Could not update the task status."
+              description: result.message
           });
       }
       setIsUpdatingStatus(null);
@@ -259,7 +254,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
         setReplyContent(prev => ({ ...prev, [taskId]: '' }));
     } else {
-        toast({ variant: 'destructive', title: "Error", description: "Could not send reply." });
+        toast({ variant: 'destructive', title: "Error", description: result.message });
     }
     setIsReplying(null);
   }

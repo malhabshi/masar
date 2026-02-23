@@ -153,6 +153,11 @@ export async function sendTask(authorId: string, recipientId: string, content: s
     if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     
     try {
+        const author = await getUser(authorId);
+        if (!author || !['admin', 'department'].includes(author.role)) {
+            return { success: false, message: 'You do not have permission to send tasks.' };
+        }
+
         const newTask: Omit<Task, 'id'> = {
             authorId,
             recipientId,
@@ -175,6 +180,11 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
     if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
 
     try {
+        const author = await getUser(authorId);
+        if (!author || !['admin', 'department'].includes(author.role)) {
+            return { success: false, message: 'You do not have permission to reply to tasks.' };
+        }
+
         const taskRef = adminDb!.collection('tasks').doc(taskId);
         const taskDoc = await taskRef.get();
         if (!taskDoc.exists) return { success: false, message: 'Task not found.' };
@@ -190,13 +200,13 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
         const updatedReplies = [...(taskData.replies || []), newReply];
         await taskRef.update({ replies: updatedReplies, status: 'in-progress' });
 
-        if (taskAuthorId !== authorId) {
-          const originalAuthor = await getUser(taskAuthorId);
+        if (taskData.authorId !== authorId) {
+          const originalAuthor = await getUser(taskData.authorId);
           if (originalAuthor) {
-            const taskContent = `You have a new reply on your task: "${taskData.content}"`;
+            const taskContent = `${author.name} replied to your task: "${taskData.content.substring(0, 30)}..."`;
             const notificationTask: Omit<Task, 'id'> = {
               authorId: 'system',
-              recipientId: taskAuthorId,
+              recipientId: taskData.authorId,
               content: taskContent,
               createdAt: new Date().toISOString(),
               status: 'new',
@@ -213,10 +223,37 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
     }
 }
 
-export async function updateTaskStatus(taskId: string, status: TaskStatus, task: Task) {
+export async function updateTaskStatus(taskId: string, status: TaskStatus, updaterId: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     try {
-        await adminDb!.collection('tasks').doc(taskId).update({ status });
+        const updater = await getUser(updaterId);
+        if (!updater || !['admin', 'department'].includes(updater.role)) {
+            return { success: false, message: 'You do not have permission to update task status.' };
+        }
+
+        const taskRef = adminDb!.collection('tasks').doc(taskId);
+        await taskRef.update({ status });
+
+        const taskDoc = await taskRef.get();
+        const taskData = taskDoc.data() as Task;
+
+        // Notify the original task author about the status change, if they aren't the one who changed it.
+        if (taskData.authorId !== updaterId) {
+            const author = await getUser(taskData.authorId);
+            if (author) {
+                 const taskContent = `The status of your task "${taskData.content.substring(0, 30)}..." was updated to '${status}' by ${updater.name}.`;
+                 const notificationTask: Omit<Task, 'id'> = {
+                    authorId: 'system',
+                    recipientId: author.id,
+                    content: taskContent,
+                    createdAt: new Date().toISOString(),
+                    status: 'new',
+                    replies: []
+                };
+                await adminDb!.collection('tasks').add(notificationTask);
+            }
+        }
+        
         return { success: true, message: 'Status updated.' };
     } catch(error) {
         console.error('updateTaskStatus error:', error);

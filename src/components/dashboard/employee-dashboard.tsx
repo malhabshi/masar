@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -31,21 +32,17 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
     const tasksToAllConstraints = useMemoFirebase(() => [where('recipientId', '==', 'all')], []);
     const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>('tasks', ...tasksToAllConstraints);
 
-    const tasksByMeConstraints = useMemoFirebase(() => [where('authorId', '==', currentUser.id)], [currentUser.id]);
-    const { data: tasksByMeData, isLoading: tasksByMeLoading } = useCollection<Task>('tasks', ...tasksByMeConstraints);
-
     const tasksToMe = useMemo(() => tasksToMeData || [], [tasksToMeData]);
     const tasksToAll = useMemo(() => tasksToAllData || [], [tasksToAllData]);
-    const tasksByMe = useMemo(() => tasksByMeData || [], [tasksByMeData]);
     
-    const tasksDataLoading = tasksToMeLoading || tasksToAllLoading || tasksByMeLoading;
+    const tasksDataLoading = tasksToMeLoading || tasksToAllLoading;
     const isLoading = studentsLoading || tasksDataLoading;
 
     const relevantTasks = useMemo(() => {
-        const allTasks = [...tasksToMe, ...tasksToAll, ...tasksByMe];
+        const allTasks = [...tasksToMe, ...tasksToAll];
         const uniqueTasks = Array.from(new Map(allTasks.map(task => [task.id, task])).values());
         return uniqueTasks.sort((a, b) => sortByDate(a, b));
-    }, [tasksToMe, tasksToAll, tasksByMe]);
+    }, [tasksToMe, tasksToAll]);
 
     const stats = useMemo(() => {
         const myTotalStudents = myStudents.length;

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -11,6 +12,7 @@ import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
+import { SendTaskForm } from './send-task-form';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
      const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>('students');
@@ -55,9 +57,14 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                     </CardContent>
                 </Card>
             </div>
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
-                <UpcomingEventsCard />
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                    <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
+                </div>
+                <div className="space-y-6">
+                    <SendTaskForm currentUser={currentUser} />
+                    <UpcomingEventsCard />
+                </div>
             </div>
         </div>
     )
