@@ -52,7 +52,20 @@ export async function addApplication(studentId: string, universityName: string, 
     await studentRef.update({ applications: updatedApplications });
 
     if (employeeId) {
-      console.log(`Action: Notify employee ${employeeId} about new application for ${studentName}`);
+      const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
+      if (!employeeQuery.empty) {
+          const employeeDocId = employeeQuery.docs[0].id;
+          const taskContent = `A new application for '${universityName}' has been added for your student, ${studentName}.`;
+          const newTask: Omit<Task, 'id'> = {
+              authorId: 'system',
+              recipientId: employeeDocId,
+              content: taskContent,
+              createdAt: new Date().toISOString(),
+              status: 'new',
+              replies: []
+          };
+          await adminDb!.collection('tasks').add(newTask);
+      }
     }
 
     return { success: true, message: `Application for ${universityName} added.` };
@@ -83,10 +96,20 @@ export async function updateApplicationStatus(studentId: string, universityName:
     await studentRef.update({ applications: updatedApplications });
 
     if (employeeId) {
-      const employee = await getUser(employeeId);
-      if(employee) {
-        console.log(`Action: Sent generic notification to ${employee.name} about application status change for ${studentName}.`);
-      }
+        const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
+        if (!employeeQuery.empty) {
+            const employeeDocId = employeeQuery.docs[0].id;
+            const taskContent = `The status for ${studentName}'s application to ${universityName} (${major}) has been updated to: ${newStatus}.`;
+            const newTask: Omit<Task, 'id'> = {
+                authorId: 'system',
+                recipientId: employeeDocId,
+                content: taskContent,
+                createdAt: new Date().toISOString(),
+                status: 'new',
+                replies: []
+            };
+            await adminDb!.collection('tasks').add(newTask);
+        }
     }
 
     return { success: true, message: 'Status updated.' };
@@ -138,14 +161,6 @@ export async function sendTask(authorId: string, recipientId: string, content: s
         };
         await adminDb!.collection('tasks').add(newTask);
         
-        if (recipientId !== 'all') {
-            const recipient = await getUser(recipientId);
-            if (recipient) {
-                console.log(`Action: Sent 'new task' notification to ${recipient.name}`);
-            }
-        } else {
-             console.log(`Task sent to all employees.`);
-        }
         return { success: true, message: 'Update sent.' };
 
     } catch(error) {
@@ -173,9 +188,20 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
         const updatedReplies = [...(taskData.replies || []), newReply];
         await taskRef.update({ replies: updatedReplies, status: 'in-progress' });
 
-        const originalAuthor = await getUser(taskAuthorId);
-        if (originalAuthor && originalAuthor.id !== authorId) {
-            console.log(`Action: Sent 'task reply' notification to ${originalAuthor.name}`);
+        if (taskAuthorId !== authorId) {
+          const originalAuthor = await getUser(taskAuthorId);
+          if (originalAuthor) {
+            const taskContent = `You have a new reply on your task: "${taskData.content}"`;
+            const notificationTask: Omit<Task, 'id'> = {
+              authorId: 'system',
+              recipientId: taskAuthorId,
+              content: taskContent,
+              createdAt: new Date().toISOString(),
+              status: 'new',
+              replies: [],
+            };
+            await adminDb!.collection('tasks').add(notificationTask);
+          }
         }
         
         return { success: true, message: 'Reply sent.' };
@@ -375,7 +401,16 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
         await studentRef.update(updates);
 
         if (newEmployee.id) {
-            console.log(`Action: Sent 'student transfer' notification to ${newEmployee.name}`);
+            const taskContent = `The student '${studentName}' has been transferred to you.`;
+            const newTask: Omit<Task, 'id'> = {
+                authorId: adminId,
+                recipientId: newEmployee.id,
+                content: taskContent,
+                createdAt: new Date().toISOString(),
+                status: 'new',
+                replies: []
+            };
+            await adminDb!.collection('tasks').add(newTask);
         }
 
         return { success: true, message: `Student ${studentName} transferred to ${newEmployee.name}.` };
@@ -669,15 +704,20 @@ export async function updateFinalChoice(studentId: string, universityName: strin
       notes: updatedNotes,
     });
     
-    // Notify the assigned employee
     if (employeeId) {
         const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
         if (!employeeQuery.empty) {
             const employeeDoc = employeeQuery.docs[0];
-            const employee = { id: employeeDoc.id, ...employeeDoc.data() } as User;
-            if (employee) {
-                console.log(`Action: Sent final choice notification to ${employee.name}`);
-            }
+            const taskContent = `The final university choice for your student, ${studentName}, has been set to: ${universityName}.`;
+            const newTask: Omit<Task, 'id'> = {
+                authorId: adminId,
+                recipientId: employeeDoc.id,
+                content: taskContent,
+                createdAt: new Date().toISOString(),
+                status: 'new',
+                replies: []
+            };
+            await adminDb!.collection('tasks').add(newTask);
         }
     }
 
