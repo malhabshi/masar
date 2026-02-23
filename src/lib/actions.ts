@@ -1,12 +1,12 @@
 'use server';
 
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, adminAuth } from '@/lib/firebase/admin';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus } from './types';
 import { sendTypedWhatsAppMessage, NotificationType } from './whatsapp-templates';
 
 // Helper to check if adminDb is available
-function checkAdminDb() {
-  if (!adminDb) {
+function checkAdminServices() {
+  if (!adminDb || !adminAuth) {
     console.error('Firebase Admin not initialized. Check FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 env var.');
     return false;
   }
@@ -15,7 +15,7 @@ function checkAdminDb() {
 
 // Helper to get user from DB
 async function getUser(userId: string): Promise<User | null> {
-    if (!checkAdminDb()) return null;
+    if (!checkAdminServices()) return null;
     const doc = await adminDb!.collection('users').doc(userId).get();
     if (!doc.exists) return null;
     return { id: doc.id, ...doc.data() } as User;
@@ -24,7 +24,7 @@ async function getUser(userId: string): Promise<User | null> {
 // --- NOTIFICATION ACTIONS ---
 
 async function sendWhatsAppMessage(userId: string, type: NotificationType, data: Record<string, string>) {
-  if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
 
   try {
     const user = await getUser(userId);
@@ -58,7 +58,7 @@ async function sendWhatsAppMessage(userId: string, type: NotificationType, data:
 // --- APPLICATION ACTIONS ---
 
 export async function addApplication(studentId: string, universityName: string, country: string, major: string, studentName: string, employeeId: string | null) {
-  if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
   
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -89,7 +89,7 @@ export async function addApplication(studentId: string, universityName: string, 
 }
 
 export async function updateApplicationStatus(studentId: string, universityName: string, major: string, newStatus: ApplicationStatus, studentName: string, employeeId: string | null) {
-  if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
 
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -124,7 +124,7 @@ export async function updateApplicationStatus(studentId: string, universityName:
 }
 
 export async function updateStudentPipelineStatus(studentId: string, status: string, userName: string, studentName: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -152,7 +152,7 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
 // --- TASK ACTIONS ---
 
 export async function sendTask(authorId: string, recipientId: string, content: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     
     try {
         const newTask: Omit<Task, 'id'> = {
@@ -183,7 +183,7 @@ export async function sendTask(authorId: string, recipientId: string, content: s
 }
 
 export async function addReplyToTask(taskId: string, authorId: string, content: string, taskAuthorId: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
 
     try {
         const taskRef = adminDb!.collection('tasks').doc(taskId);
@@ -215,7 +215,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus, task: Task) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     try {
         await adminDb!.collection('tasks').doc(taskId).update({ status });
         return { success: true, message: 'Status updated.' };
@@ -228,8 +228,56 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, task:
 
 // --- STUDENT & USER MANAGEMENT ACTIONS ---
 
+export async function createNewUser(userData: {
+  name: string;
+  email: string;
+  password: string;
+  civilId: string;
+  phone: string;
+  role: 'admin' | 'employee' | 'department';
+}) {
+  if (!checkAdminServices()) {
+    return { success: false, message: 'Admin services not available.' };
+  }
+
+  try {
+    const authUser = await adminAuth!.createUser({
+      email: userData.email,
+      password: userData.password,
+      displayName: userData.name,
+      phoneNumber: userData.phone,
+    });
+
+    const employeeId = userData.civilId.slice(-5);
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random&color=fff`;
+
+    const newUserForDb: Omit<User, 'id'> = {
+      name: userData.name,
+      email: userData.email,
+      phone: userData.phone,
+      role: userData.role,
+      avatarUrl,
+      civilId: userData.civilId,
+      employeeId: employeeId,
+    };
+
+    await adminDb!.collection('users').doc(authUser.uid).set(newUserForDb);
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error creating user:", error);
+    let message = 'An unexpected error occurred during user creation.';
+    if (error.code === 'auth/email-already-exists') {
+      message = 'This email address is already in use by another account.';
+    } else if (error.code === 'auth/invalid-password') {
+      message = 'The password must be at least 6 characters long.';
+    }
+    return { success: false, message: message };
+  }
+}
+
 export async function transferStudent(studentId: string, newEmployee: User, adminId: string, studentName: string, fromEmployeeName: string | null) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     if (!newEmployee.civilId) {
         return { success: false, message: 'Employee missing Civil ID.' };
     }
@@ -280,7 +328,7 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
 }
 
 export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
-    if (!checkAdminDb()) {
+    if (!checkAdminServices()) {
         return { success: false, message: 'Server database not available.' };
     }
     try {
@@ -331,7 +379,7 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 }
 
 export async function addNoteToStudent(studentId: string, authorId: string, content: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -354,7 +402,7 @@ export async function addNoteToStudent(studentId: string, authorId: string, cont
 }
 
 export async function addMissingItemToStudent(studentId: string, item: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -375,7 +423,7 @@ export async function addMissingItemToStudent(studentId: string, item: string) {
 }
 
 export async function removeMissingItemFromStudent(studentId: string, itemToRemove: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -392,7 +440,7 @@ export async function removeMissingItemFromStudent(studentId: string, itemToRemo
 }
 
 export async function markMissingItemAsReceived(studentId: string, itemReceived: string, userId: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -425,7 +473,7 @@ export async function markMissingItemAsReceived(studentId: string, itemReceived:
 // --- TODO ACTIONS ---
 
 export async function addTodo(userId: string, content: string) {
-  if (!checkAdminDb()) return { success: false, message: 'DB not available' };
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   
   try {
     const todoCollRef = adminDb!.collection('users').doc(userId).collection('personal_todos');
@@ -443,7 +491,7 @@ export async function addTodo(userId: string, content: string) {
 }
 
 export async function toggleTodo(userId: string, todoId: string, completed: boolean) {
-    if (!checkAdminDb()) return { success: false, message: 'DB not available' };
+    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
         const todoRef = adminDb!.collection('users').doc(userId).collection('personal_todos').doc(todoId);
         await todoRef.update({ completed: !completed });
@@ -455,7 +503,7 @@ export async function toggleTodo(userId: string, todoId: string, completed: bool
 }
 
 export async function deleteTodo(userId: string, todoId: string) {
-    if (!checkAdminDb()) return { success: false, message: 'DB not available' };
+    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
         const todoRef = adminDb!.collection('users').doc(userId).collection('personal_todos').doc(todoId);
         await todoRef.delete();
@@ -469,7 +517,7 @@ export async function deleteTodo(userId: string, todoId: string) {
 // --- MISC ACTIONS ---
 
 export async function importStudentsFromExcel(userId: string, fileName: string) {
-    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
     console.log(`User ${userId} initiated import from ${fileName}`);
     // This is a placeholder. Real implementation would parse the excel file and create student docs.
     // For now, it just creates a task for an admin to handle it manually.
@@ -488,7 +536,7 @@ export async function sendTestNotification(phoneNumber: string, userName: string
 }
 
 export async function onDocumentUploaded(documentId: string, studentId: string, documentName: string, uploaderId: string) {
-  if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
   
   try {
     const studentDoc = await adminDb!.collection('students').doc(studentId).get();
@@ -523,7 +571,7 @@ export async function onDocumentUploaded(documentId: string, studentId: string, 
     }
 
     if (recipientId && notificationType!) {
-      await sendWhatsAppMessage(recipientId, notificationType, notificationData);
+      await sendWhatsAppMessage(recipientId, notificationType!, notificationData);
     }
 
     return { success: true, message: 'Document upload notification processed.' };

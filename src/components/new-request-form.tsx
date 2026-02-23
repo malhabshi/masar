@@ -103,7 +103,7 @@ export function NewRequestForm() {
                 phone: values.phone,
                 employeeId: shouldBeAssigned ? currentUser.civilId! : null,
                 ...(shouldBeAssigned && { isNewForEmployee: true }),
-                avatarUrl: `https://picsum.photos/seed/s${Date.now()}/100/100`,
+                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(values.studentName)}&background=random&color=fff`,
                 applications: [],
                 notes: values.notes ? [{ id: `note-${Date.now()}`, authorId: currentUser.id, content: values.notes, createdAt: new Date().toISOString() }] : [],
                 documents: [],

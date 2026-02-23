@@ -11,10 +11,7 @@ import { Loader2, UserPlus } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { User } from '@/lib/types';
-import { auth, firestore } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { setDoc, doc } from 'firebase/firestore';
+import { createNewUser } from '@/lib/actions';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -48,42 +45,27 @@ export function CreateUserForm() {
     setIsLoading(true);
     
     try {
-        // 1. Create user in Firebase Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-        const authUser = userCredential.user;
-
-        // 2. Create user document in Firestore (WITHOUT password)
-        const employeeId = values.civilId.slice(-5);
-        const newUserForDb: Omit<User, 'id'> = {
-            name: values.name,
-            email: values.email,
-            phone: values.phone,
-            role: values.role,
-            avatarUrl: `https://picsum.photos/seed/u${Date.now()}/100/100`,
-            civilId: values.civilId,
-            employeeId: employeeId,
-        };
+        const result = await createNewUser(values);
         
-        // Use setDoc with the user's UID as the document ID
-        await setDoc(doc(firestore, "users", authUser.uid), newUserForDb);
-        
-        toast({
-            title: 'User Created!',
-            description: `${values.name} has been added to the system.`,
-        });
-        form.reset();
+        if (result.success) {
+            toast({
+                title: 'User Created!',
+                description: `${values.name} has been added to the system.`,
+            });
+            form.reset();
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Failed to create user',
+                description: result.message,
+            });
+        }
 
     } catch (error: any) {
-        let description = 'An unexpected error occurred.';
-        if (error.code === 'auth/email-already-in-use') {
-            description = 'This email address is already in use by another account.';
-        } else if (error.code === 'auth/weak-password') {
-            description = 'The password must be at least 8 characters long.';
-        }
         toast({
             variant: 'destructive',
             title: 'Failed to create user',
-            description: description,
+            description: error.message || 'An unexpected error occurred.',
         });
     } finally {
         setIsLoading(false);
