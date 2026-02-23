@@ -10,9 +10,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 });
     }
 
-    // Get the storage bucket from the now-centralized admin app instance.
-    // The bucket name must be specified if it's not set during initialization.
-    const bucket = storage.bucket('studio-9484431255-91d96.appspot.com');
+    // Get the default storage bucket from the initialized admin app.
+    const bucket = storage.bucket();
 
     // Parse the multipart form data from the request just once.
     const formData = await req.formData();

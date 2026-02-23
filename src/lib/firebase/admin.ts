@@ -19,12 +19,15 @@ const getServiceAccount = () => {
 };
 
 const serviceAccount = getServiceAccount();
+const bucketName = serviceAccount ? `${serviceAccount.project_id}.appspot.com` : undefined;
+
 
 // Initialize Firebase Admin only if service account exists
 if (!getApps().length && serviceAccount) {
   try {
     initializeApp({
-      credential: cert(serviceAccount)
+      credential: cert(serviceAccount),
+      storageBucket: bucketName
     });
     console.log('Firebase Admin initialized successfully');
   } catch (error) {
