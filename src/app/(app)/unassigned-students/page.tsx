@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { useUsers } from '@/contexts/users-provider';
+import { AddStudentDialog } from '@/components/student/add-student-dialog';
 
 export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
@@ -58,12 +59,15 @@ export default function UnassignedStudentsPage() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Unassigned Students</CardTitle>
-          <CardDescription>
-            A list of newly added students who need to be assigned to an
-            employee.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Unassigned Students</CardTitle>
+            <CardDescription>
+              A list of newly added students who need to be assigned to an
+              employee.
+            </CardDescription>
+          </div>
+          <AddStudentDialog />
         </CardHeader>
         <CardContent>
           <StudentTable

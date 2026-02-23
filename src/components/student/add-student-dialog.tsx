@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import type { Country } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -45,6 +46,7 @@ const formSchema = z.object({
 
 export function AddStudentDialog() {
     const { user: currentUser } = useUser();
+    const router = useRouter();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
@@ -81,12 +83,10 @@ export function AddStudentDialog() {
                 currentUser.civilId
             );
 
-            if (result.success) {
-                toast({
-                    title: "Student Added",
-                    description: `${result.studentName} has been added to the system.`,
-                });
-                
+            if (result.success && result.studentName) {
+                const shouldBeAssigned = currentUser.role === 'employee';
+                const returnTo = shouldBeAssigned ? '/applicants' : '/unassigned-students';
+                router.push(`/student-added?studentName=${encodeURIComponent(result.studentName)}&returnTo=${returnTo}`);
                 setIsOpen(false);
                 form.reset();
             } else {

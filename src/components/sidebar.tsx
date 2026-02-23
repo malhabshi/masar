@@ -43,7 +43,6 @@ export function AppSidebar() {
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
         { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
         { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'employee', 'department'] },
-        { href: '/new-request', label: 'Add Student', icon: PlusCircle, roles: ['employee'] },
         { href: '/employee-activity', label: 'Activity', icon: LineChart, roles: ['admin', 'department', 'employee'] },
     ];
     
