@@ -17,7 +17,8 @@ import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
 import { updateApplicationStatus } from '@/lib/actions';
 import { AddApplicationDialog } from './add-application-dialog';
-import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
+import { updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 
 interface StudentApplicationsProps {

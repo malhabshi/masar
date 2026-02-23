@@ -16,7 +16,8 @@ import type { User, Task } from '@/lib/types';
 import { sendTask as sendTaskAction } from '@/lib/actions';
 import { Loader2, Send } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { firestore, addDocumentNonBlocking } from '@/firebase/client';
+import { addDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 

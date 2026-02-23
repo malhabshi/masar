@@ -8,6 +8,7 @@ import type { Student, Application } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useUsers } from '@/hooks/use-users';
 import dynamic from 'next/dynamic';
+import { firestore } from '@/firebase';
 
 // Lazy load the recharts components
 const ResponsiveContainer = dynamic(

@@ -19,7 +19,8 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, FilePenLine } from 'lucide-react';
 import type { User } from '@/lib/types';
-import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
+import { updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 

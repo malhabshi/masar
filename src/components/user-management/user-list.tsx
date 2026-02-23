@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
+import { updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { EditUserDialog } from './edit-user-dialog';
 import { useUsers } from '@/contexts/users-provider';

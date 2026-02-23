@@ -19,7 +19,8 @@ import type { User } from '@/lib/types';
 import { importStudentsFromExcel } from '@/lib/actions';
 import { Loader2, FileUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
-import { firestore, addDocumentNonBlocking } from '@/firebase/client';
+import { addDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 

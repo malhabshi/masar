@@ -17,7 +17,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { User, Student, Document as StudentDocument } from '@/lib/types';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { firestore, updateDocumentNonBlocking } from '@/firebase/client';
+import { updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 
 interface UploadDocumentDialogProps {

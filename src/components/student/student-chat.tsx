@@ -17,7 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { firestore, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
+import { useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 
