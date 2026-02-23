@@ -911,3 +911,68 @@ export async function deleteStudent(studentId: string, adminId: string) {
         return { success: false, message: 'An unexpected server error occurred while deleting the student.' };
     }
 }
+
+// --- TIME LOG ACTIONS ---
+
+export async function clockIn(employeeId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const timeLogsRef = adminDb!.collection('time_logs');
+    
+    const existingLogQuery = await timeLogsRef
+      .where('employeeId', '==', employeeId)
+      .where('clockOut', '==', null)
+      .limit(1)
+      .get();
+      
+    if (!existingLogQuery.empty) {
+      return { success: false, message: 'You have an active clock-in session. Please clock out first.' };
+    }
+    
+    const newLog = {
+      employeeId,
+      date: today,
+      clockIn: new Date().toISOString(),
+      clockOut: null,
+      notes: '',
+    };
+    
+    await timeLogsRef.add(newLog);
+    
+    return { success: true, message: 'Clocked in successfully.' };
+  } catch (error) {
+    console.error('clockIn error:', error);
+    return { success: false, message: 'Failed to clock in.' };
+  }
+}
+
+export async function clockOut(employeeId: string, notes?: string) {
+  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  
+  try {
+    const timeLogsRef = adminDb!.collection('time_logs');
+    
+    const activeLogQuery = await timeLogsRef
+      .where('employeeId', '==', employeeId)
+      .where('clockOut', '==', null)
+      .limit(1)
+      .get();
+      
+    if (activeLogQuery.empty) {
+      return { success: false, message: 'No active clock-in session found to clock out from.' };
+    }
+    
+    const logDoc = activeLogQuery.docs[0];
+    await logDoc.ref.update({
+      clockOut: new Date().toISOString(),
+      notes: notes || '',
+    });
+    
+    return { success: true, message: 'Clocked out successfully.' };
+  } catch (error) {
+    console.error('clockOut error:', error);
+    return { success: false, message: 'Failed to clock out.' };
+  }
+}

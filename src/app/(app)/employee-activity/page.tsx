@@ -1,13 +1,14 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
 import type { TimeLog } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { DateRange } from 'react-day-picker';
-import { addDays, format, isAfter, isBefore } from 'date-fns';
+import { addDays, format } from 'date-fns';
 
 // UI Components
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -32,7 +33,7 @@ export default function EmployeeActivityPage() {
     });
     
     // Determine the query based on user role
-    const timeLogsQuery = useMemo(() => {
+    const timeLogsQuery = useMemoFirebase(() => {
         if (!currentUser) return [];
         if (currentUser.role === 'employee') {
             return [where('employeeId', '==', currentUser.id)];
@@ -53,6 +54,8 @@ export default function EmployeeActivityPage() {
         if (!allTimeLogs) return [];
         
         return allTimeLogs.filter(log => {
+            if (!log.clockOut) return false; // Only show completed logs
+
             const logDate = toDate(log.date);
             if (!logDate) return false;
 

@@ -114,7 +114,8 @@ export interface TimeLog {
   employeeId: string;
   date: string;
   clockIn: string;
-  clockOut: string;
+  clockOut?: string;
+  notes?: string;
 }
 
 export interface TaskReply {

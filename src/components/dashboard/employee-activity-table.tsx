@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -27,13 +28,14 @@ export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) 
     setIsClient(true);
   }, []);
 
-  const calculateTotalTime = (clockIn: string, clockOut: string) => {
+  const calculateTotalTime = (clockIn: string, clockOut?: string | null) => {
     const start = toDate(clockIn);
     const end = toDate(clockOut);
     if (!start || !end) {
-      return 'Invalid Time';
+      return 'N/A';
     }
     const diff = end.getTime() - start.getTime();
+    if (diff < 0) return 'Invalid';
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m`;
@@ -78,7 +80,7 @@ export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) 
                 </TableCell>
                 <TableCell>{isClient ? formatDate(log.date) : <Skeleton className="h-4 w-24" />}</TableCell>
                 <TableCell>{isClient ? toDate(log.clockIn)?.toLocaleTimeString() : <Skeleton className="h-4 w-16" />}</TableCell>
-                <TableCell>{isClient ? toDate(log.clockOut)?.toLocaleTimeString() : <Skeleton className="h-4 w-16" />}</TableCell>
+                <TableCell>{isClient && log.clockOut ? toDate(log.clockOut)?.toLocaleTimeString() : 'In Progress'}</TableCell>
                 <TableCell>{isClient ? calculateTotalTime(log.clockIn, log.clockOut) : <Skeleton className="h-4 w-12" />}</TableCell>
               </TableRow>
             );
