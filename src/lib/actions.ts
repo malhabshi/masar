@@ -17,7 +17,7 @@ import {
 // Helper to check if adminDb is available
 function checkAdminServices() {
   if (!adminDb || !adminAuth || !storage) {
-    console.error('Firebase Admin not initialized. Check FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 env var.');
+    console.error('Firebase Admin not initialized. Check server logs for "CRITICAL" errors regarding FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or SDK initialization.');
     return false;
   }
   return true;
@@ -34,7 +34,7 @@ async function getUser(userId: string): Promise<User | null> {
 // --- APPLICATION ACTIONS ---
 
 export async function addApplication(studentId: string, universityName: string, country: string, major: string, studentName: string, employeeId: string | null) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -78,7 +78,7 @@ export async function addApplication(studentId: string, universityName: string, 
 }
 
 export async function updateApplicationStatus(studentId: string, universityName: string, major: string, newStatus: ApplicationStatus, studentName: string, employeeId: string | null) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
 
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -122,7 +122,7 @@ export async function updateApplicationStatus(studentId: string, universityName:
 }
 
 export async function updateStudentPipelineStatus(studentId: string, status: string, userName: string, studentName: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -150,7 +150,7 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
 // --- TASK ACTIONS ---
 
 export async function sendTask(authorId: string, recipientId: string, content: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     
     try {
         const author = await getUser(authorId);
@@ -177,7 +177,7 @@ export async function sendTask(authorId: string, recipientId: string, content: s
 }
 
 export async function addReplyToTask(taskId: string, authorId: string, content: string, taskAuthorId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
 
     try {
         const author = await getUser(authorId);
@@ -224,7 +224,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus, updaterId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     try {
         const updater = await getUser(updaterId);
         if (!updater || !['admin', 'department'].includes(updater.role)) {
@@ -326,7 +326,7 @@ export async function createStudent(
   creatingUserCivilId?: string | null,
 ) {
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database not available.' };
+    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   }
 
   const { studentName, studentEmail, phone, targetCountries, otherCountry, notes } = values;
@@ -401,7 +401,7 @@ export async function createStudent(
 }
 
 export async function transferStudent(studentId: string, newEmployee: User, adminId: string, studentName: string, fromEmployeeName: string | null) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     if (!newEmployee.civilId) {
         return { success: false, message: 'Employee missing Civil ID.' };
     }
@@ -460,7 +460,7 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
 }
 
 export async function requestTransfer(studentId: string, reason: string, requestingEmployeeId: string, studentName: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -515,7 +515,7 @@ export async function requestTransfer(studentId: string, reason: string, request
 
 export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
     if (!checkAdminServices()) {
-        return { success: false, message: 'Server database not available.' };
+        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     }
     try {
         const fromEmployee = await getUser(fromEmployeeId);
@@ -565,7 +565,7 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 }
 
 export async function addNoteToStudent(studentId: string, authorId: string, content: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -588,7 +588,7 @@ export async function addNoteToStudent(studentId: string, authorId: string, cont
 }
 
 export async function addMissingItemToStudent(studentId: string, item: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -609,7 +609,7 @@ export async function addMissingItemToStudent(studentId: string, item: string) {
 }
 
 export async function removeMissingItemFromStudent(studentId: string, itemToRemove: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -626,7 +626,7 @@ export async function removeMissingItemFromStudent(studentId: string, itemToRemo
 }
 
 export async function markMissingItemAsReceived(studentId: string, itemReceived: string, userId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -704,7 +704,7 @@ export async function deleteTodo(userId: string, todoId: string) {
 
 export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean) {
     if (!checkAdminServices()) {
-        return { success: false, message: 'Server database not available.' };
+        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     }
 
     try {
@@ -722,7 +722,7 @@ export async function updateChecklistItem(studentId: string, itemKey: keyof Prof
 
 export async function updateFinalChoice(studentId: string, universityName: string, adminId: string, studentName: string, employeeId: string | null) {
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database not available.' };
+    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   }
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -769,7 +769,7 @@ export async function updateFinalChoice(studentId: string, universityName: strin
 
 export async function importStudentsFromExcel(formData: FormData) {
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database not available.' };
+    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   }
 
   const file = formData.get('file') as File | null;
@@ -913,7 +913,7 @@ async function deleteQueryBatch(query: FirebaseFirestore.Query, resolve: (value:
 
 export async function deleteStudent(studentId: string, adminId: string) {
     if (!checkAdminServices()) {
-        return { success: false, message: 'Server database not available.' };
+        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     }
 
     try {
@@ -999,7 +999,7 @@ export async function deleteStudent(studentId: string, adminId: string) {
 }
 
 export async function handleEmployeeLogin(userId: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   
   try {
     const user = await getUser(userId);
@@ -1041,7 +1041,7 @@ export async function handleEmployeeLogin(userId: string) {
 }
 
 export async function handleEmployeeLogout(userId: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   
   try {
     const timeLogsRef = adminDb!.collection('time_logs');
@@ -1122,7 +1122,7 @@ export async function closeInactiveSessions() {
 
 export async function updateUserAvatar(userId: string, avatarUrl: string) {
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database not available.' };
+    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   }
   try {
     const userRef = adminDb!.collection('users').doc(userId);
@@ -1139,7 +1139,7 @@ export async function getReportStats(dateRange: {
   to: string;
 }): Promise<{ success: boolean; data?: ReportStats; message?: string }> {
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database not available.' };
+    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
   }
 
   try {
