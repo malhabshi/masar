@@ -16,10 +16,6 @@ export default function SettingsPage() {
   const { user, isUserLoading } = useUser();
   const [isClient, setIsClient] = useState(false);
 
-  // Jotform Settings
-  const [jotformApiKey, setJotformApiKey] = useState('');
-  const [jotformFormId, setJotformFormId] = useState('');
-  
   // WhatsApp Settings
   const [wanotifierWebhookUrl, setWanotifierWebhookUrl] = useState('');
   const [testPhoneNumber, setTestPhoneNumber] = useState('');
@@ -43,13 +39,9 @@ export default function SettingsPage() {
   useEffect(() => {
     setIsClient(true);
     if (typeof window !== 'undefined') {
-      const savedJotformApi = localStorage.getItem('jotformApiKey') || '';
-      const savedJotformForm = localStorage.getItem('jotformFormId') || '';
       const savedWanotifier = localStorage.getItem('wanotifierWebhookUrl') || '';
       const savedNotifications = localStorage.getItem('notificationSettings');
       
-      setJotformApiKey(savedJotformApi);
-      setJotformFormId(savedJotformForm);
       setWanotifierWebhookUrl(savedWanotifier);
       
       if (savedNotifications) {
@@ -69,12 +61,6 @@ export default function SettingsPage() {
       applyTheme({ primary: savedPrimary, background: savedBackground, accent: savedAccent });
     }
   }, []);
-
-  const handleSaveJotform = () => {
-    localStorage.setItem('jotformApiKey', jotformApiKey);
-    localStorage.setItem('jotformFormId', jotformFormId);
-    toast({ title: 'Jotform settings saved!' });
-  };
 
   const handleSaveWhatsApp = () => {
     localStorage.setItem('wanotifierWebhookUrl', wanotifierWebhookUrl);
@@ -262,25 +248,6 @@ export default function SettingsPage() {
         </CardContent>
         <CardFooter>
           <Button onClick={handleSaveWhatsApp}>Save WhatsApp Settings</Button>
-        </CardFooter>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Jotform Integration</CardTitle>
-          <CardDescription>Connect to Jotform to receive new student submissions via webhook.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="jotform-api-key">API Key</Label>
-            <Input id="jotform-api-key" type="password" placeholder="Enter your Jotform API key" value={jotformApiKey} onChange={(e) => setJotformApiKey(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="jotform-form-id">Form ID</Label>
-            <Input id="jotform-form-id" type="text" placeholder="Enter the ID of your form" value={jotformFormId} onChange={(e) => setJotformFormId(e.target.value)} />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleSaveJotform}>Save Jotform Settings</Button>
         </CardFooter>
       </Card>
     </div>
