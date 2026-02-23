@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useMemo } from 'react';
@@ -9,7 +7,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { WhatsAppIcon } from '@/components/icons/whatsapp-icon';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
 import { FinalizeStudentDialog } from './finalize-student-dialog';
@@ -49,9 +46,6 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   if (isLoading || !student || !currentUser || usersLoading) {
     return <StudentHeaderSkeleton />;
   }
-
-  const cleanPhoneNumber = (student.phone || '').replace(/\D/g, '');
-  const whatsappLink = `https://wa.me/965${cleanPhoneNumber}`; // Assuming Kuwait country code
   
   const isAssignedEmployee = currentUser.civilId === student.employeeId;
   const canManage = ['admin', 'department'].includes(currentUser.role);
@@ -122,11 +116,6 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4" />
               <span>{student.phone || 'No Phone'}</span>
-              <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-green-500 hover:text-green-600">
-                <a href={whatsappLink} target="_blank" rel="noopener noreferrer" title="Chat on WhatsApp">
-                  <WhatsAppIcon className="h-5 w-5" />
-                </a>
-              </Button>
             </div>
           </div>
         </div>

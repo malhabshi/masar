@@ -1,11 +1,125 @@
-import * as React from 'react';
+'use client';
 
-export const WhatsAppIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
-    <title>WhatsApp</title>
-    <path
-      fill="currentColor"
-      d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.38 1.25 4.85L2 22l5.33-1.38c1.41.72 3.02 1.15 4.71 1.15h.01c5.46 0 9.91-4.45 9.91-9.91s-4.45-9.91-9.91-9.91zM12.04 20.15c-1.48 0-2.93-.39-4.19-1.09l-.3-.18-3.12.81.83-3.04-.2-.32c-.78-1.26-1.2-2.74-1.2-4.29 0-4.51 3.66-8.17 8.18-8.17 2.22 0 4.28.86 5.79 2.37 1.51 1.5 2.38 3.56 2.38 5.79-.02 4.5-3.68 8.16-8.16 8.16zm4.84-6.13c-.27-.13-1.58-.78-1.82-.87-.25-.09-.43-.13-.61.13-.18.27-.69.87-.84 1.04-.16.18-.31.2-.58.06-.27-.13-1.14-.42-2.17-1.34s-1.78-1.59-2.08-1.86c-.3-.27-.03-.42.12-.55.13-.12.29-.31.43-.46.15-.15.2-.2.3-.34.1-.14.05-.27-.02-.4-.08-.13-.61-1.47-.83-2-.22-.53-.44-.46-.61-.46s-.34 0-.51 0c-.18 0-.46.06-.7.34-.24.27-.93.9-1.07 2.19-.15 1.29.95 2.53 1.09 2.71.14.18 1.8 2.75 4.35 3.82.6.26 1.08.41 1.45.53.64.2 1.2.18 1.65.11.5-.07 1.58-.65 1.8-1.28.24-.64.24-1.18.16-1.28-.06-.11-.2-.17-.43-.3z"
-    />
-  </svg>
-);
+import { useMemo } from 'react';
+import type { Student, Country, User } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';
+import { Badge as BadgeComponent } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { EditStudentDialog } from './edit-student-dialog';
+import { Skeleton } from '../ui/skeleton';
+import { FinalizeStudentDialog } from './finalize-student-dialog';
+import { RequestTransferDialog } from './request-transfer-dialog';
+import { TransferStudentDialog } from './transfer-student-dialog';
+import { DeleteStudentDialog } from './delete-student-dialog';
+import { useCollection } from '@/firebase/client';
+
+
+interface StudentHeaderProps {
+  student: Student | null; // Allow null for loading state
+  currentUser: AppUser | null; // Allow null for loading state
+  isLoading?: boolean;
+}
+
+function StudentHeaderSkeleton() {
+    return (
+        <div className="mb-6">
+            <div className="flex flex-col md:flex-row items-start gap-6">
+                <Skeleton className="w-24 h-24 rounded-full" />
+                <div className="flex-1 space-y-2">
+                    <Skeleton className="h-8 w-64" />
+                    <Skeleton className="h-5 w-48" />
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2">
+                        <Skeleton className="h-5 w-40" />
+                        <Skeleton className="h-5 w-32" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
+  const { data: users, isLoading: usersLoading } = useCollection<User>('users');
+
+  if (isLoading || !student || !currentUser || usersLoading) {
+    return <StudentHeaderSkeleton />;
+  }
+  
+  const isAssignedEmployee = currentUser.civilId === student.employeeId;
+  const canManage = ['admin', 'department'].includes(currentUser.role);
+  const isAdmin = currentUser.role === 'admin';
+  const canEdit = canManage || isAssignedEmployee;
+
+  const canRequestTransfer = isAssignedEmployee && !student.transferRequested;
+  const canApproveTransfer = canManage && student.transferRequested;
+  const canFinalize = canManage && !student.finalChoiceUniversity;
+  const employeeUsers = (users || []).filter(u => u.role === 'employee');
+
+  const countryEmojis: Record<Country, string> = {
+    UK: '🇬🇧',
+    USA: '🇺🇸',
+    Australia: '🇦🇺',
+    'New Zealand': '🇳🇿',
+  };
+
+  const targetCountriesFromProps = student.targetCountries || [];
+  const applicationCountries = student.applications?.map(app => app.country) || [];
+  const allCountries = [...new Set([...targetCountriesFromProps, ...applicationCountries])];
+
+  return (
+    <div className="mb-6 relative">
+      {allCountries.length > 0 && (
+        <div className="absolute top-0 right-0 flex gap-2" title={allCountries.join(', ')}>
+            {allCountries.map(country => (
+                countryEmojis[country] ? (
+                  <div key={country} className="text-4xl">
+                      {countryEmojis[country]}
+                  </div>
+                ) : null
+            ))}
+        </div>
+      )}
+      <div className="flex flex-col md:flex-row items-start gap-6">
+        <Avatar className="w-24 h-24 border-4 border-card">
+          <AvatarImage src={student.avatarUrl} alt={student.name} data-ai-hint="student avatar" />
+          <AvatarFallback className="text-3xl">{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-3xl font-bold">{student.name || 'Unknown Student'}</h1>
+            {student.term && <BadgeComponent variant="secondary" className="text-base">{student.term}</BadgeComponent>}
+            {student.transferRequested && !canApproveTransfer && (
+                <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3">
+                    <ArrowRightLeft className="mr-2 h-4 w-4" />
+                    Transfer Requested
+                </BadgeComponent>
+            )}
+            {canEdit && <EditStudentDialog student={student} />}
+            {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
+            {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />}
+            {canFinalize && <FinalizeStudentDialog student={student} currentUser={currentUser} />}
+            {isAdmin && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
+          </div>
+          {student.finalChoiceUniversity && (
+            <div className="flex items-center gap-2 mt-2 text-lg font-semibold text-success">
+              <GraduationCap className="h-5 w-5" />
+              <span>{student.finalChoiceUniversity}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground mt-2">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              <span>{student.email || 'No Email'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4" />
+              <span>{student.phone || 'No Phone'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
