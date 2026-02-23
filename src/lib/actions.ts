@@ -793,10 +793,11 @@ export async function importStudentsFromExcel(formData: FormData) {
             submitKcoRequest: false,
             receivedCasOrI20: false,
             appliedForVisa: false,
-            documentsSubmittedToMohe: false,
-            readyToTravel: false,
-            financialStatementsProvided: false,
             visaGranted: false,
+            documentsSubmittedToMohe: false,
+            medicalFitnessSubmitted: false,
+            financialStatementsProvided: false,
+            readyToTravel: false,
         },
       };
 
