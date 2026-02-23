@@ -21,6 +21,7 @@ import { Loader2, UploadCloud } from 'lucide-react';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { validateFile, MAX_FILE_SIZE_MB, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 
 interface UploadDocumentDialogProps {
   student: Student;
@@ -35,7 +36,19 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      const validation = validateFile(selectedFile);
+      if (!validation.isValid) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid File',
+          description: validation.message,
+        });
+        setFile(null);
+        if (e.target) e.target.value = ''; // Reset input
+        return;
+      }
+      setFile(selectedFile);
     }
   };
 
@@ -126,13 +139,13 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
         <DialogHeader>
           <DialogTitle>Upload Document for {student.name}</DialogTitle>
           <DialogDescription>
-            The uploaded file will be added to the student's document list.
+            Max file size: {MAX_FILE_SIZE_MB}MB. Allowed types: PDF, Word, Excel, Images, Text.
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="document-file">File</Label>
-            <Input id="document-file" type="file" onChange={handleFileChange} />
+            <Input id="document-file" type="file" onChange={handleFileChange} accept={ALLOWED_FILE_EXTENSIONS} />
           </div>
         </div>
         <DialogFooter>

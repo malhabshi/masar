@@ -22,6 +22,8 @@ import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 import { useUser } from '@/hooks/use-user';
+import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
+
 
 interface StudentChatProps {
   student: Student;
@@ -74,7 +76,19 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      const validation = validateFile(selectedFile);
+      if (!validation.isValid) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid File',
+          description: validation.message,
+        });
+        setFile(null);
+        if (e.target) e.target.value = ''; // Reset input
+        return;
+      }
+      setFile(selectedFile);
     }
   };
 
@@ -281,6 +295,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
+              accept={ALLOWED_FILE_EXTENSIONS}
             />
             <Button
               type="button"
