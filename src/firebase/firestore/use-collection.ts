@@ -51,9 +51,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
   useEffect(() => {
     if (!memoizedQuery) {
-        if(path) { // Only set loading to false if path was provided but query failed
-            setIsLoading(false);
-        }
+      setIsLoading(false);
       return;
     }
 

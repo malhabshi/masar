@@ -54,9 +54,7 @@ export function useDoc<T>(path: string, ...pathSegments: string[]) {
 
   useEffect(() => {
     if (!memoizedDocRef) {
-      if (path) { // Only stop loading if path was provided but ref failed
-        setIsLoading(false);
-      }
+      setIsLoading(false);
       return;
     }
     
