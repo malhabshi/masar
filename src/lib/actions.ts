@@ -3,7 +3,6 @@
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus } from './types';
-import { sendTypedWhatsAppMessage, NotificationType } from './whatsapp-templates';
 import * as xlsx from 'xlsx';
 
 // Helper to check if adminDb is available
@@ -21,40 +20,6 @@ async function getUser(userId: string): Promise<User | null> {
     const doc = await adminDb!.collection('users').doc(userId).get();
     if (!doc.exists) return null;
     return { id: doc.id, ...doc.data() } as User;
-}
-
-// --- NOTIFICATION ACTIONS ---
-
-async function sendWhatsAppMessage(userId: string, type: NotificationType, data: Record<string, string>) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
-
-  try {
-    const user = await getUser(userId);
-    if (!user || !user.phone) {
-      console.log(`Notification not sent: User ${userId} not found or has no phone number.`);
-      return { success: false, message: 'User not found or has no phone number.' };
-    }
-    
-    const result = await sendTypedWhatsAppMessage(type, user.phone, data);
-
-    if (result.success) {
-        await adminDb!.collection('notification_logs').add({
-            type: 'whatsapp',
-            template: type,
-            recipientId: userId,
-            recipientPhone: user.phone,
-            status: 'sent',
-            timestamp: new Date().toISOString(),
-            data,
-        });
-    }
-
-    return result;
-
-  } catch (error) {
-    console.error(`Failed to send WhatsApp notification for user ${userId}:`, error);
-    return { success: false, message: String(error) };
-  }
 }
 
 // --- APPLICATION ACTIONS ---
@@ -112,9 +77,8 @@ export async function updateApplicationStatus(studentId: string, universityName:
 
     if (employeeId) {
       const employee = await getUser(employeeId);
-      if(employee?.phone) {
-        await sendWhatsAppMessage(employeeId, NotificationType.GENERIC_NOTIFICATION, { "1": employee.name });
-        console.log(`Sent generic notification to ${employee.name} about application status change for ${studentName}.`);
+      if(employee) {
+        console.log(`Action: Sent generic notification to ${employee.name} about application status change for ${studentName}.`);
       }
     }
 
@@ -169,9 +133,8 @@ export async function sendTask(authorId: string, recipientId: string, content: s
         
         if (recipientId !== 'all') {
             const recipient = await getUser(recipientId);
-            if (recipient?.phone) {
-                await sendWhatsAppMessage(recipientId, NotificationType.GENERIC_NOTIFICATION, { "1": recipient.name });
-                console.log(`Sent 'new task' notification to ${recipient.name}`);
+            if (recipient) {
+                console.log(`Action: Sent 'new task' notification to ${recipient.name}`);
             }
         } else {
              console.log(`Task sent to all employees.`);
@@ -204,9 +167,8 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
         await taskRef.update({ replies: updatedReplies, status: 'in-progress' });
 
         const originalAuthor = await getUser(taskAuthorId);
-        if (originalAuthor?.phone && originalAuthor.id !== authorId) {
-             await sendWhatsAppMessage(taskAuthorId, NotificationType.GENERIC_NOTIFICATION, { "1": originalAuthor.name });
-            console.log(`Sent 'task reply' notification to ${originalAuthor.name}`);
+        if (originalAuthor && originalAuthor.id !== authorId) {
+            console.log(`Action: Sent 'task reply' notification to ${originalAuthor.name}`);
         }
         
         return { success: true, message: 'Reply sent.' };
@@ -406,9 +368,8 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
 
         await studentRef.update(updates);
 
-        if (newEmployee.id && newEmployee.phone) {
-             await sendWhatsAppMessage(newEmployee.id, NotificationType.GENERIC_NOTIFICATION, { "1": newEmployee.name });
-            console.log(`Sent 'student transfer' notification to ${newEmployee.name}`);
+        if (newEmployee.id) {
+            console.log(`Action: Sent 'student transfer' notification to ${newEmployee.name}`);
         }
 
         return { success: true, message: `Student ${studentName} transferred to ${newEmployee.name}.` };
@@ -708,9 +669,8 @@ export async function updateFinalChoice(studentId: string, universityName: strin
         if (!employeeQuery.empty) {
             const employeeDoc = employeeQuery.docs[0];
             const employee = { id: employeeDoc.id, ...employeeDoc.data() } as User;
-            if (employee.phone) {
-                await sendWhatsAppMessage(employee.id, NotificationType.GENERIC_NOTIFICATION, { "1": employee.name });
-                console.log(`Sent final choice notification to ${employee.name}`);
+            if (employee) {
+                console.log(`Action: Sent final choice notification to ${employee.name}`);
             }
         }
     }
@@ -830,54 +790,6 @@ export async function importStudentsFromExcel(formData: FormData) {
   } catch (error) {
     console.error('Error importing students from Excel:', error);
     return { success: false, message: 'An error occurred while processing the file. Ensure it is a valid .xlsx, .xls, or .csv file.' };
-  }
-}
-
-export async function onDocumentUploaded(documentId: string, studentId: string, documentName: string, uploaderId: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
-  
-  try {
-    const studentDoc = await adminDb!.collection('students').doc(studentId).get();
-    if (!studentDoc.exists) return { success: false, message: 'Student not found' };
-
-    const student = studentDoc.data() as Student;
-    const uploader = await getUser(uploaderId);
-    
-    const isEmployeeUploader = uploader?.role === 'employee';
-    let recipientId: string | null = null;
-    let notificationType: NotificationType;
-    let notificationData: Record<string, string> = {};
-
-    if (isEmployeeUploader) {
-        const admins = (await adminDb!.collection('users').where('role', '==', 'admin').get()).docs;
-        if (admins.length > 0) {
-            recipientId = admins[0].id;
-            notificationType = NotificationType.DOCUMENT_UPLOAD_TO_ADMIN;
-            notificationData = { "1": admins[0].data().name, "2": uploader?.name || 'Unknown', "3": documentName, "4": student.name };
-        }
-    } else {
-        if (student.employeeId) {
-            const employeeQuery = await adminDb!.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
-            if (!employeeQuery.empty) {
-                const employeeDoc = employeeQuery.docs[0];
-                const employee = { id: employeeDoc.id, ...employeeDoc.data() } as User;
-                if (employee.phone) {
-                    recipientId = employee.id;
-                    notificationType = NotificationType.DOCUMENT_UPLOAD_TO_EMPLOYEE;
-                    notificationData = { "1": employee.name, "2": documentName, "3": student.name };
-                }
-            }
-        }
-    }
-
-    if (recipientId && notificationType!) {
-      await sendWhatsAppMessage(recipientId, notificationType!, notificationData);
-    }
-
-    return { success: true, message: 'Document upload notification processed.' };
-  } catch (error) {
-    console.error('Error in onDocumentUploaded:', error);
-    return { success: false, message: String(error) };
   }
 }
 

@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
@@ -13,10 +12,6 @@ import { useUser } from '@/hooks/use-user';
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
-  const [isClient, setIsClient] = useState(false);
-
-  // WhatsApp Settings
-  const [wanotifierWebhookUrl, setWanotifierWebhookUrl] = useState('');
   
   // Theme Settings
   const [primaryColor, setPrimaryColor] = useState('#5E60A4');
@@ -25,26 +20,8 @@ export default function SettingsPage() {
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // Notification Toggle Settings
-  const [notificationSettings, setNotificationSettings] = useState({
-    newStudentApplication: true,
-    applicationStatusChange: true,
-    newDocumentUpload: true,
-    taskAssigned: true,
-  });
-
   useEffect(() => {
-    setIsClient(true);
     if (typeof window !== 'undefined') {
-      const savedWanotifier = localStorage.getItem('wanotifierWebhookUrl') || '';
-      const savedNotifications = localStorage.getItem('notificationSettings');
-      
-      setWanotifierWebhookUrl(savedWanotifier);
-      
-      if (savedNotifications) {
-        setNotificationSettings(JSON.parse(savedNotifications));
-      }
-      
       const savedPrimary = localStorage.getItem('themePrimaryColor') || '#5E60A4';
       const savedBackground = localStorage.getItem('themeBackgroundColor') || '#EFF1F9';
       const savedAccent = localStorage.getItem('themeAccentColor') || '#7A6DA9';
@@ -55,18 +32,6 @@ export default function SettingsPage() {
       if(savedLogo) setLogoPreview(savedLogo);
     }
   }, []);
-
-  const handleSaveWhatsApp = () => {
-    localStorage.setItem('wanotifierWebhookUrl', wanotifierWebhookUrl);
-    toast({ title: 'WhatsApp settings saved!' });
-  };
-
-  const handleNotificationToggle = (key: keyof typeof notificationSettings, value: boolean) => {
-    const newSettings = { ...notificationSettings, [key]: value };
-    setNotificationSettings(newSettings);
-    localStorage.setItem('notificationSettings', JSON.stringify(newSettings));
-    toast({ title: 'Notification settings updated.' });
-  };
 
   const hexToHsl = (hex: string): string => {
     let r = 0, g = 0, b = 0;
@@ -182,41 +147,6 @@ export default function SettingsPage() {
         </CardContent>
         <CardFooter>
           <Button onClick={handleSaveTheme}>Save Theme</Button>
-        </CardFooter>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Notification Settings</CardTitle>
-          <CardDescription>Toggle which WhatsApp notifications are sent.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            {isClient && Object.entries(notificationSettings).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between">
-                    <Label htmlFor={`notif-${key}`} className="capitalize">
-                        {key.replace(/([A-Z])/g, ' $1')}
-                    </Label>
-                    <Switch
-                        id={`notif-${key}`}
-                        checked={value}
-                        onCheckedChange={(checked) => handleNotificationToggle(key as keyof typeof notificationSettings, checked)}
-                    />
-                </div>
-            ))}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>WhatsApp Settings</CardTitle>
-          <CardDescription>Configure the WANotifier.com webhook URL for notifications.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="wanotifier-url">Webhook URL</Label>
-            <Input id="wanotifier-url" type="url" placeholder="https://wanotifier.com/api/v1/webhook/..." value={wanotifierWebhookUrl} onChange={(e) => setWanotifierWebhookUrl(e.target.value)} />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleSaveWhatsApp}>Save WhatsApp Settings</Button>
         </CardFooter>
       </Card>
     </div>
