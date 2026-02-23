@@ -418,6 +418,60 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
     }
 }
 
+export async function requestTransfer(studentId: string, reason: string, requestingEmployeeId: string, studentName: string) {
+  if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
+  
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+    const employee = await getUser(requestingEmployeeId);
+    if (!employee) return { success: false, message: 'Requesting employee not found.' };
+
+    // 1. Set transferRequested flag on student
+    await studentRef.update({ transferRequested: true });
+
+    // 2. Add a note about the request
+    const studentData = studentDoc.data() as Student;
+    const newNote: Note = {
+      id: `note-transfer-req-${Date.now()}`,
+      authorId: requestingEmployeeId,
+      content: `Transfer requested. Reason: ${reason}`,
+      createdAt: new Date().toISOString(),
+    };
+    await studentRef.update({ notes: [...(studentData.notes || []), newNote] });
+
+    // 3. Create a task for all admins
+    const taskContent = `Employee ${employee.name} has requested to transfer student ${studentName}. Reason: ${reason}. Please go to the student's profile to approve the transfer.`;
+    
+    const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
+    if (adminsSnapshot.empty) {
+        console.log('No admins found to create transfer request task for.');
+    } else {
+        const batch = adminDb!.batch();
+        adminsSnapshot.forEach(adminDoc => {
+            const taskRef = adminDb!.collection('tasks').doc();
+            const newTask: Omit<Task, 'id'> = {
+                authorId: requestingEmployeeId,
+                recipientId: adminDoc.id,
+                content: taskContent,
+                createdAt: new Date().toISOString(),
+                status: 'new',
+                replies: []
+            };
+            batch.set(taskRef, newTask);
+        });
+        await batch.commit();
+    }
+    
+    return { success: true, message: 'Transfer request submitted. An admin will review it.' };
+  } catch (error) {
+    console.error('requestTransfer error:', error);
+    return { success: false, message: 'Failed to submit transfer request.' };
+  }
+}
+
 export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database not available.' };
@@ -807,9 +861,11 @@ export async function onDocumentUploaded(documentId: string, studentId: string, 
             if (!employeeQuery.empty) {
                 const employeeDoc = employeeQuery.docs[0];
                 const employee = { id: employeeDoc.id, ...employeeDoc.data() } as User;
-                recipientId = employee.id;
-                notificationType = NotificationType.DOCUMENT_UPLOAD_TO_EMPLOYEE;
-                notificationData = { "1": employee.name, "2": documentName, "3": student.name };
+                if (employee.phone) {
+                    recipientId = employee.id;
+                    notificationType = NotificationType.DOCUMENT_UPLOAD_TO_EMPLOYEE;
+                    notificationData = { "1": employee.name, "2": documentName, "3": student.name };
+                }
             }
         }
     }

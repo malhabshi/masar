@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Student, Country } from '@/lib/types';
@@ -10,6 +11,9 @@ import { WhatsAppIcon } from '@/components/icons/whatsapp-icon';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
 import { FinalizeStudentDialog } from './finalize-student-dialog';
+import { RequestTransferDialog } from './request-transfer-dialog';
+import { TransferStudentDialog } from './transfer-student-dialog';
+import { useUsers } from '@/contexts/users-provider';
 
 
 interface StudentHeaderProps {
@@ -37,15 +41,24 @@ function StudentHeaderSkeleton() {
 }
 
 export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
-  if (isLoading || !student || !currentUser) {
+  const { users, usersLoading } = useUsers();
+
+  if (isLoading || !student || !currentUser || usersLoading) {
     return <StudentHeaderSkeleton />;
   }
 
   const cleanPhoneNumber = (student.phone || '').replace(/\D/g, '');
   const whatsappLink = `https://wa.me/965${cleanPhoneNumber}`; // Assuming Kuwait country code
-  const canEdit = currentUser.role === 'admin' || currentUser.civilId === student.employeeId;
-  const canFinalize = (currentUser.role === 'admin' || currentUser.role === 'department') && !student.finalChoiceUniversity;
   
+  const isAssignedEmployee = currentUser.civilId === student.employeeId;
+  const canManage = ['admin', 'department'].includes(currentUser.role);
+  const canEdit = canManage || isAssignedEmployee;
+
+  const canRequestTransfer = isAssignedEmployee && !student.transferRequested;
+  const canApproveTransfer = canManage && student.transferRequested;
+  const canFinalize = canManage && !student.finalChoiceUniversity;
+  const employeeUsers = users.filter(u => u.role === 'employee');
+
   const countryEmojis: Record<Country, string> = {
     UK: '🇬🇧',
     USA: '🇺🇸',
@@ -76,16 +89,18 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           <AvatarFallback className="text-3xl">{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
         </Avatar>
         <div className="flex-1">
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-bold">{student.name || 'Unknown Student'}</h1>
             {student.term && <BadgeComponent variant="secondary" className="text-base">{student.term}</BadgeComponent>}
-            {student.transferRequested && (
+            {student.transferRequested && !canApproveTransfer && (
                 <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3">
                     <ArrowRightLeft className="mr-2 h-4 w-4" />
                     Transfer Requested
                 </BadgeComponent>
             )}
             {canEdit && <EditStudentDialog student={student} />}
+            {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
+            {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />}
             {canFinalize && <FinalizeStudentDialog student={student} currentUser={currentUser} />}
           </div>
           {student.finalChoiceUniversity && (

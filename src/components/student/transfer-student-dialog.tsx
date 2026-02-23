@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -22,7 +23,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { transferStudent } from '@/lib/actions';
 import type { Student, User, Note } from '@/lib/types';
-import { Loader2, Users } from 'lucide-react';
+import type { AppUser } from '@/hooks/use-user';
+import { Loader2, ArrowRightLeft } from 'lucide-react';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -30,7 +32,7 @@ import { doc } from 'firebase/firestore';
 interface TransferStudentDialogProps {
   student: Student;
   employees: User[];
-  currentUser: User;
+  currentUser: AppUser;
 }
 
 export function TransferStudentDialog({ student, employees, currentUser }: TransferStudentDialogProps) {
@@ -117,9 +119,12 @@ export function TransferStudentDialog({ student, employees, currentUser }: Trans
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant={isAssignAction ? 'default' : 'outline'}>
-          <Users className="mr-2 h-4 w-4" />
-          {isAssignAction ? 'Assign' : 'Transfer Student'}
+        <Button 
+          variant='outline'
+          className={student.transferRequested ? 'border-yellow-500 text-yellow-600 hover:bg-yellow-500/10 hover:text-yellow-700' : ''}
+        >
+          <ArrowRightLeft className="mr-2 h-4 w-4" />
+          {isAssignAction ? 'Assign' : student.transferRequested ? 'Approve Transfer' : 'Transfer Student'}
         </Button>
       </DialogTrigger>
       <DialogContent>
