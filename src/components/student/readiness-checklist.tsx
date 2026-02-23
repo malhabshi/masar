@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -38,7 +37,7 @@ export function ReadinessChecklist({ student, currentUser }: ReadinessChecklistP
   const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
 
   const canManage = currentUser.role === 'admin' || currentUser.role === 'department';
-  const status = student.profileCompletionStatus || {};
+  const status: Partial<ProfileCompletionStatus> = student.profileCompletionStatus || {};
 
   const handleToggle = async (itemKey: keyof ProfileCompletionStatus, currentValue: boolean) => {
     if (!canManage) return;
