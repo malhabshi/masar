@@ -12,6 +12,7 @@ import { Loader2, ArrowRightLeft } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { User, Task } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { addDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
@@ -27,7 +28,7 @@ const formSchema = z.object({
 });
 
 interface BulkTransferFormProps {
-    currentUser: User;
+    currentUser: AppUser;
 }
 
 export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {

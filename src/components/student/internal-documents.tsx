@@ -1,6 +1,7 @@
 'use client';
 
-import type { Document, User, Student, UserRole } from '@/lib/types';
+import type { Document, Student, UserRole } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,7 +14,7 @@ import { useUsers } from '@/contexts/users-provider';
 
 interface InternalDocumentsProps {
   student: Student;
-  currentUser: User;
+  currentUser: AppUser;
   title: string;
   allowUpload: boolean;
 }

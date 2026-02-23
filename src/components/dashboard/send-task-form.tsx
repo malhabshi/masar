@@ -20,9 +20,10 @@ import { addDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
+import type { AppUser } from '@/hooks/use-user';
 
 interface SendTaskFormProps {
-  currentUser: User;
+  currentUser: AppUser;
 }
 
 const formSchema = z.object({

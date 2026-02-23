@@ -1,6 +1,7 @@
 'use client';
 
-import type { Student, User, Country } from '@/lib/types';
+import type { Student, Country } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
@@ -12,7 +13,7 @@ import { Skeleton } from '../ui/skeleton';
 
 interface StudentHeaderProps {
   student: Student | null; // Allow null for loading state
-  currentUser: User | null; // Allow null for loading state
+  currentUser: AppUser | null; // Allow null for loading state
   isLoading?: boolean;
 }
 

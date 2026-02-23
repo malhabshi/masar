@@ -1,6 +1,7 @@
 'use client';
 import { useState, useMemo } from 'react';
-import type { Student, User, Note } from '@/lib/types';
+import type { Student, Note } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,7 +16,7 @@ import { useUsers } from '@/contexts/users-provider';
 
 interface NotesSectionProps {
   student: Student;
-  currentUser: User;
+  currentUser: AppUser;
   title: string;
   readOnly: boolean;
 }

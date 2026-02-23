@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/client';
-import type { Student, Task, User } from '@/lib/types';
+import type { Student, Task } from '@/lib/types';
 import { Loader2, Users, FileText, UserPlus } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 
@@ -12,8 +12,9 @@ import { TaskList } from '@/components/dashboard/task-list';
 import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { ImportStudentsDialog } from '@/components/dashboard/import-students-dialog';
+import type { AppUser } from '@/hooks/use-user';
 
-export default function AdminDashboard({ currentUser }: { currentUser: User }) {
+export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
   const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>('students');
   const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>('tasks');
 

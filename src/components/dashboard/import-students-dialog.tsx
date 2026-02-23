@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { User } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { importStudentsFromExcel } from '@/lib/actions';
 import { Loader2, FileUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -25,7 +25,7 @@ import { collection } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
 
 interface ImportStudentsDialogProps {
-  currentUser: User;
+  currentUser: AppUser;
 }
 
 export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps) {

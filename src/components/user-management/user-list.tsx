@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { User, UserRole } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
@@ -21,7 +22,7 @@ import { EditUserDialog } from './edit-user-dialog';
 import { useUsers } from '@/contexts/users-provider';
 
 interface UserListProps {
-  currentUser: User;
+  currentUser: AppUser;
 }
 
 const userRoles: UserRole[] = ['admin', 'employee', 'department'];

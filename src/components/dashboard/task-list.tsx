@@ -10,12 +10,13 @@ import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2, Send } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
-import type { Task, User, TaskReply } from '@/lib/types';
+import type { Task, TaskReply } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { useUsers } from '@/contexts/users-provider';
 
 interface TaskListProps {
   tasks: Task[];
-  currentUser: User;
+  currentUser: AppUser;
   isLoading: boolean;
 }
 

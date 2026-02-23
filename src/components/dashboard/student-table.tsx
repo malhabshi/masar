@@ -13,7 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle } from 'lucide-react';
-import type { Student, User, PipelineStatus } from '@/lib/types';
+import type { Student, PipelineStatus } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +32,7 @@ import { useUsers } from '@/contexts/users-provider';
 
 interface StudentTableProps {
   students: Student[];
-  currentUser: User;
+  currentUser: AppUser;
   showEmployee?: boolean;
   showPipelineStatus?: boolean;
   showIelts?: boolean;

@@ -2,16 +2,17 @@
 
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/client';
-import type { Student, Task, User } from '@/lib/types';
+import type { Student, Task } from '@/lib/types';
 import { Users, FileText } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
+import type { AppUser } from '@/hooks/use-user';
 
 // Components
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 
-export default function DepartmentDashboard({ currentUser }: { currentUser: User }) {
+export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
      const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>('students');
      const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>('tasks');
      

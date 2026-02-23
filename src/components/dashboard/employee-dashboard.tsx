@@ -3,9 +3,10 @@
 import { useMemo } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
-import type { Student, Task, User } from '@/lib/types';
+import type { Student, Task } from '@/lib/types';
 import { Users, FileText } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
+import type { AppUser } from '@/hooks/use-user';
 
 // Components
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,7 @@ import { TaskList } from '@/components/dashboard/task-list';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 
-export default function EmployeeDashboard({ currentUser }: { currentUser: User }) {
+export default function EmployeeDashboard({ currentUser }: { currentUser: AppUser }) {
     const myStudentsConstraints = useMemoFirebase(() => {
         return currentUser.civilId ? [where('employeeId', '==', currentUser.civilId)] : [];
     }, [currentUser.civilId]);
