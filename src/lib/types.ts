@@ -116,6 +116,7 @@ export interface TimeLog {
   date: string;
   clockIn: string;
   clockOut?: string | null;
+  lastSeen?: string;
   notes?: string;
 }
 

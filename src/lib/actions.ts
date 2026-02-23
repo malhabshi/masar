@@ -10,6 +10,7 @@ import {
   parseISO,
   format,
   differenceInMinutes,
+  subMinutes,
 } from 'date-fns';
 
 
@@ -966,13 +967,11 @@ export async function handleEmployeeLogin(userId: string) {
   try {
     const user = await getUser(userId);
     if (!user || user.role !== 'employee') {
-      // Not an employee, so no time tracking needed.
       return { success: true, message: 'Not an employee.' };
     }
 
     const timeLogsRef = adminDb!.collection('time_logs');
     
-    // Safety check: Find and close any dangling open sessions for this user
     const activeLogQuery = await timeLogsRef
       .where('employeeId', '==', userId)
       .where('clockOut', '==', null)
@@ -987,13 +986,12 @@ export async function handleEmployeeLogin(userId: string) {
       console.warn(`Closed ${activeLogQuery.size} dangling session(s) for employee ${userId}.`);
     }
     
-    // Create new clock-in record
     const newLog = {
       employeeId: userId,
       date: new Date().toISOString().split('T')[0],
       clockIn: new Date().toISOString(),
       clockOut: null,
-      notes: 'Automatic session tracking.',
+      lastSeen: new Date().toISOString(),
     };
     
     await timeLogsRef.add(newLog);
@@ -1032,6 +1030,57 @@ export async function handleEmployeeLogout(userId: string) {
     console.error('handleEmployeeLogout error:', error);
     return { success: false, message: 'Failed to end session.' };
   }
+}
+
+export async function keepAlive(userId: string) {
+    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+    try {
+        const activeLogQuery = await adminDb!
+            .collection('time_logs')
+            .where('employeeId', '==', userId)
+            .where('clockOut', '==', null)
+            .orderBy('clockIn', 'desc')
+            .limit(1)
+            .get();
+
+        if (!activeLogQuery.empty) {
+            const logDoc = activeLogQuery.docs[0];
+            await logDoc.ref.update({ lastSeen: new Date().toISOString() });
+        }
+        return { success: true };
+    } catch (error) {
+        console.error('keepAlive error:', error);
+        return { success: false, message: 'Failed to update session.' };
+    }
+}
+
+export async function closeInactiveSessions() {
+    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+    try {
+        const fiveMinutesAgo = subMinutes(new Date(), 2).toISOString();
+        const inactiveSessionsQuery = await adminDb!
+            .collection('time_logs')
+            .where('clockOut', '==', null)
+            .where('lastSeen', '<', fiveMinutesAgo)
+            .get();
+
+        if (inactiveSessionsQuery.empty) {
+            return { success: true, message: 'No inactive sessions to close.' };
+        }
+
+        const batch = adminDb!.batch();
+        inactiveSessionsQuery.docs.forEach(doc => {
+            const log = doc.data() as TimeLog;
+            // Clock out at the last seen time
+            batch.update(doc.ref, { clockOut: log.lastSeen });
+        });
+        await batch.commit();
+
+        return { success: true, message: `Closed ${inactiveSessionsQuery.size} inactive sessions.` };
+    } catch (error) {
+        console.error('closeInactiveSessions error:', error);
+        return { success: false, message: 'Failed to close inactive sessions.' };
+    }
 }
 
 export async function updateUserAvatar(userId: string, avatarUrl: string) {

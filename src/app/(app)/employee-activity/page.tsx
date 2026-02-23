@@ -1,13 +1,14 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { TimeLog } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { DateRange } from 'react-day-picker';
 import { addDays, format } from 'date-fns';
+import { closeInactiveSessions } from '@/lib/actions';
 
 // UI Components
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -33,6 +34,13 @@ export default function EmployeeActivityPage() {
         to: new Date(),
     });
     
+    // Close inactive sessions when an admin/dept views this page
+    useEffect(() => {
+        if (currentUser && ['admin', 'department'].includes(currentUser.role)) {
+            closeInactiveSessions();
+        }
+    }, [currentUser]);
+
     // Determine the query based on user role
     const timeLogsQuery = useMemoFirebase(() => {
         if (!currentUser) return [];

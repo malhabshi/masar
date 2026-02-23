@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
+import { useHeartbeat } from '@/hooks/use-heartbeat';
 import { AppSidebar } from '@/components/sidebar';
 import { Loader2 } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -14,6 +15,9 @@ export default function AuthenticatedLayout({
 }) {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  
+  // Initialize the heartbeat hook for the logged-in user
+  useHeartbeat();
 
   useEffect(() => {
     if (!isUserLoading && !user) {
