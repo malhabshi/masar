@@ -1,4 +1,5 @@
 
+
 export type UserRole = 'admin' | 'employee' | 'department';
 
 export interface User {
@@ -114,7 +115,7 @@ export interface TimeLog {
   employeeId: string;
   date: string;
   clockIn: string;
-  clockOut?: string;
+  clockOut?: string | null;
   notes?: string;
 }
 
@@ -200,4 +201,15 @@ export interface ApplicationQuestion {
   sortOrder: number;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface ReportStats {
+  totalStudents: number;
+  totalApplications: number;
+  totalEmployees: number;
+  applicationStatusData: { name: string; count: number }[];
+  studentEmployeeData: { name: string; count: number }[];
+  studentGrowthData: { date: string; count: number }[];
+  applicationCountryData: { name: string; count: number }[];
+  employeeHoursData: { name: string; hours: number }[];
 }

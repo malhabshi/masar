@@ -2,8 +2,15 @@
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats } from './types';
 import * as xlsx from 'xlsx';
+import {
+  isWithinInterval,
+  parseISO,
+  format,
+  differenceInMinutes,
+} from 'date-fns';
+
 
 // Helper to check if adminDb is available
 function checkAdminServices() {
@@ -252,7 +259,6 @@ export async function createStudent(
   creatingUserId: string,
   creatingUserRole: UserRole,
   creatingUserCivilId?: string | null,
-  isForUnassigned: boolean = false
 ) {
   if (!checkAdminServices()) {
     return { success: false, message: 'Server database not available.' };
@@ -260,7 +266,7 @@ export async function createStudent(
 
   const { studentName, studentEmail, phone, targetCountries, otherCountry, notes } = values;
 
-  const shouldBeAssigned = creatingUserRole === 'employee' && !isForUnassigned;
+  const shouldBeAssigned = creatingUserRole === 'employee';
 
   if (shouldBeAssigned && !creatingUserCivilId) {
     return {
@@ -988,5 +994,122 @@ export async function updateUserAvatar(userId: string, avatarUrl: string) {
   } catch (error) {
     console.error('updateUserAvatar error:', error);
     return { success: false, message: 'Failed to update avatar.' };
+  }
+}
+
+export async function getReportStats(dateRange: {
+  from: string;
+  to: string;
+}): Promise<{ success: boolean; data?: ReportStats; message?: string }> {
+  if (!checkAdminServices()) {
+    return { success: false, message: 'Server database not available.' };
+  }
+
+  try {
+    const fromDate = parseISO(dateRange.from);
+    const toDate = parseISO(dateRange.to);
+    const interval = { start: fromDate, end: toDate };
+
+    // Fetch all necessary data
+    const [studentsSnap, usersSnap, timeLogsSnap] = await Promise.all([
+      adminDb!.collection('students').get(),
+      adminDb!.collection('users').get(),
+      adminDb!.collection('time_logs').get(),
+    ]);
+
+    const allStudents = studentsSnap.docs.map(doc => doc.data() as Student);
+    const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+    const allTimeLogs = timeLogsSnap.docs.map(doc => doc.data() as TimeLog);
+
+    // --- Aggregations ---
+
+    // Filter students and applications by date range
+    const studentsInDateRange = allStudents.filter(s =>
+      isWithinInterval(parseISO(s.createdAt), interval)
+    );
+    const applicationsInDateRange = allStudents
+      .flatMap(s => s.applications || [])
+      .filter(app => isWithinInterval(parseISO(app.updatedAt), interval));
+
+    // 1. Totals
+    const totalStudents = allStudents.length;
+    const totalApplications = allStudents.reduce(
+      (acc, s) => acc + (s.applications?.length || 0),
+      0
+    );
+    const totalEmployees = allUsers.filter(u => u.role === 'employee').length;
+
+    // 2. Application Status (within date range)
+    const statusCounts = applicationsInDateRange.reduce((acc, app) => {
+      acc[app.status] = (acc[app.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const applicationStatusData = Object.entries(statusCounts).map(
+      ([name, count]) => ({ name, count })
+    );
+
+    // 3. Students per Employee (snapshot, not date-based)
+    const employeeMap = new Map<string, string>();
+    allUsers
+      .filter(u => u.role === 'employee')
+      .forEach(u => u.civilId && employeeMap.set(u.civilId, u.name));
+
+    const studentCountsByEmployee = allStudents.reduce((acc, student) => {
+      const employeeName = student.employeeId
+        ? employeeMap.get(student.employeeId) || 'Unassigned'
+        : 'Unassigned';
+      acc[employeeName] = (acc[employeeName] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const studentEmployeeData = Object.entries(studentCountsByEmployee).map(
+      ([name, count]) => ({ name, count })
+    );
+
+    // 4. Student Growth (within date range)
+    const growthCounts = studentsInDateRange.reduce((acc, student) => {
+      const date = format(parseISO(student.createdAt), 'yyyy-MM-dd');
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const studentGrowthData = Object.entries(growthCounts)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // 5. Applications by Country (within date range)
+    const countryCounts = applicationsInDateRange.reduce((acc, app) => {
+        acc[app.country] = (acc[app.country] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+    const applicationCountryData = Object.entries(countryCounts).map(([name, count]) => ({ name, count }));
+
+    // 6. Employee Hours Logged (within date range)
+    const employeeHours = allTimeLogs
+      .filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval))
+      .reduce((acc, log) => {
+          const user = allUsers.find(u => u.id === log.employeeId);
+          if (user) {
+              const minutes = differenceInMinutes(parseISO(log.clockOut!), parseISO(log.clockIn));
+              const hours = minutes / 60;
+              acc[user.name] = (acc[user.name] || 0) + hours;
+          }
+          return acc;
+      }, {} as Record<string, number>);
+    const employeeHoursData = Object.entries(employeeHours).map(([name, hours]) => ({ name, hours: parseFloat(hours.toFixed(1))}));
+
+    const stats: ReportStats = {
+      totalStudents,
+      totalApplications,
+      totalEmployees,
+      applicationStatusData,
+      studentEmployeeData,
+      studentGrowthData,
+      applicationCountryData,
+      employeeHoursData
+    };
+
+    return { success: true, data: stats };
+  } catch (error: any) {
+    console.error('getReportStats error:', error);
+    return { success: false, message: error.message };
   }
 }
