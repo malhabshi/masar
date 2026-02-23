@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { sendTestNotification } from '@/lib/actions';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 
@@ -18,8 +17,6 @@ export default function SettingsPage() {
 
   // WhatsApp Settings
   const [wanotifierWebhookUrl, setWanotifierWebhookUrl] = useState('');
-  const [testPhoneNumber, setTestPhoneNumber] = useState('');
-  const [isTesting, setIsTesting] = useState(false);
   
   // Theme Settings
   const [primaryColor, setPrimaryColor] = useState('#5E60A4');
@@ -66,21 +63,6 @@ export default function SettingsPage() {
     localStorage.setItem('wanotifierWebhookUrl', wanotifierWebhookUrl);
     toast({ title: 'WhatsApp settings saved!' });
   };
-  
-  const handleTestWhatsApp = async () => {
-    if (!testPhoneNumber) {
-        toast({ variant: 'destructive', title: 'Phone number is required for testing.'});
-        return;
-    }
-    setIsTesting(true);
-    const result = await sendTestNotification(testPhoneNumber, user?.name || 'User');
-    if (result.success) {
-        toast({ title: 'Test Sent!', description: 'Check the provided phone number for a message.' });
-    } else {
-        toast({ variant: 'destructive', title: 'Test Failed', description: result.message });
-    }
-    setIsTesting(false);
-  }
 
   const handleNotificationToggle = (key: keyof typeof notificationSettings, value: boolean) => {
     const newSettings = { ...notificationSettings, [key]: value };
@@ -228,22 +210,12 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>WhatsApp Settings</CardTitle>
-          <CardDescription>Configure the WANotifier.com webhook URL.</CardDescription>
+          <CardDescription>Configure the WANotifier.com webhook URL for notifications.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="wanotifier-url">Webhook URL</Label>
             <Input id="wanotifier-url" type="url" placeholder="https://wanotifier.com/api/v1/webhook/..." value={wanotifierWebhookUrl} onChange={(e) => setWanotifierWebhookUrl(e.target.value)} />
-          </div>
-          <div className="flex gap-2">
-            <div className="space-y-2 flex-1">
-                <Label htmlFor="wanotifier-test-phone">Test Phone Number</Label>
-                <Input id="wanotifier-test-phone" type="tel" placeholder="e.g., 96512345678" value={testPhoneNumber} onChange={(e) => setTestPhoneNumber(e.target.value)} />
-            </div>
-            <Button onClick={handleTestWhatsApp} className="self-end" disabled={isTesting}>
-                {isTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Send Test
-            </Button>
           </div>
         </CardContent>
         <CardFooter>

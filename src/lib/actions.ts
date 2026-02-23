@@ -525,16 +525,6 @@ export async function importStudentsFromExcel(userId: string, fileName: string) 
     return { success: true, message: `Students from '${fileName}' are being imported. A task has been created for admins to review.` };
 }
 
-export async function sendTestNotification(phoneNumber: string, userName: string) {
-    if (!phoneNumber) return { success: false, message: 'Phone number is required.' };
-    
-    const result = await sendTypedWhatsAppMessage(NotificationType.GENERIC_NOTIFICATION, phoneNumber, { "1": userName });
-    
-    console.log(`Sending test WhatsApp to ${phoneNumber} from ${userName}. Result:`, result);
-    
-    return result;
-}
-
 export async function onDocumentUploaded(documentId: string, studentId: string, documentName: string, uploaderId: string) {
   if (!checkAdminServices()) return { success: false, message: 'Server database not available.' };
   
