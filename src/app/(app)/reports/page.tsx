@@ -1,14 +1,12 @@
 'use client';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Users, University } from 'lucide-react';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { collection } from 'firebase/firestore';
+import { useCollection } from '@/firebase/client';
 import { useMemo } from 'react';
 import type { Student, Application } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useUsers } from '@/hooks/use-users';
 import dynamic from 'next/dynamic';
-import { firestore } from '@/firebase';
 
 // Lazy load the recharts components
 const ResponsiveContainer = dynamic(
@@ -28,8 +26,7 @@ const Bar = dynamic(() => import('recharts').then((mod) => mod.Bar), { ssr: fals
 export default function ReportsPage() {
     const { users, usersLoading } = useUsers();
     
-    const studentsCollection = useMemoFirebase(() => collection(firestore, 'students'), []);
-    const { data: students, isLoading: studentsLoading } = useCollection<Student>(studentsCollection);
+    const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
     
     const applications: Application[] = useMemo(() => students?.flatMap(s => s.applications || []) || [], [students]);
     

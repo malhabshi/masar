@@ -15,9 +15,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
+import { useCollection, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { formatDate, formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 import { useUsers } from '@/contexts/users-provider';
 
@@ -188,8 +188,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isReplying, setIsReplying] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const tasksCollection = useMemoFirebase(() => collection(firestore, 'tasks'), []);
-  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksCollection);
+  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>('tasks');
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 
   const handleStatusChange = async (taskId: string, status: TaskStatus) => {

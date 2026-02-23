@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useUser } from '@/hooks/use-user';
-import { useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
+import { useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import type { ApplicationQuestion } from '@/lib/types';
@@ -196,14 +196,12 @@ export default function CustomizeQuestionsForm() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<ApplicationQuestion | undefined>(undefined);
 
-  const questionsCollection = useMemoFirebase(() => collection(firestore, 'application_questions'), []);
-
-  const { data: questions, isLoading: questionsAreLoading } = useCollection<ApplicationQuestion>(questionsCollection);
+  const { data: questions, isLoading: questionsAreLoading } = useCollection<ApplicationQuestion>('application_questions');
   
   const isLoading = isUserLoading || questionsAreLoading;
 
   const handleAddOrUpdateQuestion = (values: z.infer<typeof questionSchema>) => {
-    if (!questionsCollection) return;
+    const questionsCollection = collection(firestore, 'application_questions');
     
     const questionData = {
       questionText: values.questionText,

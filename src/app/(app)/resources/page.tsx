@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/client';
+import { useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/client';
 import { firestore, storage } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -68,22 +68,16 @@ export default function ResourcesPage() {
   const [file, setFile] = useState<File | null>(null);
   const [country, setCountry] = useState<string>('all');
 
-  const sharedDocumentsCollection = useMemoFirebase(() => {
-    if (!user) return null;
-    return collection(firestore, 'shared_documents');
-  }, [user]);
+  const { data: documents, isLoading: documentsLoading } = useCollection<SharedDocument>(user ? 'shared_documents' : '');
 
-  const { data: documents, isLoading: documentsLoading } = useCollection<SharedDocument>(sharedDocumentsCollection);
-
-  const resourceLinksCollection = useMemoFirebase(() => collection(firestore, 'resource_links'), []);
-  const { data: resourceLinks, isLoading: linksLoading } = useCollection<ResourceLink>(resourceLinksCollection);
+  const { data: resourceLinks, isLoading: linksLoading } = useCollection<ResourceLink>('resource_links');
 
   const pageIsLoading = isUserLoading || documentsLoading || usersLoading || linksLoading;
 
   const canManage = user?.role === 'admin' || user?.role === 'department';
 
   const handleUpload = async () => {
-    if (!name || !description || !file || !user || !sharedDocumentsCollection) {
+    if (!name || !description || !file || !user) {
       toast({
         variant: 'destructive',
         title: 'Missing information',
@@ -108,6 +102,7 @@ export default function ResourcesPage() {
             ...(country !== 'all' && { country: country as Country }),
         };
 
+        const sharedDocumentsCollection = collection(firestore, 'shared_documents');
         addDocumentNonBlocking(sharedDocumentsCollection, newDoc);
 
         toast({
@@ -134,12 +129,13 @@ export default function ResourcesPage() {
   };
   
   const handleAddLink = (link: Omit<ResourceLink, 'id' | 'authorId' | 'createdAt'>) => {
-    if (!user || !resourceLinksCollection) return;
+    if (!user) return;
     const newLink = {
       ...link,
       authorId: user.id,
       createdAt: new Date().toISOString()
     };
+    const resourceLinksCollection = collection(firestore, 'resource_links');
     addDocumentNonBlocking(resourceLinksCollection, newLink);
     toast({
       title: "Link Added",

@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
+import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
@@ -38,11 +38,8 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const messagesCollection = useMemoFirebase(() => {
-    return collection(firestore, 'chats', studentId, 'messages');
-  }, [studentId]);
-
-  const { data: messagesData } = useCollection<ChatMessage>(messagesCollection);
+  const messagesPath = `chats/${studentId}/messages`;
+  const { data: messagesData } = useCollection<ChatMessage>(messagesPath);
 
   const messages = useMemo(() => {
     if (!messagesData) return [];
@@ -65,7 +62,6 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
 
   const handleSendMessage = () => {
     if (!newMessage.trim() && !file) return;
-    if (!messagesCollection) return;
 
     let finalMessageContent = newMessage;
     const recipientUser = recipientId ? users.find(u => u.id === recipientId) : null;
@@ -101,6 +97,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
       toastDescription = 'Your file has been shared in the chat.';
     }
 
+    const messagesCollection = collection(firestore, 'chats', studentId, 'messages');
     addDocumentNonBlocking(messagesCollection, message);
 
     if (student) {
