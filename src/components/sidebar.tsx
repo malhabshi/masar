@@ -44,6 +44,7 @@ export function AppSidebar() {
         { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
         { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'employee', 'department'] },
         { href: '/new-request', label: 'Add Student', icon: PlusCircle, roles: ['employee'] },
+        { href: '/employee-activity', label: 'Activity', icon: LineChart, roles: ['admin', 'department', 'employee'] },
     ];
     
     const managementNav = [
@@ -55,7 +56,6 @@ export function AppSidebar() {
     ];
 
     const adminNav = [
-        { href: '/employee-activity', label: 'Activity', icon: LineChart, roles: ['admin'] },
         { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin', 'department'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
