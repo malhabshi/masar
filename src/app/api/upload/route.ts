@@ -95,8 +95,22 @@ export async function POST(req: NextRequest) {
         },
     });
 
-    await blob.makePublic();
-    const downloadURL = blob.publicUrl();
+    let downloadURL = '';
+
+    if (destination === 'user_avatar') {
+        // Avatars are publicly readable via the new rule.
+        // We can make the object public and use the simple URL.
+        await blob.makePublic();
+        downloadURL = blob.publicUrl();
+    } else {
+        // For private files (student, shared), create a long-lived signed URL.
+        // This URL contains a token and respects storage rules.
+        const [url] = await blob.getSignedUrl({
+            action: 'read',
+            expires: '03-09-2491', // A very distant future date.
+        });
+        downloadURL = url;
+    }
     
     return NextResponse.json({ downloadURL });
 
