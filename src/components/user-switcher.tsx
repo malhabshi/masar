@@ -15,16 +15,18 @@ import { Button } from '@/components/ui/button';
 import { auth } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 export function UserSwitcher() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleLogout = async () => {
     try {
         await signOut(auth);
         toast({ title: 'Logged Out', description: 'You have been successfully logged out.'});
-        window.location.href = '/login';
+        router.push('/login');
     } catch (error) {
         toast({ variant: 'destructive', title: 'Logout Failed', description: 'An error occurred during logout.' });
     }
