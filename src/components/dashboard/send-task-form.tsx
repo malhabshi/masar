@@ -11,13 +11,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { User, Task } from '@/lib/types';
+import type { User } from '@/lib/types';
 import { sendTask as sendTaskAction } from '@/lib/actions';
 import { Loader2, Send } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { addDocumentNonBlocking, useCollection } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { useCollection } from '@/firebase/client';
 import type { AppUser } from '@/hooks/use-user';
 
 interface SendTaskFormProps {
@@ -57,22 +55,12 @@ export function SendTaskForm({ currentUser }: SendTaskFormProps) {
         return;
     }
     
-    // Call server action for side-effects like notifications
+    // Call server action. The database write now happens only on the server.
     const result = await sendTaskAction(currentUser.id, recipientId!, values.content);
 
     if (result.success) {
-      // Add to client-side state
-      const tasksCollection = collection(firestore, 'tasks');
-      const newTask: Omit<Task, 'id'> = {
-        authorId: currentUser.id,
-        recipientId: recipientId!,
-        content: values.content,
-        createdAt: new Date().toISOString(),
-        status: 'new',
-        replies: [],
-      };
-      addDocumentNonBlocking(tasksCollection, newTask);
-
+      // The client-side listener (useCollection) will automatically update the UI.
+      // No need to manually add the document on the client anymore.
       toast({
         title: 'Update Sent!',
         description: result.message,
