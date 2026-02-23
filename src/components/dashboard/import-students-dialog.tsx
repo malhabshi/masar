@@ -19,10 +19,6 @@ import type { AppUser } from '@/hooks/use-user';
 import { importStudentsFromExcel } from '@/lib/actions';
 import { Loader2, FileUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
-import { addDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import { useUsers } from '@/contexts/users-provider';
 
 interface ImportStudentsDialogProps {
   currentUser: AppUser;
@@ -33,7 +29,6 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
   const [file, setFile] = useState<File | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { users } = useUsers();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -47,26 +42,21 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
       return;
     }
     if (!currentUser) {
-        toast({ variant: 'destructive', title: 'Authentication error', description: 'Could not identify the current user or database.' });
+        toast({ variant: 'destructive', title: 'Authentication error', description: 'Could not identify the current user.' });
         return;
     }
 
     setIsLoading(true);
-    const result = await importStudentsFromExcel(currentUser.id, file.name);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('userId', currentUser.id);
+
+    const result = await importStudentsFromExcel(formData);
 
     if (result.success) {
-      const admins = users.filter(u => u.role === 'admin');
-      if (admins.length > 0) {
-          const taskContent = `User ${currentUser?.name || 'Unknown'} has bulk-imported students from the file '${file.name}'. Please review the new student profiles and assign them as needed.`;
-          const tasksCollection = collection(firestore, 'tasks');
-          for (const admin of admins) {
-              const newTask = { authorId: currentUser.id, recipientId: admin.id, content: taskContent, createdAt: new Date().toISOString(), status: 'new' as const, replies: [] };
-              addDocumentNonBlocking(tasksCollection, newTask);
-          }
-      }
-
       toast({
-        title: 'Import Successful',
+        title: 'Import Complete',
         description: result.message,
       });
       setIsOpen(false);
@@ -76,6 +66,7 @@ export function ImportStudentsDialog({ currentUser }: ImportStudentsDialogProps)
         variant: 'destructive',
         title: 'Import Failed',
         description: result.message,
+        duration: 9000, // Show longer for detailed error messages
       });
     }
     setIsLoading(false);
