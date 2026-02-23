@@ -53,9 +53,6 @@ export default function SettingsPage() {
       setBackgroundColor(savedBackground);
       setAccentColor(savedAccent);
       if(savedLogo) setLogoPreview(savedLogo);
-      
-      // Apply theme on load
-      applyTheme({ primary: savedPrimary, background: savedBackground, accent: savedAccent });
     }
   }, []);
 
