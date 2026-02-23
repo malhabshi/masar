@@ -1,9 +1,12 @@
 
 'use client';
 
+import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
-import { useDoc, useCollection } from '@/firebase/client';
+import { useDoc, useCollection, updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 
 import { StudentHeader } from '@/components/student/student-header';
@@ -60,6 +63,16 @@ export default function StudentDetailPage() {
   const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
   
   const isLoading = isUserLoading || usersLoading || studentIsLoading || tasksLoading;
+
+  useEffect(() => {
+    // When the assigned employee views the page, mark the student as "viewed"
+    // by clearing the `isNewForEmployee` flag. This will hide the "New" badge.
+    if (student?.isNewForEmployee && currentUser?.civilId === student?.employeeId) {
+        const studentDocRef = doc(firestore, 'students', student.id);
+        updateDocumentNonBlocking(studentDocRef, { isNewForEmployee: false });
+    }
+  }, [student, currentUser]);
+
 
   if (studentError) {
     return <div className="text-destructive">Error: {studentError.message}</div>
