@@ -1,7 +1,8 @@
+
 'use server';
 
 import { adminDb, adminAuth } from '@/lib/firebase/admin';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus } from './types';
 import { sendTypedWhatsAppMessage, NotificationType } from './whatsapp-templates';
 import * as xlsx from 'xlsx';
 
@@ -349,7 +350,10 @@ export async function createStudent(
         submitKcoRequest: false,
         receivedCasOrI20: false,
         appliedForVisa: false,
+        visaGranted: false,
         documentsSubmittedToMohe: false,
+        medicalFitnessSubmitted: false,
+        financialStatementsProvided: false,
         readyToTravel: false,
       },
     };
@@ -756,4 +760,22 @@ export async function onDocumentUploaded(documentId: string, studentId: string, 
     console.error('Error in onDocumentUploaded:', error);
     return { success: false, message: String(error) };
   }
+}
+
+export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database not available.' };
+    }
+
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        // Use dot notation to update a field in a map
+        await studentRef.update({
+            [`profileCompletionStatus.${itemKey}`]: value
+        });
+        return { success: true, message: 'Checklist updated.' };
+    } catch (error) {
+        console.error('updateChecklistItem error:', error);
+        return { success: false, message: 'Failed to update checklist item.' };
+    }
 }

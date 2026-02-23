@@ -56,7 +56,10 @@ export interface ProfileCompletionStatus {
   submitKcoRequest: boolean;
   receivedCasOrI20: boolean;
   appliedForVisa: boolean;
+  visaGranted: boolean;
   documentsSubmittedToMohe: boolean;
+  medicalFitnessSubmitted: boolean;
+  financialStatementsProvided: boolean;
   readyToTravel: boolean;
 }
 

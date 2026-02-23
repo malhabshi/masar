@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
@@ -16,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentChat } from '@/components/student/student-chat';
 import { MissingItemsSection } from '@/components/student/missing-items-section';
+import { ReadinessChecklist } from '@/components/student/readiness-checklist';
 
 
 function StudentPageContentSkeleton() {
@@ -97,6 +99,7 @@ export default function StudentDetailPage() {
                     <StudentApplications student={student} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
+                    <ReadinessChecklist student={student} currentUser={currentUser} />
                     </div>
 
                     <div className="space-y-6">
