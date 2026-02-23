@@ -976,3 +976,17 @@ export async function clockOut(employeeId: string, notes?: string) {
     return { success: false, message: 'Failed to clock out.' };
   }
 }
+
+export async function updateUserAvatar(userId: string, avatarUrl: string) {
+  if (!checkAdminServices()) {
+    return { success: false, message: 'Server database not available.' };
+  }
+  try {
+    const userRef = adminDb!.collection('users').doc(userId);
+    await userRef.update({ avatarUrl });
+    return { success: true, message: 'Avatar updated successfully.' };
+  } catch (error) {
+    console.error('updateUserAvatar error:', error);
+    return { success: false, message: 'Failed to update avatar.' };
+  }
+}

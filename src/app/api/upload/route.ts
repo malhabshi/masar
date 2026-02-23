@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-    const destination = formData.get('destination') as 'student' | 'shared' | null;
+    const destination = formData.get('destination') as 'student' | 'shared' | 'user_avatar' | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
@@ -79,6 +79,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: You do not have permission to upload to shared documents.' }, { status: 403 });
         }
         filePath = `shared_documents/${Date.now()}_${file.name}`;
+    } else if (destination === 'user_avatar') {
+        filePath = `user_avatars/${decodedToken.uid}/${Date.now()}_${file.name}`;
     } else {
         return NextResponse.json({ error: 'Invalid destination specified.' }, { status: 400 });
     }

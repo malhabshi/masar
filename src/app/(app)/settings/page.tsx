@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
+import { AvatarUpload } from '@/components/user-management/avatar-upload';
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -100,55 +101,58 @@ export default function SettingsPage() {
     }
   };
   
-  if (isUserLoading) {
+  if (isUserLoading || !user) {
     return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
   }
   
-  if (user?.role !== 'admin') {
-      return (
-          <Card>
-              <CardHeader>
-                  <CardTitle>Permission Denied</CardTitle>
-                  <CardDescription>You do not have permission to view settings.</CardDescription>
-              </CardHeader>
-          </Card>
-      )
-  }
+  const canManageTheme = user.role === 'admin';
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Theme Customization</CardTitle>
-          <CardDescription>Customize the look and feel of the application.</CardDescription>
+          <CardTitle>Profile Settings</CardTitle>
+          <CardDescription>Update your profile picture.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="space-y-2 flex-1">
-              <Label htmlFor="primary-color">Primary Color</Label>
-              <Input id="primary-color" type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
-            </div>
-            <div className="space-y-2 flex-1">
-              <Label htmlFor="background-color">Background Color</Label>
-              <Input id="background-color" type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} />
-            </div>
-            <div className="space-y-2 flex-1">
-              <Label htmlFor="accent-color">Accent Color</Label>
-              <Input id="accent-color" type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="logo-upload">Custom Logo</Label>
-            <div className="flex items-center gap-4">
-              <Input id="logo-upload" type="file" accept="image/*" onChange={handleLogoChange} className="flex-1" />
-              {logoPreview && <img src={logoPreview} alt="Logo Preview" className="h-10 w-10 object-contain rounded-md border p-1" />}
-            </div>
-          </div>
+        <CardContent>
+          <AvatarUpload />
         </CardContent>
-        <CardFooter>
-          <Button onClick={handleSaveTheme}>Save Theme</Button>
-        </CardFooter>
       </Card>
+      
+      {canManageTheme && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Theme Customization</CardTitle>
+            <CardDescription>Customize the look and feel of the application.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="space-y-2 flex-1">
+                <Label htmlFor="primary-color">Primary Color</Label>
+                <Input id="primary-color" type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+              </div>
+              <div className="space-y-2 flex-1">
+                <Label htmlFor="background-color">Background Color</Label>
+                <Input id="background-color" type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} />
+              </div>
+              <div className="space-y-2 flex-1">
+                <Label htmlFor="accent-color">Accent Color</Label>
+                <Input id="accent-color" type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="logo-upload">Custom Logo</Label>
+              <div className="flex items-center gap-4">
+                <Input id="logo-upload" type="file" accept="image/*" onChange={handleLogoChange} className="flex-1" />
+                {logoPreview && <img src={logoPreview} alt="Logo Preview" className="h-10 w-10 object-contain rounded-md border p-1" />}
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleSaveTheme}>Save Theme</Button>
+          </CardFooter>
+        </Card>
+      )}
     </div>
   );
 }
