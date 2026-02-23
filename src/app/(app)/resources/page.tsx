@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -52,12 +52,11 @@ import { firestore, storage } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { AddLinkDialog } from '@/components/resources/add-link-dialog';
-import { useUsers } from '@/contexts/users-provider';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 
 export default function ResourcesPage() {
   const { user, isUserLoading } = useUser();
-  const { getUserById, usersLoading } = useUsers();
   const { toast } = useToast();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -69,8 +68,15 @@ export default function ResourcesPage() {
   const [country, setCountry] = useState<string>('all');
 
   const { data: documents, isLoading: documentsLoading } = useCollection<SharedDocument>(user ? 'shared_documents' : '');
-
   const { data: resourceLinks, isLoading: linksLoading } = useCollection<ResourceLink>('resource_links');
+
+  const authorIds = useMemo(() => {
+    const docAuthors = (documents || []).map(d => d.authorId);
+    const linkAuthors = (resourceLinks || []).map(l => l.authorId);
+    return [...new Set([...docAuthors, ...linkAuthors])];
+  }, [documents, resourceLinks]);
+
+  const { userMap, isLoading: usersLoading } = useUserCacheById(authorIds);
 
   const pageIsLoading = isUserLoading || documentsLoading || usersLoading || linksLoading;
 
@@ -341,7 +347,7 @@ export default function ResourcesPage() {
                     <TableBody>
                     {documents && documents.length > 0 ? (
                         documents.map((doc) => {
-                            const author = getUserById(doc.authorId);
+                            const author = userMap.get(doc.authorId);
                             return (
                                 <TableRow key={doc.id}>
                                     <TableCell className="font-medium flex items-center gap-2">
@@ -353,7 +359,7 @@ export default function ResourcesPage() {
                                         {doc.country || 'All Countries'}
                                     </TableCell>
                                     <TableCell>
-                                    {author && (
+                                    {author ? (
                                         <div className="flex items-center gap-2">
                                         <Avatar className="h-6 w-6">
                                             <AvatarImage src={author.avatarUrl} alt={author.name} />
@@ -361,7 +367,7 @@ export default function ResourcesPage() {
                                         </Avatar>
                                         <span className="text-sm">{author.name}</span>
                                         </div>
-                                    )}
+                                    ) : <Skeleton className="h-6 w-24" />}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end items-center">
