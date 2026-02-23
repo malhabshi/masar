@@ -3,35 +3,34 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { firestore } from '@/firebase';
-import { toDate } from '@/lib/timestamp-utils';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 import { useMemoFirebase } from './memo';
 
 // Recursively convert all Timestamps to Date objects
 function convertTimestamps<T>(data: any): T {
-  if (!data) return data;
+  if (!data) return data as T;
   
   if (data && typeof data.toDate === 'function' && !(data instanceof Date)) {
-    return toDate(data);
+    return data.toDate() as T;
   }
   
   if (Array.isArray(data)) {
-    return data.map(item => convertTimestamps(item)) as any;
+    return data.map(item => convertTimestamps(item)) as T;
   }
   
-  if (typeof data === 'object') {
+  if (typeof data === 'object' && data !== null) {
     const converted: any = {};
     for (const key in data) {
-      if(Object.prototype.hasOwnProperty.call(data, key)) {
-          const value = data[key];
-          converted[key] = convertTimestamps(value);
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        const value = data[key];
+        converted[key] = convertTimestamps(value);
       }
     }
-    return converted;
+    return converted as T;
   }
   
-  return data;
+  return data as T;
 }
 
 export function useDoc<T>(path: string, ...pathSegments: string[]) {
