@@ -6,7 +6,7 @@ import { CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Paperclip, FileText, X } from 'lucide-react';
+import { Send, Paperclip, FileText, X, Loader2, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -21,6 +21,7 @@ import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
+import { useUser } from '@/hooks/use-user';
 
 interface StudentChatProps {
   student: Student;
@@ -30,11 +31,13 @@ interface StudentChatProps {
 export function StudentChat({ student, currentUser }: StudentChatProps) {
   const { toast } = useToast();
   const { users, getUserById } = useUsers();
+  const { auth: authUser } = useUser();
   const studentId = student.id;
 
   const [newMessage, setNewMessage] = useState('');
   const [recipientId, setRecipientId] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +53,6 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // This useEffect will clear the unread message counters when the user views the chat.
   useEffect(() => {
     if (!student || !currentUser) return;
     const studentDocRef = doc(firestore, 'students', student.id);
@@ -76,68 +78,92 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!newMessage.trim() && !file) return;
 
-    let finalMessageContent = newMessage;
-    const recipientUser = recipientId ? users.find(u => u.id === recipientId) : null;
-    let toastDescription = 'Your message has been added to the chat.';
-
-    if (currentUser.role === 'employee' && recipientId) {
-      if (recipientId === 'admins') {
-        finalMessageContent = `@Admins: ${newMessage}`;
-        toastDescription = 'Your message addressing all admins has been added to the chat.';
-      } else if (recipientId === 'departments') {
-        finalMessageContent = `@Departments: ${newMessage}`;
-        toastDescription = 'Your message addressing all department users has been added.';
-      } else if (recipientUser) {
-        finalMessageContent = `@${recipientUser.name}: ${newMessage}`;
-        toastDescription = `Your message addressing ${recipientUser.name} has been added to the chat.`;
-      }
+    if (!authUser) {
+        toast({ variant: 'destructive', title: 'Authentication Error', description: 'Cannot send message. Please refresh the page.' });
+        return;
     }
 
-    const message: Omit<ChatMessage, 'id'> = {
-      authorId: currentUser.id,
-      content: finalMessageContent,
-      timestamp: new Date().toISOString(),
-    };
+    setIsLoading(true);
+    let documentPayload: { name: string; url: string } | undefined = undefined;
 
-    if (file) {
-      (message as any).document = {
-        name: file.name,
-        url: '#', // Placeholder URL
-      };
-      if (!message.content.trim()) {
-        message.content = `Shared a file`;
-      }
-      toastDescription = 'Your file has been shared in the chat.';
-    }
+    try {
+        // 1. Handle file upload if a file is attached
+        if (file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('destination', 'student');
+            formData.append('studentId', student.id);
 
-    const messagesCollection = collection(firestore, 'chats', studentId, 'messages');
-    addDocumentNonBlocking(messagesCollection, message);
+            const token = await authUser.getIdToken();
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData,
+            });
 
-    if (student) {
-        const studentDocRef = doc(firestore, 'students', student.id);
-        if (['admin', 'department'].includes(currentUser.role) && student.employeeId) {
-            // Admin/dept is sending, notify employee
-            const currentUnread = student.employeeUnreadMessages || 0;
-            updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: currentUnread + 1 });
-        } else if (currentUser.role === 'employee') {
-            // Employee is sending, notify admin/dept
-            const currentUnread = student.unreadUpdates || 0;
-            updateDocumentNonBlocking(studentDocRef, { unreadUpdates: currentUnread + 1 });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to upload file.');
+            }
+            documentPayload = { name: file.name, url: result.downloadURL };
         }
+
+        // 2. Prepare and send the message
+        let finalMessageContent = newMessage.trim();
+        const recipientUser = recipientId ? users.find(u => u.id === recipientId) : null;
+        let toastDescription = 'Your message has been added to the chat.';
+
+        if (currentUser.role === 'employee' && recipientId) {
+            if (recipientId === 'admins') {
+                finalMessageContent = `@Admins: ${finalMessageContent}`;
+                toastDescription = 'Your message addressing all admins has been added.';
+            } else if (recipientId === 'departments') {
+                finalMessageContent = `@Departments: ${finalMessageContent}`;
+                toastDescription = 'Your message addressing all department users has been added.';
+            } else if (recipientUser) {
+                finalMessageContent = `@${recipientUser.name}: ${finalMessageContent}`;
+                toastDescription = `Your message addressing ${recipientUser.name} has been added.`;
+            }
+        }
+
+        const message: Omit<ChatMessage, 'id'> = {
+            authorId: currentUser.id,
+            content: finalMessageContent || (documentPayload ? `Shared a file` : ''),
+            timestamp: new Date().toISOString(),
+            ...(documentPayload && { document: documentPayload }),
+        };
+
+        const messagesCollection = collection(firestore, 'chats', studentId, 'messages');
+        addDocumentNonBlocking(messagesCollection, message);
+
+        // 3. Update unread counters
+        if (student) {
+            const studentDocRef = doc(firestore, 'students', student.id);
+            if (['admin', 'department'].includes(currentUser.role) && student.employeeId) {
+                const currentUnread = student.employeeUnreadMessages || 0;
+                updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: currentUnread + 1 });
+            } else if (currentUser.role === 'employee') {
+                const currentUnread = student.unreadUpdates || 0;
+                updateDocumentNonBlocking(studentDocRef, { unreadUpdates: currentUnread + 1 });
+            }
+        }
+
+        // 4. Reset state and show toast
+        setNewMessage('');
+        setFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setRecipientId('');
+        toast({ title: 'Message Sent', description: documentPayload ? `File '${documentPayload.name}' sent.` : toastDescription });
+    
+    } catch (error: any) {
+        console.error("Failed to send message:", error);
+        toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not send the message.' });
+    } finally {
+        setIsLoading(false);
     }
-
-    setNewMessage('');
-    setFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    setRecipientId('');
-
-    toast({
-      title: 'Message Sent',
-      description: toastDescription,
-    });
   };
 
   return (
@@ -175,6 +201,8 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                       <a
                         href={message.document.url}
                         download={message.document.name}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className={cn(
                           'flex items-center gap-2 mt-2 p-2 rounded-md',
                           isCurrentUser
@@ -183,7 +211,8 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                         )}
                       >
                         <FileText className="h-4 w-4 flex-shrink-0" />
-                        <span className="truncate">{message.document.name}</span>
+                        <span className="truncate font-medium">{message.document.name}</span>
+                        <Download className="h-4 w-4 ml-auto flex-shrink-0"/>
                       </a>
                     )}
                   </div>
@@ -209,7 +238,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         <div className="w-full space-y-2">
           {currentUser.role === 'employee' && (
             <Select onValueChange={setRecipientId} value={recipientId}>
-              <SelectTrigger>
+              <SelectTrigger disabled={isLoading}>
                 <SelectValue placeholder="Address message to..." />
               </SelectTrigger>
               <SelectContent>
@@ -258,6 +287,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
               variant="ghost"
               size="icon"
               onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
             >
               <Paperclip className="h-4 w-4" />
               <span className="sr-only">Attach file</span>
@@ -273,9 +303,10 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                   handleSendMessage();
                 }
               }}
+              disabled={isLoading}
             />
-            <Button type="button" size="icon" onClick={handleSendMessage}>
-              <Send className="h-4 w-4" />
+            <Button type="button" size="icon" onClick={handleSendMessage} disabled={isLoading || (!newMessage.trim() && !file)}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               <span className="sr-only">Send</span>
             </Button>
           </div>
