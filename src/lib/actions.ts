@@ -1,14 +1,14 @@
 
 'use server';
 
-import { adminDb, adminAuth } from '@/lib/firebase/admin';
+import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus } from './types';
 import { sendTypedWhatsAppMessage, NotificationType } from './whatsapp-templates';
 import * as xlsx from 'xlsx';
 
 // Helper to check if adminDb is available
 function checkAdminServices() {
-  if (!adminDb || !adminAuth) {
+  if (!adminDb || !adminAuth || !storage) {
     console.error('Firebase Admin not initialized. Check FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 env var.');
     return false;
   }
@@ -879,4 +879,123 @@ export async function onDocumentUploaded(documentId: string, studentId: string, 
     console.error('Error in onDocumentUploaded:', error);
     return { success: false, message: String(error) };
   }
+}
+
+async function deleteCollection(collectionPath: string, batchSize: number = 100) {
+    if (!adminDb) return;
+    const collectionRef = adminDb.collection(collectionPath);
+    const query = collectionRef.limit(batchSize);
+
+    return new Promise<void>((resolve, reject) => {
+        deleteQueryBatch(query, resolve, reject).catch(reject);
+    });
+}
+
+async function deleteQueryBatch(query: FirebaseFirestore.Query, resolve: (value: void) => void, reject: (reason?: any) => void) {
+    if (!adminDb) {
+        return reject('adminDb not initialized');
+    }
+    const snapshot = await query.get();
+
+    if (snapshot.size === 0) {
+        return resolve();
+    }
+
+    const batch = adminDb.batch();
+    snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+
+    process.nextTick(() => {
+        deleteQueryBatch(query, resolve, reject);
+    });
+}
+
+export async function deleteStudent(studentId: string, adminId: string) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database not available.' };
+    }
+
+    try {
+        const adminUser = await getUser(adminId);
+        if (!adminUser || adminUser.role !== 'admin') {
+            return { success: false, message: 'Unauthorized action. Only admins can delete students.' };
+        }
+
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+
+        if (!studentDoc.exists) {
+            return { success: false, message: 'Student not found.' };
+        }
+        const studentData = studentDoc.data() as Student;
+
+        // 1. Delete associated files from Storage
+        if (storage) {
+            const bucket = storage.bucket();
+            const fileDeletionPromises = (studentData.documents || []).map(doc => {
+                try {
+                    const url = new URL(doc.url);
+                    const bucketName = bucket.name;
+                    let filePath = decodeURIComponent(url.pathname.substring(1));
+                    if (filePath.startsWith(`${bucketName}/`)) {
+                        filePath = filePath.substring(bucketName.length + 1);
+                    }
+                    
+                    if(filePath) {
+                        console.log(`Deleting file from storage: ${filePath}`);
+                        return bucket.file(filePath).delete().catch(err => {
+                            console.error(`Failed to delete file ${filePath}:`, err.message);
+                        });
+                    }
+                } catch (e) {
+                    console.error(`Invalid document URL, skipping deletion: ${doc.url}`, e);
+                }
+                return Promise.resolve();
+            });
+            await Promise.all(fileDeletionPromises);
+        }
+        
+        // 2. Delete chat subcollection
+        const chatCollectionPath = `chats/${studentId}/messages`;
+        await deleteCollection(chatCollectionPath);
+        const chatParentDoc = adminDb!.collection('chats').doc(studentId);
+        if((await chatParentDoc.get()).exists) {
+            await chatParentDoc.delete();
+        }
+        
+        // 3. Delete student document
+        await studentRef.delete();
+
+        // 4. Create task for other admins
+        const taskContent = `Admin ${adminUser.name} has permanently deleted the profile for student: ${studentData.name} (ID: ${studentId}).`;
+        const adminsSnapshot = await adminDb!.collection('users')
+            .where('role', '==', 'admin')
+            .where(adminDb!.FieldPath.documentId(), '!=', adminId)
+            .get();
+
+        if (!adminsSnapshot.empty) {
+            const adminBatch = adminDb!.batch();
+            adminsSnapshot.forEach(doc => {
+                const taskRef = adminDb!.collection('tasks').doc();
+                const newTask: Omit<Task, 'id'> = {
+                    authorId: adminId,
+                    recipientId: doc.id,
+                    content: taskContent,
+                    createdAt: new Date().toISOString(),
+                    status: 'new',
+                    replies: []
+                };
+                adminBatch.set(taskRef, newTask);
+            });
+            await adminBatch.commit();
+        }
+
+        return { success: true, message: `Student ${studentData.name} deleted successfully.` };
+    } catch (error: any) {
+        console.error('deleteStudent error:', error);
+        return { success: false, message: 'An unexpected server error occurred while deleting the student.' };
+    }
 }

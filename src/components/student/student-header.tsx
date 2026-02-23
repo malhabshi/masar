@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { Student, Country } from '@/lib/types';
@@ -14,6 +15,7 @@ import { FinalizeStudentDialog } from './finalize-student-dialog';
 import { RequestTransferDialog } from './request-transfer-dialog';
 import { TransferStudentDialog } from './transfer-student-dialog';
 import { useUsers } from '@/contexts/users-provider';
+import { DeleteStudentDialog } from './delete-student-dialog';
 
 
 interface StudentHeaderProps {
@@ -52,6 +54,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   
   const isAssignedEmployee = currentUser.civilId === student.employeeId;
   const canManage = ['admin', 'department'].includes(currentUser.role);
+  const isAdmin = currentUser.role === 'admin';
   const canEdit = canManage || isAssignedEmployee;
 
   const canRequestTransfer = isAssignedEmployee && !student.transferRequested;
@@ -102,6 +105,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
             {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />}
             {canFinalize && <FinalizeStudentDialog student={student} currentUser={currentUser} />}
+            {isAdmin && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
           </div>
           {student.finalChoiceUniversity && (
             <div className="flex items-center gap-2 mt-2 text-lg font-semibold text-success">
