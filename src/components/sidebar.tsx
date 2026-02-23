@@ -74,11 +74,11 @@ export function AppSidebar() {
             <SidebarMenu>
             {mainNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton isActive={pathname.startsWith(item.href)} asChild>
-                      <Link href={item.href}>
-                        <item.icon /> {item.label}
-                      </Link>
-                    </SidebarMenuButton>
+                    <Link href={item.href}>
+                        <SidebarMenuButton isActive={pathname.startsWith(item.href)}>
+                            <item.icon /> <span>{item.label}</span>
+                        </SidebarMenuButton>
+                    </Link>
                 </SidebarMenuItem>
             ))}
 
@@ -86,11 +86,11 @@ export function AppSidebar() {
             
             {managementNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton isActive={pathname.startsWith(item.href)} asChild>
-                      <Link href={item.href}>
-                        <item.icon /> {item.label}
-                      </Link>
-                    </SidebarMenuButton>
+                    <Link href={item.href}>
+                        <SidebarMenuButton isActive={pathname.startsWith(item.href)}>
+                            <item.icon /> <span>{item.label}</span>
+                        </SidebarMenuButton>
+                    </Link>
                 </SidebarMenuItem>
             ))}
 
@@ -98,11 +98,11 @@ export function AppSidebar() {
             
             {adminNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
-                     <SidebarMenuButton isActive={pathname.startsWith(item.href)} asChild>
-                      <Link href={item.href}>
-                        <item.icon /> {item.label}
-                      </Link>
-                    </SidebarMenuButton>
+                    <Link href={item.href}>
+                        <SidebarMenuButton isActive={pathname.startsWith(item.href)}>
+                            <item.icon /> <span>{item.label}</span>
+                        </SidebarMenuButton>
+                    </Link>
                 </SidebarMenuItem>
             ))}
 
@@ -110,11 +110,11 @@ export function AppSidebar() {
             
             {userHasRole(supportNav.roles) && 
                 <SidebarMenuItem>
-                    <SidebarMenuButton isActive={pathname.startsWith(supportNav.href)} asChild>
-                      <Link href={supportNav.href}>
-                        <supportNav.icon /> {supportNav.label}
-                      </Link>
-                    </SidebarMenuButton>
+                    <Link href={supportNav.href}>
+                        <SidebarMenuButton isActive={pathname.startsWith(supportNav.href)}>
+                            <supportNav.icon /> <span>{supportNav.label}</span>
+                        </SidebarMenuButton>
+                    </Link>
                 </SidebarMenuItem>
             }
             </SidebarMenu>
