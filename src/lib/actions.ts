@@ -1,7 +1,7 @@
 'use server';
 
 import { adminDb, adminAuth } from '@/lib/firebase/admin';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole } from './types';
 import { sendTypedWhatsAppMessage, NotificationType } from './whatsapp-templates';
 import * as xlsx from 'xlsx';
 
@@ -67,7 +67,7 @@ export async function addApplication(studentId: string, universityName: string, 
     if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
 
     const studentData = studentDoc.data() as Student;
-    const newApplication = {
+    const newApplication: Application = {
       university: universityName,
       country: country as any,
       major: major,
@@ -274,6 +274,92 @@ export async function createNewUser(userData: {
       message = 'The password must be at least 6 characters long.';
     }
     return { success: false, message: message };
+  }
+}
+
+export async function createStudent(
+  values: {
+    studentName: string;
+    studentEmail?: string;
+    phone: string;
+    targetCountries: string[];
+    otherCountry?: string;
+    notes?: string;
+  },
+  creatingUserId: string,
+  creatingUserRole: UserRole,
+  creatingUserCivilId?: string | null,
+  isForUnassigned: boolean = false
+) {
+  if (!checkAdminServices()) {
+    return { success: false, message: 'Server database not available.' };
+  }
+
+  const { studentName, studentEmail, phone, targetCountries, otherCountry, notes } = values;
+
+  const shouldBeAssigned = creatingUserRole === 'employee' && !isForUnassigned;
+
+  if (shouldBeAssigned && !creatingUserCivilId) {
+    return {
+      success: false,
+      message:
+        'Your Civil ID is missing. Admin must add it before you can create assigned students.',
+    };
+  }
+  
+  let finalTargetCountries = targetCountries;
+  if (otherCountry && otherCountry.trim()) {
+      finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
+  }
+
+  try {
+    const studentRef = adminDb!.collection('students').doc(); // Auto-generate ID
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      studentName
+    )}&background=random&color=fff`;
+
+    const newStudentData: Student = {
+      id: studentRef.id,
+      name: studentName,
+      email: studentEmail || '',
+      phone: phone,
+      employeeId: shouldBeAssigned ? creatingUserCivilId! : null,
+      ...(shouldBeAssigned && { isNewForEmployee: true }),
+      avatarUrl,
+      applications: [],
+      notes: notes
+        ? [
+            {
+              id: `note-${Date.now()}`,
+              authorId: creatingUserId,
+              content: notes,
+              createdAt: new Date().toISOString(),
+            },
+          ]
+        : [],
+      documents: [],
+      createdAt: new Date().toISOString(),
+      createdBy: creatingUserId,
+      targetCountries: finalTargetCountries as Country[],
+      missingItems: [],
+      pipelineStatus: 'none',
+      profileCompletionStatus: {
+        submitUniversityApplication: false,
+        applyMoheScholarship: false,
+        submitKcoRequest: false,
+        receivedCasOrI20: false,
+        appliedForVisa: false,
+        documentsSubmittedToMohe: false,
+        readyToTravel: false,
+      },
+    };
+
+    await studentRef.set(newStudentData);
+
+    return { success: true, studentId: studentRef.id, studentName };
+  } catch (error) {
+    console.error('createStudent error:', error);
+    return { success: false, message: 'Failed to create student on the server.' };
   }
 }
 

@@ -5,10 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { useState } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { Country, Student } from '@/lib/types';
-import { setDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import type { Country } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '../ui/checkbox';
+import { createStudent } from '@/lib/actions';
 
 
 const formSchema = z.object({
@@ -74,67 +72,36 @@ export function AddStudentDialog() {
             setIsSubmitting(false);
             return;
         }
-        
-        const shouldBeAssigned = currentUser.role === 'employee';
-        
-        if (shouldBeAssigned && !currentUser.civilId) {
-            toast({ variant: 'destructive', title: 'Account Incomplete', description: 'Your Civil ID is missing. Admin must add it before you can create assigned students.' });
-            setIsSubmitting(false);
-            return;
-        }
 
-        let finalTargetCountries = values.targetCountries;
-        if (values.otherCountry && values.otherCountry.trim()) {
-            finalTargetCountries = [...finalTargetCountries, values.otherCountry.trim()];
-        }
-        
         try {
-            const studentsCollectionRef = collection(firestore, 'students');
-            const newStudentDocRef = doc(studentsCollectionRef);
+            const result = await createStudent(
+                values,
+                currentUser.id,
+                currentUser.role,
+                currentUser.civilId
+            );
 
-            const newStudentData: Student = {
-                id: newStudentDocRef.id,
-                name: values.studentName,
-                email: values.studentEmail || '',
-                phone: values.phone,
-                employeeId: shouldBeAssigned ? currentUser.civilId! : null,
-                ...(shouldBeAssigned && { isNewForEmployee: true }),
-                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(values.studentName)}&background=random&color=fff`,
-                applications: [],
-                notes: values.notes ? [{ id: `note-${Date.now()}`, authorId: currentUser.id, content: values.notes, createdAt: new Date().toISOString() }] : [],
-                documents: [],
-                createdAt: new Date().toISOString(),
-                createdBy: currentUser.id,
-                targetCountries: finalTargetCountries as Country[],
-                missingItems: [],
-                pipelineStatus: 'none',
-                profileCompletionStatus: {
-                    submitUniversityApplication: false,
-                    applyMoheScholarship: false,
-                    submitKcoRequest: false,
-                    receivedCasOrI20: false,
-                    appliedForVisa: false,
-                    documentsSubmittedToMohe: false,
-                    readyToTravel: false,
-                },
-            };
-
-            setDocumentNonBlocking(newStudentDocRef, newStudentData);
-            
-            toast({
-                title: "Student Added",
-                description: `${values.studentName} has been added to the system.`,
-            });
-            
-            setIsOpen(false);
-            form.reset();
-
+            if (result.success) {
+                toast({
+                    title: "Student Added",
+                    description: `${result.studentName} has been added to the system.`,
+                });
+                
+                setIsOpen(false);
+                form.reset();
+            } else {
+                 toast({
+                    variant: "destructive",
+                    title: "Submission Failed",
+                    description: result.message || "An unexpected error occurred."
+                });
+            }
         } catch (error) {
             console.error("Failed to create student:", error);
             toast({
                 variant: "destructive",
                 title: "Submission Failed",
-                description: "Could not save the new student to the database. Please try again."
+                description: "Could not save the new student. Please try again."
             });
         } finally {
             setIsSubmitting(false);
