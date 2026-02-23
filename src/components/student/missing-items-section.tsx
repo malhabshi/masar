@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { Student, Note } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { addMissingItemToStudent, removeMissingItemFromStudent, markMissingItemAsReceived } from '@/lib/actions';
 
 interface MissingItemsSectionProps {
   student: Student;
@@ -35,55 +36,42 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmployee, student.id, student.newMissingItemsForEmployee]);
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItem.trim()) return;
 
     setIsLoading(true);
-    const updatedItems = [...(student.missingItems || []), newItem.trim()];
-    const updates = {
-      missingItems: updatedItems,
-      newMissingItemsForEmployee: (student.newMissingItemsForEmployee || 0) + 1,
-    };
-
-    const studentDocRef = doc(firestore, 'students', student.id);
-    updateDocumentNonBlocking(studentDocRef, updates);
-
-    toast({ title: 'Item Added', description: `"${newItem.trim()}" added to the list.` });
-    setNewItem('');
+    const result = await addMissingItemToStudent(student.id, newItem.trim());
+    
+    if (result.success) {
+        toast({ title: 'Item Added', description: `"${newItem.trim()}" added to the list.` });
+        setNewItem('');
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+    }
     setIsLoading(false);
   };
 
-  const handleRemoveItem = (itemToRemove: string) => {
+  const handleRemoveItem = async (itemToRemove: string) => {
     setIsLoading(true);
-    const updatedItems = (student.missingItems || []).filter(item => item !== itemToRemove);
-    const studentDocRef = doc(firestore, 'students', student.id);
-    updateDocumentNonBlocking(studentDocRef, { missingItems: updatedItems });
+    const result = await removeMissingItemFromStudent(student.id, itemToRemove);
 
-    toast({ title: 'Item Removed', description: `"${itemToRemove}" has been removed.` });
+    if (result.success) {
+        toast({ title: 'Item Removed', description: `"${itemToRemove}" has been removed.` });
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+    }
     setIsLoading(false);
   };
 
-  const handleMarkAsReceived = (itemReceived: string) => {
+  const handleMarkAsReceived = async (itemReceived: string) => {
     setIsLoading(true);
-    const updatedItems = (student.missingItems || []).filter(item => item !== itemReceived);
+    const result = await markMissingItemAsReceived(student.id, itemReceived, currentUser.id);
     
-    const newNote: Note = {
-      id: `note-item-received-${Date.now()}`,
-      authorId: currentUser.id,
-      content: `Marked missing item as received: "${itemReceived}"`,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updates = {
-      missingItems: updatedItems,
-      notes: [...(student.notes || []), newNote],
-      unreadUpdates: (student.unreadUpdates || 0) + 1, // Notify admin/dept
-    };
-
-    const studentDocRef = doc(firestore, 'students', student.id);
-    updateDocumentNonBlocking(studentDocRef, updates);
-    
-    toast({ title: 'Item Received', description: `"${itemReceived}" marked as received. An admin has been notified.` });
+    if (result.success) {
+        toast({ title: 'Item Received', description: `"${itemReceived}" marked as received. An admin has been notified.` });
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+    }
     setIsLoading(false);
   };
 

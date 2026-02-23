@@ -1,6 +1,6 @@
 'use client';
 import { useState, useMemo } from 'react';
-import type { Student, Note } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -8,11 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { updateDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 import { useUsers } from '@/contexts/users-provider';
+import { addNoteToStudent } from '@/lib/actions';
 
 interface NotesSectionProps {
   student: Student;
@@ -36,24 +34,21 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
     if (!newNote.trim() || !currentUser) return;
 
     setIsLoading(true);
+    const result = await addNoteToStudent(student.id, currentUser.id, newNote.trim());
 
-    const noteToAdd: Note = {
-      id: `note-${Date.now()}`,
-      authorId: currentUser.id,
-      content: newNote.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    
-    const studentDocRef = doc(firestore, 'students', student.id);
-    const updatedNotes = [...(student.notes || []), noteToAdd];
-    updateDocumentNonBlocking(studentDocRef, { notes: updatedNotes });
-
-    toast({
-      title: 'Note Added',
-      description: 'Your note has been saved.',
-    });
-
-    setNewNote('');
+    if (result.success) {
+        toast({
+          title: 'Note Added',
+          description: 'Your note has been saved.',
+        });
+        setNewNote('');
+    } else {
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: result.message,
+        });
+    }
     setIsLoading(false);
   };
   

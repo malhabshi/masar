@@ -28,9 +28,7 @@ import { addApplication } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import type { ApprovedUniversity, Student } from '@/lib/types';
-import { useCollection, updateDocumentNonBlocking, useDoc } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useCollection, useDoc } from '@/firebase/client';
 
 const formSchema = z.object({
   universityName: z.string().min(1, { message: 'Please select a university.' }),
@@ -88,18 +86,7 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
     const result = await addApplication(student.id, university.name, university.country, values.major, student.name, student.employeeId);
     
     if (result.success) {
-      const newApplication = {
-          university: university.name,
-          country: university.country,
-          major: values.major,
-          status: 'Pending' as const,
-          updatedAt: new Date().toISOString(),
-      };
-      const updatedApplications = [...(student.applications || []), newApplication];
-      
-      const studentDocRef = doc(firestore, 'students', student.id);
-      updateDocumentNonBlocking(studentDocRef, { applications: updatedApplications });
-
+      // The useDoc hook will automatically update the UI on snapshot change
       toast({ title: 'Application Added', description: result.message });
       setIsOpen(false);
       form.reset();

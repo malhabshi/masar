@@ -17,9 +17,6 @@ import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
 import { updateApplicationStatus } from '@/lib/actions';
 import { AddApplicationDialog } from './add-application-dialog';
-import { updateDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
 
 interface StudentApplicationsProps {
   student: Student;
@@ -46,14 +43,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
     const result = await updateApplicationStatus(student.id, university, major, newStatus, student.name, student.employeeId);
 
     if (result.success) {
-      const studentDocRef = doc(firestore, 'students', student.id);
-      const updatedApplications = student.applications.map(app => 
-        app.university === university && app.major === major
-          ? { ...app, status: newStatus, updatedAt: new Date().toISOString() }
-          : app
-      );
-      updateDocumentNonBlocking(studentDocRef, { applications: updatedApplications });
-      
+      // The useDoc hook will automatically update the UI.
       toast({
         title: 'Status Updated',
         description: `Application for ${university} is now ${newStatus}.`

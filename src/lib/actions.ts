@@ -330,6 +330,98 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
     }
 }
 
+export async function addNoteToStudent(studentId: string, authorId: string, content: string) {
+    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+        
+        const studentData = studentDoc.data() as Student;
+        const newNote: Note = {
+            id: `note-${Date.now()}`,
+            authorId: authorId,
+            content: content,
+            createdAt: new Date().toISOString(),
+        };
+        const updatedNotes = [...(studentData.notes || []), newNote];
+        await studentRef.update({ notes: updatedNotes });
+        return { success: true, message: 'Note added.' };
+    } catch (error) {
+        console.error('addNoteToStudent error:', error);
+        return { success: false, message: 'Failed to add note.' };
+    }
+}
+
+export async function addMissingItemToStudent(studentId: string, item: string) {
+    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+        const studentData = studentDoc.data() as Student;
+        const updatedItems = [...(studentData.missingItems || []), item];
+        const updates = {
+            missingItems: updatedItems,
+            newMissingItemsForEmployee: (studentData.newMissingItemsForEmployee || 0) + 1,
+        };
+        await studentRef.update(updates);
+        return { success: true, message: 'Missing item added.' };
+    } catch (error) {
+        console.error('addMissingItemToStudent error:', error);
+        return { success: false, message: 'Failed to add missing item.' };
+    }
+}
+
+export async function removeMissingItemFromStudent(studentId: string, itemToRemove: string) {
+    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+        const studentData = studentDoc.data() as Student;
+        const updatedItems = (studentData.missingItems || []).filter(item => item !== itemToRemove);
+        await studentRef.update({ missingItems: updatedItems });
+        return { success: true, message: 'Missing item removed.' };
+    } catch (error) {
+        console.error('removeMissingItemFromStudent error:', error);
+        return { success: false, message: 'Failed to remove missing item.' };
+    }
+}
+
+export async function markMissingItemAsReceived(studentId: string, itemReceived: string, userId: string) {
+    if (!checkAdminDb()) return { success: false, message: 'Server database not available.' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+        const studentData = studentDoc.data() as Student;
+        const updatedItems = (studentData.missingItems || []).filter(item => item !== itemReceived);
+        
+        const newNote: Note = {
+            id: `note-item-received-${Date.now()}`,
+            authorId: userId,
+            content: `Marked missing item as received: "${itemReceived}"`,
+            createdAt: new Date().toISOString(),
+        };
+
+        const updates = {
+            missingItems: updatedItems,
+            notes: [...(studentData.notes || []), newNote],
+            unreadUpdates: (studentData.unreadUpdates || 0) + 1,
+        };
+        await studentRef.update(updates);
+        return { success: true, message: 'Item marked as received.' };
+    } catch (error) {
+        console.error('markMissingItemAsReceived error:', error);
+        return { success: false, message: 'Failed to mark item as received.' };
+    }
+}
+
+
 // --- TODO ACTIONS ---
 
 export async function addTodo(userId: string, content: string) {
