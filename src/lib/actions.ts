@@ -2,6 +2,7 @@
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
+import { FieldPath } from 'firebase-admin/firestore';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats } from './types';
 import * as xlsx from 'xlsx';
 import {
@@ -932,7 +933,7 @@ export async function deleteStudent(studentId: string, adminId: string) {
         const taskContent = `Admin ${adminUser.name} has permanently deleted the profile for student: ${studentData.name} (ID: ${studentId}).`;
         const adminsSnapshot = await adminDb!.collection('users')
             .where('role', '==', 'admin')
-            .where(adminDb!.FieldPath.documentId(), '!=', adminId)
+            .where(FieldPath.documentId(), '!=', adminId)
             .get();
 
         if (!adminsSnapshot.empty) {
@@ -1154,3 +1155,5 @@ export async function getReportStats(dateRange: {
     return { success: false, message: 'An error occurred while generating the report data.' };
   }
 }
+
+    
