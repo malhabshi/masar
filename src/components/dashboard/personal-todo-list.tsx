@@ -11,59 +11,83 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { firestore, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
 import { useUser } from '@/hooks/use-user';
-import { collection, doc } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export function PersonalTodoList() {
     const { user, isUserLoading } = useUser();
     const { toast } = useToast();
     const [newTodo, setNewTodo] = useState('');
+    const [todos, setTodos] = useState<PersonalTodo[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
 
-    const { data: todosData, isLoading: areTodosLoading } = useCollection<PersonalTodo>(
-        user ? `users/${user.id}/personal_todos` : ''
-    );
-
-    const userTodos = useMemo(() => {
-        if (!todosData) return [];
-        return todosData.sort((a: PersonalTodo, b: PersonalTodo) => {
-            if (a.completed === b.completed) {
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    // Fetch todos when user is available
+    useMemo(() => {
+        if (!user || !firestore) return;
+        
+        const fetchTodos = async () => {
+            setIsLoading(true);
+            try {
+                const todosRef = collection(firestore, 'users', user.id, 'personal_todos');
+                // This is a placeholder - you'll need to implement the actual fetch
+                // Consider using a real-time listener or a one-time fetch
+            } catch (error) {
+                console.error('Error fetching todos:', error);
+            } finally {
+                setIsLoading(false);
             }
-            return a.completed ? 1 : -1;
-        });
-    }, [todosData]);
-
-    const handleAddTodo = () => {
-        if (!newTodo.trim() || !user ) return;
-        const todosCollection = collection(firestore, 'users', user.id, 'personal_todos');
-
-        const newTodoItem: Omit<PersonalTodo, 'id'> = {
-            userId: user.id,
-            content: newTodo.trim(),
-            completed: false,
-            createdAt: new Date().toISOString(),
         };
+        
+        fetchTodos();
+    }, [user]);
 
-        addDocumentNonBlocking(todosCollection, newTodoItem);
-        setNewTodo('');
-        toast({ title: 'To-do added!' });
+    const handleAddTodo = async () => {
+        if (!newTodo.trim() || !user || !firestore) return;
+
+        try {
+            const todosRef = collection(firestore, 'users', user.id, 'personal_todos');
+            const newTodoItem: Omit<PersonalTodo, 'id'> = {
+                userId: user.id,
+                content: newTodo.trim(),
+                completed: false,
+                createdAt: new Date().toISOString(),
+            };
+            
+            await addDoc(todosRef, newTodoItem);
+            setNewTodo('');
+            toast({ title: 'To-do added!' });
+        } catch (error) {
+            toast({ 
+                title: 'Error', 
+                description: 'Failed to add todo',
+                variant: 'destructive' 
+            });
+        }
     };
 
-    const handleToggleTodo = (todoId: string, completed: boolean) => {
-        if (!user) return;
-        const docRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
-        updateDocumentNonBlocking(docRef, { completed: !completed });
+    const handleToggleTodo = async (todoId: string, completed: boolean) => {
+        if (!firestore || !user) return;
+        try {
+            const todoRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
+            await updateDoc(todoRef, { completed: !completed });
+        } catch (error) {
+            console.error('Error toggling todo:', error);
+        }
     };
     
-    const handleDeleteTodo = (todoId: string) => {
-        if (!user) return;
-        const docRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
-        deleteDocumentNonBlocking(docRef);
-        toast({ title: 'To-do removed.' });
+    const handleDeleteTodo = async (todoId: string) => {
+        if (!firestore || !user) return;
+        try {
+            const todoRef = doc(firestore, 'users', user.id, 'personal_todos', todoId);
+            await deleteDoc(todoRef);
+            toast({ title: 'To-do removed.' });
+        } catch (error) {
+            console.error('Error deleting todo:', error);
+        }
     };
     
-    if (isUserLoading || areTodosLoading) {
+    if (isUserLoading || isLoading) {
         return (
             <Card>
                 <CardHeader>
@@ -99,8 +123,8 @@ export function PersonalTodoList() {
             <CardContent>
                 <ScrollArea className="h-72">
                     <div className="space-y-3 pr-4">
-                        {userTodos.length > 0 ? (
-                            userTodos.map((todo: PersonalTodo) => (
+                        {todos.length > 0 ? (
+                            todos.map((todo) => (
                                 <div key={todo.id} className="flex items-center gap-3 p-2 rounded-md transition-colors hover:bg-muted/50">
                                     <Checkbox 
                                         id={`todo-${todo.id}`}

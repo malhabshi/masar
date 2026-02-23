@@ -1,131 +1,35 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function isUserAdmin() {
-      return getUserData().role == 'admin';
-    }
-    
-    function isDepartment() {
-      return getUserData().role == 'department';
-    }
-    
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    function isStudentAssignedToCurrentUser(studentId) {
-      // Ensure we have a studentId to check and that the user data is available
-      if (studentId == null || getUserData() == null || getUserData().civilId == null) {
-        return false;
-      }
-      let student = get(/databases/$(database)/documents/students/$(studentId)).data;
-      return student.employeeId == getUserData().civilId;
-    }
-
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isUserAdmin() || (isOwner(userId) && (request.resource.data.role != 'admin' || request.resource.data.email == 'admin@uniapply.hub'));
-      allow update: if isUserAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role);
-      allow delete: if isUserAdmin();
-    }
-
-    match /students {
-      // Any authenticated user can list all students. Client-side queries are responsible for filtering.
-      allow list: if isSignedIn();
-    }
-
-    match /students/{studentId} {
-      // Any authenticated user can read a single student document.
-      allow get: if isSignedIn();
-      
-      // A user can only create a student document if they are signed in.
-      allow create: if isSignedIn();
-
-      // An admin, department user, or the assigned employee can update a student.
-      allow update: if isSignedIn() && (isUserAdmin() || isDepartment() || (resource.data.employeeId == getUserData().civilId));
-
-      // Only admins can delete students.
-      allow delete: if isUserAdmin();
-    }
-    
-    match /universities/{universityId} {
-      allow read: if isSignedIn();
-      allow write: if isUserAdmin();
-    }
-
-    match /approved_universities/{universityId} {
-      allow read: if isSignedIn();
-      allow write: if isUserAdmin() || isDepartment();
-    }
-
-    match /academic_terms/{termId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
-    }
-
-    match /shared_documents/{documentId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin() || isDepartment();
-    }
-
-    match /request_types/{requestTypeId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
-    }
-    
-    match /resource_links/{linkId} {
-      allow read: if isSignedIn();
-      allow write: if isUserAdmin() || isDepartment();
-    }
-    
-    match /upcoming_events/{eventId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
-    }
-    
-    match /application_questions/{questionId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isUserAdmin();
-    }
-    
+    // Allow users to read/write their own personal_todos
     match /users/{userId}/personal_todos/{todoId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    match /applications/{applicationId} {
-      // Allow any authenticated user to read/write applications
-      allow read, write: if isSignedIn();
+    // Allow users to read/write their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-
-    match /documents/{documentId} {
-      // Allow assigned employees, departments, and admins to manage documents.
-      allow read: if isSignedIn() && (isUserAdmin() || isDepartment() || isStudentAssignedToCurrentUser(resource.data.studentId));
-      allow create: if isSignedIn() && (isUserAdmin() || isStudentAssignedToCurrentUser(request.resource.data.studentId));
-      allow update, delete: if isUserAdmin();
-    }
-
-    match /tasks {
-        allow list: if isSignedIn();
-    }
+    
+    // Tasks collection - all authenticated users
     match /tasks/{taskId} {
-      // Allow any authenticated user to get/write a task
-      allow get, write: if isSignedIn();
+      allow read, write: if request.auth != null;
     }
-
-    match /chats/{studentId}/messages/{messageId} {
-      allow read, write: if isSignedIn() && (isUserAdmin() || isDepartment() || getUserData().civilId == get(/databases/$(database)/documents/students/$(studentId)).data.employeeId);
+    
+    // Students collection
+    match /students/{studentId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Approved universities
+    match /approved_universities/{universityId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Applications
+    match /applications/{applicationId} {
+      allow read, write: if request.auth != null;
     }
   }
 }
-    
