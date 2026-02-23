@@ -126,7 +126,7 @@ export async function updateApplicationStatus(studentId: string, universityName:
 export async function updateStudentPipelineStatus(studentId: string, status: string, userName: string, studentName: string) {
     if (!checkAdminDb()) return { success: false, message: 'Server connection error.' };
     try {
-        const studentRef = adminDb.collection('students').doc(studentId);
+        const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
         if (!studentDoc.exists) return { success: false, message: "Student not found."};
         
@@ -163,7 +163,7 @@ export async function sendTask(authorId: string, recipientId: string, content: s
             status: 'new',
             replies: []
         };
-        await adminDb.collection('tasks').add(newTask);
+        await adminDb!.collection('tasks').add(newTask);
         
         if (recipientId !== 'all') {
             const recipient = await getUser(recipientId);
@@ -186,7 +186,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
     if (!checkAdminDb()) return { success: false, message: 'Server connection error.' };
 
     try {
-        const taskRef = adminDb.collection('tasks').doc(taskId);
+        const taskRef = adminDb!.collection('tasks').doc(taskId);
         const taskDoc = await taskRef.get();
         if (!taskDoc.exists) return { success: false, message: 'Task not found.' };
 
@@ -217,7 +217,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
 export async function updateTaskStatus(taskId: string, status: TaskStatus, task: Task) {
     if (!checkAdminDb()) return { success: false, message: 'Server connection error.' };
     try {
-        await adminDb.collection('tasks').doc(taskId).update({ status });
+        await adminDb!.collection('tasks').doc(taskId).update({ status });
         return { success: true, message: 'Status updated.' };
     } catch(error) {
         console.error('updateTaskStatus error:', error);
@@ -229,12 +229,13 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, task:
 // --- STUDENT & USER MANAGEMENT ACTIONS ---
 
 export async function transferStudent(studentId: string, newEmployee: User, adminId: string, studentName: string, fromEmployeeName: string | null) {
-    if (!checkAdminDb() || !newEmployee.civilId) {
-        return { success: false, message: 'Server connection error or employee missing Civil ID.' };
+    if (!checkAdminDb()) return { success: false, message: 'Server connection error.' };
+    if (!newEmployee.civilId) {
+        return { success: false, message: 'Employee missing Civil ID.' };
     }
 
     try {
-        const studentRef = adminDb.collection('students').doc(studentId);
+        const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
 
@@ -297,13 +298,13 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
             return { success: false, message: 'One or both employees are missing a Civil ID.' };
         }
 
-        const snapshot = await adminDb.collection('students').where('employeeId', '==', fromEmployeeCivilId).get();
+        const snapshot = await adminDb!.collection('students').where('employeeId', '==', fromEmployeeCivilId).get();
         
         if (snapshot.empty) {
             return { success: true, message: 'No students to transfer.' };
         }
 
-        const batch = adminDb.batch();
+        const batch = adminDb!.batch();
         snapshot.docs.forEach(doc => {
             batch.update(doc.ref, { 
                 employeeId: toEmployeeCivilId, 
@@ -333,6 +334,8 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 
 export async function importStudentsFromExcel(userId: string, fileName: string) {
     console.log(`User ${userId} initiated import from ${fileName}`);
+    // This is a placeholder. Real implementation would parse the excel file and create student docs.
+    // For now, it just creates a task for an admin to handle it manually.
     await sendTask(userId, 'all', `User ${userId} bulk-imported students from file '${fileName}'. Please review and assign.`);
     return { success: true, message: `Students from '${fileName}' are being imported. A task has been created for admins to review.` };
 }
@@ -363,7 +366,7 @@ export async function onDocumentUploaded(documentId: string, studentId: string, 
     let notificationData: Record<string, string> = {};
 
     if (isEmployeeUploader) {
-        const admins = (await adminDb.collection('users').where('role', '==', 'admin').get()).docs;
+        const admins = (await adminDb!.collection('users').where('role', '==', 'admin').get()).docs;
         if (admins.length > 0) {
             recipientId = admins[0].id;
             notificationType = NotificationType.DOCUMENT_UPLOAD_TO_ADMIN;
@@ -371,7 +374,7 @@ export async function onDocumentUploaded(documentId: string, studentId: string, 
         }
     } else {
         if (student.employeeId) {
-            const employeeQuery = await adminDb.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
+            const employeeQuery = await adminDb!.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
             if (!employeeQuery.empty) {
                 const employeeDoc = employeeQuery.docs[0];
                 const employee = { id: employeeDoc.id, ...employeeDoc.data() } as User;
