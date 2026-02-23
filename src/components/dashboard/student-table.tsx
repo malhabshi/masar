@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -29,6 +30,7 @@ import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useUsers } from '@/contexts/users-provider';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 interface StudentTableProps {
@@ -41,6 +43,7 @@ interface StudentTableProps {
   showCountries?: boolean;
   emptyStateMessage?: string;
   showApplicationCount?: boolean;
+  showAssignedFilter?: boolean;
 }
 
 const pipelineStatusStyles: { [key: string]: string } = {
@@ -57,9 +60,17 @@ const pipelineStatusLabels: { [key: string]: string } = {
 };
 
 
-export function StudentTable({ students, currentUser, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false }: StudentTableProps) {
+export function StudentTable({ students, currentUser, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false, showAssignedFilter = false }: StudentTableProps) {
   const { toast } = useToast();
   const { getUserByCivilId } = useUsers();
+  const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine'>('all');
+
+  const displayedStudents = useMemo(() => {
+    if (showAssignedFilter && assignedFilter === 'mine' && currentUser?.civilId) {
+      return students.filter(s => s.employeeId === currentUser.civilId);
+    }
+    return students;
+  }, [students, showAssignedFilter, assignedFilter, currentUser]);
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -82,183 +93,195 @@ export function StudentTable({ students, currentUser, showEmployee = false, show
 
   const numColumns = [showEmployee, showPipelineStatus, showIelts, showApplicationCount, showTerm, showCountries].filter(Boolean).length + 2;
 
-  return (
-    <div className="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Student</TableHead>
-            {showApplicationCount && <TableHead>Application Tracking</TableHead>}
-            {showPipelineStatus && <TableHead>Pipeline</TableHead>}
-            {showCountries && <TableHead>Countries</TableHead>}
-            {showEmployee && <TableHead>Assigned Employee</TableHead>}
-            {showIelts && <TableHead>IELTS Overall</TableHead>}
-            {showTerm && <TableHead>Term</TableHead>}
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {students.length > 0 ? (
-            students.map((student) => {
-              const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
-              const applicationCountries = Array.from(new Set(student.applications.map(app => app.country))).join(', ');
-              const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
-              const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const currentEmptyStateMessage = assignedFilter === 'mine' ? 'You have no assigned students that match the current filters.' : emptyStateMessage;
 
-              return (
-              <TableRow key={student.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                       <AvatarImage src={student.avatarUrl} alt={student.name} />
-                      <AvatarFallback>{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <Link href={`/student/${student.id}`} className="hover:underline">
-                        <div className="font-medium flex items-center gap-2 flex-wrap">
-                          <span>{student.name || 'Unknown Student'}</span>
-                          {isCurrentUserAssigned && student.isNewForEmployee && (
-                              <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>
-                          )}
-                          {isAdminOrDept && student.unreadUpdates && student.unreadUpdates > 0 && (
-                            <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
-                              <MessageSquare className="h-3 w-3" />
-                              <span>{student.unreadUpdates}</span>
-                            </Badge>
-                          )}
-                          {isAdminOrDept && (student.newDocumentsForAdmin || 0) > 0 && (
-                            <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500 hover:bg-blue-600">
-                              <FilePlus className="h-3 w-3" />
-                              <span>{student.newDocumentsForAdmin}</span>
-                            </Badge>
-                          )}
-                          {isCurrentUserAssigned && (student.employeeUnreadMessages || 0) > 0 && (
-                            <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
-                                <MessageSquare className="h-3 w-3" />
-                                <span>{student.employeeUnreadMessages}</span>
-                            </Badge>
-                          )}
-                          {isCurrentUserAssigned && (student.newDocumentsForEmployee || 0) > 0 && (
-                              <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500 hover:bg-blue-600">
-                                  <FilePlus className="h-3 w-3" />
-                                  <span>{student.newDocumentsForEmployee}</span>
-                              </Badge>
-                          )}
-                          {isCurrentUserAssigned && (student.newMissingItemsForEmployee || 0) > 0 && (
-                              <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 hover:bg-yellow-500 text-black">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  <span>{student.newMissingItemsForEmployee}</span>
-                              </Badge>
-                          )}
-                          {student.transferRequested && (
-                              <Badge variant="outline" className="border-yellow-500 text-yellow-600">
-                                  <ArrowRightLeft className="mr-1 h-3 w-3" />
-                                  Transfer Requested
-                              </Badge>
-                          )}
-                          {wasTransferred && (
-                              <Badge variant="outline" className="border-blue-500 text-blue-600">
-                                  <Repeat className="mr-1 h-3 w-3" />
-                                  Transferred
-                              </Badge>
-                          )}
-                        </div>
-                      </Link>
-                      <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
-                      <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
-                      {student.finalChoiceUniversity && (
-                        <div className="flex items-center gap-1 text-lg text-success font-bold mt-1">
-                          <GraduationCap className="h-5 w-5" />
-                          <span>{student.finalChoiceUniversity}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </TableCell>
-                {showApplicationCount && (
-                  <TableCell>
-                    <div className="text-center font-medium">{student.applications.length}</div>
-                  </TableCell>
-                )}
-                {showPipelineStatus && (
-                  <TableCell>
-                    <Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>
-                      {pipelineStatusLabels[student.pipelineStatus || 'none']}
-                    </Badge>
-                  </TableCell>
-                )}
-                {showCountries && (
-                  <TableCell>
-                    {applicationCountries ? (
-                      <span>{applicationCountries}</span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">N/A</span>
-                    )}
-                  </TableCell>
-                )}
-                {showEmployee && (
-                  <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
-                )}
-                {showIelts && (
-                  <TableCell>
-                    {student.ielts?.overall ? (
-                        <Badge variant="secondary">{student.ielts.overall.toFixed(1)}</Badge>
-                    ) : (
-                        <span className="text-sm text-muted-foreground">N/A</span>
-                    )}
-                  </TableCell>
-                )}
-                {showTerm && (
-                  <TableCell>
-                    {student.term ? (
-                        <Badge variant="outline">{student.term}</Badge>
-                    ) : (
-                        <span className="text-sm text-muted-foreground">N/A</span>
-                    )}
-                  </TableCell>
-                )}
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                      <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <span className="sr-only">Open menu</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                  <Link href={`/student/${student.id}`}>View Details</Link>
-                              </DropdownMenuItem>
-                              {currentUser?.role === 'employee' && (
-                                  <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'green')}>
-                                          <span>Move to Green</span>
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'orange')}>
-                                          <span>Move to Orange</span>
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'red')}>
-                                          <span>Move to Red</span>
-                                      </DropdownMenuItem>
-                                  </>
-                              )}
-                          </DropdownMenuContent>
-                      </DropdownMenu>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )})
-          ) : (
+  return (
+    <div>
+      {showAssignedFilter && currentUser.role !== 'employee' && (
+        <Tabs value={assignedFilter} onValueChange={(value) => setAssignedFilter(value as 'all' | 'mine')} className="mb-4">
+          <TabsList>
+            <TabsTrigger value="all">All Applicants</TabsTrigger>
+            <TabsTrigger value="mine">My Assigned</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+      <div className="rounded-lg border">
+        <Table>
+          <TableHeader>
             <TableRow>
-                <TableCell colSpan={numColumns} className="h-24 text-center">
-                    {emptyStateMessage}
-                </TableCell>
+              <TableHead>Student</TableHead>
+              {showApplicationCount && <TableHead>Application Tracking</TableHead>}
+              {showPipelineStatus && <TableHead>Pipeline</TableHead>}
+              {showCountries && <TableHead>Countries</TableHead>}
+              {showEmployee && <TableHead>Assigned Employee</TableHead>}
+              {showIelts && <TableHead>IELTS Overall</TableHead>}
+              {showTerm && <TableHead>Term</TableHead>}
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {displayedStudents.length > 0 ? (
+              displayedStudents.map((student) => {
+                const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
+                const applicationCountries = Array.from(new Set(student.applications.map(app => app.country))).join(', ');
+                const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
+                const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+
+                return (
+                <TableRow key={student.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarImage src={student.avatarUrl} alt={student.name} />
+                        <AvatarFallback>{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <Link href={`/student/${student.id}`} className="hover:underline">
+                          <div className="font-medium flex items-center gap-2 flex-wrap">
+                            <span>{student.name || 'Unknown Student'}</span>
+                            {isCurrentUserAssigned && student.isNewForEmployee && (
+                                <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>
+                            )}
+                            {isAdminOrDept && student.unreadUpdates && student.unreadUpdates > 0 && (
+                              <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
+                                <MessageSquare className="h-3 w-3" />
+                                <span>{student.unreadUpdates}</span>
+                              </Badge>
+                            )}
+                            {isAdminOrDept && (student.newDocumentsForAdmin || 0) > 0 && (
+                              <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500 hover:bg-blue-600">
+                                <FilePlus className="h-3 w-3" />
+                                <span>{student.newDocumentsForAdmin}</span>
+                              </Badge>
+                            )}
+                            {isCurrentUserAssigned && (student.employeeUnreadMessages || 0) > 0 && (
+                              <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span>{student.employeeUnreadMessages}</span>
+                              </Badge>
+                            )}
+                            {isCurrentUserAssigned && (student.newDocumentsForEmployee || 0) > 0 && (
+                                <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500 hover:bg-blue-600">
+                                    <FilePlus className="h-3 w-3" />
+                                    <span>{student.newDocumentsForEmployee}</span>
+                                </Badge>
+                            )}
+                            {isCurrentUserAssigned && (student.newMissingItemsForEmployee || 0) > 0 && (
+                                <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 hover:bg-yellow-500 text-black">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    <span>{student.newMissingItemsForEmployee}</span>
+                                </Badge>
+                            )}
+                            {student.transferRequested && (
+                                <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                                    <ArrowRightLeft className="mr-1 h-3 w-3" />
+                                    Transfer Requested
+                                </Badge>
+                            )}
+                            {wasTransferred && (
+                                <Badge variant="outline" className="border-blue-500 text-blue-600">
+                                    <Repeat className="mr-1 h-3 w-3" />
+                                    Transferred
+                                </Badge>
+                            )}
+                          </div>
+                        </Link>
+                        <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
+                        <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
+                        {student.finalChoiceUniversity && (
+                          <div className="flex items-center gap-1 text-lg text-success font-bold mt-1">
+                            <GraduationCap className="h-5 w-5" />
+                            <span>{student.finalChoiceUniversity}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  {showApplicationCount && (
+                    <TableCell>
+                      <div className="text-center font-medium">{student.applications.length}</div>
+                    </TableCell>
+                  )}
+                  {showPipelineStatus && (
+                    <TableCell>
+                      <Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>
+                        {pipelineStatusLabels[student.pipelineStatus || 'none']}
+                      </Badge>
+                    </TableCell>
+                  )}
+                  {showCountries && (
+                    <TableCell>
+                      {applicationCountries ? (
+                        <span>{applicationCountries}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">N/A</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {showEmployee && (
+                    <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
+                  )}
+                  {showIelts && (
+                    <TableCell>
+                      {student.ielts?.overall ? (
+                          <Badge variant="secondary">{student.ielts.overall.toFixed(1)}</Badge>
+                      ) : (
+                          <span className="text-sm text-muted-foreground">N/A</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {showTerm && (
+                    <TableCell>
+                      {student.term ? (
+                          <Badge variant="outline">{student.term}</Badge>
+                      ) : (
+                          <span className="text-sm text-muted-foreground">N/A</span>
+                      )}
+                    </TableCell>
+                  )}
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/student/${student.id}`}>View Details</Link>
+                                </DropdownMenuItem>
+                                {currentUser?.role === 'employee' && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'green')}>
+                                            <span>Move to Green</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'orange')}>
+                                            <span>Move to Orange</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'red')}>
+                                            <span>Move to Red</span>
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )})
+            ) : (
+              <TableRow>
+                  <TableCell colSpan={numColumns} className="h-24 text-center">
+                      {currentEmptyStateMessage}
+                  </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

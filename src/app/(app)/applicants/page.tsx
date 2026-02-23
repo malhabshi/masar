@@ -83,6 +83,7 @@ export default function ApplicantsPage() {
             showEmployee={currentUser.role !== 'employee'}
             showPipelineStatus
             showTerm
+            showAssignedFilter={true}
           />
         </CardContent>
       </Card>
