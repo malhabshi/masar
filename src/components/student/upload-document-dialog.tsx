@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { Student, Document as StudentDocument } from '@/lib/types';
-import type { AppUser } from '@/hooks/use-user';
+import { useUser } from '@/hooks/use-user';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
@@ -24,14 +24,14 @@ import { doc } from 'firebase/firestore';
 
 interface UploadDocumentDialogProps {
   student: Student;
-  currentUser: AppUser;
 }
 
-export function UploadDocumentDialog({ student, currentUser }: UploadDocumentDialogProps) {
+export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { user: currentUser, auth: authUser } = useUser();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -44,7 +44,7 @@ export function UploadDocumentDialog({ student, currentUser }: UploadDocumentDia
       toast({ variant: 'destructive', title: 'No file selected' });
       return;
     }
-    if (!currentUser) {
+    if (!currentUser || !authUser) {
       toast({ variant: 'destructive', title: 'Authentication or database error' });
       return;
     }
@@ -57,8 +57,12 @@ export function UploadDocumentDialog({ student, currentUser }: UploadDocumentDia
     formData.append('studentId', student.id);
 
     try {
+      const token = await authUser.getIdToken();
       const response = await fetch('/api/upload', {
         method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
 

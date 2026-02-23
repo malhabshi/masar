@@ -95,7 +95,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
       </CardContent>
       {allowUpload && (
         <CardFooter className="border-t pt-4">
-           <UploadDocumentDialog student={student} currentUser={currentUser} />
+           <UploadDocumentDialog student={student} />
         </CardFooter>
       )}
     </Card>
