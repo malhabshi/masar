@@ -15,6 +15,7 @@ import { useUsers } from '@/contexts/users-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentChat } from '@/components/student/student-chat';
+import { MissingItemsSection } from '@/components/student/missing-items-section';
 
 
 function StudentPageContentSkeleton() {
@@ -106,6 +107,7 @@ export default function StudentDetailPage() {
                             </CardHeader>
                             <StudentChat student={student} currentUser={currentUser} />
                         </Card>
+                        <MissingItemsSection student={student} currentUser={currentUser} />
                         {student.transferHistory && student.transferHistory.length > 0 && (
                             <TransferHistory transferHistory={student.transferHistory} />
                         )}
