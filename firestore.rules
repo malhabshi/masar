@@ -35,8 +35,8 @@ service cloud.firestore {
     
     // Users collection - custom rules for admin vs regular users
     match /users/{userId} {
-      // Anyone can read all users (for lookups)
-      allow read: if request.auth != null;
+      // Users can read their own profile. Admins and department members can read all profiles.
+      allow read: if request.auth != null && (request.auth.uid == userId || isOneOfRoles(['admin', 'department']));
       
       // Users can write their own document, but cannot change their own role.
       // Only admins can change roles.
@@ -119,8 +119,8 @@ service cloud.firestore {
 
     // Restrict time logs to the employee and give read-only access to admins.
     match /time_logs/{logId} {
-      // Employees can create their own time logs.
-      allow create: if request.auth != null && request.resource.data.employeeId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.employeeId == request.auth.uid;
       
       // Admins can read any log for reporting. Employees can read their own.
       allow read: if request.auth != null && (isRole('admin') || resource.data.employeeId == request.auth.uid);
