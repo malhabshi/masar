@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -45,14 +46,11 @@ export function NotificationListener() {
   // Fetch students based on user role
   const studentQueryConstraints = useMemoFirebase(() => {
     if (!user) return null;
-    if (user.role === 'employee' && user.civilId) {
-        return [where('employeeId', '==', user.civilId)];
-    }
     if (user.role === 'admin' || user.role === 'department') {
         return []; // No constraints for admins/depts, they get all students
     }
     return null; // Not a role that should be listening to students this way
-  }, [user?.role, user?.civilId]);
+  }, [user?.role]);
 
   const { data: students } = useCollection<Student>(
     studentQueryConstraints ? 'students' : '', 
@@ -69,18 +67,11 @@ export function NotificationListener() {
     (events || []).forEach(event => ids.add(event.authorId));
     (students || []).forEach(student => {
       if (student.createdBy) ids.add(student.createdBy);
-      student.documents?.forEach(doc => ids.add(doc.authorId));
     });
     return Array.from(ids);
   }, [tasks, events, students]);
 
   const { userMap } = useUserCacheById(allUserIds);
-  
-  useEffect(() => {
-    if (user) {
-        console.log('👂 Listener running for user:', user.email, 'role:', user.role);
-    }
-  }, [user]);
 
   // Effect for new tasks
   useEffect(() => {
@@ -125,86 +116,29 @@ export function NotificationListener() {
     prevEventsRef.current = events;
   }, [events, user, toast, router]);
 
-  // Effect for new students (for admins) & new documents (for all)
+  // Effect for new students (for admins)
   useEffect(() => {
     if (!students || !user || !userMap.size || !prevStudentsRef.current) {
         prevStudentsRef.current = students;
         return;
     }
-
-    const prevStudentsMap = new Map(prevStudentsRef.current.map(s => [s.id, s]));
-
-    students.forEach(currentStudent => {
-        const prevStudent = prevStudentsMap.get(currentStudent.id);
-        const isAdminOrDept = ['admin', 'department'].includes(user.role);
-
-        // 1. Check for newly created students
-        if (!prevStudent && isAdminOrDept) {
-            const creator = userMap.get(currentStudent.createdBy);
-            if (creator && creator.role === 'employee') {
-                playNotificationSound(1200); // Higher pitch for new students
-                toast({
-                    title: 'New Student Added',
-                    description: `'${currentStudent.name}' was added by ${creator.name}.`,
-                    action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
-                });
-            }
-        }
-
-        // 2. Check for new documents on existing students
-        if (prevStudent) {
-            const isEmployee = user.role === 'employee';
-            let wasDocumentAddedForThisUser = false;
-            
-            // Check if a doc was added FOR an admin/dept
-            if (isAdminOrDept && (currentStudent.newDocumentsForAdmin || 0) > (prevStudent.newDocumentsForAdmin || 0)) {
-                wasDocumentAddedForThisUser = true;
-            }
-
-            // Check if a doc was added FOR an employee
-            const currentDocsForEmployee = currentStudent.newDocumentsForEmployee || 0;
-            const prevDocsForEmployee = prevStudent.newDocumentsForEmployee || 0;
-            console.log('📊 Student data changed:', currentStudent.id, 'newDocsForEmployee (current):', currentDocsForEmployee, 'newDocsForEmployee (prev):', prevDocsForEmployee);
-
-            if (isEmployee && currentDocsForEmployee > prevDocsForEmployee) {
-                wasDocumentAddedForThisUser = true;
-            }
-            
-            if (wasDocumentAddedForThisUser) {
-                const newDocs = currentStudent.documents.filter(
-                    doc => !prevStudent.documents.some(prevDoc => prevDoc.id === doc.id)
-                );
-                
-                if (newDocs.length > 0) {
-                    const latestDoc = newDocs[newDocs.length - 1];
-
-                    if (latestDoc.authorId !== user.id) { // Don't notify the uploader
-                        const author = userMap.get(latestDoc.authorId);
-                        const authorName = author ? author.name : 'A user';
-                        const toastTitle = isEmployee ? 'New Document for Your Student' : 'New Document Uploaded';
-                        
-                        console.log('🚀 TRIGGERING NOTIFICATION!', {
-                            toastTitle,
-                            studentName: currentStudent.name,
-                            authorName,
-                        });
-
-                        playNotificationSound(900); // Document-specific sound
-                        toast({
-                            title: toastTitle,
-                            description: `${authorName} uploaded a document for ${currentStudent.name}.`,
-                            action: (
-                                <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>
-                                    View
-                                </ToastAction>
-                            ),
-                        });
-                    }
+    const prevStudentIds = new Set(prevStudentsRef.current.map(s => s.id));
+    students.forEach(student => {
+        if (!prevStudentIds.has(student.id)) {
+            const isAdminOrDept = ['admin', 'department'].includes(user.role);
+            if (isAdminOrDept) {
+                const creator = userMap.get(student.createdBy);
+                if (creator && creator.role === 'employee') {
+                    playNotificationSound(1200); // Higher pitch
+                    toast({
+                        title: 'New Student Added',
+                        description: `'${student.name}' was added by ${creator.name}.`,
+                        action: <ToastAction altText="View" onClick={() => router.push(`/student/${student.id}`)}>View</ToastAction>,
+                    });
                 }
             }
         }
     });
-
     prevStudentsRef.current = students;
   }, [students, user, userMap, toast, router]);
 

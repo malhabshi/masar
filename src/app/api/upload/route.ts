@@ -1,13 +1,10 @@
 
-
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import type { User, Student } from '@/lib/types';
 import type { Document as StudentDocument } from '@/lib/types';
-
-console.log('🔥🔥🔥 UPLOAD API ROUTE CALLED 🔥🔥🔥');
 
 // Re-using the getUser helper from actions.ts, but defined locally for the route
 async function getUser(userId: string): Promise<User | null> {
@@ -43,13 +40,6 @@ export async function POST(req: NextRequest) {
     const destination = formData.get('destination') as 'student' | 'shared' | 'user_avatar' | null;
     const customName = formData.get('customName') as string | null;
 
-     console.log('📦 Form data received:', {
-       file: file?.name,
-       destination,
-       studentId: formData.get('studentId'),
-       customName
-     });
-
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
@@ -69,10 +59,8 @@ export async function POST(req: NextRequest) {
 
         // 1. UPLOAD FILE TO STORAGE
         const filePath = `students/${studentId}/${Date.now()}_${file.name}`;
-        console.log('📁 Attempting to upload to storage path:', filePath);
         const blob = bucket.file(filePath);
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
-        console.log('✅ File saved to storage successfully');
         
         await blob.makePublic();
         const url = blob.publicUrl();
@@ -96,7 +84,6 @@ export async function POST(req: NextRequest) {
             isNew: true,
         };
         
-        console.log('📝 Updating Firestore with new document:', newDocument);
         const updatedDocuments = [...(studentData.documents || []), newDocument];
         
         // Update notification counters based on uploader role
@@ -105,10 +92,8 @@ export async function POST(req: NextRequest) {
 
         let counterUpdate = {};
         if (uploaderRole === 'employee') {
-          console.log('📈 Uploader is employee, incrementing newDocumentsForAdmin');
           counterUpdate = { newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 };
         } else {
-          console.log('📈 Uploader is admin/dept, incrementing newDocumentsForEmployee');
           counterUpdate = { newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 };
         }
    
@@ -122,7 +107,6 @@ export async function POST(req: NextRequest) {
 
     } else if (destination === 'user_avatar') {
         const filePath = `user_avatars/${decodedToken.uid}/${Date.now()}_${file.name}`;
-        console.log('📁 Attempting to upload to storage path:', filePath);
         const blob = bucket.file(filePath);
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
         await blob.makePublic();
@@ -136,12 +120,7 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('🔥🔥🔥 FULL ERROR OBJECT:', error);
-    console.error('🔥 Error name:', error.name);
-    console.error('🔥 Error message:', error.message);
-    console.error('🔥 Error stack:', error.stack);
-    if (error.code) console.error('🔥 Error code:', error.code);
-    if (error.response) console.error('🔥 Error response:', error.response);
+    console.error('Upload API Error:', error);
     return NextResponse.json({ error: 'Failed to process upload.', details: error.message }, { status: 500 });
   }
 }
