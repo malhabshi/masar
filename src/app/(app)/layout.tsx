@@ -7,6 +7,7 @@ import { useHeartbeat } from '@/hooks/use-heartbeat';
 import { AppSidebar } from '@/components/sidebar';
 import { Loader2 } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { NotificationListener } from '@/components/notifications/notification-listener';
 
 export default function AuthenticatedLayout({
   children,
@@ -35,6 +36,7 @@ export default function AuthenticatedLayout({
 
   return (
     <SidebarProvider>
+      <NotificationListener />
       <div className="flex h-full">
           <AppSidebar />
           <main className="flex-1 p-6 overflow-auto">

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type { Task, TaskReply, TaskStatus, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { addReplyToTask, updateTaskStatus } from '@/lib/actions';
@@ -21,6 +21,7 @@ import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { formatDate, formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { cn } from '@/lib/utils';
 
 const taskStatuses: TaskStatus[] = ['new', 'in-progress', 'completed', 'archived'];
 
@@ -31,6 +32,7 @@ function TaskItem({
     onReply, 
     isReplying,
     userMap,
+    isNew,
 }: { 
     task: Task, 
     onStatusChange: (taskId: string, status: TaskStatus) => void, 
@@ -38,6 +40,7 @@ function TaskItem({
     onReply: (taskId: string, reply: string) => void,
     isReplying: boolean,
     userMap: Map<string, User>,
+    isNew: boolean,
 }) {
     const [replyContent, setReplyContent] = useState('');
     const [isClient, setIsClient] = useState(false);
@@ -63,7 +66,6 @@ function TaskItem({
         if (!task.replies || task.replies.length === 0) return null;
         const sortedReplies = [...task.replies].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         const firstReply = sortedReplies[0];
-        // Note: date-fns formatDistanceStrict would be more precise
         const diffMs = new Date(firstReply.createdAt).getTime() - new Date(task.createdAt).getTime();
         const diffMins = Math.round(diffMs / 60000);
         if (diffMins < 60) return `${diffMins} minutes`;
@@ -74,7 +76,7 @@ function TaskItem({
     const responseTime = getResponseTime(task);
 
     return (
-        <Card>
+        <Card className={cn("transition-colors duration-500", isNew && "bg-blue-500/10")}>
             <CardHeader className="flex flex-row items-start gap-4 space-y-0 pb-4">
                 <Avatar className="h-9 w-9 border">
                     {author ? (
@@ -189,9 +191,32 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const [isReplying, setIsReplying] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  const [newItems, setNewItems] = useState(new Set<string>());
 
   const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
   const tasks = useMemo(() => tasksData || [], [tasksData]);
+
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+    const storageKey = `lastViewedTasksManager_${currentUser.id}`;
+    const lastViewed = localStorage.getItem(storageKey);
+
+    const newlyAdded = new Set<string>();
+    tasks.forEach(task => {
+        if (!lastViewed || new Date(task.createdAt) > new Date(lastViewed)) {
+            newlyAdded.add(task.id);
+        }
+    });
+
+    if (newlyAdded.size > 0) {
+      setNewItems(prev => new Set([...prev, ...newlyAdded]));
+    }
+    
+    return () => {
+      localStorage.setItem(storageKey, new Date().toISOString());
+    };
+  }, [tasks, currentUser.id]);
 
   const allUserIdsInTasks = useMemo(() => {
     const userIds = new Set<string>();
@@ -260,7 +285,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   }
 
   const filteredTasks = useMemo(() => {
-    // Both Admin and Department roles should see all tasks on this management page.
     if (currentUser.role === 'admin' || currentUser.role === 'department') {
       return tasks;
     }
@@ -289,7 +313,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
                 <TabsContent value="active" className="mt-4">
                     <div className="space-y-4">
                         {activeTasks.length > 0 ? (
-                            activeTasks.map(task => <TaskItem key={task.id} task={task} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} userMap={userMap} />)
+                            activeTasks.map(task => <TaskItem key={task.id} task={task} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} userMap={userMap} isNew={newItems.has(task.id)} />)
                         ) : (
                             <p className="p-8 text-center text-muted-foreground">No active tasks.</p>
                         )}
@@ -298,7 +322,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
                 <TabsContent value="archived" className="mt-4">
                      <div className="space-y-4">
                         {archivedTasks.length > 0 ? (
-                            archivedTasks.map(task => <TaskItem key={task.id} task={task} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} userMap={userMap} />)
+                            archivedTasks.map(task => <TaskItem key={task.id} task={task} onStatusChange={handleStatusChange} isUpdatingStatus={isUpdatingStatus === task.id} onReply={handleReply} isReplying={isReplying === task.id} userMap={userMap} isNew={newItems.has(task.id)} />)
                         ) : (
                             <p className="p-8 text-center text-muted-foreground">No archived tasks.</p>
                         )}

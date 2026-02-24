@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import type { Task, TaskReply } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { addReplyToTask } from '@/lib/actions';
+import { cn } from '@/lib/utils';
 
 interface TaskListProps {
   tasks: Task[];
@@ -26,6 +27,32 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  
+  const [newItems, setNewItems] = useState(new Set<string>());
+
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+
+    const storageKey = `lastViewedTasks_${currentUser.id}`;
+    const lastViewed = localStorage.getItem(storageKey);
+
+    const newlyAdded = new Set<string>();
+    tasks.forEach(task => {
+      const isForCurrentUser = task.recipientId === currentUser.id || (task.recipientId === 'all' && currentUser.role === 'employee');
+      if (isForCurrentUser && (!lastViewed || new Date(task.createdAt) > new Date(lastViewed))) {
+        newlyAdded.add(task.id);
+      }
+    });
+
+    if (newlyAdded.size > 0) {
+      setNewItems(prev => new Set([...prev, ...newlyAdded]));
+    }
+    
+    return () => {
+      localStorage.setItem(storageKey, new Date().toISOString());
+    };
+  }, [tasks, currentUser.id, currentUser.role]);
+
 
   const allUserIds = useMemo(() => {
     const ids = new Set<string>();
@@ -45,6 +72,12 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const handleReply = async (taskId: string) => {
     if (!replyContent[taskId]?.trim()) return;
     
+    const canReply = currentUser.role === 'admin' || currentUser.role === 'department';
+    if (!canReply) {
+        toast({ variant: 'destructive', title: 'Error', description: 'You do not have permission to reply.' });
+        return;
+    }
+
     setIsReplying(prev => ({ ...prev, [taskId]: true }));
     
     const task = tasks.find(t => t.id === taskId);
@@ -54,7 +87,6 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
         return;
     }
     
-    // Server action to handle permissions and notifications
     const result = await addReplyToTask(taskId, currentUser.id, replyContent[taskId].trim(), task.authorId);
 
     if (result.success) {
@@ -77,6 +109,8 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
 
     setIsReplying(prev => ({ ...prev, [taskId]: false }));
   };
+  
+  const canCreateOrReply = currentUser.role === 'admin' || currentUser.role === 'department';
 
   if (isLoading) {
     return (
@@ -103,7 +137,10 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
           <p className="text-center text-muted-foreground py-8">No tasks found.</p>
         ) : (
           tasks.map((task) => (
-            <div key={task.id} className="space-y-4 border-b pb-4 last:border-0">
+            <div key={task.id} className={cn(
+                "space-y-4 border-b pb-4 last:border-0 transition-colors duration-500 p-4 rounded-lg",
+                newItems.has(task.id) && "bg-blue-500/10"
+              )}>
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-medium">{task.content}</p>
@@ -126,7 +163,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
                 </div>
               )}
               
-              {currentUser.role !== 'employee' && (
+              {canCreateOrReply && (
                 <div className="flex gap-2">
                   <Input
                     placeholder="Write a reply..."

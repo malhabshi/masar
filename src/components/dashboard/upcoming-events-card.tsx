@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -33,6 +33,29 @@ export function UpcomingEventsCard() {
   const { data: events, isLoading: areEventsLoading } = useCollection<UpcomingEvent>(user ? 'upcoming_events' : '');
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [newItems, setNewItems] = useState(new Set<string>());
+
+  useEffect(() => {
+    if (!events || events.length === 0 || !user) return;
+    const storageKey = `lastViewedEvents_${user.id}`;
+    const lastViewed = localStorage.getItem(storageKey);
+
+    const newlyAdded = new Set<string>();
+    events.forEach(event => {
+      if (!lastViewed || new Date(event.date) > new Date(lastViewed)) {
+        newlyAdded.add(event.id);
+      }
+    });
+
+    if (newlyAdded.size > 0) {
+      setNewItems(prev => new Set([...prev, ...newlyAdded]));
+    }
+    
+    return () => {
+      localStorage.setItem(storageKey, new Date().toISOString());
+    };
+  }, [events, user]);
 
   const form = useForm<z.infer<typeof eventSchema>>({
     resolver: zodResolver(eventSchema),
@@ -45,7 +68,7 @@ export function UpcomingEventsCard() {
   const futureEvents = useMemo(() => {
     if (!events) return [];
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set time to midnight to include all of today
+    today.setHours(0, 0, 0, 0);
     return [...events]
       .filter(event => {
         const eventDate = toDate(event.date);
@@ -93,7 +116,10 @@ export function UpcomingEventsCard() {
         ) : (
           <div className="space-y-3">
             {futureEvents.map((event) => (
-              <div key={event.id} className="flex items-start gap-3 group">
+              <div key={event.id} className={cn(
+                  "flex items-start gap-3 group p-2 rounded-lg transition-colors duration-500",
+                  newItems.has(event.id) && "bg-blue-500/10"
+                )}>
                 <CalendarDays className="h-4 w-4 mt-0.5 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">{event.title}</p>
