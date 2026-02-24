@@ -13,8 +13,9 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function EmployeeApplicantsPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -29,8 +30,8 @@ export function EmployeeApplicantsPage() {
     return [where('employeeId', '==', currentUser.civilId)];
   }, [currentUser?.civilId]);
 
-  const { data: myStudents, isLoading: studentsAreLoading } = useCollection<Student>(
-    myStudentsQuery ? 'students' : '',
+  const { data: myStudents, isLoading: studentsAreLoading, error: studentsError } = useCollection<Student>(
+    (isMounted && currentUser?.civilId) ? 'students' : '',
     ...(myStudentsQuery || [])
   );
 
@@ -50,6 +51,42 @@ export function EmployeeApplicantsPage() {
 
   if (!currentUser) {
     return <p>Loading user...</p>;
+  }
+  
+  if (!currentUser.civilId) {
+     return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-destructive">Configuration Error</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Your user profile is missing its Civil ID. You cannot view assigned students until an administrator corrects your profile.
+                  </AlertDescription>
+                </Alert>
+            </CardContent>
+        </Card>
+     )
+  }
+  
+  if (studentsError) {
+      return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-destructive">Permission Error</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Could not load your students due to a permission error. This may be because no students are assigned to you, or there's a problem with the security rules.
+                  </AlertDescription>
+                </Alert>
+            </CardContent>
+        </Card>
+      )
   }
 
   return (
