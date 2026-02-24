@@ -1,5 +1,6 @@
+
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Student } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -23,6 +24,11 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
   const [newNote, setNewNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const authorIds = useMemo(() => (student.notes || []).map(note => note.authorId), [student.notes]);
   const { userMap } = useUserCacheById(authorIds);
@@ -77,7 +83,7 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
                   <div className="flex-1 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">{author?.name || '...'}</span>
-                      <span className="text-xs text-muted-foreground">{formatRelativeTime(note.createdAt)}</span>
+                      <span className="text-xs text-muted-foreground">{isClient ? formatRelativeTime(note.createdAt) : '...'}</span>
                     </div>
                     <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{note.content}</p>
                   </div>

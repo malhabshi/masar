@@ -29,6 +29,12 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const { toast } = useToast();
   
   const [newItems, setNewItems] = useState(new Set<string>());
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   useEffect(() => {
     if (!tasks || tasks.length === 0 || !currentUser) return;
@@ -145,7 +151,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
                 <div>
                   <p className="font-medium">{task.content}</p>
                   <p className="text-sm text-muted-foreground">
-                    From: {getUserName(task.authorId)} • {formatRelativeTime(task.createdAt)}
+                    From: {getUserName(task.authorId)} • {isClient ? formatRelativeTime(task.createdAt) : '...'}
                   </p>
                 </div>
               </div>
@@ -156,7 +162,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
                     <div key={reply.id} className="text-sm">
                       <p>{reply.content}</p>
                       <p className="text-xs text-muted-foreground">
-                        {getUserName(reply.authorId)} • {formatRelativeTime(reply.createdAt)}
+                        {getUserName(reply.authorId)} • {isClient ? formatRelativeTime(reply.createdAt) : '...'}
                       </p>
                     </div>
                   ))}

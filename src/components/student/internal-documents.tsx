@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Document, Student, UserRole } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -24,11 +25,16 @@ interface InternalDocumentsProps {
 }
 
 export function InternalDocuments({ student, currentUser, title, allowUpload }: InternalDocumentsProps) {
+  const [isClient, setIsClient] = useState(false);
   const authorIds = useMemo(() => {
     return (student.documents || []).map(doc => doc.authorId);
   }, [student.documents]);
   const { userMap } = useUserCacheById(authorIds);
   
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const managementRoles: UserRole[] = ['admin', 'department'];
 
   const documents = (student.documents || []).filter(doc => {
@@ -105,7 +111,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                         <span className="text-muted-foreground">Student</span>
                       )}
                     </TableCell>
-                    <TableCell>{formatDate(doc.uploadedAt)}</TableCell>
+                    <TableCell>{isClient ? formatDate(doc.uploadedAt) : '...'}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" asChild>
                         <a href={doc.url} download={doc.name} target="_blank" rel="noopener noreferrer">
