@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -48,7 +47,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No destination provided.' }, { status: 400 });
     }
 
-    const bucket = storage.bucket('studio-9484431255-91d96.appspot.com');
+    // Explicitly set the bucket name as requested
+    const bucket = storage.bucket('studio-9484431255-91d96.firebasestorage.app');
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
     if (destination === 'student') {
@@ -92,8 +92,10 @@ export async function POST(req: NextRequest) {
 
         let counterUpdate = {};
         if (uploaderRole === 'employee') {
+          // Employee uploaded, notify admins
           counterUpdate = { newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 };
-        } else {
+        } else if (uploaderRole === 'admin' || uploaderRole === 'department') {
+          // Admin/Dept uploaded, notify employee
           counterUpdate = { newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 };
         }
    
