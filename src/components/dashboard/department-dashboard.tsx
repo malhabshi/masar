@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { SendTaskForm } from './send-task-form';
+import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
      const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(currentUser ? 'students' : '');
@@ -63,6 +64,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                 </div>
                 <div className="space-y-6">
                     <UpcomingEventsCard />
+                    <PersonalTodoList />
                 </div>
             </div>
         </div>

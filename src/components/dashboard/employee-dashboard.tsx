@@ -77,9 +77,9 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TaskList tasks={relevantTasks} currentUser={currentUser} isLoading={isLoading} />
-                <PersonalTodoList />
+                <UpcomingEventsCard />
             </div>
-            <UpcomingEventsCard />
+            <PersonalTodoList />
         </div>
     );
 }
