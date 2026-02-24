@@ -14,6 +14,7 @@ export default function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
+  console.log('🔍 AuthenticatedLayout rendering', new Date().toISOString());
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
@@ -22,7 +23,9 @@ export default function AuthenticatedLayout({
   useHeartbeat();
 
   useEffect(() => {
+    console.log('✅ Component mounted:', 'AuthenticatedLayout');
     setIsMounted(true);
+    return () => console.log('❌ Component unmounted:', 'AuthenticatedLayout');
   }, []);
 
   useEffect(() => {

@@ -38,7 +38,9 @@ export function AppSidebar() {
     const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
+      console.log('✅ Component mounted:', 'AppSidebar');
       setIsClient(true);
+      return () => console.log('❌ Component unmounted:', 'AppSidebar');
     }, []);
 
     const { user } = useUser();

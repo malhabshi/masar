@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { EmployeeSimplePage } from './employee-simple-page';
+import { EmployeeApplicantsPage } from './employee-page';
 import { AdminApplicantsPage } from './admin-page';
 import { Loader2 } from 'lucide-react';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,9 @@ export default function ApplicantsPage() {
   const { user, isUserLoading } = useUser();
 
   useEffect(() => {
+    console.log('✅ Component mounted:', 'ApplicantsPage');
     setIsMounted(true);
+    return () => console.log('❌ Component unmounted:', 'ApplicantsPage');
   }, []);
 
   // Server and initial client render a generic loading state.
@@ -38,7 +40,7 @@ export default function ApplicantsPage() {
 
   // ONLY after mounting and confirming the user, render the role-specific page.
   if (user.role === 'employee') {
-    return <EmployeeSimplePage />;
+    return <EmployeeApplicantsPage />;
   }
 
   // Default to Admin/Department view.
