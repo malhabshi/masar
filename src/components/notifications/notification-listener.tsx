@@ -75,6 +75,12 @@ export function NotificationListener() {
   }, [tasks, events, students]);
 
   const { userMap } = useUserCacheById(allUserIds);
+  
+  useEffect(() => {
+    if (user) {
+        console.log('👂 Listener running for user:', user.email, 'role:', user.role);
+    }
+  }, [user]);
 
   // Effect for new tasks
   useEffect(() => {
@@ -156,7 +162,11 @@ export function NotificationListener() {
             }
 
             // Check if a doc was added FOR an employee
-            if (isEmployee && (currentStudent.newDocumentsForEmployee || 0) > (prevStudent.newDocumentsForEmployee || 0)) {
+            const currentDocsForEmployee = currentStudent.newDocumentsForEmployee || 0;
+            const prevDocsForEmployee = prevStudent.newDocumentsForEmployee || 0;
+            console.log('📊 Student data changed:', currentStudent.id, 'newDocsForEmployee (current):', currentDocsForEmployee, 'newDocsForEmployee (prev):', prevDocsForEmployee);
+
+            if (isEmployee && currentDocsForEmployee > prevDocsForEmployee) {
                 wasDocumentAddedForThisUser = true;
             }
             
@@ -172,6 +182,12 @@ export function NotificationListener() {
                         const author = userMap.get(latestDoc.authorId);
                         const authorName = author ? author.name : 'A user';
                         const toastTitle = isEmployee ? 'New Document for Your Student' : 'New Document Uploaded';
+                        
+                        console.log('🚀 TRIGGERING NOTIFICATION!', {
+                            toastTitle,
+                            studentName: currentStudent.name,
+                            authorName,
+                        });
 
                         playNotificationSound(900); // Document-specific sound
                         toast({

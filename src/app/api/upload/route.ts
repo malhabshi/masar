@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No destination provided.' }, { status: 400 });
     }
 
-    const bucket = storage.bucket('studio-9484431255-91d96.firebasestorage.app');
+    const bucket = storage.bucket('studio-9484431255-91d96.appspot.com');
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
     if (destination === 'student') {
@@ -73,7 +74,8 @@ export async function POST(req: NextRequest) {
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
         console.log('✅ File saved to storage successfully');
         
-        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
+        await blob.makePublic();
+        const url = blob.publicUrl();
 
         // 2. UPDATE FIRESTORE DOCUMENT
         const studentRef = adminDb.collection('students').doc(studentId);
@@ -97,21 +99,23 @@ export async function POST(req: NextRequest) {
         console.log('📝 Updating Firestore with new document:', newDocument);
         const updatedDocuments = [...(studentData.documents || []), newDocument];
         
-        await studentRef.update({ documents: updatedDocuments });
-        
         // Update notification counters based on uploader role
         const uploaderDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
         const uploaderRole = uploaderDoc.data()?.role;
-   
+
+        let counterUpdate = {};
         if (uploaderRole === 'employee') {
-          await studentRef.update({ 
-            newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 
-          });
+          console.log('📈 Uploader is employee, incrementing newDocumentsForAdmin');
+          counterUpdate = { newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 };
         } else {
-          await studentRef.update({ 
-            newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 
-          });
+          console.log('📈 Uploader is admin/dept, incrementing newDocumentsForEmployee');
+          counterUpdate = { newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 };
         }
+   
+        await studentRef.update({
+            documents: updatedDocuments,
+            ...counterUpdate,
+        });
 
         // 3. RETURN SUCCESS
         return NextResponse.json({ success: true, document: newDocument });
