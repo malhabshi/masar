@@ -1,3 +1,4 @@
+
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
@@ -24,7 +25,7 @@ const getServiceAccount = () => {
 };
 
 const serviceAccount = getServiceAccount();
-const bucketName = serviceAccount ? `${serviceAccount.project_id}.appspot.com` : undefined;
+const bucketName = 'studio-9484431255-91d96.firebasestorage.app';
 
 
 // Initialize Firebase Admin only if service account exists
