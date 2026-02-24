@@ -24,6 +24,34 @@ interface UploadDocumentDialogProps {
   student: Student;
 }
 
+// Function to play a success sound using Web Audio API
+function playUploadSuccessSound() {
+  // Check if window and AudioContext are available
+  if (typeof window === 'undefined' || !window.AudioContext) return;
+
+  try {
+    const audioContext = new window.AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    // A pleasant "ding" sound
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(1200, audioContext.currentTime); // Higher pitch
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Subtle volume
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.4);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.4);
+  } catch (e) {
+    // Catch errors in case AudioContext is blocked or fails
+    console.error('Could not play notification sound:', e);
+  }
+}
+
+
 export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -51,7 +79,6 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   };
 
   const handleUpload = async () => {
-    console.log('1. Starting upload with file:', file);
     if (!file) {
       toast({ variant: 'destructive', title: 'No file selected' });
       return;
@@ -69,10 +96,7 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
     formData.append('studentId', student.id);
     if (customName) {
         formData.append('customName', customName);
-        console.log('3a. Custom Name:', customName);
     }
-    console.log('2. Destination:', 'student');
-    console.log('3. Student ID:', student.id);
 
 
     try {
@@ -86,24 +110,24 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
       });
 
       const result = await response.json();
-      console.log('4. API response:', result);
       
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to upload file and update database.');
       }
       
-      // The useDoc hook will automatically update the UI now that the server handles the database write.
       toast({
         title: 'Upload Successful',
         description: `'${result.document.name}' has been uploaded and added to the student's profile.`,
       });
+
+      playUploadSuccessSound();
 
       setIsOpen(false);
       setFile(null);
       setCustomName('');
 
     } catch (error: any) {
-      console.error('5. Upload error:', error);
+      console.error('Upload error:', error);
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
