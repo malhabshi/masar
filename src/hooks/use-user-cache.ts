@@ -12,22 +12,51 @@ export function useUserCacheById(ids: string[] = []) {
   const uniqueIds = useMemo(() => [...new Set(ids.filter(id => id))], [ids]);
 
   useEffect(() => {
-    if (uniqueIds.length === 0) {
-        if (userMap.size > 0) setUserMap(new Map());
-        if (isLoading) setIsLoading(false);
-        return;
-    }
-
+    let isMounted = true;
+    
     const idsToFetch = uniqueIds.filter(id => !userMap.has(id));
 
     if (idsToFetch.length > 0) {
       setIsLoading(true);
-      fetchUsersById(idsToFetch).then(fetchedUsers => {
-        setUserMap(prevMap => new Map([...prevMap, ...fetchedUsers]));
-        setIsLoading(false);
-      }).catch(() => setIsLoading(false));
+      fetchUsersById(idsToFetch)
+        .then(fetchedUsers => {
+          if (isMounted) {
+            setUserMap(prevMap => {
+              const newMap = new Map(prevMap);
+              fetchedUsers.forEach(user => newMap.set(user.id, user));
+              return newMap;
+            });
+            setIsLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setIsLoading(false);
+          }
+        });
     }
-  }, [uniqueIds, fetchUsersById, userMap, isLoading]);
+
+    // Prune old users from cache that are no longer needed
+    if (isMounted) {
+      const currentIds = new Set(uniqueIds);
+      let mapChanged = false;
+      const newMap = new Map(userMap);
+      newMap.forEach((_, key) => {
+        if (!currentIds.has(key)) {
+          newMap.delete(key);
+          mapChanged = true;
+        }
+      });
+      if (mapChanged) {
+        setUserMap(newMap);
+      }
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  // Using JSON.stringify on the deps array is a common way to deep-compare
+  }, [JSON.stringify(uniqueIds), fetchUsersById, userMap]);
   
   return { userMap, isLoading };
 }
@@ -41,22 +70,52 @@ export function useUserCacheByCivilId(civilIds: string[] = []) {
   const uniqueIds = useMemo(() => [...new Set(civilIds.filter(id => id))], [civilIds]);
 
   useEffect(() => {
-    if (uniqueIds.length === 0) {
-        if (userMap.size > 0) setUserMap(new Map());
-        if(isLoading) setIsLoading(false);
-        return;
-    }
-
+    let isMounted = true;
+    
     const idsToFetch = uniqueIds.filter(id => !userMap.has(id));
 
     if (idsToFetch.length > 0) {
       setIsLoading(true);
-      fetchUsersByCivilId(idsToFetch).then(fetchedUsers => {
-        setUserMap(prevMap => new Map([...prevMap, ...fetchedUsers]));
-        setIsLoading(false);
-      }).catch(() => setIsLoading(false));
+      fetchUsersByCivilId(idsToFetch)
+        .then(fetchedUsers => {
+          if (isMounted) {
+            setUserMap(prevMap => {
+              const newMap = new Map(prevMap);
+              fetchedUsers.forEach(user => {
+                if (user.civilId) newMap.set(user.civilId, user);
+              });
+              return newMap;
+            });
+            setIsLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setIsLoading(false);
+          }
+        });
     }
-  }, [uniqueIds, fetchUsersByCivilId, userMap, isLoading]);
+
+    // Prune old users
+    if (isMounted) {
+        const currentIds = new Set(uniqueIds);
+        let mapChanged = false;
+        const newMap = new Map(userMap);
+        newMap.forEach((user, key) => {
+            if (!currentIds.has(key)) {
+                newMap.delete(key);
+                mapChanged = true;
+            }
+        });
+        if(mapChanged) {
+            setUserMap(newMap);
+        }
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [JSON.stringify(uniqueIds), fetchUsersByCivilId, userMap]);
   
   return { userMap, isLoading };
 }
