@@ -56,7 +56,7 @@ export function useUserCacheById(ids: string[] = []) {
       isMounted = false;
     };
   // Using JSON.stringify on the deps array is a common way to deep-compare
-  }, [JSON.stringify(uniqueIds), fetchUsersById, userMap]);
+  }, [JSON.stringify(uniqueIds), fetchUsersById]);
   
   return { userMap, isLoading };
 }
@@ -115,7 +115,7 @@ export function useUserCacheByCivilId(civilIds: string[] = []) {
     return () => {
       isMounted = false;
     };
-  }, [JSON.stringify(uniqueIds), fetchUsersByCivilId, userMap]);
+  }, [JSON.stringify(uniqueIds), fetchUsersByCivilId]);
   
   return { userMap, isLoading };
 }
