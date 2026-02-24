@@ -11,7 +11,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -243,71 +242,65 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 return (
                 <TableRow key={student.id}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={student.avatarUrl} alt={student.name} />
-                        <AvatarFallback>{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <Link href={`/student/${student.id}`} className="hover:underline">
-                          <div className="font-medium flex items-center gap-2 flex-wrap">
-                            <span>{student.name || 'Unknown Student'}</span>
-                            {isCurrentUserAssigned && student.isNewForEmployee && (
-                                <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>
-                            )}
-                            {isAdminOrDept && student.unreadUpdates && student.unreadUpdates > 0 && (
-                              <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
+                    <div>
+                      <Link href={`/student/${student.id}`} className="hover:underline">
+                        <div className="font-medium flex items-center gap-2 flex-wrap">
+                          <span>{student.name || 'Unknown Student'}</span>
+                          {isCurrentUserAssigned && student.isNewForEmployee && (
+                              <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>
+                          )}
+                          {isAdminOrDept && student.unreadUpdates && student.unreadUpdates > 0 && (
+                            <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
+                              <MessageSquare className="h-3 w-3" />
+                              <span>{student.unreadUpdates}</span>
+                            </Badge>
+                          )}
+                          {isAdminOrDept && (student.newDocumentsForAdmin || 0) > 0 && (
+                            <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500 hover:bg-blue-600">
+                              <FilePlus className="h-3 w-3" />
+                              <span>{student.newDocumentsForAdmin}</span>
+                            </Badge>
+                          )}
+                          {isCurrentUserAssigned && (student.employeeUnreadMessages || 0) > 0 && (
+                            <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
                                 <MessageSquare className="h-3 w-3" />
-                                <span>{student.unreadUpdates}</span>
-                              </Badge>
-                            )}
-                            {isAdminOrDept && (student.newDocumentsForAdmin || 0) > 0 && (
+                                <span>{student.employeeUnreadMessages}</span>
+                            </Badge>
+                          )}
+                          {isCurrentUserAssigned && (student.newDocumentsForEmployee || 0) > 0 && (
                               <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500 hover:bg-blue-600">
-                                <FilePlus className="h-3 w-3" />
-                                <span>{student.newDocumentsForAdmin}</span>
+                                  <FilePlus className="h-3 w-3" />
+                                  <span>{student.newDocumentsForEmployee}</span>
                               </Badge>
-                            )}
-                            {isCurrentUserAssigned && (student.employeeUnreadMessages || 0) > 0 && (
-                              <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6">
-                                  <MessageSquare className="h-3 w-3" />
-                                  <span>{student.employeeUnreadMessages}</span>
+                          )}
+                          {isCurrentUserAssigned && (student.newMissingItemsForEmployee || 0) > 0 && (
+                              <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 hover:bg-yellow-500 text-black">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  <span>{student.newMissingItemsForEmployee}</span>
                               </Badge>
-                            )}
-                            {isCurrentUserAssigned && (student.newDocumentsForEmployee || 0) > 0 && (
-                                <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500 hover:bg-blue-600">
-                                    <FilePlus className="h-3 w-3" />
-                                    <span>{student.newDocumentsForEmployee}</span>
-                                </Badge>
-                            )}
-                            {isCurrentUserAssigned && (student.newMissingItemsForEmployee || 0) > 0 && (
-                                <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 hover:bg-yellow-500 text-black">
-                                    <AlertTriangle className="h-3 w-3" />
-                                    <span>{student.newMissingItemsForEmployee}</span>
-                                </Badge>
-                            )}
-                            {student.transferRequested && (
-                                <Badge variant="outline" className="border-yellow-500 text-yellow-600">
-                                    <ArrowRightLeft className="mr-1 h-3 w-3" />
-                                    Transfer Requested
-                                </Badge>
-                            )}
-                            {wasTransferred && (
-                                <Badge variant="outline" className="border-blue-500 text-blue-600">
-                                    <Repeat className="mr-1 h-3 w-3" />
-                                    Transferred
-                                </Badge>
-                            )}
-                          </div>
-                        </Link>
-                        <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
-                        <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
-                        {student.finalChoiceUniversity && (
-                          <div className="flex items-center gap-1 text-lg text-success font-bold mt-1">
-                            <GraduationCap className="h-5 w-5" />
-                            <span>{student.finalChoiceUniversity}</span>
-                          </div>
-                        )}
-                      </div>
+                          )}
+                          {student.transferRequested && (
+                              <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                                  <ArrowRightLeft className="mr-1 h-3 w-3" />
+                                  Transfer Requested
+                              </Badge>
+                          )}
+                          {wasTransferred && (
+                              <Badge variant="outline" className="border-blue-500 text-blue-600">
+                                  <Repeat className="mr-1 h-3 w-3" />
+                                  Transferred
+                              </Badge>
+                          )}
+                        </div>
+                      </Link>
+                      <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
+                      <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
+                      {student.finalChoiceUniversity && (
+                        <div className="flex items-center gap-1 text-lg text-success font-bold mt-1">
+                          <GraduationCap className="h-5 w-5" />
+                          <span>{student.finalChoiceUniversity}</span>
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>

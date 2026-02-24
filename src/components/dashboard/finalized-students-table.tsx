@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -10,7 +9,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Student } from '@/lib/types';
 import { Plane } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -60,23 +58,17 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
             students.map((student) => (
               <TableRow key={student.id}>
                 <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={student.avatarUrl} alt={student.name} data-ai-hint="student avatar" />
-                      <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{student.name}</span>
-                        {student.profileCompletionStatus?.readyToTravel && (
-                            <Badge variant="outline" className="border-success text-success font-normal">
-                                <Plane className="mr-1 h-3 w-3" />
-                                Ready to travel
-                            </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{student.email}</div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{student.name}</span>
+                      {student.profileCompletionStatus?.readyToTravel && (
+                          <Badge variant="outline" className="border-success text-success font-normal">
+                              <Plane className="mr-1 h-3 w-3" />
+                              Ready to travel
+                          </Badge>
+                      )}
                     </div>
+                    <div className="text-sm text-muted-foreground">{student.email}</div>
                   </div>
                 </TableCell>
                 <TableCell className="font-medium">{student.finalChoiceUniversity}</TableCell>

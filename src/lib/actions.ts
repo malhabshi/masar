@@ -1,5 +1,6 @@
 
 
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -355,18 +356,14 @@ export async function createStudent(
 
   try {
     const studentRef = adminDb!.collection('students').doc(); // Auto-generate ID
-    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      studentName
-    )}&background=random&color=fff`;
 
-    const newStudentData: Student = {
+    const newStudentData: Omit<Student, 'avatarUrl'> = {
       id: studentRef.id,
       name: studentName,
       email: studentEmail || '',
       phone: phone,
       employeeId: shouldBeAssigned ? creatingUserCivilId! : null,
       ...(shouldBeAssigned && { isNewForEmployee: true }),
-      avatarUrl,
       applications: [],
       notes: notes
         ? [

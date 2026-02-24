@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,8 +24,7 @@ interface StudentHeaderProps {
 function StudentHeaderSkeleton() {
     return (
         <div className="mb-6">
-            <div className="flex flex-col md:flex-row items-start gap-6">
-                <Skeleton className="w-24 h-24 rounded-full" />
+            <div className="flex flex-col items-start gap-2">
                 <div className="flex-1 space-y-2">
                     <Skeleton className="h-8 w-64" />
                     <Skeleton className="h-5 w-48" />
@@ -81,11 +79,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             ))}
         </div>
       )}
-      <div className="flex flex-col md:flex-row items-start gap-6">
-        <Avatar className="w-24 h-24 border-4 border-card">
-          <AvatarImage src={student.avatarUrl} alt={student.name} data-ai-hint="student avatar" />
-          <AvatarFallback className="text-3xl">{student?.name?.charAt(0) ?? 'S'}</AvatarFallback>
-        </Avatar>
+      <div className="flex flex-col items-start gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-bold">{student.name || 'Unknown Student'}</h1>

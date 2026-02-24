@@ -70,7 +70,6 @@ export interface Student {
   email: string;
   phone: string;
   employeeId: string | null;
-  avatarUrl: string;
   applications: Application[];
   notes: Note[];
   documents: Document[];
