@@ -30,7 +30,7 @@ const eventSchema = z.object({
 
 export function UpcomingEventsCard() {
   const { user, isUserLoading } = useUser();
-  const { data: events, isLoading: areEventsLoading } = useCollection<UpcomingEvent>('upcoming_events');
+  const { data: events, isLoading: areEventsLoading } = useCollection<UpcomingEvent>(user ? 'upcoming_events' : '');
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 

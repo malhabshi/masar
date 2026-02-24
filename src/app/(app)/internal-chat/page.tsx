@@ -17,7 +17,7 @@ export default function InternalChatPage() {
     return [where('unreadUpdates', '>', 0)];
   }, [currentUser?.role]);
 
-  const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>('students', ...studentsQuery);
+  const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>(currentUser ? 'students' : '', ...studentsQuery);
   
   const isLoading = isUserLoading || studentsAreLoading;
 

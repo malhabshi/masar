@@ -33,7 +33,7 @@ interface BulkTransferFormProps {
 export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+  const { data: usersData, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
   const employeeOptions = useMemo(() => (usersData || []).filter(u => u.role === 'employee'), [usersData]);
 

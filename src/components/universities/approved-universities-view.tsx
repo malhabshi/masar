@@ -27,7 +27,7 @@ export function ApprovedUniversitiesView() {
   const { user, isUserLoading: isUserLoadingHook } = useUser();
   const { toast } = useToast();
 
-  const { data: universitiesData, isLoading: areUniversitiesLoading } = useCollection<ApprovedUniversity>('approved_universities');
+  const { data: universitiesData, isLoading: areUniversitiesLoading } = useCollection<ApprovedUniversity>(user ? 'approved_universities' : '');
   
   const isLoading = isUserLoadingHook || areUniversitiesLoading;
 

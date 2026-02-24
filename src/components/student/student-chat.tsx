@@ -53,7 +53,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const authorIds = useMemo(() => (messages || []).map(m => m.authorId), [messages]);
   const { userMap } = useUserCacheById(authorIds);
 
-  const { data: allUsers, isLoading: usersLoading } = useCollection<User>('users');
+  const { data: allUsers, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
   const managementUsers = useMemo(() => (allUsers || []).filter(u => ['admin', 'department'].includes(u.role)), [allUsers]);
   const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);
   const hasDepartments = useMemo(() => (allUsers || []).some(u => u.role === 'department'), [allUsers]);

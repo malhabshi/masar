@@ -27,10 +27,10 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
     const myStudents = useMemo(() => myStudentsData || [], [myStudentsData]);
 
     const tasksToMeConstraints = useMemoFirebase(() => [where('recipientId', '==', currentUser.id)], [currentUser.id]);
-    const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>('tasks', ...tasksToMeConstraints);
+    const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>(currentUser ? 'tasks' : '', ...tasksToMeConstraints);
 
     const tasksToAllConstraints = useMemoFirebase(() => [where('recipientId', '==', 'all')], []);
-    const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>('tasks', ...tasksToAllConstraints);
+    const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>(currentUser ? 'tasks' : '', ...tasksToAllConstraints);
 
     const tasksToMe = useMemo(() => tasksToMeData || [], [tasksToMeData]);
     const tasksToAll = useMemo(() => tasksToAllData || [], [tasksToAllData]);

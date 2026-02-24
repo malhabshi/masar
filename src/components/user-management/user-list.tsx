@@ -30,7 +30,7 @@ const userRoles: UserRole[] = ['admin', 'employee', 'department'];
 export function UserList({ currentUser }: UserListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
-  const { data: usersData, isLoading: usersLoading } = useCollection<User>('users');
+  const { data: usersData, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
   const users = useMemo(() => usersData || [], [usersData]);
 
 

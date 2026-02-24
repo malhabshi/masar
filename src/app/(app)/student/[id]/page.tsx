@@ -58,7 +58,7 @@ export default function StudentDetailPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>('students', studentId);
-  const { data: tasks, isLoading: tasksLoading } = useCollection<Task>('tasks');
+  const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
   
   const isLoading = isUserLoading || studentIsLoading || tasksLoading;
 

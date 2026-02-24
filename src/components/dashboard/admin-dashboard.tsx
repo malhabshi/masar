@@ -15,8 +15,8 @@ import { ImportStudentsDialog } from '@/components/dashboard/import-students-dia
 import type { AppUser } from '@/hooks/use-user';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
-  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>('students');
-  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>('tasks');
+  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(currentUser ? 'students' : '');
+  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
 
   const students = useMemo(() => studentsData || [], [studentsData]);
   const tasks = useMemo(() => tasksData || [], [tasksData]);

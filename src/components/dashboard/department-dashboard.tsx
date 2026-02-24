@@ -14,8 +14,8 @@ import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card'
 import { SendTaskForm } from './send-task-form';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
-     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>('students');
-     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>('tasks');
+     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(currentUser ? 'students' : '');
+     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
      
      const students = useMemo(() => studentsData || [], [studentsData]);
      const tasks = useMemo(() => tasksData || [], [tasksData]);

@@ -41,7 +41,7 @@ function StudentHeaderSkeleton() {
 }
 
 export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
-  const { data: users, isLoading: usersLoading } = useCollection<User>('users');
+  const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
   if (isLoading || !student || !currentUser || usersLoading) {
     return <StudentHeaderSkeleton />;

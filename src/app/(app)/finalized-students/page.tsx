@@ -14,7 +14,7 @@ interface FinalizedStudent extends Student {
 
 export default function FinalizedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>('students');
+  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(currentUser ? 'students' : '');
 
   const finalizedStudents = useMemo(() => {
     if (!allStudents) return [];

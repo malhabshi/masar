@@ -32,7 +32,7 @@ export function SendTaskForm({ currentUser }: SendTaskFormProps) {
   const [sendTo, setSendTo] = useState<'all' | 'specific'>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { data: users, isLoading: usersLoading } = useCollection<User>('users');
+  const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
   const recipients = useMemo(() => (users || []).filter(u => u.role === 'employee' || u.role === 'department'), [users]);
 
   const form = useForm<z.infer<typeof formSchema>>({

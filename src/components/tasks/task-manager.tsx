@@ -190,7 +190,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isReplying, setIsReplying] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>('tasks');
+  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 
   const allUserIdsInTasks = useMemo(() => {
