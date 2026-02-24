@@ -81,7 +81,7 @@ export function EmployeeApplicantsPage() {
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    Could not load your students due to a permission error. This may be because no students are assigned to you, or there's a problem with the security rules.
+                    Could not load your students. This is likely because your account does not have permission to read the 'students' collection with the query for your Civil ID ({currentUser.civilId}). Please check Firestore security rules.
                   </AlertDescription>
                 </Alert>
             </CardContent>
