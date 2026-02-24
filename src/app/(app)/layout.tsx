@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useHeartbeat } from '@/hooks/use-heartbeat';
@@ -16,17 +16,26 @@ export default function AuthenticatedLayout({
 }) {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const [isMounted, setIsMounted] = useState(false);
   
   // Initialize the heartbeat hook for the logged-in user
   useHeartbeat();
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Only run this effect on the client after mount
+    if (!isMounted || isUserLoading) return;
+    if (!user) {
       router.push('/login');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, isMounted, router]);
 
-  if (isUserLoading || !user) {
+  // The server will always render this. The client will also render this on its
+  // first pass, preventing a hydration mismatch.
+  if (!isMounted || isUserLoading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -34,6 +43,7 @@ export default function AuthenticatedLayout({
     );
   }
 
+  // This part is now guaranteed to only run on the client, after hydration.
   return (
     <SidebarProvider>
       <NotificationListener />
