@@ -1,53 +1,23 @@
 'use client';
 
 import { useUser } from '@/hooks/use-user';
-import type { Student, User } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
-import { StudentTable } from '@/components/dashboard/student-table';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
-import { AddStudentDialog } from '@/components/student/add-student-dialog';
+import { EmployeeApplicantsPage } from './employee-page';
+import { AdminApplicantsPage } from './admin-page';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 export default function ApplicantsPage() {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  // --- Start of original page logic ---
-  const { user: currentUser, isUserLoading } = useUser();
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(
-    currentUser ? 'students' : ''
-  );
-  const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
-    currentUser ? 'users' : ''
-  );
-
-  const isLoading = isUserLoading || studentsAreLoading || usersAreLoading;
-
-  // --- End of original page logic ---
-
-  if (!isMounted) {
-    return <div className="p-8 text-center">Loading applicants...</div>;
-  }
-
-  if (isLoading) {
+  const { user, isUserLoading } = useUser();
+  
+  if (isUserLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
+        <div className="flex h-full w-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
     );
   }
-
-  if (!currentUser) {
+  
+  if (!user) {
     return (
       <Card>
         <CardHeader>
@@ -57,32 +27,11 @@ export default function ApplicantsPage() {
       </Card>
     );
   }
-
-  // If the user is an employee, render a simple test div to isolate the error.
-  if (currentUser.role === 'employee') {
-    return <div>Employee View Test</div>;
+  
+  if (user.role === 'employee') {
+    return <EmployeeApplicantsPage />;
   }
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Applicants</CardTitle>
-            <CardDescription>
-              A filterable list of all students in the system.
-            </CardDescription>
-          </div>
-          {['admin', 'employee'].includes(currentUser.role) && <AddStudentDialog />}
-        </CardHeader>
-        <CardContent>
-          <StudentTable
-            students={allStudents || []}
-            currentUser={currentUser}
-            allUsers={allUsers || []}
-          />
-        </CardContent>
-      </Card>
-    </div>
-  );
+  
+  // For 'admin' and 'department'
+  return <AdminApplicantsPage />;
 }
