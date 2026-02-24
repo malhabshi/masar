@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { EmployeeApplicantsPage } from './employee-page';
+import { EmployeeSimplePage } from './employee-simple-page';
 import { AdminApplicantsPage } from './admin-page';
 import { Loader2 } from 'lucide-react';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +38,7 @@ export default function ApplicantsPage() {
 
   // ONLY after mounting and confirming the user, render the role-specific page.
   if (user.role === 'employee') {
-    return <EmployeeApplicantsPage />;
+    return <EmployeeSimplePage />;
   }
 
   // Default to Admin/Department view.
