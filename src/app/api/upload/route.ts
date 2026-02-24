@@ -1,7 +1,5 @@
 'use server';
 
-console.log('🔥🔥🔥 UPLOAD API ROUTE CALLED 🔥🔥🔥');
-
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import type { User, Student } from '@/lib/types';
@@ -41,13 +39,6 @@ export async function POST(req: NextRequest) {
     const destination = formData.get('destination') as 'student' | 'shared' | 'user_avatar' | null;
     const customName = formData.get('customName') as string | null;
 
-    console.log('📦 Form data received:', {
-      file: file?.name,
-      destination,
-      studentId: formData.get('studentId'),
-      customName
-    });
-
     if (!file) {
       return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
     }
@@ -66,10 +57,8 @@ export async function POST(req: NextRequest) {
 
         // 1. UPLOAD FILE TO STORAGE
         const filePath = `students/${studentId}/${Date.now()}_${file.name}`;
-        console.log('📁 Attempting to upload to storage path:', filePath);
         const blob = bucket.file(filePath);
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
-        console.log('✅ File saved to storage successfully');
         
         const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
 
@@ -94,7 +83,6 @@ export async function POST(req: NextRequest) {
         
         const updatedDocuments = [...(studentData.documents || []), newDocument];
         
-        console.log('📝 Updating Firestore with new document:', newDocument);
         await studentRef.update({ documents: updatedDocuments });
         
         // Update notification counters based on uploader role
@@ -129,13 +117,7 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('🔥🔥🔥 FULL ERROR OBJECT:', error);
-    console.error('🔥 Error name:', error.name);
-    console.error('🔥 Error message:', error.message);
-    console.error('🔥 Error stack:', error.stack);
-    if (error.code) console.error('🔥 Error code:', error.code);
-    if (error.response) console.error('🔥 Error response:', error.response);
-
+    console.error('Upload API Error:', error.message);
     return NextResponse.json({ error: 'Failed to process upload.', details: error.message }, { status: 500 });
   }
 }
