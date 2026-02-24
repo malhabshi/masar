@@ -1,14 +1,20 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { EmployeeStatsView } from '@/components/stats/employee-stats-view';
 import { useUser } from '@/hooks/use-user';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 
 export default function EmployeeStudentsCountPage() {
+  const [isMounted, setIsMounted] = useState(false);
   const { user, isUserLoading } = useUser();
 
-  if (isUserLoading) {
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted || isUserLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
