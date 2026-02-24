@@ -196,7 +196,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                         <SelectItem value="red">Red</SelectItem>
                     </SelectContent>
                 </Select>
-                {currentUser.role !== 'employee' && (
+                {isClient && currentUser.role !== 'employee' && (
                     <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
                         <SelectTrigger className="w-full flex-1">
                             <SelectValue placeholder="Assigned Employee" />
