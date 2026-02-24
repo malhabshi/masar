@@ -11,7 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
 import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
-import { ImportStudentsDialog } from '@/components/dashboard/import-students-dialog';
 import type { AppUser } from '@/hooks/use-user';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 
@@ -75,7 +74,6 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
             </div>
             <div className="space-y-6">
                 <UpcomingEventsCard />
-                <ImportStudentsDialog currentUser={currentUser} />
                 <PersonalTodoList />
             </div>
         </div>

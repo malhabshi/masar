@@ -5,7 +5,6 @@
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent } from './types';
-import * as xlsx from 'xlsx';
 import {
   isWithinInterval,
   parseISO,
@@ -765,118 +764,6 @@ export async function updateFinalChoice(studentId: string, universityName: strin
   } catch (error) {
     console.error('updateFinalChoice error:', error);
     return { success: false, message: 'Failed to update final choice.' };
-  }
-}
-
-export async function importStudentsFromExcel(formData: FormData) {
-  if (!checkAdminServices()) {
-    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
-  }
-
-  const file = formData.get('file') as File | null;
-  const userId = formData.get('userId') as string | null;
-
-  if (!file || !userId) {
-    return { success: false, message: 'File or user ID missing.' };
-  }
-  
-  const uploader = await getUser(userId);
-  if (!uploader) {
-      return { success: false, message: 'Could not identify the importing user.' };
-  }
-
-  try {
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const workbook = xlsx.read(buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(sheet) as any[];
-
-    if (data.length === 0) {
-      return { success: false, message: 'The Excel file is empty or in an incorrect format.' };
-    }
-
-    const batch = adminDb!.batch();
-    let importedCount = 0;
-
-    for (const row of data) {
-      const name = row.Name || row.name;
-      const email = row.Email || row.email;
-      const phone = String(row.Phone || row.phone || '');
-
-      if (!name || (!email && !phone)) {
-        continue;
-      }
-
-      const newStudentRef = adminDb!.collection('students').doc(); // Auto-generate ID
-      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
-
-      const newStudentData: Omit<Student, 'id'> = {
-        name,
-        email: email || '',
-        phone,
-        employeeId: null, // Always unassigned on import
-        avatarUrl,
-        applications: [],
-        notes: [],
-        documents: [],
-        createdAt: new Date().toISOString(),
-        createdBy: userId,
-        targetCountries: [],
-        missingItems: [],
-        pipelineStatus: 'none',
-        profileCompletionStatus: {
-            submitUniversityApplication: false,
-            applyMoheScholarship: false,
-            submitKcoRequest: false,
-            receivedCasOrI20: false,
-            appliedForVisa: false,
-            visaGranted: false,
-            documentsSubmittedToMohe: false,
-            medicalFitnessSubmitted: false,
-            financialStatementsProvided: false,
-            readyToTravel: false,
-        },
-      };
-
-      batch.set(newStudentRef, newStudentData);
-      importedCount++;
-    }
-
-    if (importedCount === 0) {
-      return { success: false, message: 'No valid student data found in the file. Check column names (Name, Email, Phone).' };
-    }
-
-    await batch.commit();
-
-    // Create a task for admins to notify them of the import
-    const taskContent = `User ${uploader.name} has bulk-imported ${importedCount} students from the file '${file.name}'. Please review the new student profiles and assign them as needed.`;
-    const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
-    
-    if (!adminsSnapshot.empty) {
-        const adminBatch = adminDb!.batch();
-        adminsSnapshot.forEach(adminDoc => {
-            const taskRef = adminDb!.collection('tasks').doc();
-            const newTask: Omit<Task, 'id'> = {
-                authorId: userId,
-                recipientId: adminDoc.id,
-                content: taskContent,
-                createdAt: new Date().toISOString(),
-                status: 'new',
-                replies: []
-            };
-            adminBatch.set(taskRef, newTask);
-        });
-        await adminBatch.commit();
-    }
-    
-    return { success: true, message: `${importedCount} students were imported successfully and are now in the 'Unassigned' list.` };
-
-  } catch (error) {
-    console.error('Error importing students from Excel:', error);
-    return { success: false, message: 'An error occurred while processing the file. Ensure it is a valid .xlsx, .xls, or .csv file.' };
   }
 }
 
