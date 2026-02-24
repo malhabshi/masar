@@ -13,14 +13,8 @@ export default function ApplicantsPage() {
 
   // Employees, Admins, and Depts all fetch the full list of students.
   // The StudentTable component will handle client-side filtering for employees.
-  const studentsQuery = useMemoFirebase(() => {
-    if (!currentUser) return [];
-    return [];
-  }, [currentUser?.id]); // Depend on user ID to re-run if user changes
-
   const { data: students, isLoading: studentsAreLoading } = useCollection<Student>(
-    currentUser ? 'students' : '',
-    ...studentsQuery
+    currentUser ? 'students' : ''
   );
 
   const isLoading = isUserLoading || studentsAreLoading;
@@ -65,7 +59,8 @@ export default function ApplicantsPage() {
             showEmployee={currentUser.role !== 'employee'}
             showPipelineStatus
             showTerm
-            showAssignedFilter={true}
+            showIelts
+            showAssignedFilter={currentUser.role === 'employee'}
           />
         </CardContent>
       </Card>

@@ -105,7 +105,7 @@ export function StudentTable({ students, currentUser, showEmployee = false, show
 
   return (
     <div>
-      {showAssignedFilter && currentUser.role === 'employee' && (
+      {showAssignedFilter && (
         <Tabs value={assignedFilter} onValueChange={(value) => setAssignedFilter(value as 'all' | 'mine')} className="mb-4">
           <TabsList>
             <TabsTrigger value="mine">My Assigned</TabsTrigger>
@@ -234,7 +234,7 @@ export function StudentTable({ students, currentUser, showEmployee = false, show
                       {student.ielts?.overall ? (
                           <Badge variant="secondary">{student.ielts.overall.toFixed(1)}</Badge>
                       ) : (
-                          <span className="text-sm text-muted-foreground">N/A</span>
+                          "0"
                       )}
                     </TableCell>
                   )}
