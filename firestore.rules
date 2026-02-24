@@ -69,16 +69,25 @@ service cloud.firestore {
       allow delete: if request.auth != null && isRole('admin');
     }
     
-    // Students collection - read/write for admin/dept/assigned employee
+    // Students collection rules
     match /students/{studentId} {
-      // Allow read if user is authenticated
-      allow read: if request.auth != null;
-      
-      // Write: Only admins/departments can write, employees can update their assigned students
-      allow write: if request.auth != null && (
-        isOneOfRoles(['admin', 'department']) ||
-        resource.data.employeeId == getUserData().civilId
-      );
+        // Allow reading a single document if user is admin/dept, or if they are the assigned employee.
+        allow get: if request.auth != null && (
+            isOneOfRoles(['admin', 'department']) ||
+            resource.data.employeeId == getUserData().civilId
+        );
+
+        // Allow querying the collection if user is admin/dept, OR if an employee is querying for *their own* students.
+        allow list: if request.auth != null && (
+            isOneOfRoles(['admin', 'department']) ||
+            (isRole('employee') && request.query.where.employeeId == getUserData().civilId)
+        );
+        
+        // Write: Only admins/departments can write, or an employee can update their assigned students.
+        allow write: if request.auth != null && (
+            isOneOfRoles(['admin', 'department']) ||
+            (request.auth != null && resource.data.employeeId == getUserData().civilId)
+        );
     }
     
     // Approved universities - admins and dept can write, all can read
