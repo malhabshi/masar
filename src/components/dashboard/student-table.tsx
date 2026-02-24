@@ -70,6 +70,12 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [termFilter, setTermFilter] = useState('');
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -227,7 +233,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
             </div>
         </div>
 
-      {currentUser.role === 'employee' && (
+      {isClient && currentUser.role === 'employee' && (
         <Tabs value={assignedFilter} onValueChange={(value) => setAssignedFilter(value as 'all' | 'mine')} className="mb-4">
           <TabsList>
             <TabsTrigger value="mine">My Assigned</TabsTrigger>
