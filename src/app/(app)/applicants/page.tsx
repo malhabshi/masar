@@ -11,12 +11,10 @@ import { AddStudentDialog } from '@/components/student/add-student-dialog';
 export default function ApplicantsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
-  // Fetch ALL students
+  // Fetch ALL students and ALL users so the table can perform client-side filtering.
   const { data: students, isLoading: studentsAreLoading } = useCollection<Student>(
     currentUser ? 'students' : ''
   );
-  
-  // Fetch ALL users for the employee filter dropdown
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     currentUser ? 'users' : ''
   );
@@ -42,9 +40,7 @@ export default function ApplicantsPage() {
     );
   }
 
-  const description = currentUser.role === 'employee'
-    ? "A list of all students. Use the tabs to switch between your assigned students and all applicants."
-    : 'A comprehensive list of all students in the system.';
+  const description = "A comprehensive list of all students in the system. Use the filters to narrow your search.";
 
   return (
     <div className="space-y-6">
@@ -54,18 +50,13 @@ export default function ApplicantsPage() {
             <CardTitle>Applicants</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          <AddStudentDialog />
+          {(currentUser.role === 'admin' || currentUser.role === 'employee') && <AddStudentDialog />}
         </CardHeader>
         <CardContent>
           <StudentTable
             students={students || []}
             currentUser={currentUser}
             allUsers={allUsers || []}
-            showEmployee={currentUser.role !== 'employee'}
-            showPipelineStatus
-            showTerm
-            showIelts
-            showAssignedFilter={currentUser.role === 'employee'}
           />
         </CardContent>
       </Card>

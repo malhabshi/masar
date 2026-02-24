@@ -38,14 +38,7 @@ interface StudentTableProps {
   students: Student[];
   currentUser: AppUser;
   allUsers: User[];
-  showEmployee?: boolean;
-  showPipelineStatus?: boolean;
-  showIelts?: boolean;
-  showTerm?: boolean;
-  showCountries?: boolean;
   emptyStateMessage?: string;
-  showApplicationCount?: boolean;
-  showAssignedFilter?: boolean;
 }
 
 const pipelineStatusStyles: { [key: string]: string } = {
@@ -62,10 +55,10 @@ const pipelineStatusLabels: { [key: string]: string } = {
 };
 
 
-export function StudentTable({ students, currentUser, allUsers, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false, showAssignedFilter = false }: StudentTableProps) {
+export function StudentTable({ students, currentUser, allUsers, emptyStateMessage = "No students found." }: StudentTableProps) {
   const { toast } = useToast();
   
-  // State for employee tabs
+  // State for tabs (only for employees)
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine'>(
     currentUser.role === 'employee' ? 'mine' : 'all'
   );
@@ -76,7 +69,7 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
   const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
-  const [termFilter, setTermFilter] = useState('all');
+  const [termFilter, setTermFilter] = useState('');
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -87,11 +80,7 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
 
   // Prepare data for dropdowns
   const employeeOptions = useMemo(() => allUsers.filter(u => u.role === 'employee'), [allUsers]);
-  const termOptions = useMemo(() => {
-    const terms = students.map(s => s.term).filter(Boolean);
-    return [...new Set(terms)] as string[];
-  }, [students]);
-
+  
   const employeeMapByCivilId = useMemo(() => {
     const map = new Map<string, User>();
     allUsers.forEach(u => {
@@ -104,11 +93,10 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
     let tempStudents = [...students];
 
     // Employee 'My Assigned' tab filter
-    if (showAssignedFilter && assignedFilter === 'mine' && currentUser.civilId) {
+    if (currentUser.role === 'employee' && assignedFilter === 'mine' && currentUser.civilId) {
       tempStudents = tempStudents.filter(s => s.employeeId === currentUser.civilId);
     }
 
-    // Dropdown/Search Filters
     return tempStudents.filter(student => {
         const searchLower = debouncedSearchQuery.toLowerCase();
         const matchesSearch = !debouncedSearchQuery || 
@@ -122,18 +110,25 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
             (employeeFilter === 'unassigned' && !student.employeeId) || 
             (student.employeeId && employeeMapByCivilId.get(student.employeeId)?.id === employeeFilter);
 
-        const minIelts = ieltsFilter === 'all' ? 0 : parseFloat(ieltsFilter);
-        const matchesIelts = ieltsFilter === 'all' || (student.ielts?.overall || 0) >= minIelts;
+        const studentIelts = student.ielts?.overall ?? 0;
+        let matchesIelts = true;
+        if (ieltsFilter !== 'all') {
+            switch(ieltsFilter) {
+            case '0': matchesIelts = studentIelts === 0; break;
+            case '<=5.0': matchesIelts = studentIelts > 0 && studentIelts <= 5.0; break;
+            case '5.5': matchesIelts = studentIelts === 5.5; break;
+            case '6.0': matchesIelts = studentIelts === 6.0; break;
+            case '>=6.5': matchesIelts = studentIelts >= 6.5; break;
+            }
+        }
         
-        const matchesTerm = termFilter === 'all' || student.term === termFilter;
+        const matchesTerm = !termFilter.trim() || (student.term && student.term.toLowerCase().includes(termFilter.trim().toLowerCase()));
 
-        const isVisibleForRole = currentUser.role === 'employee' ? true : matchesEmployee;
-
-        return matchesSearch && matchesPipeline && isVisibleForRole && matchesIelts && matchesTerm;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesTerm;
     });
   }, [
-    students, showAssignedFilter, assignedFilter, currentUser.civilId, debouncedSearchQuery,
-    pipelineFilter, employeeFilter, ieltsFilter, termFilter, employeeMapByCivilId, currentUser.role
+    students, assignedFilter, currentUser.civilId, currentUser.role, debouncedSearchQuery,
+    pipelineFilter, employeeFilter, ieltsFilter, termFilter, employeeMapByCivilId
   ]);
 
   const handleClearFilters = () => {
@@ -141,10 +136,9 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
     setPipelineFilter('all');
     setEmployeeFilter('all');
     setIeltsFilter('all');
-    setTermFilter('all');
+    setTermFilter('');
   };
-  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || termFilter !== 'all';
-
+  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || termFilter;
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -165,7 +159,7 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
     }
   }
 
-  const numColumns = [showEmployee, showPipelineStatus, showIelts, showApplicationCount, showTerm, showCountries].filter(Boolean).length + 2;
+  const numColumns = 6;
 
   const currentEmptyStateMessage = displayedStudents.length === 0 && isFiltered 
       ? 'No students match your current filters.' 
@@ -173,76 +167,67 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row gap-2 mb-4">
-        <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-                placeholder="Search name, email, or phone..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 w-full"
-            />
+        <div className="flex flex-col gap-4 mb-4">
+            <div className="relative w-full">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                    placeholder="Search by name, email, or phone..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 w-full"
+                />
+            </div>
+            <div className="flex flex-col md:flex-row gap-2 items-center">
+                <Select value={pipelineFilter} onValueChange={(v) => setPipelineFilter(v as any)}>
+                    <SelectTrigger className="w-full flex-1">
+                        <SelectValue placeholder="Pipeline Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Pipelines</SelectItem>
+                        <SelectItem value="none">No Status</SelectItem>
+                        <SelectItem value="green">Green</SelectItem>
+                        <SelectItem value="orange">Orange</SelectItem>
+                        <SelectItem value="red">Red</SelectItem>
+                    </SelectContent>
+                </Select>
+                {currentUser.role !== 'employee' && (
+                    <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                        <SelectTrigger className="w-full flex-1">
+                            <SelectValue placeholder="Assigned Employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Employees</SelectItem>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {employeeOptions.map(emp => (
+                                <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+                <Select value={ieltsFilter} onValueChange={setIeltsFilter}>
+                    <SelectTrigger className="w-full flex-1">
+                        <SelectValue placeholder="IELTS Score" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Scores</SelectItem>
+                        <SelectItem value="0">0</SelectItem>
+                        <SelectItem value="<=5.0">5.0 or less</SelectItem>
+                        <SelectItem value="5.5">5.5</SelectItem>
+                        <SelectItem value="6.0">6.0</SelectItem>
+                        <SelectItem value=">=6.5">6.5+</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Input
+                    placeholder="Filter by term..."
+                    value={termFilter}
+                    onChange={(e) => setTermFilter(e.target.value)}
+                    className="w-full flex-1"
+                />
+                {isFiltered && <Button variant="ghost" onClick={handleClearFilters} className="w-full md:w-auto"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
+            </div>
         </div>
-        {showPipelineStatus && (
-            <Select value={pipelineFilter} onValueChange={(v) => setPipelineFilter(v as any)}>
-                <SelectTrigger className="w-full md:w-[150px]">
-                    <SelectValue placeholder="Pipeline Status" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Pipelines</SelectItem>
-                    <SelectItem value="none">No Status</SelectItem>
-                    <SelectItem value="green">Green</SelectItem>
-                    <SelectItem value="orange">Orange</SelectItem>
-                    <SelectItem value="red">Red</SelectItem>
-                </SelectContent>
-            </Select>
-        )}
-        {showEmployee && (
-             <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                    <SelectValue placeholder="Assigned Employee" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Employees</SelectItem>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {employeeOptions.map(emp => (
-                        <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-        )}
-         {showIelts && (
-             <Select value={ieltsFilter} onValueChange={setIeltsFilter}>
-                <SelectTrigger className="w-full md:w-[120px]">
-                    <SelectValue placeholder="Min IELTS" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">Any IELTS</SelectItem>
-                    <SelectItem value="5.0">5.0+</SelectItem>
-                    <SelectItem value="5.5">5.5+</SelectItem>
-                    <SelectItem value="6.0">6.0+</SelectItem>
-                    <SelectItem value="6.5">6.5+</SelectItem>
-                    <SelectItem value="7.0">7.0+</SelectItem>
-                </SelectContent>
-            </Select>
-        )}
-        {showTerm && termOptions.length > 0 && (
-             <Select value={termFilter} onValueChange={setTermFilter}>
-                <SelectTrigger className="w-full md:w-[150px]">
-                    <SelectValue placeholder="Term" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Terms</SelectItem>
-                    {termOptions.map(term => (
-                        <SelectItem key={term} value={term}>{term}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-        )}
-        {isFiltered && <Button variant="ghost" onClick={handleClearFilters}><X className="mr-2 h-4 w-4" /> Clear</Button>}
-      </div>
 
-      {showAssignedFilter && (
+      {currentUser.role === 'employee' && (
         <Tabs value={assignedFilter} onValueChange={(value) => setAssignedFilter(value as 'all' | 'mine')} className="mb-4">
           <TabsList>
             <TabsTrigger value="mine">My Assigned</TabsTrigger>
@@ -250,17 +235,16 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
           </TabsList>
         </Tabs>
       )}
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Student</TableHead>
-              {showApplicationCount && <TableHead>Application Tracking</TableHead>}
-              {showPipelineStatus && <TableHead>Pipeline</TableHead>}
-              {showCountries && <TableHead>Countries</TableHead>}
-              {showEmployee && <TableHead>Assigned Employee</TableHead>}
-              {showIelts && <TableHead>IELTS Overall</TableHead>}
-              {showTerm && <TableHead>Term</TableHead>}
+              <TableHead>Pipeline</TableHead>
+              <TableHead>Assigned Employee</TableHead>
+              <TableHead>IELTS Overall</TableHead>
+              <TableHead>Term</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -268,7 +252,6 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
             {displayedStudents.length > 0 ? (
               displayedStudents.map((student) => {
                 const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
-                const applicationCountries = Array.from(new Set(student.applications.map(app => app.country))).join(', ');
                 const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
                 const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
 
@@ -342,48 +325,26 @@ export function StudentTable({ students, currentUser, allUsers, showEmployee = f
                       </div>
                     </div>
                   </TableCell>
-                  {showApplicationCount && (
-                    <TableCell>
-                      <div className="text-center font-medium">{student.applications.length}</div>
-                    </TableCell>
-                  )}
-                  {showPipelineStatus && (
-                    <TableCell>
-                      <Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>
-                        {pipelineStatusLabels[student.pipelineStatus || 'none']}
-                      </Badge>
-                    </TableCell>
-                  )}
-                  {showCountries && (
-                    <TableCell>
-                      {applicationCountries ? (
-                        <span>{applicationCountries}</span>
-                      ) : (
+                  <TableCell>
+                    <Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>
+                      {pipelineStatusLabels[student.pipelineStatus || 'none']}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
+                  <TableCell>
+                    {student.ielts?.overall ? (
+                        <Badge variant="secondary">{student.ielts.overall.toFixed(1)}</Badge>
+                    ) : (
+                        <Badge variant="outline">0</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {student.term ? (
+                        <Badge variant="outline">{student.term}</Badge>
+                    ) : (
                         <span className="text-sm text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                  )}
-                  {showEmployee && (
-                    <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
-                  )}
-                  {showIelts && (
-                    <TableCell>
-                      {student.ielts?.overall ? (
-                          <Badge variant="secondary">{student.ielts.overall.toFixed(1)}</Badge>
-                      ) : (
-                          <Badge variant="outline">0</Badge>
-                      )}
-                    </TableCell>
-                  )}
-                  {showTerm && (
-                    <TableCell>
-                      {student.term ? (
-                          <Badge variant="outline">{student.term}</Badge>
-                      ) : (
-                          <span className="text-sm text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                  )}
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                         <DropdownMenu>
