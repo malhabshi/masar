@@ -20,19 +20,6 @@ export default function ApplicantsPage() {
 
   useEffect(() => {
     setIsMounted(true);
-
-    // This will help identify which component is causing the error
-    const originalError = console.error;
-    console.error = (...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('Hydration')) {
-        debugger; // This will pause execution when a hydration error occurs
-      }
-      originalError.apply(console, args);
-    };
-
-    return () => {
-      console.error = originalError;
-    };
   }, []);
 
   // --- Start of original page logic ---
