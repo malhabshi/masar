@@ -24,34 +24,6 @@ interface UploadDocumentDialogProps {
   student: Student;
 }
 
-// Function to play a success sound using Web Audio API
-function playUploadSuccessSound() {
-  // Check if window and AudioContext are available
-  if (typeof window === 'undefined' || !window.AudioContext) return;
-
-  try {
-    const audioContext = new window.AudioContext();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    // A pleasant "ding" sound
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(1200, audioContext.currentTime); // Higher pitch
-    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Subtle volume
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.4);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.4);
-  } catch (e) {
-    // Catch errors in case AudioContext is blocked or fails
-    console.error('Could not play notification sound:', e);
-  }
-}
-
-
 export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -119,8 +91,6 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
         title: 'Upload Successful',
         description: `'${result.document.name}' has been uploaded and added to the student's profile.`,
       });
-
-      playUploadSuccessSound();
 
       setIsOpen(false);
       setFile(null);

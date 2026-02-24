@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Task, UpcomingEvent, Student } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { ToastAction } from '@/components/ui/toast';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { where } from 'firebase/firestore';
 
 function playNotificationSound(frequency = 800) {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -34,149 +35,162 @@ export function NotificationListener() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const isInitialTaskLoad = useRef(true);
-  const isInitialEventLoad = useRef(true);
-  const isInitialStudentLoad = useRef(true);
-
-  // Determine if we are allowed to fetch all students
-  const canFetchAllStudents = user && ['admin', 'department'].includes(user.role);
+  const prevTasksRef = useRef<Task[]>();
+  const prevEventsRef = useRef<UpcomingEvent[]>();
+  const prevStudentsRef = useRef<Student[]>();
 
   const { data: tasks } = useCollection<Task>(user ? `tasks` : '');
   const { data: events } = useCollection<UpcomingEvent>(user ? `upcoming_events` : '');
-  // Only fetch students if the user has the appropriate role
-  const { data: students } = useCollection<Student>(canFetchAllStudents ? `students` : '');
 
-  const creatorIds = useMemo(() => students?.map(s => s.createdBy).filter(Boolean) as string[] || [], [students]);
-  const { userMap: creatorUserMap, isLoading: creatorsLoading } = useUserCacheById(creatorIds);
+  // Fetch students based on user role
+  const studentQueryConstraints = useMemoFirebase(() => {
+    if (!user) return null;
+    if (user.role === 'employee' && user.civilId) {
+        return [where('employeeId', '==', user.civilId)];
+    }
+    if (user.role === 'admin' || user.role === 'department') {
+        return []; // No constraints for admins/depts, they get all students
+    }
+    return null; // Not a role that should be listening to students this way
+  }, [user?.role, user?.civilId]);
 
+  const { data: students } = useCollection<Student>(
+    studentQueryConstraints ? 'students' : '', 
+    ...(studentQueryConstraints || [])
+  );
 
+  // Cache all user profiles needed for notifications
+  const allUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    (tasks || []).forEach(task => {
+      ids.add(task.authorId);
+      task.replies?.forEach(reply => ids.add(reply.authorId));
+    });
+    (events || []).forEach(event => ids.add(event.authorId));
+    (students || []).forEach(student => {
+      if (student.createdBy) ids.add(student.createdBy);
+      student.documents?.forEach(doc => ids.add(doc.authorId));
+    });
+    return Array.from(ids);
+  }, [tasks, events, students]);
+
+  const { userMap } = useUserCacheById(allUserIds);
+
+  // Effect for new tasks
   useEffect(() => {
-    if (!tasks || !user) return;
-
-    const storageKey = `lastNotifiedTaskTimestamp_${user.id}`;
-    const lastNotified = localStorage.getItem(storageKey);
-
-    if (isInitialTaskLoad.current) {
-        isInitialTaskLoad.current = false;
-        if (!lastNotified) {
-             localStorage.setItem(storageKey, new Date().toISOString());
-        }
+    if (!tasks || !user || !prevTasksRef.current) {
+        prevTasksRef.current = tasks;
         return;
     }
-    
-    let newLatestTimestamp = lastNotified || new Date(0).toISOString();
-    let didNotify = false;
-
+    const prevTaskIds = new Set(prevTasksRef.current.map(t => t.id));
     tasks.forEach(task => {
-      const isNew = new Date(task.createdAt) > new Date(lastNotified || 0);
-      const isRelevant = user.role === 'employee' && (task.recipientId === 'all' || task.recipientId === user.id);
-      
-      if (isNew && isRelevant) {
-        if (!didNotify) didNotify = true;
-        toast({
-          title: 'New Task Assigned',
-          description: task.content.substring(0, 50) + '...',
-          action: <ToastAction altText="View" onClick={() => router.push('/dashboard')}>View</ToastAction>,
-        });
-      }
-
-      if (new Date(task.createdAt) > new Date(newLatestTimestamp)) {
-        newLatestTimestamp = task.createdAt;
-      }
+        if (!prevTaskIds.has(task.id)) {
+            const isRelevant = user.role === 'employee' && (task.recipientId === 'all' || task.recipientId === user.id);
+            if (isRelevant) {
+                playNotificationSound();
+                toast({
+                    title: 'New Task Assigned',
+                    description: task.content.substring(0, 50) + '...',
+                    action: <ToastAction altText="View" onClick={() => router.push('/dashboard')}>View</ToastAction>,
+                });
+            }
+        }
     });
-    
-    if (didNotify) {
-        playNotificationSound();
-    }
-    
-    localStorage.setItem(storageKey, newLatestTimestamp);
-
+    prevTasksRef.current = tasks;
   }, [tasks, user, toast, router]);
 
+  // Effect for new events
   useEffect(() => {
-    if (!events || !user) return;
-    
-    const storageKey = `lastNotifiedEventTimestamp_${user.id}`;
-    const lastNotified = localStorage.getItem(storageKey);
-    
-    if (isInitialEventLoad.current) {
-      isInitialEventLoad.current = false;
-      if (!lastNotified) {
-          localStorage.setItem(storageKey, new Date().toISOString());
-      }
-      return;
+    if (!events || !user || !prevEventsRef.current) {
+        prevEventsRef.current = events;
+        return;
     }
-    
-    let newLatestTimestamp = lastNotified || new Date(0).toISOString();
-    let didNotify = false;
-
+    const prevEventIds = new Set(prevEventsRef.current.map(e => e.id));
     events.forEach(event => {
-      if (new Date(event.createdAt) > new Date(lastNotified || 0)) {
-        if (!didNotify) didNotify = true;
-        toast({
-          title: 'New Event Scheduled',
-          description: `${event.title} on ${new Date(event.date).toLocaleDateString()}`,
-          action: <ToastAction altText="View" onClick={() => router.push('/dashboard')}>View</ToastAction>,
-        });
-      }
-
-      if (new Date(event.createdAt) > new Date(newLatestTimestamp)) {
-        newLatestTimestamp = event.createdAt;
-      }
+        if (!prevEventIds.has(event.id)) {
+            playNotificationSound();
+            toast({
+                title: 'New Event Scheduled',
+                description: `${event.title} on ${new Date(event.date).toLocaleDateString()}`,
+                action: <ToastAction altText="View" onClick={() => router.push('/dashboard')}>View</ToastAction>,
+            });
+        }
     });
-
-    if (didNotify) {
-        playNotificationSound();
-    }
-    
-    localStorage.setItem(storageKey, newLatestTimestamp);
-
+    prevEventsRef.current = events;
   }, [events, user, toast, router]);
 
+  // Effect for new students (for admins) & new documents (for all)
   useEffect(() => {
-    // The useCollection hook is now guarded, but we double-check here before processing.
-    if (!students || !user || creatorsLoading) return;
-    if (!['admin', 'department'].includes(user.role)) return;
-
-    const storageKey = `lastNotifiedStudentTimestamp_${user.id}`;
-    const lastNotified = localStorage.getItem(storageKey);
-
-    if (isInitialStudentLoad.current) {
-        isInitialStudentLoad.current = false;
-        if (!lastNotified) {
-            localStorage.setItem(storageKey, new Date().toISOString());
-        }
+    if (!students || !user || !userMap.size || !prevStudentsRef.current) {
+        prevStudentsRef.current = students;
         return;
     }
 
-    let newLatestTimestamp = lastNotified || new Date(0).toISOString();
-    let didNotify = false;
+    const prevStudentsMap = new Map(prevStudentsRef.current.map(s => [s.id, s]));
 
-    students.forEach(student => {
-      const isNew = new Date(student.createdAt) > new Date(lastNotified || 0);
-      const creator = student.createdBy ? creatorUserMap.get(student.createdBy) : null;
-      
-      if (isNew && creator && creator.role === 'employee') {
-          if (!didNotify) didNotify = true;
-          toast({
-              title: 'New Student Added',
-              description: `'${student.name}' was added by ${creator.name}.`,
-              action: <ToastAction altText="View" onClick={() => router.push(`/student/${student.id}`)}>View</ToastAction>,
-          });
-      }
+    students.forEach(currentStudent => {
+        const prevStudent = prevStudentsMap.get(currentStudent.id);
+        const isAdminOrDept = ['admin', 'department'].includes(user.role);
 
-      if (new Date(student.createdAt) > new Date(newLatestTimestamp)) {
-        newLatestTimestamp = student.createdAt;
-      }
+        // 1. Check for newly created students
+        if (!prevStudent && isAdminOrDept) {
+            const creator = userMap.get(currentStudent.createdBy);
+            if (creator && creator.role === 'employee') {
+                playNotificationSound(1200); // Higher pitch for new students
+                toast({
+                    title: 'New Student Added',
+                    description: `'${currentStudent.name}' was added by ${creator.name}.`,
+                    action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
+                });
+            }
+        }
+
+        // 2. Check for new documents on existing students
+        if (prevStudent) {
+            const isEmployee = user.role === 'employee';
+            let wasDocumentAddedForThisUser = false;
+            
+            // Check if a doc was added FOR an admin/dept
+            if (isAdminOrDept && (currentStudent.newDocumentsForAdmin || 0) > (prevStudent.newDocumentsForAdmin || 0)) {
+                wasDocumentAddedForThisUser = true;
+            }
+
+            // Check if a doc was added FOR an employee
+            if (isEmployee && (currentStudent.newDocumentsForEmployee || 0) > (prevStudent.newDocumentsForEmployee || 0)) {
+                wasDocumentAddedForThisUser = true;
+            }
+            
+            if (wasDocumentAddedForThisUser) {
+                const newDocs = currentStudent.documents.filter(
+                    doc => !prevStudent.documents.some(prevDoc => prevDoc.id === doc.id)
+                );
+                
+                if (newDocs.length > 0) {
+                    const latestDoc = newDocs[newDocs.length - 1];
+
+                    if (latestDoc.authorId !== user.id) { // Don't notify the uploader
+                        const author = userMap.get(latestDoc.authorId);
+                        const authorName = author ? author.name : 'A user';
+                        const toastTitle = isEmployee ? 'New Document for Your Student' : 'New Document Uploaded';
+
+                        playNotificationSound(900); // Document-specific sound
+                        toast({
+                            title: toastTitle,
+                            description: `${authorName} uploaded a document for ${currentStudent.name}.`,
+                            action: (
+                                <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>
+                                    View
+                                </ToastAction>
+                            ),
+                        });
+                    }
+                }
+            }
+        }
     });
 
-    if(didNotify) {
-        playNotificationSound(1200); // Higher pitch for new students
-    }
-
-    localStorage.setItem(storageKey, newLatestTimestamp);
-
-  }, [students, user, toast, router, creatorUserMap, creatorsLoading]);
+    prevStudentsRef.current = students;
+  }, [students, user, userMap, toast, router]);
 
 
   return null;
