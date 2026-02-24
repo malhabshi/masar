@@ -2,7 +2,8 @@
 
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
   Card,
@@ -16,9 +17,19 @@ import { Loader2 } from 'lucide-react';
 
 export function EmployeeApplicantsPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(
-    currentUser ? 'students' : ''
+
+  const myStudentsQuery = useMemoFirebase(() => {
+    // Make sure we have a civilId before creating the query
+    if (!currentUser?.civilId) return null;
+    return [where('employeeId', '==', currentUser.civilId)];
+  }, [currentUser?.civilId]);
+
+  // Only fetch if the query is ready
+  const { data: myStudents, isLoading: studentsAreLoading } = useCollection<Student>(
+    myStudentsQuery ? 'students' : '',
+    ...(myStudentsQuery || [])
   );
+
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     currentUser ? 'users' : ''
   );
@@ -42,16 +53,16 @@ export function EmployeeApplicantsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Applicants</CardTitle>
+            <CardTitle>My Applicants</CardTitle>
             <CardDescription>
-              A filterable list of all students in the system.
+              A filterable list of your assigned students.
             </CardDescription>
           </div>
           <AddStudentDialog />
         </CardHeader>
         <CardContent>
           <StudentTable
-            students={allStudents || []}
+            students={myStudents || []}
             currentUser={currentUser}
             allUsers={allUsers || []}
           />

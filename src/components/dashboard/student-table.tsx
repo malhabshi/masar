@@ -31,8 +31,6 @@ import { cn } from '@/lib/utils';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
 
 interface StudentTableProps {
   students: Student[];
@@ -58,11 +56,6 @@ const pipelineStatusLabels: { [key: string]: string } = {
 export function StudentTable({ students, currentUser, allUsers, emptyStateMessage = "No students found." }: StudentTableProps) {
   const { toast } = useToast();
   
-  // State for tabs (only for employees)
-  const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine'>(
-    currentUser.role === 'employee' ? 'mine' : 'all'
-  );
-
   // State for all filters
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -96,14 +89,9 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   }, [allUsers]);
 
   const displayedStudents = useMemo(() => {
-    let tempStudents = [...students];
-
-    // Employee 'My Assigned' tab filter
-    if (currentUser.role === 'employee' && assignedFilter === 'mine' && currentUser.civilId) {
-      tempStudents = tempStudents.filter(s => s.employeeId === currentUser.civilId);
-    }
-
-    return tempStudents.filter(student => {
+    // The parent component is now responsible for filtering by 'my assigned' vs 'all'.
+    // This component just filters the list it's given.
+    return students.filter(student => {
         const searchLower = debouncedSearchQuery.toLowerCase();
         const matchesSearch = !debouncedSearchQuery || 
             student.name.toLowerCase().includes(searchLower) ||
@@ -133,7 +121,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
         return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesTerm;
     });
   }, [
-    students, assignedFilter, currentUser.civilId, currentUser.role, debouncedSearchQuery,
+    students, debouncedSearchQuery,
     pipelineFilter, employeeFilter, ieltsFilter, termFilter, employeeMapByCivilId
   ]);
 
@@ -169,7 +157,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
 
   const currentEmptyStateMessage = displayedStudents.length === 0 && isFiltered 
       ? 'No students match your current filters.' 
-      : (assignedFilter === 'mine' ? 'You have no assigned students.' : emptyStateMessage);
+      : emptyStateMessage;
 
   return (
     <div>
@@ -232,15 +220,6 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 {isFiltered && <Button variant="ghost" onClick={handleClearFilters} className="w-full md:w-auto"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
             </div>
         </div>
-
-      {isClient && currentUser.role === 'employee' && (
-        <Tabs value={assignedFilter} onValueChange={(value) => setAssignedFilter(value as 'all' | 'mine')} className="mb-4">
-          <TabsList>
-            <TabsTrigger value="mine">My Assigned</TabsTrigger>
-            <TabsTrigger value="all">All Applicants</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      )}
 
       <div className="rounded-lg border">
         <Table>
