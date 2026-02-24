@@ -62,7 +62,9 @@ const pipelineStatusLabels: { [key: string]: string } = {
 
 export function StudentTable({ students, currentUser, showEmployee = false, showPipelineStatus = false, showIelts = false, showTerm = false, showCountries = false, emptyStateMessage = "No students found.", showApplicationCount = false, showAssignedFilter = false }: StudentTableProps) {
   const { toast } = useToast();
-  const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine'>('all');
+  const [assignedFilter, setAssignedFilter] = useState<'all' | 'mine'>(
+    currentUser.role === 'employee' ? 'mine' : 'all'
+  );
 
   const employeeCivilIds = useMemo(() => {
     if (!showEmployee) return [];
@@ -103,11 +105,11 @@ export function StudentTable({ students, currentUser, showEmployee = false, show
 
   return (
     <div>
-      {showAssignedFilter && currentUser.role !== 'employee' && (
+      {showAssignedFilter && currentUser.role === 'employee' && (
         <Tabs value={assignedFilter} onValueChange={(value) => setAssignedFilter(value as 'all' | 'mine')} className="mb-4">
           <TabsList>
-            <TabsTrigger value="all">All Applicants</TabsTrigger>
             <TabsTrigger value="mine">My Assigned</TabsTrigger>
+            <TabsTrigger value="all">All Applicants</TabsTrigger>
           </TabsList>
         </Tabs>
       )}

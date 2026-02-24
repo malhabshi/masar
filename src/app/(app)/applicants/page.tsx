@@ -3,7 +3,6 @@
 import { useUser } from '@/hooks/use-user';
 import type { Student } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -12,18 +11,13 @@ import { AddStudentDialog } from '@/components/student/add-student-dialog';
 export default function ApplicantsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
-  // Define constraints for the query based on the user's role
+  // Employees, Admins, and Depts all fetch the full list of students.
+  // The StudentTable component will handle client-side filtering for employees.
   const studentsQuery = useMemoFirebase(() => {
-    if (!currentUser) return []; // No query if user isn't loaded
-    if (currentUser.role === 'employee' && currentUser.civilId) {
-      // Employees see only their assigned students
-      return [where('employeeId', '==', currentUser.civilId)];
-    }
-    // Admins and Departments see all students, so no extra constraints
+    if (!currentUser) return [];
     return [];
-  }, [currentUser?.role, currentUser?.civilId]);
+  }, [currentUser?.id]); // Depend on user ID to re-run if user changes
 
-  // Use the useCollection hook with the defined constraints
   const { data: students, isLoading: studentsAreLoading } = useCollection<Student>(
     currentUser ? 'students' : '',
     ...studentsQuery
@@ -51,7 +45,7 @@ export default function ApplicantsPage() {
   }
 
   const description = currentUser.role === 'employee'
-    ? 'A list of students currently assigned to you.'
+    ? "A list of all students. Use the tabs to switch between your assigned students and all applicants."
     : 'A comprehensive list of all students in the system.';
 
   return (
