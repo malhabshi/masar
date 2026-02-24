@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -70,10 +69,11 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
     formData.append('studentId', student.id);
     if (customName) {
         formData.append('customName', customName);
+        console.log('3a. Custom Name:', customName);
     }
     console.log('2. Destination:', 'student');
     console.log('3. Student ID:', student.id);
-    if (customName) console.log('3a. Custom Name:', customName);
+
 
     try {
       const token = await authUser.getIdToken();

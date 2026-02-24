@@ -2,8 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
-import type { User, Student, Document as StudentDocument } from '@/lib/types';
-import { FieldPath } from 'firebase-admin/firestore';
+import type { User, Student } from '@/lib/types';
+import type { Document as StudentDocument } from '@/lib/types';
 
 // Re-using the getUser helper from actions.ts, but defined locally for the route
 async function getUser(userId: string): Promise<User | null> {
@@ -75,14 +75,16 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Forbidden: You do not have permission to upload to this student profile.' }, { status: 403 });
         }
 
+        // 1. UPLOAD FILE TO STORAGE
         const filePath = `students/${studentId}/${Date.now()}_${file.name}`;
         const blob = bucket.file(filePath);
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
+        // Use a long-lived signed URL. For public access, use blob.makePublic() and blob.publicUrl()
         const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
 
-        // --- THIS IS THE NEW, CONSOLIDATED DATABASE UPDATE LOGIC ---
+        // 2. UPDATE FIRESTORE DOCUMENT
         const newDocument: StudentDocument = {
-            id: `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: customName || file.name,
             originalName: file.name,
             size: file.size,
@@ -92,10 +94,13 @@ export async function POST(req: NextRequest) {
             isNew: true,
         };
         
+        const updatedDocuments = [...(studentData.documents || []), newDocument];
+        
         const updates: any = {
-            documents: [...(studentData.documents || []), newDocument],
+            documents: updatedDocuments,
         };
 
+        // Increment the correct notification counter
         if (uploader.role === 'employee') {
             updates.newDocumentsForAdmin = (studentData.newDocumentsForAdmin || 0) + 1;
         } else if (['admin', 'department'].includes(uploader.role)) {
@@ -104,6 +109,7 @@ export async function POST(req: NextRequest) {
 
         await studentRef.update(updates);
 
+        // 3. RETURN SUCCESS
         return NextResponse.json({ success: true, document: newDocument });
 
     } else if (destination === 'user_avatar') {
@@ -118,16 +124,7 @@ export async function POST(req: NextRequest) {
 
     } else {
         // Logic for other destinations like 'shared'
-        const canUpload = uploader.role === 'admin' || uploader.role === 'department';
-        if (destination === 'shared' && !canUpload) {
-             return NextResponse.json({ error: 'Forbidden: You do not have permission to upload to shared documents.' }, { status: 403 });
-        }
-        const filePath = `shared_documents/${Date.now()}_${file.name}`;
-        const blob = bucket.file(filePath);
-        await blob.save(fileBuffer, { metadata: { contentType: file.type } });
-        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
-        const downloadURL = url;
-        return NextResponse.json({ success: true, downloadURL });
+        return NextResponse.json({ error: 'Invalid destination provided.' }, { status: 400 });
     }
 
   } catch (error: any) {
