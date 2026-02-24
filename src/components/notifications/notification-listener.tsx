@@ -1,16 +1,17 @@
 
+
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { Task, UpcomingEvent } from '@/lib/types';
+import type { Task, UpcomingEvent, Student } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import { ToastAction } from '@/components/ui/toast';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
-function playNotificationSound() {
+function playNotificationSound(frequency = 800) {
   if (typeof window === 'undefined' || !window.AudioContext) return;
   
   const audioContext = new window.AudioContext();
@@ -21,7 +22,7 @@ function playNotificationSound() {
   gainNode.connect(audioContext.destination);
 
   oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+  oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
   gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
   gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.5);
 
@@ -37,9 +38,15 @@ export function NotificationListener() {
 
   const isInitialTaskLoad = useRef(true);
   const isInitialEventLoad = useRef(true);
+  const isInitialStudentLoad = useRef(true);
 
   const { data: tasks } = useCollection<Task>(user ? `tasks` : '');
   const { data: events } = useCollection<UpcomingEvent>(user ? `upcoming_events` : '');
+  const { data: students } = useCollection<Student>(user ? `students` : '');
+
+  const creatorIds = useMemo(() => students?.map(s => s.createdBy).filter(Boolean) as string[] || [], [students]);
+  const { userMap: creatorUserMap, isLoading: creatorsLoading } = useUserCacheById(creatorIds);
+
 
   useEffect(() => {
     if (!tasks || !user) return;
@@ -123,6 +130,50 @@ export function NotificationListener() {
     localStorage.setItem(storageKey, newLatestTimestamp);
 
   }, [events, user, toast, router]);
+
+  useEffect(() => {
+    if (!students || !user || creatorsLoading) return;
+    if (!['admin', 'department'].includes(user.role)) return;
+
+    const storageKey = `lastNotifiedStudentTimestamp_${user.id}`;
+    const lastNotified = localStorage.getItem(storageKey);
+
+    if (isInitialStudentLoad.current) {
+        isInitialStudentLoad.current = false;
+        if (!lastNotified) {
+            localStorage.setItem(storageKey, new Date().toISOString());
+        }
+        return;
+    }
+
+    let newLatestTimestamp = lastNotified || new Date(0).toISOString();
+    let didNotify = false;
+
+    students.forEach(student => {
+      const isNew = new Date(student.createdAt) > new Date(lastNotified || 0);
+      const creator = student.createdBy ? creatorUserMap.get(student.createdBy) : null;
+      
+      if (isNew && creator && creator.role === 'employee') {
+          if (!didNotify) didNotify = true;
+          toast({
+              title: 'New Student Added',
+              description: `'${student.name}' was added by ${creator.name}.`,
+              action: <ToastAction altText="View" onClick={() => router.push(`/student/${student.id}`)}>View</ToastAction>,
+          });
+      }
+
+      if (new Date(student.createdAt) > new Date(newLatestTimestamp)) {
+        newLatestTimestamp = student.createdAt;
+      }
+    });
+
+    if(didNotify) {
+        playNotificationSound(1200); // Higher pitch for new students
+    }
+
+    localStorage.setItem(storageKey, newLatestTimestamp);
+
+  }, [students, user, toast, router, creatorUserMap, creatorsLoading]);
 
 
   return null;

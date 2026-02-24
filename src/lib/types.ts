@@ -74,7 +74,7 @@ export interface Student {
   notes: Note[];
   documents: Document[];
   createdAt: string;
-  createdBy?: string;
+  createdBy: string;
   targetCountries?: Country[];
   missingItems?: string[];
   pipelineStatus?: PipelineStatus;
@@ -213,4 +213,22 @@ export interface ReportStats {
   studentGrowthData: { date: string; count: number }[];
   applicationCountryData: { name: string; count: number }[];
   employeeHoursData: { name: string; hours: number }[];
+}
+
+export interface EmployeeDailyCount {
+  date: string;
+  count: number;
+}
+
+export interface EmployeeMonthlyTotal {
+  month: string;
+  count: number;
+}
+
+export interface EmployeeStats {
+  employeeId: string;
+  employeeName: string;
+  totalStudents: number;
+  dailyCounts: EmployeeDailyCount[];
+  monthlyTotals: EmployeeMonthlyTotal[];
 }

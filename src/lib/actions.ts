@@ -1,17 +1,20 @@
 
 
 
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats } from './types';
 import {
   isWithinInterval,
   parseISO,
   format,
   differenceInMinutes,
   subMinutes,
+  subDays,
+  startOfDay,
 } from 'date-fns';
 
 
@@ -1177,5 +1180,71 @@ export async function deleteEvent(eventId: string, userId: string) {
     } catch (error) {
         console.error('deleteEvent error:', error);
         return { success: false, message: 'Failed to delete event.' };
+    }
+}
+
+
+export async function getEmployeeStudentStats(): Promise<{ success: boolean; data?: EmployeeStats[]; message?: string; }> {
+    if (!checkAdminServices()) return { success: false, message: "Server not available" };
+
+    try {
+        const employeesSnap = await adminDb!.collection('users').where('role', '==', 'employee').get();
+        const employees = employeesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+
+        const studentsSnap = await adminDb!.collection('students').get();
+        const allStudents = studentsSnap.docs.map(doc => doc.data() as Student);
+
+        const thirtyDaysAgo = startOfDay(subDays(new Date(), 30));
+
+        const stats: EmployeeStats[] = employees.map(employee => {
+            const createdStudents = allStudents.filter(student => student.createdBy === employee.id);
+            const totalStudents = createdStudents.length;
+
+            const dailyCountsMap: { [key: string]: number } = {};
+            const monthlyTotalsMap: { [key: string]: number } = {};
+
+            for (const student of createdStudents) {
+                const createdAt = parseISO(student.createdAt);
+                
+                // Monthly total
+                const monthKey = format(createdAt, 'yyyy-MM');
+                monthlyTotalsMap[monthKey] = (monthlyTotalsMap[monthKey] || 0) + 1;
+                
+                // Daily total (last 30 days)
+                if (createdAt >= thirtyDaysAgo) {
+                    const dayKey = format(createdAt, 'yyyy-MM-dd');
+                    dailyCountsMap[dayKey] = (dailyCountsMap[dayKey] || 0) + 1;
+                }
+            }
+
+            // Fill in missing days for the last 30 days
+            const dailyCounts = [];
+            for (let i = 0; i < 30; i++) {
+                const date = subDays(new Date(), i);
+                const dateKey = format(date, 'yyyy-MM-dd');
+                dailyCounts.push({
+                    date: dateKey,
+                    count: dailyCountsMap[dateKey] || 0,
+                });
+            }
+
+            const monthlyTotals = Object.entries(monthlyTotalsMap)
+                .map(([month, count]) => ({ month, count }))
+                .sort((a, b) => a.month.localeCompare(b.month));
+
+            return {
+                employeeId: employee.id,
+                employeeName: employee.name,
+                totalStudents,
+                dailyCounts: dailyCounts.sort((a,b) => a.date.localeCompare(b.date)),
+                monthlyTotals,
+            };
+        });
+
+        return { success: true, data: stats };
+
+    } catch (error: any) {
+        console.error("getEmployeeStudentStats error:", error);
+        return { success: false, message: error.message };
     }
 }

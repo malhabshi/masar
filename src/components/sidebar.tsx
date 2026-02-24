@@ -63,6 +63,7 @@ export function AppSidebar() {
 
     const adminNav = [
         { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin', 'department'] },
+        { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin', 'department'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin', 'department'] },
         { href: '/customize-questions', label: 'Questions', icon: Wrench, roles: ['admin'] },
@@ -104,7 +105,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
             ))}
 
-            {userHasRole(['admin']) && <SidebarSeparator />}
+            {userHasRole(['admin', 'department']) && <SidebarSeparator />}
             
             {adminNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
