@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useEffect } from 'react';
@@ -9,6 +7,7 @@ import { useDoc, useCollection, updateDocumentNonBlocking } from '@/firebase/cli
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 import { StudentHeader } from '@/components/student/student-header';
 import { StudentApplications } from '@/components/student/student-applications';
@@ -56,6 +55,7 @@ export default function StudentDetailPage() {
   const params = useParams();
   const studentId = params.id as string;
   const router = useRouter();
+  const { toast } = useToast();
 
   const { user: currentUser, isUserLoading } = useUser();
 
@@ -72,6 +72,22 @@ export default function StudentDetailPage() {
         updateDocumentNonBlocking(studentDocRef, { isNewForEmployee: false });
     }
   }, [student, currentUser]);
+  
+  useEffect(() => {
+    if (isLoading) return;
+    if (!currentUser || !student) return;
+
+    // If the current user is an employee, verify they are still assigned to this student.
+    // If not, redirect them away to prevent a crash.
+    if (currentUser.role === 'employee' && student.employeeId !== currentUser.civilId) {
+        toast({
+            title: 'Student Transferred',
+            description: `This student is no longer assigned to you.`,
+            variant: 'destructive',
+        });
+        router.push('/applicants');
+    }
+  }, [student, currentUser, isLoading, router, toast]);
 
 
   if (studentError) {
@@ -80,22 +96,11 @@ export default function StudentDetailPage() {
   
   // This check happens after loading, if the student is truly not found or permissions fail
   if (!isLoading && !student) {
+    // The redirection effect will handle cases where an employee loses access.
+    // This is for admins who try a wrong ID, or for initial load where student is genuinely not found.
     return <div>Student not found or you do not have permission to view this page.</div>;
   }
   
-  // Client-side permission check (will run once student data is loaded)
-  if (!isLoading && student && currentUser) {
-    const isAssignedEmployee = student.employeeId === currentUser.civilId;
-    if (currentUser.role === 'employee' && !isAssignedEmployee) {
-        router.push('/applicants'); 
-        return (
-          <div className="flex h-full w-full items-center justify-center">
-            <p>Access Denied. You are not assigned to this student.</p>
-          </div>
-        );
-    }
-  }
-
   const canRenderContent = !isLoading && student && currentUser;
   const isAssignedEmployee = canRenderContent && student.employeeId === currentUser.civilId;
   const isAdminOrDept = canRenderContent && ['admin', 'department'].includes(currentUser.role);
