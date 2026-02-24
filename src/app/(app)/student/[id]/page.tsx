@@ -74,7 +74,7 @@ export default function StudentDetailPage() {
   }, [student, currentUser]);
   
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || studentError) return;
     if (!currentUser || !student) return;
 
     // If the current user is an employee, verify they are still assigned to this student.
@@ -87,17 +87,33 @@ export default function StudentDetailPage() {
         });
         router.push('/applicants');
     }
-  }, [student, currentUser, isLoading, router, toast]);
+  }, [student, currentUser, isLoading, router, toast, studentError]);
 
+
+  if (isLoading) {
+    return (
+        <div className="space-y-6">
+            <StudentHeader student={null} currentUser={null} isLoading={true} />
+            <StudentPageContentSkeleton />
+        </div>
+    )
+  }
 
   if (studentError) {
+    // If the error is a permission issue and the user is an employee,
+    // they've likely lost access. Redirect them gracefully.
+    if (studentError.message.includes('permission') && currentUser?.role === 'employee') {
+      router.push('/applicants');
+      toast({ title: 'Access Denied', description: 'You no longer have access to this student.' });
+      return null; // Render nothing while redirecting
+    }
     return <div className="text-destructive">Error: {studentError.message}</div>
   }
   
-  // This check happens after loading, if the student is truly not found or permissions fail
-  if (!isLoading && !student) {
-    // The redirection effect will handle cases where an employee loses access.
-    // This is for admins who try a wrong ID, or for initial load where student is genuinely not found.
+  // This check happens after loading, if the student is truly not found
+  if (!student) {
+    // The redirection logic now handles the permission error case,
+    // so this is primarily for genuinely non-existent student IDs.
     return <div>Student not found or you do not have permission to view this page.</div>;
   }
   
@@ -109,33 +125,31 @@ export default function StudentDetailPage() {
     <div className="space-y-6">
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
-      {isLoading ? <StudentPageContentSkeleton /> : (
+      {canRenderContent && (
         <>
-            {canRenderContent && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 space-y-6">
-                    <StudentApplications student={student} />
-                    <IeltsCard student={student} currentUser={currentUser} />
-                    <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
-                    <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
-                    <ReadinessChecklist student={student} currentUser={currentUser} />
-                    </div>
-
-                    <div className="space-y-6">
-                        <NotesSection student={student} currentUser={currentUser} title="Notes" readOnly={false} />
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Internal Chat</CardTitle>
-                            </CardHeader>
-                            <StudentChat student={student} currentUser={currentUser} />
-                        </Card>
-                        <MissingItemsSection student={student} currentUser={currentUser} />
-                        {student.transferHistory && student.transferHistory.length > 0 && (
-                            <TransferHistory transferHistory={student.transferHistory} />
-                        )}
-                    </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                <StudentApplications student={student} />
+                <IeltsCard student={student} currentUser={currentUser} />
+                <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
+                <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
+                <ReadinessChecklist student={student} currentUser={currentUser} />
                 </div>
-            )}
+
+                <div className="space-y-6">
+                    <NotesSection student={student} currentUser={currentUser} title="Notes" readOnly={false} />
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Internal Chat</CardTitle>
+                        </CardHeader>
+                        <StudentChat student={student} currentUser={currentUser} />
+                    </Card>
+                    <MissingItemsSection student={student} currentUser={currentUser} />
+                    {student.transferHistory && student.transferHistory.length > 0 && (
+                        <TransferHistory transferHistory={student.transferHistory} />
+                    )}
+                </div>
+            </div>
             
             <TaskHistory tasks={tasks || []} studentId={studentId} />
         </>
