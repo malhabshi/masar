@@ -98,7 +98,7 @@
             "writing": { "type": "number" },
             "speaking": { "type": "number" }
         },
-        "required": ["overall", "listening", "reading", "writing", "speaking"]
+        "required": ["overall"]
     },
     "ProfileCompletionStatus": {
         "title": "Profile Completion Status",

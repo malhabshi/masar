@@ -2,11 +2,12 @@
 
 
 
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, IeltsScore } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1247,4 +1248,45 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
         console.error("getEmployeeStudentStats error:", error);
         return { success: false, message: error.message };
     }
+}
+
+export async function updateStudentIELTS(studentId: string, ieltsData: Partial<IeltsScore>, authorId: string) {
+  if (!checkAdminServices()) {
+    return { success: false, message: 'Server database connection not available.' };
+  }
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) {
+      return { success: false, message: 'Student not found.' };
+    }
+
+    const studentData = studentDoc.data() as Student;
+    const existingIelts = studentData.ielts || {};
+    
+    // Merge new data with existing data
+    const updatedIeltsData = {
+        ...existingIelts,
+        ...ieltsData
+    };
+
+    await studentRef.update({ ielts: updatedIeltsData });
+
+    // Add a note for the update
+    const author = await getUser(authorId);
+    const noteContent = `IELTS score updated by ${author?.name || 'an employee'}. New overall score: ${ieltsData.overall?.toFixed(1)}.`;
+    const newNote: Note = {
+      id: `note-ielts-${Date.now()}`,
+      authorId: authorId,
+      content: noteContent,
+      createdAt: new Date().toISOString(),
+    };
+    await studentRef.update({ notes: [...(studentData.notes || []), newNote] });
+
+
+    return { success: true, message: 'IELTS score updated successfully.' };
+  } catch (error) {
+    console.error('updateStudentIELTS error:', error);
+    return { success: false, message: 'Failed to update IELTS score.' };
+  }
 }

@@ -44,11 +44,10 @@ export type PipelineStatus = 'green' | 'orange' | 'red' | 'none';
 
 export interface IeltsScore {
   overall: number;
-  listening: number;
-  reading: number;
-  writing: number;
-  speaking: number;
-  uploadedDocumentId?: string;
+  listening?: number;
+  reading?: number;
+  writing?: number;
+  speaking?: number;
 }
 
 export interface ProfileCompletionStatus {
