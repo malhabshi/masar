@@ -70,11 +70,8 @@ service cloud.firestore {
     
     // Students collection - read/write for admin/dept/assigned employee
     match /students/{studentId} {
-      // Read: Only admins, departments, and assigned employees (by civilId) can read
-      allow read: if request.auth != null && (
-        isOneOfRoles(['admin', 'department']) ||
-        resource.data.employeeId == getUserData().civilId
-      );
+      // Allow read if user is authenticated
+      allow read: if request.auth != null;
       
       // Write: Only admins/departments can write, employees can update their assigned students
       allow write: if request.auth != null && (
@@ -102,7 +99,7 @@ service cloud.firestore {
     }
     match /upcoming_events/{eventId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && isRole('admin');
+      allow write: if request.auth != null && (isOneOfRoles(['admin', 'department']));
     }
     match /shared_documents/{documentId} {
       allow read: if request.auth != null;
