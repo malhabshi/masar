@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -15,12 +16,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { Student, Document as StudentDocument } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { updateDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
 import { validateFile, MAX_FILE_SIZE_MB, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 
 interface UploadDocumentDialogProps {
@@ -33,7 +31,7 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   const [customName, setCustomName] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { user: currentUser, auth: authUser } = useUser();
+  const { auth: authUser } = useUser();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -59,8 +57,8 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
       toast({ variant: 'destructive', title: 'No file selected' });
       return;
     }
-    if (!currentUser || !authUser) {
-      toast({ variant: 'destructive', title: 'Authentication or database error' });
+    if (!authUser) {
+      toast({ variant: 'destructive', title: 'Authentication error. Please refresh and try again.' });
       return;
     }
 
@@ -70,8 +68,12 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
     formData.append('file', file);
     formData.append('destination', 'student');
     formData.append('studentId', student.id);
+    if (customName) {
+        formData.append('customName', customName);
+    }
     console.log('2. Destination:', 'student');
     console.log('3. Student ID:', student.id);
+    if (customName) console.log('3a. Custom Name:', customName);
 
     try {
       const token = await authUser.getIdToken();
@@ -85,40 +87,15 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
 
       const result = await response.json();
       console.log('4. API response:', result);
-
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to upload file.');
-      }
-
-      const { downloadURL } = result;
-
-      const newDocument: StudentDocument = {
-        id: `doc-${Date.now()}`,
-        name: customName.trim() || file.name,
-        originalName: file.name,
-        size: file.size,
-        url: downloadURL,
-        authorId: currentUser.id,
-        uploadedAt: new Date().toISOString(),
-        isNew: true,
-      };
       
-      const studentDocRef = doc(firestore, 'students', student.id);
-      const updatedDocuments = [...(student.documents || []), newDocument];
-      
-      const updates: Partial<Student> = { documents: updatedDocuments };
-      if (currentUser.role === 'employee') {
-          updates.newDocumentsForAdmin = (student.newDocumentsForAdmin || 0) + 1;
-      } else if (['admin', 'department'].includes(currentUser.role)) {
-          updates.newDocumentsForEmployee = (student.newDocumentsForEmployee || 0) + 1;
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to upload file and update database.');
       }
-
-      updateDocumentNonBlocking(studentDocRef, updates);
-
+      
+      // The useDoc hook will automatically update the UI now that the server handles the database write.
       toast({
         title: 'Upload Successful',
-        description: `'${newDocument.name}' has been uploaded and added to the student's profile.`,
+        description: `'${result.document.name}' has been uploaded and added to the student's profile.`,
       });
 
       setIsOpen(false);

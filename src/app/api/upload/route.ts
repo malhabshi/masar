@@ -1,16 +1,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
-import type { User } from '@/lib/types';
+import type { User, Student, Document as StudentDocument } from '@/lib/types';
+import { FieldPath } from 'firebase-admin/firestore';
 
-// Helper to get user from DB
 async function getUser(userId: string): Promise<User | null> {
     if (!adminDb) return null;
     const doc = await adminDb.collection('users').doc(userId).get();
     if (!doc.exists) return null;
     return { id: doc.id, ...doc.data() } as User;
 }
-
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,6 +40,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const destination = formData.get('destination') as 'student' | 'shared' | 'user_avatar' | null;
+    const customName = formData.get('customName') as string | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
@@ -49,70 +49,89 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No destination provided.' }, { status: 400 });
     }
     
-    // Check permissions based on destination
     let filePath = '';
+    let downloadURL = '';
+
+    const bucket = storage.bucket();
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+
     if (destination === 'student') {
         const studentId = formData.get('studentId') as string | null;
         if (!studentId) {
             return NextResponse.json({ error: 'studentId is required for student destination.' }, { status: 400 });
         }
         
-        const studentDoc = await adminDb.collection('students').doc(studentId).get();
+        const studentRef = adminDb.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
         if (!studentDoc.exists) {
             return NextResponse.json({ error: 'Student not found.' }, { status: 404 });
         }
-        const student = studentDoc.data();
+        const student = studentDoc.data() as Student;
         
         const canUpload = user.role === 'admin' || 
                           user.role === 'department' || 
-                          (student?.employeeId && user.civilId && student.employeeId === user.civilId);
+                          (student.employeeId && user.civilId && student.employeeId === user.civilId);
         
         if (!canUpload) {
           return NextResponse.json({ error: 'Forbidden: You do not have permission to upload to this student profile.' }, { status: 403 });
         }
 
         filePath = `students/${studentId}/${Date.now()}_${file.name}`;
+        const blob = bucket.file(filePath);
+        await blob.save(fileBuffer, { metadata: { contentType: file.type } });
+        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
+        downloadURL = url;
 
-    } else if (destination === 'shared') {
-        const canUpload = user.role === 'admin' || user.role === 'department';
-        if (!canUpload) {
-            return NextResponse.json({ error: 'Forbidden: You do not have permission to upload to shared documents.' }, { status: 403 });
+        // --- DATABASE UPDATE LOGIC ---
+        const studentData = studentDoc.data() as Student;
+
+        const newDocument: StudentDocument = {
+            id: `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            name: customName || file.name,
+            originalName: file.name,
+            size: file.size,
+            url: downloadURL,
+            authorId: decodedToken.uid,
+            uploadedAt: new Date().toISOString(),
+            isNew: true,
+        };
+        
+        const updates: Partial<Student> = {
+            documents: [...(studentData.documents || []), newDocument],
+        };
+
+        if (user.role === 'employee') {
+            updates.newDocumentsForAdmin = (studentData.newDocumentsForAdmin || 0) + 1;
+        } else if (['admin', 'department'].includes(user.role)) {
+            updates.newDocumentsForEmployee = (studentData.newDocumentsForEmployee || 0) + 1;
         }
-        filePath = `shared_documents/${Date.now()}_${file.name}`;
+
+        await studentRef.update(updates);
+
+        return NextResponse.json({ success: true, document: newDocument });
+
     } else if (destination === 'user_avatar') {
         filePath = `user_avatars/${decodedToken.uid}/${Date.now()}_${file.name}`;
-    } else {
-        return NextResponse.json({ error: 'Invalid destination specified.' }, { status: 400 });
-    }
-    
-    const bucket = storage.bucket();
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const blob = bucket.file(filePath);
-    
-    await blob.save(fileBuffer, {
-        metadata: {
-            contentType: file.type,
-        },
-    });
-
-    let downloadURL = '';
-
-    if (destination === 'user_avatar') {
-        // Avatars are publicly readable via the new rule.
-        // We can make the object public and use the simple URL.
+        const blob = bucket.file(filePath);
+        await blob.save(fileBuffer, { metadata: { contentType: file.type } });
         await blob.makePublic();
         downloadURL = blob.publicUrl();
+
+        await adminDb.collection('users').doc(decodedToken.uid).update({ avatarUrl: downloadURL });
+        return NextResponse.json({ success: true, downloadURL });
+
     } else {
-        // For private files (student, shared), create a long-lived signed URL.
-        // This URL contains a token and respects storage rules.
-        const [url] = await blob.getSignedUrl({
-            action: 'read',
-            expires: '03-09-2491', // A very distant future date.
-        });
+        const canUpload = user.role === 'admin' || user.role === 'department';
+        if (destination === 'shared' && !canUpload) {
+             return NextResponse.json({ error: 'Forbidden: You do not have permission to upload to shared documents.' }, { status: 403 });
+        }
+        filePath = `shared_documents/${Date.now()}_${file.name}`;
+        const blob = bucket.file(filePath);
+        await blob.save(fileBuffer, { metadata: { contentType: file.type } });
+        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
         downloadURL = url;
+        return NextResponse.json({ success: true, downloadURL });
     }
-    
-    return NextResponse.json({ downloadURL });
 
   } catch (error: any) {
     console.error('API Upload Error:', error);
