@@ -14,17 +14,21 @@ import {
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export function EmployeeApplicantsPage() {
+  const [isMounted, setIsMounted] = useState(false);
   const { user: currentUser, isUserLoading } = useUser();
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const myStudentsQuery = useMemoFirebase(() => {
-    // Make sure we have a civilId before creating the query
     if (!currentUser?.civilId) return null;
     return [where('employeeId', '==', currentUser.civilId)];
   }, [currentUser?.civilId]);
 
-  // Only fetch if the query is ready
   const { data: myStudents, isLoading: studentsAreLoading } = useCollection<Student>(
     myStudentsQuery ? 'students' : '',
     ...(myStudentsQuery || [])
@@ -34,9 +38,9 @@ export function EmployeeApplicantsPage() {
     currentUser ? 'users' : ''
   );
 
-  const isLoading = isUserLoading || studentsAreLoading || usersAreLoading;
+  const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
-  if (isLoading) {
+  if (!isMounted || dataIsLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />

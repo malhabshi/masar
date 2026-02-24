@@ -1,28 +1,30 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { EmployeeApplicantsPage } from './employee-page';
 import { AdminApplicantsPage } from './admin-page';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function ApplicantsPage() {
-  const { user, isUserLoading } = useUser();
   const [isMounted, setIsMounted] = useState(false);
+  const { user, isUserLoading } = useUser();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // Server and initial client render a generic loading state.
   if (!isMounted || isUserLoading) {
     return (
-        <div className="flex h-full w-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+      <div className="flex h-full w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     );
   }
-  
+
+  // Once mounted, check for user.
   if (!user) {
     return (
       <Card>
@@ -33,11 +35,12 @@ export default function ApplicantsPage() {
       </Card>
     );
   }
-  
+
+  // ONLY after mounting and confirming the user, render the role-specific page.
   if (user.role === 'employee') {
     return <EmployeeApplicantsPage />;
   }
-  
-  // For 'admin' and 'department'
+
+  // Default to Admin/Department view.
   return <AdminApplicantsPage />;
 }

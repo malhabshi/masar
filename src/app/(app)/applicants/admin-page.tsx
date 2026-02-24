@@ -13,9 +13,16 @@ import {
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export function AdminApplicantsPage() {
+  const [isMounted, setIsMounted] = useState(false);
   const { user: currentUser, isUserLoading } = useUser();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(
     currentUser ? 'students' : ''
   );
@@ -23,9 +30,9 @@ export function AdminApplicantsPage() {
     currentUser ? 'users' : ''
   );
 
-  const isLoading = isUserLoading || studentsAreLoading || usersAreLoading;
+  const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
-  if (isLoading) {
+  if (!isMounted || dataIsLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
