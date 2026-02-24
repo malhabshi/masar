@@ -58,6 +58,11 @@ export default function ApplicantsPage() {
     );
   }
 
+  // If the user is an employee, render a simple test div to isolate the error.
+  if (currentUser.role === 'employee') {
+    return <div>Employee View Test</div>;
+  }
+
   return (
     <div className="space-y-6">
       <Card>
