@@ -198,7 +198,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 
   useEffect(() => {
-    if (!tasks || tasks.length === 0) return;
+    if (!tasks || tasks.length === 0 || !currentUser) return;
     const storageKey = `lastViewedTasksManager_${currentUser.id}`;
     const lastViewed = localStorage.getItem(storageKey);
 
@@ -210,7 +210,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     });
 
     if (newlyAdded.size > 0) {
-      setNewItems(prev => new Set([...prev, ...newlyAdded]));
+      setNewItems(newlyAdded);
     }
     
     return () => {

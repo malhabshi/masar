@@ -49,7 +49,7 @@ export function UpcomingEventsCard() {
     });
 
     if (newlyAdded.size > 0) {
-      setNewItems(prev => new Set([...prev, ...newlyAdded]));
+      setNewItems(newlyAdded);
     }
     
     return () => {

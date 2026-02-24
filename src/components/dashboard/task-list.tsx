@@ -31,7 +31,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const [newItems, setNewItems] = useState(new Set<string>());
 
   useEffect(() => {
-    if (!tasks || tasks.length === 0) return;
+    if (!tasks || tasks.length === 0 || !currentUser) return;
 
     const storageKey = `lastViewedTasks_${currentUser.id}`;
     const lastViewed = localStorage.getItem(storageKey);
@@ -45,7 +45,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
     });
 
     if (newlyAdded.size > 0) {
-      setNewItems(prev => new Set([...prev, ...newlyAdded]));
+      setNewItems(newlyAdded);
     }
     
     return () => {
