@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -40,9 +38,13 @@ export function NotificationListener() {
   const isInitialEventLoad = useRef(true);
   const isInitialStudentLoad = useRef(true);
 
+  // Determine if we are allowed to fetch all students
+  const canFetchAllStudents = user && ['admin', 'department'].includes(user.role);
+
   const { data: tasks } = useCollection<Task>(user ? `tasks` : '');
   const { data: events } = useCollection<UpcomingEvent>(user ? `upcoming_events` : '');
-  const { data: students } = useCollection<Student>(user ? `students` : '');
+  // Only fetch students if the user has the appropriate role
+  const { data: students } = useCollection<Student>(canFetchAllStudents ? `students` : '');
 
   const creatorIds = useMemo(() => students?.map(s => s.createdBy).filter(Boolean) as string[] || [], [students]);
   const { userMap: creatorUserMap, isLoading: creatorsLoading } = useUserCacheById(creatorIds);
@@ -132,6 +134,7 @@ export function NotificationListener() {
   }, [events, user, toast, router]);
 
   useEffect(() => {
+    // The useCollection hook is now guarded, but we double-check here before processing.
     if (!students || !user || creatorsLoading) return;
     if (!['admin', 'department'].includes(user.role)) return;
 
