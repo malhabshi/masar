@@ -1,9 +1,10 @@
 
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent } from './types';
 import * as xlsx from 'xlsx';
 import {
   isWithinInterval,
@@ -17,7 +18,7 @@ import {
 // Helper to check if adminDb is available
 function checkAdminServices() {
   if (!adminDb || !adminAuth || !storage) {
-    console.error('Firebase Admin not initialized. Check server logs for "CRITICAL" errors regarding FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or SDK initialization.');
+    console.error('CRITICAL: Firebase Admin not initialized. Check server logs for "CRITICAL" errors regarding FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 or SDK initialization.');
     return false;
   }
   return true;
@@ -383,11 +384,11 @@ export async function createStudent(
         submitKcoRequest: false,
         receivedCasOrI20: false,
         appliedForVisa: false,
-        visaGranted: false,
         documentsSubmittedToMohe: false,
-        medicalFitnessSubmitted: false,
-        financialStatementsProvided: false,
         readyToTravel: false,
+        financialStatementsProvided: false,
+        visaGranted: false,
+        medicalFitnessSubmitted: false
       },
     };
 
@@ -1249,4 +1250,40 @@ export async function getReportStats(dateRange: {
     console.error('getReportStats error:', error);
     return { success: false, message: 'An error occurred while generating the report data.' };
   }
+}
+
+export async function addEvent(authorId: string, title: string, description: string, date: string) {
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+    try {
+        const author = await getUser(authorId);
+        if (!author || !['admin', 'department'].includes(author.role)) {
+            return { success: false, message: 'You do not have permission to add events.' };
+        }
+        const newEvent: Omit<UpcomingEvent, 'id'> = {
+            authorId,
+            title,
+            description,
+            date,
+        };
+        await adminDb!.collection('upcoming_events').add(newEvent);
+        return { success: true, message: 'Event added.' };
+    } catch (error) {
+        console.error('addEvent error:', error);
+        return { success: false, message: 'Failed to add event.' };
+    }
+}
+
+export async function deleteEvent(eventId: string, userId: string) {
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+    try {
+        const user = await getUser(userId);
+        if (!user || !['admin', 'department'].includes(user.role)) {
+            return { success: false, message: 'You do not have permission to delete events.' };
+        }
+        await adminDb!.collection('upcoming_events').doc(eventId).delete();
+        return { success: true, message: 'Event deleted.' };
+    } catch (error) {
+        console.error('deleteEvent error:', error);
+        return { success: false, message: 'Failed to delete event.' };
+    }
 }
