@@ -42,14 +42,6 @@ export interface Document {
 
 export type PipelineStatus = 'green' | 'orange' | 'red' | 'none';
 
-export interface IeltsScore {
-  overall: number;
-  listening?: number;
-  reading?: number;
-  writing?: number;
-  speaking?: number;
-}
-
 export interface ProfileCompletionStatus {
   submitUniversityApplication: boolean;
   applyMoheScholarship: boolean;
@@ -89,7 +81,7 @@ export interface Student {
   newDocumentsForAdmin?: number;
   newMissingItemsForEmployee?: number;
   finalChoiceUniversity?: string;
-  ielts?: IeltsScore;
+  ieltsOverall?: number;
   profileCompletionStatus?: ProfileCompletionStatus;
   transferRequested?: boolean;
   deletionRequested?: boolean;

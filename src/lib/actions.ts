@@ -3,11 +3,12 @@
 
 
 
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, IeltsScore } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -361,7 +362,7 @@ export async function createStudent(
   try {
     const studentRef = adminDb!.collection('students').doc(); // Auto-generate ID
 
-    const newStudentData: Omit<Student, 'avatarUrl'> = {
+    const newStudentData: Omit<Student, 'avatarUrl' | 'ielts'> = {
       id: studentRef.id,
       name: studentName,
       email: studentEmail || '',
@@ -1250,7 +1251,7 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
     }
 }
 
-export async function updateStudentIELTS(studentId: string, ieltsData: Partial<IeltsScore>, authorId: string) {
+export async function updateStudentIELTS(studentId: string, overallScore: number, authorId: string) {
   if (!checkAdminServices()) {
     return { success: false, message: 'Server database connection not available.' };
   }
@@ -1262,19 +1263,12 @@ export async function updateStudentIELTS(studentId: string, ieltsData: Partial<I
     }
 
     const studentData = studentDoc.data() as Student;
-    const existingIelts = studentData.ielts || {};
-    
-    // Merge new data with existing data
-    const updatedIeltsData = {
-        ...existingIelts,
-        ...ieltsData
-    };
 
-    await studentRef.update({ ielts: updatedIeltsData });
+    await studentRef.update({ ieltsOverall: overallScore });
 
     // Add a note for the update
     const author = await getUser(authorId);
-    const noteContent = `IELTS score updated by ${author?.name || 'an employee'}. New overall score: ${ieltsData.overall?.toFixed(1)}.`;
+    const noteContent = `IELTS overall score updated to ${overallScore.toFixed(1)} by ${author?.name || 'an employee'}.`;
     const newNote: Note = {
       id: `note-ielts-${Date.now()}`,
       authorId: authorId,
@@ -1282,7 +1276,6 @@ export async function updateStudentIELTS(studentId: string, ieltsData: Partial<I
       createdAt: new Date().toISOString(),
     };
     await studentRef.update({ notes: [...(studentData.notes || []), newNote] });
-
 
     return { success: true, message: 'IELTS score updated successfully.' };
   } catch (error) {

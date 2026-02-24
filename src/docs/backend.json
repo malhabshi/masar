@@ -26,6 +26,7 @@
         "email": { "type": "string", "description": "The email address of the student.", "format": "email" },
         "phone": { "type": "string", "description": "The phone number of the student." },
         "employeeId": { "type": ["string", "null"], "description": "Reference to the User's Civil ID for the assigned employee." },
+        "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the student's profile picture." },
         "applications": { "type": "array", "description": "A list of university applications for the student.", "items": { "$ref": "#/entities/Application" } },
         "notes": { "type": "array", "description": "A list of notes about the student.", "items": { "$ref": "#/entities/Note" } },
         "documents": { "type": "array", "description": "A list of documents uploaded for the student.", "items": { "$ref": "#/entities/StudentDocument" } },
@@ -41,7 +42,7 @@
         "newDocumentsForAdmin": { "type": "number", "description": "Counter for new documents uploaded by employee for the admin." },
         "newMissingItemsForEmployee": { "type": "number", "description": "Counter for new missing items added by admin for the employee." },
         "finalChoiceUniversity": { "type": "string", "description": "The name of the university the student has finalized." },
-        "ielts": { "$ref": "#/entities/IeltsScore" },
+        "ieltsOverall": { "type": "number", "description": "The student's overall IELTS score." },
         "profileCompletionStatus": { "$ref": "#/entities/ProfileCompletionStatus" },
         "transferRequested": { "type": "boolean", "description": "Flag indicating if a transfer has been requested for this student." },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
@@ -87,18 +88,6 @@
         "isNew": { "type": "boolean" }
       },
       "required": ["id", "name", "url", "uploadedAt", "authorId"]
-    },
-    "IeltsScore": {
-        "title": "IELTS Score",
-        "type": "object",
-        "properties": {
-            "overall": { "type": "number" },
-            "listening": { "type": "number" },
-            "reading": { "type": "number" },
-            "writing": { "type": "number" },
-            "speaking": { "type": "number" }
-        },
-        "required": ["overall"]
     },
     "ProfileCompletionStatus": {
         "title": "Profile Completion Status",

@@ -21,7 +21,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StudentChat } from '@/components/student/student-chat';
 import { MissingItemsSection } from '@/components/student/missing-items-section';
 import { ReadinessChecklist } from '@/components/student/readiness-checklist';
-import { IeltsSection } from '@/components/student/ielts-section';
 
 
 function StudentPageContentSkeleton() {
@@ -110,7 +109,6 @@ export default function StudentDetailPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-6">
                     <StudentApplications student={student} />
-                    <IeltsSection student={student} currentUser={currentUser} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
                     <ReadinessChecklist student={student} currentUser={currentUser} />
