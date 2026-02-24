@@ -1,8 +1,8 @@
 'use client';
 
 import { useUser } from '@/hooks/use-user';
-import type { Student } from '@/lib/types';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
+import type { Student, User } from '@/lib/types';
+import { useCollection } from '@/firebase/client';
 import { StudentTable } from '@/components/dashboard/student-table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -11,13 +11,17 @@ import { AddStudentDialog } from '@/components/student/add-student-dialog';
 export default function ApplicantsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
-  // Employees, Admins, and Depts all fetch the full list of students.
-  // The StudentTable component will handle client-side filtering for employees.
+  // Fetch ALL students
   const { data: students, isLoading: studentsAreLoading } = useCollection<Student>(
     currentUser ? 'students' : ''
   );
+  
+  // Fetch ALL users for the employee filter dropdown
+  const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
+    currentUser ? 'users' : ''
+  );
 
-  const isLoading = isUserLoading || studentsAreLoading;
+  const isLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
   if (isLoading) {
     return (
@@ -56,6 +60,7 @@ export default function ApplicantsPage() {
           <StudentTable
             students={students || []}
             currentUser={currentUser}
+            allUsers={allUsers || []}
             showEmployee={currentUser.role !== 'employee'}
             showPipelineStatus
             showTerm
