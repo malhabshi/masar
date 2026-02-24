@@ -95,7 +95,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                   <TableRow key={doc.id}>
                     <TableCell className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span>{doc.name}</span>
+                      <span className="font-medium">{doc.name}</span>
                       {doc.isNew && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
                     </TableCell>
                     <TableCell>
