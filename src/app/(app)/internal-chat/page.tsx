@@ -11,13 +11,19 @@ import { Loader2 } from 'lucide-react';
 export default function InternalChatPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
+  // Only attempt to fetch data if the user is an admin or department member.
+  const canFetch = currentUser && ['admin', 'department'].includes(currentUser.role);
+
   // Query for students with unread messages for admins/depts.
   const studentsQuery = useMemoFirebase(() => {
-    if (!currentUser || !['admin', 'department'].includes(currentUser.role)) return [];
+    if (!canFetch) return [];
     return [where('unreadUpdates', '>', 0)];
-  }, [currentUser?.role]);
+  }, [canFetch]);
 
-  const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>(currentUser ? 'students' : '', ...studentsQuery);
+  const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>(
+    canFetch ? 'students' : '', 
+    ...studentsQuery
+  );
   
   const isLoading = isUserLoading || studentsAreLoading;
 
@@ -25,7 +31,7 @@ export default function InternalChatPage() {
     return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
   }
 
-  if (!currentUser || !['admin', 'department'].includes(currentUser.role)) {
+  if (!canFetch) {
     return (
       <Card>
         <CardHeader>

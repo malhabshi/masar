@@ -14,7 +14,13 @@ interface FinalizedStudent extends Student {
 
 export default function FinalizedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(currentUser ? 'students' : '');
+  
+  // Only attempt to fetch data if the user is an admin or department member.
+  const canFetch = currentUser && ['admin', 'department'].includes(currentUser.role);
+  
+  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(
+    canFetch ? 'students' : ''
+  );
 
   const finalizedStudents = useMemo(() => {
     if (!allStudents) return [];
@@ -28,7 +34,7 @@ export default function FinalizedStudentsPage() {
     return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
   }
 
-  if (!currentUser || !['admin', 'department'].includes(currentUser.role)) {
+  if (!canFetch) {
     return (
       <Card>
         <CardHeader>
