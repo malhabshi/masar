@@ -30,6 +30,7 @@ interface UploadDocumentDialogProps {
 export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
+  const [customName, setCustomName] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { user: currentUser, auth: authUser } = useUser();
@@ -53,6 +54,7 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   };
 
   const handleUpload = async () => {
+    console.log('1. Starting upload with file:', file);
     if (!file) {
       toast({ variant: 'destructive', title: 'No file selected' });
       return;
@@ -68,6 +70,8 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
     formData.append('file', file);
     formData.append('destination', 'student');
     formData.append('studentId', student.id);
+    console.log('2. Destination:', 'student');
+    console.log('3. Student ID:', student.id);
 
     try {
       const token = await authUser.getIdToken();
@@ -80,6 +84,8 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
       });
 
       const result = await response.json();
+      console.log('4. API response:', result);
+
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to upload file.');
@@ -89,11 +95,13 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
 
       const newDocument: StudentDocument = {
         id: `doc-${Date.now()}`,
-        name: file.name,
+        name: customName.trim() || file.name,
+        originalName: file.name,
+        size: file.size,
         url: downloadURL,
         authorId: currentUser.id,
         uploadedAt: new Date().toISOString(),
-        isNew: true, // Flag for notifications
+        isNew: true,
       };
       
       const studentDocRef = doc(firestore, 'students', student.id);
@@ -110,13 +118,15 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
 
       toast({
         title: 'Upload Successful',
-        description: `'${file.name}' has been uploaded and added to the student's profile.`,
+        description: `'${newDocument.name}' has been uploaded and added to the student's profile.`,
       });
 
       setIsOpen(false);
       setFile(null);
+      setCustomName('');
 
     } catch (error: any) {
+      console.error('5. Upload error:', error);
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
@@ -146,6 +156,16 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
           <div className="space-y-2">
             <Label htmlFor="document-file">File</Label>
             <Input id="document-file" type="file" onChange={handleFileChange} accept={ALLOWED_FILE_EXTENSIONS} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="custom-name">File Name (Optional)</Label>
+            <Input 
+              id="custom-name" 
+              type="text" 
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              placeholder="e.g., Passport Scan - January"
+            />
           </div>
         </div>
         <DialogFooter>

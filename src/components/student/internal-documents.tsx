@@ -16,6 +16,18 @@ import { firestore } from '@/firebase';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 
+function formatBytes(bytes: number, decimals = 2) {
+  if (!+bytes) return '0 Bytes';
+
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
 interface InternalDocumentsProps {
   student: Student;
   currentUser: AppUser;
@@ -84,6 +96,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                 <TableHead>File Name</TableHead>
                 <TableHead>Uploaded By</TableHead>
                 <TableHead>Date Uploaded</TableHead>
+                <TableHead>Size</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -111,9 +124,10 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                       )}
                     </TableCell>
                     <TableCell>{isClient ? formatDate(doc.uploadedAt) : '...'}</TableCell>
+                    <TableCell>{formatBytes(doc.size || 0)}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" asChild>
-                        <a href={doc.url} download={doc.name} target="_blank" rel="noopener noreferrer">
+                        <a href={doc.url} download={doc.originalName || doc.name} target="_blank" rel="noopener noreferrer">
                           <Download className="h-4 w-4" />
                         </a>
                       </Button>

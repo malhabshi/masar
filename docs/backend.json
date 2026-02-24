@@ -42,7 +42,7 @@
         "newDocumentsForAdmin": { "type": "number", "description": "Counter for new documents uploaded by employee for the admin." },
         "newMissingItemsForEmployee": { "type": "number", "description": "Counter for new missing items added by admin for the employee." },
         "finalChoiceUniversity": { "type": "string", "description": "The name of the university the student has finalized." },
-        "ielts": { "$ref": "#/entities/IeltsScore" },
+        "ieltsOverall": { "type": "number", "description": "The student's overall IELTS score." },
         "profileCompletionStatus": { "$ref": "#/entities/ProfileCompletionStatus" },
         "transferRequested": { "type": "boolean", "description": "Flag indicating if a transfer has been requested for this student." },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
@@ -81,25 +81,15 @@
       "description": "Represents a document uploaded to a student's profile.",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
+        "name": { "type": "string", "description": "The custom display name for the document." },
+        "originalName": { "type": "string", "description": "The original name of the uploaded file." },
+        "size": { "type": "number", "description": "The size of the file in bytes." },
         "url": { "type": "string", "format": "uri" },
         "uploadedAt": { "type": "string", "format": "date-time" },
         "authorId": { "type": "string" },
         "isNew": { "type": "boolean" }
       },
-      "required": ["id", "name", "url", "uploadedAt", "authorId"]
-    },
-    "IeltsScore": {
-        "title": "IELTS Score",
-        "type": "object",
-        "properties": {
-            "overall": { "type": "number" },
-            "listening": { "type": "number" },
-            "reading": { "type": "number" },
-            "writing": { "type": "number" },
-            "speaking": { "type": "number" }
-        },
-        "required": ["overall", "listening", "reading", "writing", "speaking"]
+      "required": ["id", "name", "originalName", "size", "url", "uploadedAt", "authorId"]
     },
     "ProfileCompletionStatus": {
         "title": "Profile Completion Status",

@@ -1,5 +1,6 @@
 
 
+
 export type UserRole = 'admin' | 'employee' | 'department';
 
 export interface User {
@@ -33,7 +34,9 @@ export interface Note {
 
 export interface Document {
   id: string;
-  name: string;
+  name: string; // Custom name or original filename
+  originalName: string; // Always the original filename
+  size: number; // File size in bytes
   url: string;
   uploadedAt: string;
   authorId: string;
