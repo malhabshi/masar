@@ -32,8 +32,15 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export function AppSidebar() {
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+      setIsClient(true);
+    }, []);
+
     const { user } = useUser();
     const pathname = usePathname();
 
@@ -63,6 +70,10 @@ export function AppSidebar() {
     ];
 
     const supportNav = { href: '/support', label: 'Support', icon: LifeBuoy, roles: ['admin', 'employee', 'department'] };
+    
+    if (!isClient) {
+      return <div className="w-64 bg-sidebar" />; // Empty sidebar placeholder
+    }
 
     return (
         <Sidebar>
