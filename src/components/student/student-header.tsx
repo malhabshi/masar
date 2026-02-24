@@ -13,7 +13,6 @@ import { RequestTransferDialog } from './request-transfer-dialog';
 import { TransferStudentDialog } from './transfer-student-dialog';
 import { DeleteStudentDialog } from './delete-student-dialog';
 import { useCollection } from '@/firebase/client';
-import { EditIeltsDialog } from './edit-ielts-dialog';
 
 
 interface StudentHeaderProps {
@@ -111,18 +110,6 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4" />
               <span>{student.phone || 'No Phone'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4" />
-                <span>IELTS: {student.ieltsOverall != null ? student.ieltsOverall.toFixed(1) : 'N/A'}</span>
-                {isAssignedEmployee && (
-                    <EditIeltsDialog student={student} currentUser={currentUser}>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                            <FilePenLine className="h-3 w-3" />
-                            <span className="sr-only">Edit IELTS Score</span>
-                        </Button>
-                    </EditIeltsDialog>
-                )}
             </div>
           </div>
         </div>

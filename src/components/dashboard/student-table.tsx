@@ -103,7 +103,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
             (employeeFilter === 'unassigned' && !student.employeeId) || 
             (student.employeeId && employeeMapByCivilId.get(student.employeeId)?.id === employeeFilter);
 
-        const studentIelts = student.ielts?.overall ?? 0;
+        const studentIelts = student.ieltsOverall ?? 0;
         let matchesIelts = true;
         if (ieltsFilter !== 'all') {
             switch(ieltsFilter) {
@@ -310,11 +310,9 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                   </TableCell>
                   <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
                   <TableCell>
-                    {student.ielts?.overall ? (
-                        <Badge variant="secondary">{student.ielts.overall.toFixed(1)}</Badge>
-                    ) : (
-                        <Badge variant="outline">0</Badge>
-                    )}
+                    <Badge variant={student.ieltsOverall ? 'secondary' : 'outline'}>
+                        {(student.ieltsOverall ?? 0).toFixed(1)}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     {student.term ? (
