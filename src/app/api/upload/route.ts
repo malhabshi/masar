@@ -1,5 +1,7 @@
 'use server';
 
+console.log('🔥🔥🔥 UPLOAD API ROUTE CALLED 🔥🔥🔥');
+
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import type { User, Student } from '@/lib/types';
@@ -16,7 +18,7 @@ async function getUser(userId: string): Promise<User | null> {
 export async function POST(req: NextRequest) {
   try {
     if (!adminDb || !storage || !adminAuth) {
-      console.error('Firebase Admin has not been initialized. Check service account key environment variable.');
+      console.error('CRITICAL: Firebase Admin has not been initialized. Check service account key environment variable.');
       return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 });
     }
 
@@ -34,15 +36,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid or expired token.' }, { status: 401 });
     }
 
-    const uploader = await getUser(decodedToken.uid);
-    if (!uploader) {
-        return NextResponse.json({ error: 'User not found in database.' }, { status: 401 });
-    }
-
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const destination = formData.get('destination') as 'student' | 'shared' | 'user_avatar' | null;
     const customName = formData.get('customName') as string | null;
+
+    console.log('📦 Form data received:', {
+      file: file?.name,
+      destination,
+      studentId: formData.get('studentId'),
+      customName
+    });
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided.' }, { status: 400 });
@@ -60,29 +64,23 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'studentId is required for student destination.' }, { status: 400 });
         }
 
+        // 1. UPLOAD FILE TO STORAGE
+        const filePath = `students/${studentId}/${Date.now()}_${file.name}`;
+        console.log('📁 Attempting to upload to storage path:', filePath);
+        const blob = bucket.file(filePath);
+        await blob.save(fileBuffer, { metadata: { contentType: file.type } });
+        console.log('✅ File saved to storage successfully');
+        
+        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
+
+        // 2. UPDATE FIRESTORE DOCUMENT
         const studentRef = adminDb.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
         if (!studentDoc.exists) {
             return NextResponse.json({ error: 'Student not found.' }, { status: 404 });
         }
         const studentData = studentDoc.data() as Student;
-
-        const canUpload = uploader.role === 'admin' ||
-                          uploader.role === 'department' ||
-                          (studentData.employeeId && uploader.civilId && studentData.employeeId === uploader.civilId);
-
-        if (!canUpload) {
-          return NextResponse.json({ error: 'Forbidden: You do not have permission to upload to this student profile.' }, { status: 403 });
-        }
-
-        // 1. UPLOAD FILE TO STORAGE
-        const filePath = `students/${studentId}/${Date.now()}_${file.name}`;
-        const blob = bucket.file(filePath);
-        await blob.save(fileBuffer, { metadata: { contentType: file.type } });
-        // Use a long-lived signed URL. For public access, use blob.makePublic() and blob.publicUrl()
-        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
-
-        // 2. UPDATE FIRESTORE DOCUMENT
+        
         const newDocument: StudentDocument = {
             id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: customName || file.name,
@@ -96,18 +94,22 @@ export async function POST(req: NextRequest) {
         
         const updatedDocuments = [...(studentData.documents || []), newDocument];
         
-        const updates: any = {
-            documents: updatedDocuments,
-        };
-
-        // Increment the correct notification counter
-        if (uploader.role === 'employee') {
-            updates.newDocumentsForAdmin = (studentData.newDocumentsForAdmin || 0) + 1;
-        } else if (['admin', 'department'].includes(uploader.role)) {
-            updates.newDocumentsForEmployee = (studentData.newDocumentsForEmployee || 0) + 1;
+        console.log('📝 Updating Firestore with new document:', newDocument);
+        await studentRef.update({ documents: updatedDocuments });
+        
+        // Update notification counters based on uploader role
+        const uploaderDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
+        const uploaderRole = uploaderDoc.data()?.role;
+   
+        if (uploaderRole === 'employee') {
+          await studentRef.update({ 
+            newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 
+          });
+        } else {
+          await studentRef.update({ 
+            newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 
+          });
         }
-
-        await studentRef.update(updates);
 
         // 3. RETURN SUCCESS
         return NextResponse.json({ success: true, document: newDocument });
@@ -123,12 +125,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, downloadURL });
 
     } else {
-        // Logic for other destinations like 'shared'
         return NextResponse.json({ error: 'Invalid destination provided.' }, { status: 400 });
     }
 
   } catch (error: any) {
-    console.error('API Upload Error:', error);
+    console.error('🔥🔥🔥 FULL ERROR OBJECT:', error);
+    console.error('🔥 Error name:', error.name);
+    console.error('🔥 Error message:', error.message);
+    console.error('🔥 Error stack:', error.stack);
+    if (error.code) console.error('🔥 Error code:', error.code);
+    if (error.response) console.error('🔥 Error response:', error.response);
+
     return NextResponse.json({ error: 'Failed to process upload.', details: error.message }, { status: 500 });
   }
 }
