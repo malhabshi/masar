@@ -150,7 +150,10 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
 // --- TASK ACTIONS ---
 
 export async function sendTask(authorId: string, recipientId: string, content: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    if (!checkAdminServices()) {
+        console.error('adminDb is null - check FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 env var');
+        return { success: false, message: 'Server database connection not available - check service account' };
+    }
     
     try {
         const author = await getUser(authorId);
@@ -177,10 +180,13 @@ export async function sendTask(authorId: string, recipientId: string, content: s
 }
 
 export async function addReplyToTask(taskId: string, authorId: string, content: string, taskAuthorId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    if (!checkAdminServices()) {
+      return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    }
 
     try {
         const author = await getUser(authorId);
+        // Only Admins and department can reply
         if (!author || !['admin', 'department'].includes(author.role)) {
             return { success: false, message: 'You do not have permission to reply to tasks.' };
         }
@@ -200,9 +206,10 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
         const updatedReplies = [...(taskData.replies || []), newReply];
         await taskRef.update({ replies: updatedReplies, status: 'in-progress' });
 
+        // Notify the original employee if an admin/dept replies
         if (taskData.authorId !== authorId) {
           const originalAuthor = await getUser(taskData.authorId);
-          if (originalAuthor) {
+          if (originalAuthor && originalAuthor.role === 'employee') {
             const taskContent = `${author.name} replied to your task: "${taskData.content.substring(0, 30)}..."`;
             const notificationTask: Omit<Task, 'id'> = {
               authorId: 'system',
@@ -1151,6 +1158,7 @@ export async function addEvent(authorId: string, title: string, description: str
             title,
             description,
             date,
+            createdAt: new Date().toISOString(),
         };
         await adminDb!.collection('upcoming_events').add(newEvent);
         return { success: true, message: 'Event added.' };

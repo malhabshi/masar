@@ -154,6 +154,7 @@ export interface UpcomingEvent {
   date: string;
   description: string;
   authorId: string;
+  createdAt: string;
 }
 
 export interface PersonalTodo {

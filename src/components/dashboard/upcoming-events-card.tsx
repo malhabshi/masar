@@ -43,7 +43,7 @@ export function UpcomingEventsCard() {
 
     const newlyAdded = new Set<string>();
     events.forEach(event => {
-      if (!lastViewed || new Date(event.date) > new Date(lastViewed)) {
+      if (!lastViewed || new Date(event.createdAt) > new Date(lastViewed)) {
         newlyAdded.add(event.id);
       }
     });

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useRef } from 'react';
@@ -101,7 +102,7 @@ export function NotificationListener() {
     let didNotify = false;
 
     events.forEach(event => {
-      if (new Date(event.date) > new Date(lastNotified || 0)) {
+      if (new Date(event.createdAt) > new Date(lastNotified || 0)) {
         if (!didNotify) didNotify = true;
         toast({
           title: 'New Event Scheduled',
@@ -110,8 +111,8 @@ export function NotificationListener() {
         });
       }
 
-      if (new Date(event.date) > new Date(newLatestTimestamp)) {
-        newLatestTimestamp = event.date;
+      if (new Date(event.createdAt) > new Date(newLatestTimestamp)) {
+        newLatestTimestamp = event.createdAt;
       }
     });
 
