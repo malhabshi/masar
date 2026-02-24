@@ -3,9 +3,8 @@
 import { useMemo } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, FilePenLine } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
 import { FinalizeStudentDialog } from './finalize-student-dialog';
@@ -51,6 +50,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const canEdit = canManage || isAssignedEmployee;
 
   const canRequestTransfer = isAssignedEmployee && !student.transferRequested;
+  const canAssign = canManage && !student.employeeId;
   const canApproveTransfer = canManage && student.transferRequested;
   const canFinalize = canManage && !student.finalChoiceUniversity;
   const employeeUsers = (users || []).filter(u => u.role === 'employee');
@@ -92,7 +92,10 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             )}
             {canEdit && <EditStudentDialog student={student} />}
             {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
-            {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />}
+            {/* Explicitly separate Assign from Transfer Approve */}
+            {canAssign && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="assign" />}
+            {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="transfer" />}
+
             {canFinalize && <FinalizeStudentDialog student={student} currentUser={currentUser} />}
             {isAdmin && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
           </div>

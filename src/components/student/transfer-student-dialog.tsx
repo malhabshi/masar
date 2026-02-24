@@ -33,15 +33,16 @@ interface TransferStudentDialogProps {
   student: Student;
   employees: User[];
   currentUser: AppUser;
+  actionType: 'assign' | 'transfer';
 }
 
-export function TransferStudentDialog({ student, employees, currentUser }: TransferStudentDialogProps) {
+export function TransferStudentDialog({ student, employees, currentUser, actionType }: TransferStudentDialogProps) {
   const { toast } = useToast();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
 
-  const isAssignAction = !student.employeeId;
+  const isAssignAction = actionType === 'assign';
 
   const availableEmployees = employees.filter(e => e.civilId !== student.employeeId);
   const currentEmployee = employees.find(e => e.civilId === student.employeeId);
@@ -121,20 +122,20 @@ export function TransferStudentDialog({ student, employees, currentUser }: Trans
       <DialogTrigger asChild>
         <Button 
           variant='outline'
-          className={student.transferRequested ? 'border-yellow-500 text-yellow-600 hover:bg-yellow-500/10 hover:text-yellow-700' : ''}
+          className={actionType === 'transfer' ? 'border-yellow-500 text-yellow-600 hover:bg-yellow-500/10 hover:text-yellow-700' : ''}
         >
           <ArrowRightLeft className="mr-2 h-4 w-4" />
-          {isAssignAction ? 'Assign' : student.transferRequested ? 'Approve Transfer' : 'Transfer Student'}
+          {isAssignAction ? 'Assign Student' : 'Approve Transfer'}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isAssignAction ? 'Assign' : 'Transfer'} {student.name}</DialogTitle>
+          <DialogTitle>{isAssignAction ? `Assign ${student.name}`: `Approve Transfer for ${student.name}`}</DialogTitle>
           <DialogDescription>
             {isAssignAction
               ? 'Assign this student to an employee. The employee will be notified.'
-              : 'Transfer this student to another employee. The new employee will be notified.'}
-            {!isAssignAction && currentEmployee && (
+              : `Transfer this student to another employee. The current employee (${currentEmployee?.name}) has requested this transfer.`}
+            {!isAssignAction && currentEmployee && !isAssignAction && (
               <>
                 <br />
                 Currently assigned to: <strong>{currentEmployee.name}</strong>
