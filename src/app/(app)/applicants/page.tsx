@@ -5,11 +5,17 @@ import { EmployeeApplicantsPage } from './employee-page';
 import { AdminApplicantsPage } from './admin-page';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function ApplicantsPage() {
   const { user, isUserLoading } = useUser();
-  
-  if (isUserLoading) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted || isUserLoading) {
     return (
         <div className="flex h-full w-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
