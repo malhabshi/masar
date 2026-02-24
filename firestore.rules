@@ -35,8 +35,9 @@ service cloud.firestore {
     
     // Users collection - custom rules for admin vs regular users
     match /users/{userId} {
-      // Users can read their own profile. Admins and department members can read all profiles.
-      allow read: if request.auth != null && (request.auth.uid == userId || isOneOfRoles(['admin', 'department']));
+      // Allow any authenticated user to read all user profiles.
+      // This is necessary for employees to see who is assigned to students on the main list.
+      allow read: if request.auth != null;
       
       // Users can write their own document, but cannot change their own role.
       // Only admins can change roles.
