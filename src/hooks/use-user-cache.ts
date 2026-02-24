@@ -55,7 +55,8 @@ export function useUserCacheById(ids: string[] = []) {
     return () => {
       isMounted = false;
     };
-  // Using JSON.stringify on the deps array is a common way to deep-compare
+  // The dependency array is critical. It should NOT include userMap.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(uniqueIds), fetchUsersById]);
   
   return { userMap, isLoading };
@@ -115,6 +116,8 @@ export function useUserCacheByCivilId(civilIds: string[] = []) {
     return () => {
       isMounted = false;
     };
+  // The dependency array is critical. It should NOT include userMap.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(uniqueIds), fetchUsersByCivilId]);
   
   return { userMap, isLoading };
