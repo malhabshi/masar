@@ -4,6 +4,7 @@
 
 
 
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -711,13 +712,30 @@ export async function deleteTodo(userId: string, todoId: string) {
 
 // --- MISC ACTIONS ---
 
-export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean) {
+export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean, authorId: string) {
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
     }
 
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) {
+            return { success: false, message: "Student not found." };
+        }
+        const studentData = studentDoc.data() as Student;
+        
+        const author = await getUser(authorId);
+        if (!author) {
+            return { success: false, message: 'Authorizing user not found.' };
+        }
+
+        const isAssignedEmployee = author.civilId === studentData.employeeId;
+
+        if (!isAssignedEmployee) {
+            return { success: false, message: 'Only the assigned employee can update the readiness checklist.' };
+        }
+
         // Use dot notation to update a field in a map
         await studentRef.update({
             [`profileCompletionStatus.${itemKey}`]: value

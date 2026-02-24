@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Student, ProfileCompletionStatus } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,15 +36,33 @@ export function ReadinessChecklist({ student, currentUser }: ReadinessChecklistP
   const { toast } = useToast();
   const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
 
-  const canManage = currentUser.role === 'admin' || currentUser.role === 'department';
+  // Rule 1: Checklist is editable by the assigned employee.
+  const canManage = currentUser.civilId === student.employeeId;
+  
   const status: Partial<ProfileCompletionStatus> = student.profileCompletionStatus || {};
+
+  // Rule 2: "Ready to Travel" is only enabled when all other items are checked.
+  const allOtherItemsChecked = useMemo(() => {
+      return checklistKeys.every(key => !!status[key]);
+  }, [status]);
+
 
   const handleToggle = async (itemKey: keyof ProfileCompletionStatus, currentValue: boolean) => {
     if (!canManage) return;
 
+    // Special check for 'readyToTravel'
+    if (itemKey === 'readyToTravel' && !allOtherItemsChecked) {
+        toast({
+            variant: 'destructive',
+            title: 'Action Not Allowed',
+            description: 'All other checklist items must be completed before marking as "Ready to Travel".',
+        });
+        return;
+    }
+
     setUpdatingItems(prev => new Set(prev).add(itemKey));
 
-    const result = await updateChecklistItem(student.id, itemKey, !currentValue);
+    const result = await updateChecklistItem(student.id, itemKey, !currentValue, currentUser.id);
 
     if (result.success) {
       toast({
@@ -115,10 +133,11 @@ export function ReadinessChecklist({ student, currentUser }: ReadinessChecklistP
             <Checkbox
                 id="readyToTravel"
                 checked={!!status.readyToTravel}
-                disabled={!canManage}
+                disabled={!canManage || !allOtherItemsChecked || updatingItems.has('readyToTravel')}
                 onCheckedChange={() => handleToggle('readyToTravel', !!status.readyToTravel)}
+                title={!allOtherItemsChecked ? "Complete all other items to enable" : ""}
             />
-            <Label htmlFor="readyToTravel" className="font-bold text-lg text-success">
+            <Label htmlFor="readyToTravel" className={`font-bold text-lg ${!allOtherItemsChecked || !canManage ? 'text-muted-foreground cursor-not-allowed' : 'text-success cursor-pointer'}`}>
                 {checklistLabels.readyToTravel}
             </Label>
         </div>
