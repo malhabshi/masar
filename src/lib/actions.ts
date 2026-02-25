@@ -386,6 +386,7 @@ export async function createStudent(
   }
 
   try {
+    console.log(`[SERVER] Creating student: ${studentName} by user ${creatingUserId}`);
     const studentRef = adminDb!.collection('students').doc(); // Auto-generate ID
 
     const newStudentData: Omit<Student, 'avatarUrl' | 'ielts'> = {

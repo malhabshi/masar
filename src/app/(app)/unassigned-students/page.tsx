@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -28,6 +29,19 @@ export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
+
+  // Debugging logs added here
+  if (currentUser) {
+    console.log('Current user:', { 
+      uid: currentUser?.id, 
+      role: currentUser?.role,
+      civilId: currentUser?.civilId 
+    });
+    console.log('Query filters:', {
+      employeeId: null,
+      createdBy: currentUser?.role === 'employee' ? currentUser.id : 'all (admin/dept)'
+    });
+  }
 
   const { data: unassignedStudents, isLoading: studentsAreLoading } =
     useCollection<Student>(
