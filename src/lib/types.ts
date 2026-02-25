@@ -2,6 +2,7 @@
 
 
 
+
 export type UserRole = 'admin' | 'employee' | 'department';
 
 export interface User {
@@ -66,7 +67,8 @@ export interface Student {
   phone: string;
   employeeId: string | null;
   applications: Application[];
-  notes: Note[];
+  employeeNotes?: Note[];
+  adminNotes?: Note[];
   documents: Document[];
   createdAt: string;
   createdBy: string;

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -8,6 +9,7 @@ import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { addAdminNote, addEmployeeNote } from '@/lib/actions';
 
 import { StudentHeader } from '@/components/student/student-header';
 import { StudentApplications } from '@/components/student/student-applications';
@@ -120,6 +122,10 @@ export default function StudentDetailPage() {
   const canRenderContent = !isLoading && student && currentUser;
   const isAssignedEmployee = canRenderContent && student.employeeId === currentUser.civilId;
   const isAdminOrDept = canRenderContent && ['admin', 'department'].includes(currentUser.role);
+  
+  const handleAddEmployeeNote = (content: string) => addEmployeeNote(student.id, currentUser.id, content);
+  const handleAddAdminNote = (content: string) => addAdminNote(student.id, currentUser.id, content);
+
 
   return (
     <div className="space-y-6">
@@ -134,10 +140,16 @@ export default function StudentDetailPage() {
                 <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
                 <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
                 <ReadinessChecklist student={student} currentUser={currentUser} />
+                <NotesSection
+                    title="Employee Notes"
+                    notes={student.employeeNotes || []}
+                    canWrite={isAssignedEmployee}
+                    onAddNote={handleAddEmployeeNote}
+                    placeholder="Add a new employee note..."
+                />
                 </div>
 
                 <div className="space-y-6">
-                    <NotesSection student={student} currentUser={currentUser} title="Notes" readOnly={false} />
                     <Card>
                         <CardHeader>
                             <CardTitle>Internal Chat</CardTitle>
@@ -145,6 +157,17 @@ export default function StudentDetailPage() {
                         <StudentChat student={student} currentUser={currentUser} />
                     </Card>
                     <MissingItemsSection student={student} currentUser={currentUser} />
+
+                    {isAdminOrDept && (
+                        <NotesSection
+                            title="Admin Notes"
+                            notes={student.adminNotes || []}
+                            canWrite={isAdminOrDept}
+                            onAddNote={handleAddAdminNote}
+                            placeholder="Add a new internal note..."
+                        />
+                    )}
+
                     {student.transferHistory && student.transferHistory.length > 0 && (
                         <TransferHistory transferHistory={student.transferHistory} />
                     )}

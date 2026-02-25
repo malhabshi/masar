@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -138,7 +139,7 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
             content: noteContent,
             createdAt: new Date().toISOString(),
         };
-        await studentRef.update({ notes: [...(studentData.notes || []), newNote] });
+        await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
         
         return { success: true, message: 'Status updated.' };
     } catch(error) {
@@ -364,7 +365,7 @@ export async function createStudent(
       employeeId: shouldBeAssigned ? creatingUserCivilId! : null,
       ...(shouldBeAssigned && { isNewForEmployee: true }),
       applications: [],
-      notes: notes
+      employeeNotes: notes
         ? [
             {
               id: `note-${Date.now()}`,
@@ -374,6 +375,7 @@ export async function createStudent(
             },
           ]
         : [],
+      adminNotes: [],
       documents: [],
       createdAt: new Date().toISOString(),
       createdBy: creatingUserId,
@@ -437,7 +439,7 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
             transferRequested: false, 
             isNewForEmployee: true,
             transferHistory: [...(studentData.transferHistory || []), transferRecord],
-            notes: [...(studentData.notes || []), newNote]
+            adminNotes: [...(studentData.adminNotes || []), newNote]
         };
 
         await studentRef.update(updates);
@@ -484,7 +486,7 @@ export async function requestTransfer(studentId: string, reason: string, request
       content: `Transfer requested. Reason: ${reason}`,
       createdAt: new Date().toISOString(),
     };
-    await studentRef.update({ notes: [...(studentData.notes || []), newNote] });
+    await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
 
     // 3. Create a task for all admins
     const taskContent = `Employee ${employee.name} has requested to transfer student ${studentName}. Reason: ${reason}. Please go to the student's profile to approve the transfer.`;
@@ -614,26 +616,59 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
     }
 }
 
-export async function addNoteToStudent(studentId: string, authorId: string, content: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+export async function addEmployeeNote(studentId: string, authorId: string, content: string) {
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
-        
+
+        const author = await getUser(authorId);
+        if (!author) return { success: false, message: 'Author not found.'};
+
         const studentData = studentDoc.data() as Student;
+        if (author.role === 'employee' && author.civilId !== studentData.employeeId) {
+            return { success: false, message: 'Only the assigned employee can add notes to this section.' };
+        }
+        
         const newNote: Note = {
             id: `note-${Date.now()}`,
             authorId: authorId,
             content: content,
             createdAt: new Date().toISOString(),
         };
-        const updatedNotes = [...(studentData.notes || []), newNote];
-        await studentRef.update({ notes: updatedNotes });
+        await studentRef.update({ employeeNotes: [...(studentData.employeeNotes || []), newNote] });
         return { success: true, message: 'Note added.' };
     } catch (error) {
-        console.error('addNoteToStudent error:', error);
-        return { success: false, message: 'Failed to add note.' };
+        console.error('addEmployeeNote error:', error);
+        return { success: false, message: 'Failed to add employee note.' };
+    }
+}
+
+export async function addAdminNote(studentId: string, authorId: string, content: string) {
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+        const author = await getUser(authorId);
+        if (!author || !['admin', 'department'].includes(author.role)) {
+            return { success: false, message: 'Only admins or department users can add notes to this section.' };
+        }
+        
+        const studentData = studentDoc.data() as Student;
+        const newNote: Note = {
+            id: `note-admin-${Date.now()}`,
+            authorId: authorId,
+            content: content,
+            createdAt: new Date().toISOString(),
+        };
+        await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
+        return { success: true, message: 'Admin note added.' };
+    } catch (error) {
+        console.error('addAdminNote error:', error);
+        return { success: false, message: 'Failed to add admin note.' };
     }
 }
 
@@ -694,7 +729,7 @@ export async function markMissingItemAsReceived(studentId: string, itemReceived:
 
         const updates = {
             missingItems: updatedItems,
-            notes: [...(studentData.notes || []), newNote],
+            adminNotes: [...(studentData.adminNotes || []), newNote],
             unreadUpdates: (studentData.unreadUpdates || 0) + 1,
         };
         await studentRef.update(updates);
@@ -803,11 +838,11 @@ export async function updateFinalChoice(studentId: string, universityName: strin
 
     const studentDoc = await studentRef.get();
     const studentData = studentDoc.data() as Student;
-    const updatedNotes = [...(studentData.notes || []), newNote];
+    const updatedNotes = [...(studentData.adminNotes || []), newNote];
 
     await studentRef.update({
       finalChoiceUniversity: universityName,
-      notes: updatedNotes,
+      adminNotes: updatedNotes,
     });
     
     if (employeeId) {
@@ -1430,7 +1465,7 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
       content: noteContent,
       createdAt: new Date().toISOString(),
     };
-    await studentRef.update({ notes: [...(studentData.notes || []), newNote] });
+    await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
 
     return { success: true, message: 'IELTS score updated successfully.' };
   } catch (error) {

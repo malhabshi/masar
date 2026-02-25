@@ -1,7 +1,7 @@
 
 'use client';
 import { useState, useMemo, useEffect } from 'react';
-import type { Student } from '@/lib/types';
+import type { Note } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,17 +10,17 @@ import { Button } from '@/components/ui/button';
 import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
-import { addNoteToStudent } from '@/lib/actions';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 
 interface NotesSectionProps {
-  student: Student;
-  currentUser: AppUser;
+  notes: Note[];
+  canWrite: boolean;
   title: string;
-  readOnly: boolean;
+  placeholder: string;
+  onAddNote: (content: string) => Promise<{ success: boolean; message: string }>;
 }
 
-export function NotesSection({ student, currentUser, title, readOnly }: NotesSectionProps) {
+export function NotesSection({ notes, canWrite, title, placeholder, onAddNote }: NotesSectionProps) {
   const [newNote, setNewNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -30,19 +30,19 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
     setIsClient(true);
   }, []);
 
-  const authorIds = useMemo(() => (student.notes || []).map(note => note.authorId), [student.notes]);
+  const authorIds = useMemo(() => (notes || []).map(note => note.authorId), [notes]);
   const { userMap } = useUserCacheById(authorIds);
 
   const sortedNotes = useMemo(() => {
-    if (!student.notes) return [];
-    return [...student.notes].sort((a,b) => sortByDate(a,b));
-  }, [student.notes]);
+    if (!notes) return [];
+    return [...notes].sort((a,b) => sortByDate(a,b));
+  }, [notes]);
 
   const handleAddNote = async () => {
-    if (!newNote.trim() || !currentUser) return;
+    if (!newNote.trim()) return;
 
     setIsLoading(true);
-    const result = await addNoteToStudent(student.id, currentUser.id, newNote.trim());
+    const result = await onAddNote(newNote.trim());
 
     if (result.success) {
         toast({
@@ -95,10 +95,10 @@ export function NotesSection({ student, currentUser, title, readOnly }: NotesSec
           )}
         </div>
       </CardContent>
-      {!readOnly && (
+      {canWrite && (
         <CardFooter className="flex flex-col items-stretch gap-2 border-t pt-4">
           <Textarea 
-            placeholder="Add a new note..."
+            placeholder={placeholder}
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
           />
