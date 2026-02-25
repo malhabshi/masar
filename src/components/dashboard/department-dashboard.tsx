@@ -15,7 +15,10 @@ import { SendTaskForm } from './send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
-     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(currentUser ? 'students' : '');
+     // SECURE: Only attempt to fetch the full students collection if user is department or admin.
+     const canFetch = currentUser && ['admin', 'department'].includes(currentUser.role);
+
+     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(canFetch ? 'students' : '');
      const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
      
      const students = useMemo(() => studentsData || [], [studentsData]);
