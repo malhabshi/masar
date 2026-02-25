@@ -882,11 +882,16 @@ export async function setStudentFinalChoice(studentId: string, university: strin
         return { success: false, message: 'You do not have permission to perform this action.' };
     }
 
+    const oldChoice = studentData.finalChoiceUniversity;
+    
     // Update final choice
     await studentRef.update({ finalChoiceUniversity: university });
 
     // Add note
-    const noteContent = `${updater.name} has set the final choice to: ${university} (${major}).`;
+    const noteContent = oldChoice
+      ? `${updater.name} has changed the final choice from '${oldChoice}' to: ${university} (${major}).`
+      : `${updater.name} has set the final choice to: ${university} (${major}).`;
+      
     const newNote: Note = {
         id: `note-finalize-${Date.now()}`,
         authorId: updaterId,
@@ -899,7 +904,9 @@ export async function setStudentFinalChoice(studentId: string, university: strin
     if (updater.role === 'employee') {
         const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
         if (!adminsSnapshot.empty) {
-            const taskContent = `${updater.name} has set the final university choice for student ${studentData.name} to ${university}.`;
+            const taskContent = oldChoice
+                ? `${updater.name} has changed the final university choice for student ${studentData.name} from '${oldChoice}' to '${university}'.`
+                : `${updater.name} has set the final university choice for student ${studentData.name} to ${university}.`;
             const batch = adminDb!.batch();
             adminsSnapshot.forEach(adminDoc => {
                 const taskRef = adminDb!.collection('tasks').doc();
@@ -917,7 +924,11 @@ export async function setStudentFinalChoice(studentId: string, university: strin
         }
     }
     
-    return { success: true, message: `Final choice set to ${university}.` };
+    const successMessage = oldChoice
+      ? `Final choice changed to ${university}.`
+      : `Final choice set to ${university}.`;
+      
+    return { success: true, message: successMessage };
   } catch (error) {
     console.error('setStudentFinalChoice error:', error);
     return { success: false, message: 'Failed to set final choice.' };

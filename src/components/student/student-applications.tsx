@@ -19,6 +19,17 @@ import { useToast } from '@/hooks/use-toast';
 import { updateApplicationStatus, setStudentFinalChoice } from '@/lib/actions';
 import { AddApplicationDialog } from './add-application-dialog';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
 
 interface StudentApplicationsProps {
   student: Student;
@@ -36,6 +47,8 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   const { user: currentUser } = useUser();
   const { toast } = useToast();
   const [isFinalizing, setIsFinalizing] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<{ from: string; to: Application } | null>(null);
+
 
   const canManageApplications = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const canAddApplications = currentUser?.role === 'admin' || currentUser?.role === 'department';
@@ -57,51 +70,62 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
     }
   }, [student, toast]);
 
-  const handleSetFinal = useCallback(async (app: Application) => {
+  const confirmAndSetFinal = useCallback(async (app: Application) => {
     if (!currentUser) return;
     setIsFinalizing(app.university);
+    setConfirmation(null); // Close dialog
     const result = await setStudentFinalChoice(student.id, app.university, app.major, currentUser.id);
     if (result.success) {
-      toast({ title: 'Final Choice Set', description: result.message });
+      toast({ title: 'Final Choice Updated', description: result.message });
     } else {
       toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
     }
     setIsFinalizing(null);
   }, [student.id, currentUser, toast]);
 
+  const handleSetFinalClick = (app: Application) => {
+    if (student.finalChoiceUniversity && student.finalChoiceUniversity !== app.university) {
+        setConfirmation({ from: student.finalChoiceUniversity, to: app });
+    } else {
+        confirmAndSetFinal(app);
+    }
+  };
+
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>University Applications</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {student.applications && student.applications.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>University</TableHead>
-                <TableHead>Major</TableHead>
-                <TableHead>Country</TableHead>
-                <TableHead>Status</TableHead>
-                {(canManageApplications || canSetFinalChoice) && <TableHead className="text-right">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {student.applications.map((app, index) => {
-                const isFinalChoice = student.finalChoiceUniversity === app.university;
-                return (
-                  <TableRow key={index} className={cn(isFinalChoice && 'bg-green-500/10 hover:bg-green-500/10')}>
-                    <TableCell className="font-medium flex items-center">
-                        {isFinalChoice && <CheckCircle className="h-4 w-4 text-green-600 mr-2" />}
-                        {app.university}
-                    </TableCell>
-                    <TableCell>{app.major}</TableCell>
-                    <TableCell>{app.country}</TableCell>
-                    <TableCell>
-                      <Badge className={`${statusColors[app.status]} text-white`}>{app.status}</Badge>
-                    </TableCell>
-                    {(canManageApplications || canSetFinalChoice) && (
-                        <TableCell className="text-right">
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>University Applications</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {student.applications && student.applications.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>University</TableHead>
+                  <TableHead>Major</TableHead>
+                  <TableHead>Country</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {student.applications.map((app, index) => {
+                  const isFinalChoice = student.finalChoiceUniversity === app.university;
+                  return (
+                    <TableRow key={index} className={cn(isFinalChoice && 'bg-green-500/10 hover:bg-green-500/10')}>
+                      <TableCell className="font-medium flex items-center">
+                          {isFinalChoice && <CheckCircle className="h-4 w-4 text-green-600 mr-2" />}
+                          {app.university}
+                      </TableCell>
+                      <TableCell>{app.major}</TableCell>
+                      <TableCell>{app.country}</TableCell>
+                      <TableCell>
+                        <Badge className={`${statusColors[app.status]} text-white`}>{app.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
                             {canManageApplications && (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -123,36 +147,55 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                                 </DropdownMenu>
                             )}
                             {canSetFinalChoice && (
-                                isFinalChoice ? (
-                                    <Badge variant="outline" className="border-green-600 text-green-600">Final Choice</Badge>
-                                ) : (
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm"
-                                        onClick={() => handleSetFinal(app)}
-                                        disabled={!!student.finalChoiceUniversity || isFinalizing === app.university}
-                                    >
-                                        {isFinalizing === app.university && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                        Set as Final
-                                    </Button>
-                                )
+                                <>
+                                    {isFinalChoice ? (
+                                        <Badge variant="outline" className="border-green-600 text-green-600">Final Choice</Badge>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleSetFinalClick(app)}
+                                            disabled={isFinalizing !== null} // Disable all buttons if any action is in progress
+                                        >
+                                            {isFinalizing === app.university && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Set as Final
+                                        </Button>
+                                    )}
+                                </>
                             )}
-                        </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        ) : (
-          <p className="text-sm text-muted-foreground text-center py-8">No applications added yet.</p>
+                          </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">No applications added yet.</p>
+          )}
+        </CardContent>
+        {canAddApplications && (
+          <CardFooter className="border-t pt-4">
+            <AddApplicationDialog studentId={student.id} />
+          </CardFooter>
         )}
-      </CardContent>
-      {canAddApplications && (
-        <CardFooter className="border-t pt-4">
-          <AddApplicationDialog studentId={student.id} />
-        </CardFooter>
-      )}
-    </Card>
+      </Card>
+      <AlertDialog open={!!confirmation} onOpenChange={(open) => !open && setConfirmation(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Confirm Final Choice Change</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Are you sure you want to change the final choice from <strong>{confirmation?.from}</strong> to <strong>{confirmation?.to.university}</strong>?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setConfirmation(null)}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => confirmation && confirmAndSetFinal(confirmation.to)}>
+                    Confirm Change
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
