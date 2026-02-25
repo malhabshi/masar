@@ -93,9 +93,14 @@ service cloud.firestore {
     
     // Students collection rules
     match /students/{studentId} {
-      allow read: if request.auth != null && hasStudentReadAccess(resource.data);
+      allow get: if request.auth != null && hasStudentReadAccess(resource.data);
+      allow list: if request.auth != null && (
+        isOneOfRoles(['admin', 'department']) ||
+        (isRole('employee') && request.query.employeeId == getUserData().civilId)
+      );
       allow write: if request.auth != null && hasStudentWriteAccess(resource.data);
     }
+
     
     // Approved universities - admins and dept can write, all can read
     match /approved_universities/{universityId} {
