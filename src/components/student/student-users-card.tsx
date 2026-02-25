@@ -37,12 +37,17 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
     }));
   }, [student.studentLogins, userMap]);
 
+  const getUsername = (email: string) => {
+    if (!email) return '';
+    return email.split('@')[0];
+  }
+
   const handleDelete = async (uid: string, email: string) => {
     setIsMutating(`delete-${uid}`);
     const result = await deleteStudentLogin(student.id, uid, currentUser.id);
 
     if (result.success) {
-      toast({ title: 'Student User Deleted', description: `Login for ${email} has been removed.` });
+      toast({ title: 'Student User Deleted', description: `Login for ${getUsername(email)} has been removed.` });
     } else {
       toast({ variant: 'destructive', title: 'Deletion Failed', description: result.message });
     }
@@ -78,7 +83,7 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email / Username</TableHead>
+                <TableHead>Username</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -86,7 +91,7 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
             <TableBody>
               {studentUsers.map(su => (
                 <TableRow key={su.uid}>
-                  <TableCell className="font-medium">{su.email}</TableCell>
+                  <TableCell className="font-medium">{getUsername(su.email)}</TableCell>
                   <TableCell>{formatDate(su.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -110,7 +115,7 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
                           <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will permanently delete the login for {su.email}. The student will no longer be able to access their portal. This action cannot be undone.
+                              This will permanently delete the login for {getUsername(su.email)}. The student will no longer be able to access their portal. This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

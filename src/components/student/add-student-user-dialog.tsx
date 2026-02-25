@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
-  email: z.string().email({ message: 'Please enter a valid email address.' }),
+  username: z.string().min(3, { message: 'Username must be at least 3 characters.' }),
   password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
 });
 
@@ -44,16 +44,16 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
+      username: '',
       password: '',
     },
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
-    const result = await createStudentLogin(student.id, values.email, values.password, currentUser.id);
+    const result = await createStudentLogin(student.id, values.username, values.password, currentUser.id);
     if (result.success) {
-      toast({ title: 'Student Login Created', description: `An account has been created for ${values.email}.` });
+      toast({ title: 'Student Login Created', description: `An account has been created for ${values.username}.` });
       setIsOpen(false);
       form.reset();
     } else {
@@ -76,12 +76,12 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
             <FormField
               control={form.control}
-              name="email"
+              name="username"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email (Username)</FormLabel>
+                  <FormLabel>Username</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="student@email.com" {...field} />
+                    <Input type="text" placeholder="Enter username" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -94,7 +94,7 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
+                    <Input type="text" placeholder="Enter password" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

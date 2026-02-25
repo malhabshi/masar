@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1539,7 +1540,7 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
   }
 }
 
-export async function createStudentLogin(studentId: string, email: string, password: string, createdByUserId: string) {
+export async function createStudentLogin(studentId: string, username: string, password: string, createdByUserId: string) {
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1552,7 +1553,6 @@ export async function createStudentLogin(studentId: string, email: string, passw
         }
         const studentData = studentDoc.data() as Student;
         
-        // Check permissions
         const creator = await getUser(createdByUserId);
         if (!creator) return { success: false, message: "Creating user not found." };
 
@@ -1560,15 +1560,15 @@ export async function createStudentLogin(studentId: string, email: string, passw
         if (!canCreate) {
             return { success: false, message: 'You do not have permission to create a login for this student.' };
         }
+        
+        const email = `${username.trim().toLowerCase()}@student.uniapply.hub`;
 
-        // Create user in Firebase Auth
         const authUser = await adminAuth!.createUser({
             email,
             password,
             displayName: studentData.name,
         });
 
-        // Create corresponding user document in /users
         const newUserDoc: Omit<User, 'id'> = {
             name: studentData.name,
             email: email,
@@ -1578,7 +1578,6 @@ export async function createStudentLogin(studentId: string, email: string, passw
         };
         await adminDb!.collection('users').doc(authUser.uid).set(newUserDoc);
 
-        // Update the student document with the new login info
         const newLogin = {
             uid: authUser.uid,
             email: email,
@@ -1594,9 +1593,11 @@ export async function createStudentLogin(studentId: string, email: string, passw
         console.error("Error creating student login:", error);
         let message = 'An unexpected error occurred.';
         if (error.code === 'auth/email-already-exists') {
-            message = 'This email is already in use by another account.';
+            message = 'This username is already taken. Please choose a different one.';
         } else if (error.code === 'auth/invalid-password') {
             message = 'Password must be at least 8 characters.';
+        } else if (error.code === 'auth/invalid-email') {
+            message = 'The username contains invalid characters. Please use only letters, numbers, and basic symbols.'
         }
         return { success: false, message };
     }
@@ -1624,13 +1625,9 @@ export async function deleteStudentLogin(studentId: string, uidToDelete: string,
             return { success: false, message: 'You do not have permission to delete this login.' };
         }
 
-        // Delete from Auth
         await adminAuth!.deleteUser(uidToDelete);
-
-        // Delete from /users collection
         await adminDb!.collection('users').doc(uidToDelete).delete();
 
-        // Remove from student's studentLogins array
         const updatedLogins = (studentData.studentLogins || []).filter(login => login.uid !== uidToDelete);
         await studentRef.update({ studentLogins: updatedLogins });
 
@@ -1650,8 +1647,6 @@ export async function resetStudentPassword(email: string) {
     
     try {
         await adminAuth!.generatePasswordResetLink(email);
-        // In a real app, you would email this link to the user.
-        // For this demo, we just log that it would be sent.
         console.log(`Password reset email would be sent to: ${email}`);
         
         return { success: true, message: 'Password reset email sent.' };
