@@ -24,11 +24,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   description: z.string().min(3, { message: 'Description must be at least 3 characters.' }),
   username: z.string().min(3, { message: 'Username must be at least 3 characters.' }),
+  notes: z.string().optional(),
 });
 
 interface AddStudentUserDialogProps {
@@ -47,12 +49,13 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
     defaultValues: {
       description: '',
       username: '',
+      notes: '',
     },
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
-    const result = await createStudentLogin(student.id, values.description, values.username, currentUser.id);
+    const result = await createStudentLogin(student.id, values.description, values.username, values.notes, currentUser.id);
     if (result.success) {
       toast({ title: 'Student Login Created', description: `An account has been created for ${values.username}. The student will need to use the password reset flow to log in.` });
       setIsOpen(false);
@@ -101,6 +104,19 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Add any relevant notes for this login..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <DialogFooter>
               <DialogClose asChild>
                 <Button variant="outline" type="button">Cancel</Button>
@@ -116,3 +132,5 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
     </Dialog>
   );
 }
+
+    

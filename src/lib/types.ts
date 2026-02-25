@@ -6,6 +6,7 @@
 
 
 
+
 export type UserRole = 'admin' | 'employee' | 'department' | 'student';
 
 export interface User {
@@ -68,6 +69,7 @@ export interface StudentLogin {
     uid: string;
     description: string;
     email: string;
+    notes?: string;
     createdAt: string;
 }
 
@@ -249,3 +251,5 @@ export interface EmployeeStats {
   dailyCounts: EmployeeDailyCount[];
   monthlyTotals: EmployeeMonthlyTotal[];
 }
+
+    

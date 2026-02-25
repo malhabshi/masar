@@ -3,7 +3,7 @@
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1540,7 +1540,7 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
   }
 }
 
-export async function createStudentLogin(studentId: string, description: string, username: string, createdByUserId: string) {
+export async function createStudentLogin(studentId: string, description: string, username: string, notes: string | undefined, createdByUserId: string) {
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1581,12 +1581,16 @@ export async function createStudentLogin(studentId: string, description: string,
         };
         await adminDb!.collection('users').doc(authUser.uid).set(newUserDoc);
 
-        const newLogin = {
+        const newLogin: StudentLogin = {
             uid: authUser.uid,
             email: email,
             description: description,
             createdAt: new Date().toISOString(),
         };
+
+        if (notes) {
+            newLogin.notes = notes;
+        }
 
         const updatedLogins = [...(studentData.studentLogins || []), newLogin];
         await studentRef.update({ studentLogins: updatedLogins });
@@ -1665,3 +1669,5 @@ export async function resetStudentPassword(email: string) {
         return { success: false, message };
     }
 }
+
+    

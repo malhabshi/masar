@@ -13,9 +13,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { PlusCircle, Trash2, Loader2, KeyRound } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, KeyRound, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AddStudentUserDialog } from './add-student-user-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface StudentUsersCardProps {
   student: Student;
@@ -87,6 +93,7 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
                 <TableHead>Description</TableHead>
                 <TableHead>Username</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead>Notes</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -96,6 +103,20 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
                   <TableCell className="font-medium">{su.description}</TableCell>
                   <TableCell>{getUsername(su.email)}</TableCell>
                   <TableCell>{formatDate(su.createdAt)}</TableCell>
+                  <TableCell>
+                    {su.notes && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="h-4 w-4 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{su.notes}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                        <Button variant="outline" size="sm" disabled={!!isMutating} onClick={() => handleResetPassword(su.email, su.description)}>
@@ -143,3 +164,5 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
     </Card>
   );
 }
+
+    

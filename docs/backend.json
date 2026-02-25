@@ -71,6 +71,7 @@
           "uid": { "type": "string", "description": "The Firebase Auth UID for the student user." },
           "description": { "type": "string", "description": "A description for the login's purpose, e.g., 'MOHE Portal'." },
           "email": { "type": "string", "description": "The email (username) for the student user." },
+          "notes": { "type": "string", "description": "Optional notes for this login." },
           "createdAt": { "type": "string", "format": "date-time", "description": "When the login was created." }
         },
         "required": ["uid", "description", "email", "createdAt"]
@@ -368,3 +369,5 @@
     }
   }
 }
+
+    
