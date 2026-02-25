@@ -24,8 +24,6 @@ import {
   BarChart,
   Users2,
   Settings,
-  LifeBuoy,
-  PlusCircle,
   Wrench,
   Settings2,
   LineChart,
@@ -71,8 +69,6 @@ export function AppSidebar() {
         { href: '/customize-questions', label: 'Questions', icon: Wrench, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },
     ];
-
-    const supportNav = { href: '/support', label: 'Support', icon: LifeBuoy, roles: ['admin', 'employee', 'department'] };
     
     if (!isClient) {
       return <div className="w-64 bg-sidebar" />; // Empty sidebar placeholder
@@ -118,18 +114,6 @@ export function AppSidebar() {
                     </Link>
                 </SidebarMenuItem>
             ))}
-
-            <SidebarSeparator />
-            
-            {userHasRole(supportNav.roles) && 
-                <SidebarMenuItem>
-                    <Link href={supportNav.href}>
-                        <SidebarMenuButton isActive={pathname.startsWith(supportNav.href)}>
-                            <supportNav.icon /> <span>{supportNav.label}</span>
-                        </SidebarMenuButton>
-                    </Link>
-                </SidebarMenuItem>
-            }
             </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
