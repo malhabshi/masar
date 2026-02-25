@@ -48,15 +48,14 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/client';
-import { firestore, storage } from '@/firebase';
+import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { AddLinkDialog } from '@/components/resources/add-link-dialog';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 
 
 export default function ResourcesPage() {
-  const { user, isUserLoading } = useUser();
+  const { user, auth: authUser, isUserLoading } = useUser();
   const { toast } = useToast();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -83,7 +82,7 @@ export default function ResourcesPage() {
   const canManage = user?.role === 'admin' || user?.role === 'department';
 
   const handleUpload = async () => {
-    if (!name || !description || !file || !user) {
+    if (!name || !description || !file || !authUser) {
       toast({
         variant: 'destructive',
         title: 'Missing information',
@@ -93,23 +92,27 @@ export default function ResourcesPage() {
     }
     setIsUploading(true);
 
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('destination', 'shared');
+    formData.append('customName', name);
+    formData.append('description', description);
+    formData.append('country', country);
+
     try {
-        const filePath = `shared_documents/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, filePath);
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
+        const token = await authUser.getIdToken();
 
-        const newDoc: Omit<SharedDocument, 'id'> = {
-            name,
-            description,
-            url: downloadURL,
-            authorId: user.id,
-            uploadedAt: new Date().toISOString(),
-            ...(country !== 'all' && { country: country as Country }),
-        };
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData,
+        });
+        
+        const result = await response.json();
 
-        const sharedDocumentsCollection = collection(firestore, 'shared_documents');
-        addDocumentNonBlocking(sharedDocumentsCollection, newDoc);
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to upload document.');
+        }
 
         toast({
             title: 'Document Uploaded',
@@ -121,13 +124,13 @@ export default function ResourcesPage() {
         setFile(null);
         setCountry('all');
         setIsDialogOpen(false);
+
     } catch (error: any) {
-        console.error("Shared document upload error:", error);
-        const errorMessage = error.code ? `${error.code}: ${error.message}` : error.message || 'Could not upload the file to storage.';
+        console.error("Upload error in ResourcesPage:", error);
         toast({
             variant: 'destructive',
             title: 'Upload failed',
-            description: errorMessage
+            description: error.message || 'Could not upload the file.'
         });
     } finally {
         setIsUploading(false);
