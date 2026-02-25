@@ -69,10 +69,11 @@
         "description": "Represents a student's login credentials.",
         "properties": {
           "uid": { "type": "string", "description": "The Firebase Auth UID for the student user." },
+          "name": { "type": "string", "description": "A descriptive name for the login, e.g., 'MOHE Portal'." },
           "email": { "type": "string", "description": "The email (username) for the student user." },
           "createdAt": { "type": "string", "format": "date-time", "description": "When the login was created." }
         },
-        "required": ["uid", "email", "createdAt"]
+        "required": ["uid", "name", "email", "createdAt"]
     },
     "Application": {
       "title": "Application",

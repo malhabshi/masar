@@ -5,6 +5,7 @@
 
 
 
+
 export type UserRole = 'admin' | 'employee' | 'department' | 'student';
 
 export interface User {
@@ -65,6 +66,7 @@ export interface ProfileCompletionStatus {
 
 export interface StudentLogin {
     uid: string;
+    name: string;
     email: string;
     createdAt: string;
 }

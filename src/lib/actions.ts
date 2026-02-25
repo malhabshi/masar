@@ -1540,7 +1540,7 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
   }
 }
 
-export async function createStudentLogin(studentId: string, username: string, password: string, createdByUserId: string) {
+export async function createStudentLogin(studentId: string, name: string, username: string, password: string, createdByUserId: string) {
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1581,6 +1581,7 @@ export async function createStudentLogin(studentId: string, username: string, pa
         const newLogin = {
             uid: authUser.uid,
             email: email,
+            name: name,
             createdAt: new Date().toISOString(),
         };
 

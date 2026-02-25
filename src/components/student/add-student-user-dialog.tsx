@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -26,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
+  name: z.string().min(3, { message: 'Name/Purpose must be at least 3 characters.' }),
   username: z.string().min(3, { message: 'Username must be at least 3 characters.' }),
   password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
 });
@@ -44,6 +46,7 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: '',
       username: '',
       password: '',
     },
@@ -51,9 +54,9 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
-    const result = await createStudentLogin(student.id, values.username, values.password, currentUser.id);
+    const result = await createStudentLogin(student.id, values.name, values.username, values.password, currentUser.id);
     if (result.success) {
-      toast({ title: 'Student Login Created', description: `An account has been created for ${values.username}.` });
+      toast({ title: 'Student Login Created', description: `An account has been created for ${values.name}.` });
       setIsOpen(false);
       form.reset();
     } else {
@@ -74,6 +77,19 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name / Purpose</FormLabel>
+                  <FormControl>
+                    <Input type="text" placeholder="e.g., MOHE Portal, University Login" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="username"
