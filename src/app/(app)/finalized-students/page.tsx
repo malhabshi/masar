@@ -22,36 +22,45 @@ export default function FinalizedStudentsPage() {
     setIsMounted(true);
   }, []);
 
+  // This logic now fetches data differently based on role to avoid composite query issues for employees.
   const studentsQuery = useMemo(() => {
-    const baseQuery = [where('finalChoiceUniversity', '>', '')];
-
     if (!isMounted || !currentUser) {
       return null;
     }
-
+    
+    // For Admins/Depts, query directly for finalized students. This is allowed by their broader security rules.
+    if (currentUser.role === 'admin' || currentUser.role === 'department') {
+      return [where('finalChoiceUniversity', '>', '')];
+    }
+    
+    // For Employees, fetch ALL their students. The "finalized" filtering will happen on the client.
+    // This avoids the composite query that was causing permission errors.
     if (currentUser.role === 'employee') {
       if (!currentUser.civilId) {
         return null;
       }
-      return [...baseQuery, where('employeeId', '==', currentUser.civilId)];
+      return [where('employeeId', '==', currentUser.civilId)];
     }
-
-    return baseQuery;
+    
+    return null;
   }, [isMounted, currentUser]);
 
-  const { data: finalizedStudents, isLoading: studentsAreLoading, error: studentsError } = useCollection<Student>(
+  // The hook now fetches either all finalized students (for admins) or all of an employee's students.
+  const { data: fetchedStudents, isLoading: studentsAreLoading, error: studentsError } = useCollection<Student>(
     studentsQuery ? 'students' : '',
     ...(studentsQuery || [])
   );
+  
+  // This memo performs the client-side filtering for employees.
+  const finalizedStudents = useMemo(() => {
+    if (!fetchedStudents) return [];
+    if (currentUser?.role === 'employee') {
+      return fetchedStudents.filter(s => s.finalChoiceUniversity && s.finalChoiceUniversity.length > 0);
+    }
+    // Admins/Depts already get filtered data from the query, so no extra filtering is needed.
+    return fetchedStudents;
+  }, [fetchedStudents, currentUser?.role]);
 
-  // Debugging logs as requested
-  if (currentUser?.role === 'employee' && isMounted) {
-    console.log('Employee civilId:', currentUser?.civilId);
-    console.log('Query being sent:', {
-      path: studentsQuery ? 'students' : '(no query)',
-      filters: studentsQuery
-    });
-  }
 
   const isLoading = isUserLoading || !isMounted || (studentsQuery && studentsAreLoading);
 
