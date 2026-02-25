@@ -22,7 +22,7 @@
       "type": "object",
       "description": "Represents a student whose university applications are being managed through the UniApply Hub.",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the Student entity." },
+        "id": { "type": "string", "description": "Unique identifier for the Student entity. Can be prefixed with 'U-' for unassigned." },
         "name": { "type": "string", "description": "The full name of the student." },
         "email": { "type": "string", "description": "The email address of the student.", "format": "email" },
         "phone": { "type": "string", "description": "The phone number of the student." },
@@ -61,7 +61,7 @@
         "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." },
         "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." }
       },
-      "required": ["id", "name", "phone", "createdAt"]
+      "required": ["id", "name", "phone", "createdAt", "createdBy"]
     },
     "StudentLogin": {
         "title": "Student Login",
@@ -69,11 +69,12 @@
         "description": "Represents a student's login credentials.",
         "properties": {
           "uid": { "type": "string", "description": "The Firebase Auth UID for the student user." },
-          "name": { "type": "string", "description": "A descriptive name for the login, e.g., 'MOHE Portal'." },
+          "description": { "type": "string", "description": "A description for the login's purpose, e.g., 'MOHE Portal'." },
           "email": { "type": "string", "description": "The email (username) for the student user." },
+          "notes": { "type": "string", "description": "Optional notes for this login." },
           "createdAt": { "type": "string", "format": "date-time", "description": "When the login was created." }
         },
-        "required": ["uid", "name", "email", "createdAt"]
+        "required": ["uid", "description", "email", "createdAt"]
     },
     "Application": {
       "title": "Application",

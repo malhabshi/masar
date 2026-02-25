@@ -85,8 +85,11 @@ export function AddStudentDialog() {
             );
 
             if (result.success && result.studentName) {
-                const returnTo = '/unassigned-students';
-                router.push(`/student-added?studentName=${encodeURIComponent(result.studentName)}&returnTo=${returnTo}`);
+                router.push('/unassigned-students');
+                toast({
+                    title: 'Student Added',
+                    description: `${result.studentName} has been added to the unassigned list.`
+                });
                 setIsOpen(false);
                 form.reset();
             } else {

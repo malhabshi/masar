@@ -377,6 +377,9 @@ export async function createStudent(
   if (!checkAdminServices()) {
     return { success: false, message: 'Server database connection not available.' };
   }
+  if (!creatingUserCivilId) {
+    return { success: false, message: 'Creator user is missing a Civil ID.' };
+  }
 
   const { studentName, studentEmail, phone, targetCountries, otherCountry, notes } = values;
 
@@ -386,11 +389,14 @@ export async function createStudent(
   }
 
   try {
-    console.log(`[SERVER] Creating student: ${studentName} by user ${creatingUserId}`);
-    const studentRef = adminDb!.collection('students').doc(); // Auto-generate ID
+    // Generate new prefix-based ID
+    const studentId = `U-${creatingUserCivilId}-${Date.now()}`;
+    const studentRef = adminDb!.collection('students').doc(studentId);
+
+    console.log(`[SERVER] Creating student with ID: ${studentId} by user ${creatingUserId}`);
 
     const newStudentData: Omit<Student, 'avatarUrl' | 'ielts'> = {
-      id: studentRef.id,
+      id: studentId,
       name: studentName,
       email: studentEmail || '',
       phone: phone,
