@@ -54,6 +54,25 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       setIsLoading(false);
       return;
     }
+    
+    // --- DEBUG LOGGING ---
+    // This will log every query executed by this hook.
+    if ((memoizedQuery as any)?._query?.path) {
+        const q = (memoizedQuery as any)._query;
+        const constraintStrings = q.constraints.map((c: any) => {
+            const field = c._field.segments.join('.');
+            const op = c._op;
+            // Attempt to access value, acknowledging it might not exist on all constraint types
+            const value = c._value?.value?.stringValue ?? c._value?.value?.integerValue ?? '[complex value]';
+            return `${field} ${op} '${value}'`;
+        });
+
+        console.log('⚡️ Running Firestore Query:', {
+            path: q.path.segments.join('/'),
+            constraints: constraintStrings.join(', ') || 'none'
+        });
+    }
+    // --- END DEBUG LOGGING ---
 
     let isMounted = true;
     setIsLoading(true);
