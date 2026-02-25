@@ -49,13 +49,13 @@ export function AppSidebar() {
     const mainNav = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
         { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
+        { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'employee', 'department'] },
         { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'employee', 'department'] },
         { href: '/employee-activity', label: 'Activity', icon: LineChart, roles: ['admin'] },
     ];
     
     const managementNav = [
         { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'department'] },
-        { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'department'] },
         { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'department'] },
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'] },
         { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'] },
