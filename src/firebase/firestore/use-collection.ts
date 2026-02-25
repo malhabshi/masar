@@ -52,33 +52,30 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
 
   useEffect(() => {
-    console.log('🔍 useCollection executing with:', {
-      path,
-      constraintsCount: queryConstraints?.length || 0,
-      timestamp: new Date().toISOString()
-    });
-
     if (queryConstraints && queryConstraints.length > 0) {
-        try {
-            console.log('🔍 FULL QUERY DETAILS:', {
-                path,
-                constraints: queryConstraints.map(c => {
-                    const constraint = c as any;
-                    // Note: These are internal properties and might not always be present or stable
-                    return {
-                        type: constraint.type,
-                        field: constraint._field?.segments?.join('.') || 'unknown',
-                        op: constraint._op || 'unknown',
-                        value: constraint._value?.value?.stringValue || 
-                               constraint._value?.value?.integerValue || 
-                               constraint._value?.value?.booleanValue || 
-                               'unknown'
-                    };
-                })
-            });
-        } catch (e) {
-            console.warn('Could not extract full query details for logging', e);
-        }
+        console.log('🔍 FULL QUERY DETAILS:', {
+          path,
+          constraints: queryConstraints.map(c => {
+            try {
+              // Try to extract the where clause details from internal Firestore objects
+              const constraint = c as any;
+              if (constraint._field && constraint._op) {
+                return {
+                  field: constraint._field.segments?.join('.') || 'unknown',
+                  operator: constraint._op,
+                  value: constraint._value?.value?.stringValue || 
+                         constraint._value?.value?.integerValue || 
+                         constraint._value?.value?.booleanValue ||
+                         'complex'
+                };
+              }
+              return constraint.toString();
+            } catch (e) {
+              return 'unknown constraint';
+            }
+          }),
+          timestamp: new Date().toISOString()
+        });
     }
     
     if (!memoizedQuery) {
