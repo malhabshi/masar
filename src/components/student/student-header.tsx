@@ -8,7 +8,6 @@ import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert } from 'lucide-
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
-import { FinalizeStudentDialog } from './finalize-student-dialog';
 import { RequestTransferDialog } from './request-transfer-dialog';
 import { TransferStudentDialog } from './transfer-student-dialog';
 import { DeleteStudentDialog } from './delete-student-dialog';
@@ -63,7 +62,6 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const canRequestDeletion = isAssignedEmployee && !student.deletionRequested;
   const canAssign = canManage && !student.employeeId;
   const canApproveTransfer = canManage && student.transferRequested;
-  const canFinalize = canManage && !student.finalChoiceUniversity;
   const canApproveDeletion = isAdmin && student.deletionRequested?.status === 'pending';
   
   const employeeUsers = (users || []).filter(u => u.role === 'employee');
@@ -125,7 +123,6 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             {canAssign && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="assign" />}
             {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="transfer" />}
 
-            {canFinalize && <FinalizeStudentDialog student={student} currentUser={currentUser} />}
             {canApproveDeletion && <ApproveDeletionDialog student={student} currentUser={currentUser} />}
             {isAdmin && !canApproveDeletion && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
           </div>

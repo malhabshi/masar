@@ -822,50 +822,64 @@ export async function updateChecklistItem(studentId: string, itemKey: keyof Prof
     }
 }
 
-export async function updateFinalChoice(studentId: string, universityName: string, adminId: string, studentName: string, employeeId: string | null) {
-  if (!checkAdminServices()) {
-    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
-  }
+export async function setStudentFinalChoice(studentId: string, university: string, major: string, updaterId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+  
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
-    
-    const newNote: Note = {
-      id: `note-finalize-${Date.now()}`,
-      authorId: adminId,
-      content: `Final university choice set to: ${universityName}.`,
-      createdAt: new Date().toISOString(),
-    };
-
     const studentDoc = await studentRef.get();
-    const studentData = studentDoc.data() as Student;
-    const updatedNotes = [...(studentData.adminNotes || []), newNote];
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
 
-    await studentRef.update({
-      finalChoiceUniversity: universityName,
-      adminNotes: updatedNotes,
-    });
+    const studentData = studentDoc.data() as Student;
+    const updater = await getUser(updaterId);
+    if (!updater) return { success: false, message: 'Updater not found.' };
     
-    if (employeeId) {
-        const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
-        if (!employeeQuery.empty) {
-            const employeeDoc = employeeQuery.docs[0];
-            const taskContent = `The final university choice for your student, ${studentName}, has been set to: ${universityName}.`;
-            const newTask: Omit<Task, 'id'> = {
-                authorId: adminId,
-                recipientId: employeeDoc.id,
-                content: taskContent,
-                createdAt: new Date().toISOString(),
-                status: 'new',
-                replies: []
-            };
-            await adminDb!.collection('tasks').add(newTask);
-        }
+    // Check permissions
+    const isAssignedEmployee = updater.role === 'employee' && updater.civilId === studentData.employeeId;
+    const isAdminOrDept = ['admin', 'department'].includes(updater.role);
+    if (!isAssignedEmployee && !isAdminOrDept) {
+        return { success: false, message: 'You do not have permission to perform this action.' };
     }
 
-    return { success: true, message: `Final choice for ${studentName} set to ${universityName}.` };
+    // Update final choice
+    await studentRef.update({ finalChoiceUniversity: university });
+
+    // Add note
+    const noteContent = `${updater.name} has set the final choice to: ${university} (${major}).`;
+    const newNote: Note = {
+        id: `note-finalize-${Date.now()}`,
+        authorId: updaterId,
+        content: noteContent,
+        createdAt: new Date().toISOString(),
+    };
+    await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
+
+    // Notify admins if employee made the choice
+    if (updater.role === 'employee') {
+        const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
+        if (!adminsSnapshot.empty) {
+            const taskContent = `${updater.name} has set the final university choice for student ${studentData.name} to ${university}.`;
+            const batch = adminDb!.batch();
+            adminsSnapshot.forEach(adminDoc => {
+                const taskRef = adminDb!.collection('tasks').doc();
+                const newTask: Omit<Task, 'id'> = {
+                    authorId: updaterId,
+                    recipientId: adminDoc.id,
+                    content: taskContent,
+                    createdAt: new Date().toISOString(),
+                    status: 'new',
+                    replies: []
+                };
+                batch.set(taskRef, newTask);
+            });
+            await batch.commit();
+        }
+    }
+    
+    return { success: true, message: `Final choice set to ${university}.` };
   } catch (error) {
-    console.error('updateFinalChoice error:', error);
-    return { success: false, message: 'Failed to update final choice.' };
+    console.error('setStudentFinalChoice error:', error);
+    return { success: false, message: 'Failed to set final choice.' };
   }
 }
 
