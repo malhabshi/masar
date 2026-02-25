@@ -92,6 +92,14 @@ export default function ResourcesPage() {
     }
     setIsUploading(true);
 
+    console.log('1. Starting upload with file:', file);
+    console.log('2. Form data:', {
+      name,
+      description,
+      country,
+      file: file?.name
+    });
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('destination', 'shared');
@@ -101,13 +109,18 @@ export default function ResourcesPage() {
 
     try {
         const token = await authUser.getIdToken();
+        console.log('3. Got token');
+
         const response = await fetch('/api/upload', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData,
         });
 
+        console.log('4. Response status:', response.status);
         const result = await response.json();
+        console.log('5. Result:', result);
+
         if (!response.ok || !result.success) {
             throw new Error(result.error || 'Failed to upload document.');
         }
@@ -124,7 +137,7 @@ export default function ResourcesPage() {
         setIsDialogOpen(false);
 
     } catch (error: any) {
-        console.error("Shared document upload error:", error);
+        console.error('6. Error:', error);
         toast({
             variant: 'destructive',
             title: 'Upload failed',

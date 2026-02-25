@@ -62,8 +62,7 @@ export async function POST(req: NextRequest) {
         const blob = bucket.file(filePath);
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
         
-        await blob.makePublic();
-        const url = blob.publicUrl();
+        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
 
         // 2. UPDATE FIRESTORE DOCUMENT
         const studentRef = adminDb.collection('students').doc(studentId);
@@ -111,8 +110,7 @@ export async function POST(req: NextRequest) {
         const filePath = `user_avatars/${decodedToken.uid}/${Date.now()}_${file.name}`;
         const blob = bucket.file(filePath);
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
-        await blob.makePublic();
-        const downloadURL = blob.publicUrl();
+        const [downloadURL] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
 
         await adminDb.collection('users').doc(decodedToken.uid).update({ avatarUrl: downloadURL });
         return NextResponse.json({ success: true, downloadURL });
@@ -124,8 +122,7 @@ export async function POST(req: NextRequest) {
         const filePath = `shared_documents/${Date.now()}_${file.name}`;
         const blob = bucket.file(filePath);
         await blob.save(fileBuffer, { metadata: { contentType: file.type } });
-        await blob.makePublic();
-        const url = blob.publicUrl();
+        const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
 
         const newDocData: Omit<SharedDocument, 'id'> = {
             name: customName || file.name,

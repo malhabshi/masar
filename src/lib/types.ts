@@ -7,6 +7,7 @@
 
 
 
+
 export type UserRole = 'admin' | 'employee' | 'department' | 'student';
 
 export interface User {
@@ -191,6 +192,7 @@ export interface SharedDocument {
   uploadedAt: string;
   authorId: string;
   country?: Country;
+  size: number;
 }
 
 export interface ApprovedUniversity {
