@@ -5,23 +5,16 @@ import { useState, useMemo } from 'react';
 import type { Student, User, StudentLogin } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { formatDate } from '@/lib/timestamp-utils';
-import { deleteStudentLogin, resetStudentPassword } from '@/lib/actions';
+import { deleteStudentLogin } from '@/lib/actions';
 
 // UI Components
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { PlusCircle, Trash2, Loader2, KeyRound, Info } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AddStudentUserDialog } from './add-student-user-dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 
 interface StudentUsersCardProps {
   student: Student;
@@ -61,18 +54,6 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
     setIsMutating(null);
   };
   
-  const handleResetPassword = async (email: string, description: string) => {
-    setIsMutating(`reset-${email}`);
-    const result = await resetStudentPassword(email);
-
-    if (result.success) {
-      toast({ title: 'Password Reset Triggered', description: `A password reset link for ${description} has been logged on the server. In a real app, this would be emailed.` });
-    } else {
-      toast({ variant: 'destructive', title: 'Reset Failed', description: result.message });
-    }
-    setIsMutating(null);
-  }
-
   if (!canManage) {
     return null;
   }
@@ -92,7 +73,6 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
               <TableRow>
                 <TableHead>Description</TableHead>
                 <TableHead>Username</TableHead>
-                <TableHead>Created</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -102,48 +82,27 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
                 <TableRow key={su.uid}>
                   <TableCell className="font-medium">{su.description}</TableCell>
                   <TableCell>{getUsername(su.email)}</TableCell>
-                  <TableCell>{formatDate(su.createdAt)}</TableCell>
-                  <TableCell>
-                    {su.notes && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Info className="h-4 w-4 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="max-w-xs">{su.notes}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{su.notes}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                       <Button variant="outline" size="sm" disabled={!!isMutating} onClick={() => handleResetPassword(su.email, su.description)}>
-                           {isMutating === `reset-${su.email}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                            <span className="ml-2 hidden sm:inline">Reset Password</span>
-                       </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm" disabled={!!isMutating}>
-                            {isMutating === `delete-${su.uid}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                             <span className="ml-2 hidden sm:inline">Delete</span>
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete the login for {su.description} ({getUsername(su.email)}). The student will no longer be able to access their portal. This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(su.uid, su.description)}>Delete User</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="icon" className="h-8 w-8" disabled={!!isMutating}>
+                          {isMutating === `delete-${su.uid}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete the login for {su.description} ({getUsername(su.email)}). The student will no longer be able to access their portal. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(su.uid, su.description)}>Delete User</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))}
@@ -164,5 +123,3 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
     </Card>
   );
 }
-
-    
