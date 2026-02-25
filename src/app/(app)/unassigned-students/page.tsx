@@ -30,24 +30,31 @@ export default function UnassignedStudentsPage() {
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
 
-  // Debugging logs added here
-  if (currentUser) {
-    console.log('Current user:', { 
-      uid: currentUser?.id, 
-      role: currentUser?.role,
-      civilId: currentUser?.civilId 
-    });
-    console.log('Query filters:', {
-      employeeId: null,
-      createdBy: currentUser?.role === 'employee' ? currentUser.id : 'all (admin/dept)'
-    });
-  }
+  // Memoize the query to prevent re-creation on every render
+  const unassignedStudentsQuery = useMemo(() => {
+    if (!currentUser) return null; // Don't query if no user
+
+    const baseQuery = where('employeeId', '==', null);
+    
+    if (currentUser.role === 'employee') {
+      // Employees can only see unassigned students they created
+      if (!currentUser.id) return null; // Guard against missing ID
+      return [baseQuery, where('createdBy', '==', currentUser.id)];
+    }
+    
+    if (currentUser.role === 'admin' || currentUser.role === 'department') {
+      // Admins/Depts can see all unassigned students
+      return [baseQuery];
+    }
+
+    return null; // Should not happen
+  }, [currentUser]);
+
 
   const { data: unassignedStudents, isLoading: studentsAreLoading } =
     useCollection<Student>(
-      currentUser ? 'students' : '',
-      where('employeeId', '==', null),
-      ...(currentUser?.role === 'employee' ? [where('createdBy', '==', currentUser.id)] : [])
+      unassignedStudentsQuery ? 'students' : '',
+      ...(unassignedStudentsQuery || [])
     );
   
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
