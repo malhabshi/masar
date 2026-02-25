@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { useCollection } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import {
   Table,
@@ -29,24 +29,11 @@ export default function UnassignedStudentsPage() {
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
 
-  const unassignedQuery = useMemoFirebase(() => {
-    if (!currentUser) return [];
-
-    if (canManage) {
-      return [where('employeeId', '==', null)];
-    }
-    
-    if (currentUser.role === 'employee') {
-      return [where('employeeId', '==', null), where('createdBy', '==', currentUser.id)];
-    }
-    
-    return [];
-  }, [currentUser?.id, currentUser?.role, canManage]);
-
   const { data: unassignedStudents, isLoading: studentsAreLoading } =
     useCollection<Student>(
       currentUser ? 'students' : '',
-      ...unassignedQuery
+      where('employeeId', '==', null),
+      ...(currentUser?.role === 'employee' ? [where('createdBy', '==', currentUser.id)] : [])
     );
   
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
