@@ -2,13 +2,15 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { Student } from '@/lib/types';
+import type { Student, User, Country } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { FinalizedStudentsTable } from '@/components/dashboard/finalized-students-table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface FinalizedStudent extends Student {
   finalChoiceUniversity: string;
@@ -18,51 +20,82 @@ export default function FinalizedStudentsPage() {
   const [isMounted, setIsMounted] = useState(false);
   const { user: currentUser, isUserLoading } = useUser();
 
+  // Filters for admin/dept
+  const [universityFilter, setUniversityFilter] = useState('');
+  const [countryFilter, setCountryFilter] = useState('all');
+  const [employeeFilter, setEmployeeFilter] = useState('all');
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // This logic now fetches data differently based on role to avoid composite query issues for employees.
   const studentsQuery = useMemo(() => {
     if (!isMounted || !currentUser) {
       return null;
     }
     
-    // For Admins/Depts, query directly for finalized students. This is allowed by their broader security rules.
     if (currentUser.role === 'admin' || currentUser.role === 'department') {
       return [where('finalChoiceUniversity', '>', '')];
     }
     
-    // For Employees, fetch ALL their students. The "finalized" filtering will happen on the client.
-    // This avoids the composite query that was causing permission errors.
     if (currentUser.role === 'employee') {
       if (!currentUser.civilId) {
         return null;
       }
+      // For employees, we fetch all their students and filter for finalized on the client
+      // to avoid composite query security rule issues.
       return [where('employeeId', '==', currentUser.civilId)];
     }
     
     return null;
   }, [isMounted, currentUser]);
 
-  // The hook now fetches either all finalized students (for admins) or all of an employee's students.
   const { data: fetchedStudents, isLoading: studentsAreLoading, error: studentsError } = useCollection<Student>(
     studentsQuery ? 'students' : '',
     ...(studentsQuery || [])
   );
   
-  // This memo performs the client-side filtering for employees.
+  const { data: allUsers, isLoading: usersLoading } = useCollection<User>(
+    (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'users' : ''
+  );
+
+  const employeeOptions = useMemo(() => {
+    if (!allUsers) return [];
+    return allUsers.filter(u => u.role === 'employee' && u.civilId);
+  }, [allUsers]);
+
+  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+
   const finalizedStudents = useMemo(() => {
     if (!fetchedStudents) return [];
+
+    let studentsToFilter = fetchedStudents;
+
+    // For employees, client-side filter for finalized status from their list of all students.
     if (currentUser?.role === 'employee') {
-      return fetchedStudents.filter(s => s.finalChoiceUniversity && s.finalChoiceUniversity.length > 0);
+      return studentsToFilter.filter(s => s.finalChoiceUniversity && s.finalChoiceUniversity.length > 0);
     }
-    // Admins/Depts already get filtered data from the query, so no extra filtering is needed.
-    return fetchedStudents;
-  }, [fetchedStudents, currentUser?.role]);
+    
+    // For admins/depts, apply the UI filters.
+    if (currentUser?.role === 'admin' || currentUser?.role === 'department') {
+        return studentsToFilter.filter(student => {
+            const matchesUniversity = !universityFilter || (student.finalChoiceUniversity && student.finalChoiceUniversity.toLowerCase().includes(universityFilter.toLowerCase()));
+
+            const application = student.applications.find(app => app.university === student.finalChoiceUniversity);
+            const studentCountry = application?.country;
+            const matchesCountry = countryFilter === 'all' || studentCountry === countryFilter;
+            
+            const matchesEmployee = employeeFilter === 'all' || student.employeeId === employeeFilter;
+
+            return matchesUniversity && matchesCountry && matchesEmployee;
+        });
+    }
+    
+    return studentsToFilter;
+  }, [fetchedStudents, currentUser?.role, universityFilter, countryFilter, employeeFilter]);
 
 
-  const isLoading = isUserLoading || !isMounted || (studentsQuery && studentsAreLoading);
+  const isLoading = isUserLoading || !isMounted || (studentsQuery && studentsAreLoading) || usersLoading;
 
   const pageDescription = currentUser?.role === 'employee' 
     ? "A list of your students who have made their final university choice."
@@ -121,6 +154,36 @@ export default function FinalizedStudentsPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {(currentUser.role === 'admin' || currentUser.role === 'department') && (
+            <div className="flex flex-col md:flex-row gap-2 mb-4">
+                <Input
+                    placeholder="Filter by university..."
+                    value={universityFilter}
+                    onChange={(e) => setUniversityFilter(e.target.value)}
+                    className="w-full"
+                />
+                <Select value={countryFilter} onValueChange={setCountryFilter}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Filter by country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Countries</SelectItem>
+                        {countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Filter by employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Employees</SelectItem>
+                        {employeeOptions.map(emp => (
+                            <SelectItem key={emp.id} value={emp.civilId!}>{emp.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+        )}
         <FinalizedStudentsTable
           students={(finalizedStudents as FinalizedStudent[]) || []}
           showEmployee={currentUser.role !== 'employee'}
