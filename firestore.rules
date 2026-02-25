@@ -15,19 +15,6 @@ service cloud.firestore {
       return getUserData().role in roles;
     }
 
-    function hasStudentReadAccess(studentData) {
-      let user = getUserData();
-      return user.role in ['admin', 'department'] || 
-            (studentData.employeeId != null && studentData.employeeId == user.civilId) ||
-            (user.role == 'student' && user.studentId == studentData.id);
-    }
-
-    function hasStudentWriteAccess(studentData) {
-      let user = getUserData();
-      return user.role in ['admin', 'department'] || 
-            (studentData.employeeId != null && studentData.employeeId == user.civilId);
-    }
-
     // Check if a user has access to a specific student's data.
     // Access is granted to admins, department users, and the assigned employee.
     function hasStudentAccess(studentId) {
@@ -36,7 +23,10 @@ service cloud.firestore {
         return false;
       }
       let student = get(/databases/$(database)/documents/students/$(studentId)).data;
-      return isOneOfRoles(['admin', 'department']) || student.employeeId == getUserData().civilId;
+      let user = getUserData();
+      return user.role in ['admin', 'department'] || 
+             student.employeeId == user.civilId ||
+             (user.role == 'student' && user.studentId == studentId);
     }
 
     // --- Collection Rules ---
@@ -81,7 +71,6 @@ service cloud.firestore {
       // Create is allowed if the author is the current user.
       allow create: if request.auth != null && request.resource.data.authorId == request.auth.uid;
       // Update is allowed by admins, departments, the author, or the recipient.
-      // This covers both status updates and replies.
       allow update: if request.auth != null && (
         isOneOfRoles(['admin', 'department']) ||
         resource.data.authorId == request.auth.uid ||
@@ -93,19 +82,24 @@ service cloud.firestore {
     
     // Students collection rules
     match /students/{studentId} {
+      // LIST logic
       allow list: if request.auth != null && (
         isOneOfRoles(['admin', 'department']) ||
+        // Allow querying assigned students
         (isRole('employee') && request.query.employeeId == getUserData().civilId) ||
+        // Allow querying own created students (allows unassigned pool access)
         (isRole('employee') && request.query.createdBy == request.auth.uid)
       );
 
+      // GET logic
       allow get: if request.auth != null && (
         isOneOfRoles(['admin', 'department']) ||
-        (isRole('student') && getUserData().studentId == resource.data.id) ||
+        (isRole('student') && getUserData().studentId == studentId) ||
         (resource.data.employeeId != null && resource.data.employeeId == getUserData().civilId) ||
-        (resource.data.createdBy == request.auth.uid && resource.data.employeeId == null)
+        (resource.data.createdBy == request.auth.uid)
       );
       
+      // WRITE logic
       allow write: if request.auth != null && (
         isOneOfRoles(['admin', 'department']) ||
         (resource.data.employeeId != null && resource.data.employeeId == getUserData().civilId) ||
@@ -113,7 +107,6 @@ service cloud.firestore {
       );
     }
 
-    
     // Approved universities - admins and dept can write, all can read
     match /approved_universities/{universityId} {
       allow read: if request.auth != null;
@@ -127,8 +120,7 @@ service cloud.firestore {
       allow write: if request.auth != null && isRole('admin');
     }
     // Chat messages are nested under a student, so access is tied to student access.
-    match /chats/{studentId}/messages/{messageId} {
-      // Anyone who has access to the student document can read and write to the chat.
+    match /databases/{database}/documents/chats/{studentId}/messages/{messageId} {
       allow read, write: if request.auth != null && hasStudentAccess(studentId);
     }
     match /upcoming_events/{eventId} {
