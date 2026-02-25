@@ -1,73 +1,82 @@
+
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
-import type { Task } from '@/lib/types';
-import { CheckCircle, Clock, AlertCircle, MessageSquare } from 'lucide-react';
+import type { Task, TaskStatus } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { addReplyToTask, updateTaskStatus } from '@/lib/actions';
+import { TaskItem } from '../tasks/task-item';
+import { sortByDate } from '@/lib/timestamp-utils';
+
 
 interface TaskHistoryProps {
   tasks: Task[];
-  studentId?: string;
+  studentId: string;
+  currentUser: AppUser;
+  isLoading: boolean;
 }
 
-export function TaskHistory({ tasks, studentId }: TaskHistoryProps) {
-  const relevantTasks = useMemo(() => {
-    if (!tasks) return [];
-    
-    // Filter tasks related to this student if studentId is provided
-    let filtered = tasks;
-    if (studentId) {
-      filtered = tasks.filter(task => 
-        task.content.includes(studentId) || 
-        (task.replies && task.replies.some(r => r.content.includes(studentId)))
-      );
-    }
-    
-    return filtered.sort((a, b) => sortByDate(a,b));
-  }, [tasks, studentId]);
+export function TaskHistory({ tasks, studentId, currentUser, isLoading }: TaskHistoryProps) {
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
+  const [isReplying, setIsReplying] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const sortedTasks = useMemo(() => {
+    return [...tasks].sort((a, b) => sortByDate(a, b));
+  }, [tasks]);
 
   const authorIds = useMemo(() => {
     const ids = new Set<string>();
-    relevantTasks.forEach(task => {
+    tasks.forEach(task => {
         ids.add(task.authorId);
+        if (task.recipientId !== 'all' && task.recipientId !== 'admins' && task.recipientId !== 'departments') {
+            ids.add(task.recipientId);
+        }
         (task.replies || []).forEach(reply => ids.add(reply.authorId));
     });
     return Array.from(ids);
-  }, [relevantTasks]);
+  }, [tasks]);
 
   const { userMap } = useUserCacheById(authorIds);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'in-progress':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
-      case 'archived':
-        return <AlertCircle className="h-4 w-4 text-gray-500" />;
-      default:
-        return <MessageSquare className="h-4 w-4 text-blue-500" />;
+  const handleStatusChange = async (taskId: string, status: TaskStatus) => {
+    setIsUpdatingStatus(taskId);
+    const result = await updateTaskStatus(taskId, status, currentUser.id);
+    if (result.success) {
+        toast({
+            title: "Task Status Updated",
+            description: "The task status has been changed."
+        });
+    } else {
+        toast({
+            variant: 'destructive',
+            title: "Error",
+            description: result.message
+        });
     }
+    setIsUpdatingStatus(null);
   };
 
-  const getUserName = (userId: string) => {
-    return userMap.get(userId)?.name || '...';
+  const handleReply = async (taskId: string, content: string) => {
+    setIsReplying(taskId);
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Task not found.' });
+      setIsReplying(null);
+      return;
+    }
+    const result = await addReplyToTask(taskId, currentUser.id, content, task.authorId);
+    if (result.success) {
+        toast({ title: "Reply Sent" });
+    } else {
+        toast({ variant: 'destructive', title: "Error", description: result.message });
+    }
+    setIsReplying(null);
   };
-
-  if (relevantTasks.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Task History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">No task history found for this student.</p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card>
@@ -75,31 +84,28 @@ export function TaskHistory({ tasks, studentId }: TaskHistoryProps) {
         <CardTitle>Task History</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {relevantTasks.map((task) => (
-            <div key={task.id} className="flex items-start gap-3 border-b pb-3 last:border-0">
-              {getStatusIcon(task.status)}
-              <div className="flex-1">
-                <p className="text-sm">{task.content}</p>
-                <p className="text-xs text-muted-foreground">
-                  From: {getUserName(task.authorId)} • {formatRelativeTime(task.createdAt)}
-                </p>
-                {task.replies && task.replies.length > 0 && (
-                  <div className="mt-2 ml-4 space-y-1">
-                    {task.replies.map((reply) => (
-                      <div key={reply.id} className="text-xs border-l-2 pl-2">
-                        <p>{reply.content}</p>
-                        <p className="text-muted-foreground">
-                          {getUserName(reply.authorId)} • {formatRelativeTime(reply.createdAt)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+        {isLoading ? (
+            <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin" />
             </div>
-          ))}
-        </div>
+        ) : sortedTasks.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">No task history found for this student.</p>
+        ) : (
+            <div className="space-y-4">
+                {sortedTasks.map(task => (
+                    <TaskItem 
+                        key={task.id}
+                        task={task}
+                        onStatusChange={handleStatusChange}
+                        isUpdatingStatus={isUpdatingStatus === task.id}
+                        onReply={handleReply}
+                        isReplying={isReplying === task.id}
+                        userMap={userMap}
+                        currentUser={currentUser}
+                    />
+                ))}
+            </div>
+        )}
       </CardContent>
     </Card>
   );

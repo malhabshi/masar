@@ -28,7 +28,8 @@
         "employeeId": { "type": ["string", "null"], "description": "Reference to the User's Civil ID for the assigned employee." },
         "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the student's profile picture." },
         "applications": { "type": "array", "description": "A list of university applications for the student.", "items": { "$ref": "#/entities/Application" } },
-        "notes": { "type": "array", "description": "A list of notes about the student.", "items": { "$ref": "#/entities/Note" } },
+        "employeeNotes": { "type": "array", "description": "Notes written by the assigned employee.", "items": { "$ref": "#/entities/Note" } },
+        "adminNotes": { "type": "array", "description": "Internal notes for admins and departments.", "items": { "$ref": "#/entities/Note" } },
         "documents": { "type": "array", "description": "A list of documents uploaded for the student.", "items": { "$ref": "#/entities/StudentDocument" } },
         "createdAt": { "type": "string", "description": "Timestamp indicating when the student record was created.", "format": "date-time" },
         "createdBy": { "type": "string", "description": "The ID of the user who created the student record." },
@@ -45,6 +46,16 @@
         "ieltsOverall": { "type": "number", "description": "The student's overall IELTS score." },
         "profileCompletionStatus": { "$ref": "#/entities/ProfileCompletionStatus" },
         "transferRequested": { "type": "boolean", "description": "Flag indicating if a transfer has been requested for this student." },
+        "deletionRequested": {
+            "type": "object",
+            "description": "Information about a pending, approved, or rejected deletion request.",
+            "properties": {
+                "requestedBy": { "type": "string" },
+                "reason": { "type": "string" },
+                "requestedAt": { "type": "string", "format": "date-time" },
+                "status": { "type": "string", "enum": ["pending", "approved", "rejected"] }
+            }
+        },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
         "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." }
       },
@@ -81,13 +92,15 @@
       "description": "Represents a document uploaded to a student's profile.",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
+        "name": { "type": "string", "description": "The custom display name for the document." },
+        "originalName": { "type": "string", "description": "The original name of the uploaded file." },
+        "size": { "type": "number", "description": "The size of the file in bytes." },
         "url": { "type": "string", "format": "uri" },
         "uploadedAt": { "type": "string", "format": "date-time" },
         "authorId": { "type": "string" },
         "isNew": { "type": "boolean" }
       },
-      "required": ["id", "name", "url", "uploadedAt", "authorId"]
+      "required": ["id", "name", "originalName", "size", "url", "uploadedAt", "authorId"]
     },
     "ProfileCompletionStatus": {
         "title": "Profile Completion Status",
@@ -142,7 +155,10 @@
         "content": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "status": { "type": "string", "enum": ["new", "in-progress", "completed", "archived"] },
-        "replies": { "type": "array", "items": { "$ref": "#/entities/TaskReply" } }
+        "replies": { "type": "array", "items": { "$ref": "#/entities/TaskReply" } },
+        "studentId": { "type": "string", "description": "The ID of the student this task relates to." },
+        "studentName": { "type": "string", "description": "The name of the student for quick reference." },
+        "taskType": { "type": "string", "description": "The category or type of the task, from Request Settings." }
       },
       "required": ["id", "authorId", "recipientId", "content", "status", "createdAt"]
     },

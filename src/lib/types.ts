@@ -3,6 +3,7 @@
 
 
 
+
 export type UserRole = 'admin' | 'employee' | 'department';
 
 export interface User {
@@ -138,6 +139,9 @@ export interface Task {
   createdAt: string;
   status: TaskStatus;
   replies?: TaskReply[];
+  studentId?: string;
+  studentName?: string;
+  taskType?: string;
 }
 
 export interface ResourceLink {

@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -17,6 +17,7 @@ import { ApproveDeletionDialog } from './approve-deletion-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
+import { CreateStudentTaskDialog } from '../tasks/create-student-task-dialog';
 
 
 interface StudentHeaderProps {
@@ -117,6 +118,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 </TooltipProvider>
             )}
             {canEdit && <EditStudentDialog student={student} />}
+            {isAssignedEmployee && <CreateStudentTaskDialog student={student} currentUser={currentUser} />}
             {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
             {canRequestDeletion && <RequestDeletionDialog student={student} currentUser={currentUser} />}
             {/* Explicitly separate Assign from Transfer Approve */}

@@ -1,12 +1,13 @@
 
+
 'use client';
 
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
-import { useDoc, useCollection, updateDocumentNonBlocking } from '@/firebase/client';
+import { useDoc, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, where } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { addAdminNote, addEmployeeNote } from '@/lib/actions';
@@ -62,7 +63,13 @@ export default function StudentDetailPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>('students', studentId);
-  const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
+  
+  const studentTasksQuery = useMemoFirebase(() => {
+    if (!currentUser) return [];
+    return [where('studentId', '==', studentId)];
+  }, [studentId, currentUser]);
+
+  const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '', ...studentTasksQuery);
   
   const isLoading = isUserLoading || studentIsLoading || tasksLoading;
 
@@ -133,20 +140,29 @@ export default function StudentDetailPage() {
       
       {canRenderContent && (
         <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
-                <StudentApplications student={student} />
-                <IeltsCard student={student} currentUser={currentUser} />
-                <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
-                <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
-                <ReadinessChecklist student={student} currentUser={currentUser} />
-                <NotesSection
-                    title="Employee Notes"
-                    notes={student.employeeNotes || []}
-                    canWrite={isAssignedEmployee}
-                    onAddNote={handleAddEmployeeNote}
-                    placeholder="Add a new employee note..."
-                />
+                    <StudentApplications student={student} />
+                    <IeltsCard student={student} currentUser={currentUser} />
+                    <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
+                    <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
+                    <ReadinessChecklist student={student} currentUser={currentUser} />
+                    <NotesSection
+                        title="Employee Notes"
+                        notes={student.employeeNotes || []}
+                        canWrite={isAssignedEmployee}
+                        onAddNote={handleAddEmployeeNote}
+                        placeholder="Add a new employee note..."
+                    />
+                    {isAdminOrDept && (
+                        <NotesSection
+                            title="Admin Notes"
+                            notes={student.adminNotes || []}
+                            canWrite={isAdminOrDept}
+                            onAddNote={handleAddAdminNote}
+                            placeholder="Add a new internal note..."
+                        />
+                    )}
                 </div>
 
                 <div className="space-y-6">
@@ -157,24 +173,13 @@ export default function StudentDetailPage() {
                         <StudentChat student={student} currentUser={currentUser} />
                     </Card>
                     <MissingItemsSection student={student} currentUser={currentUser} />
-
-                    {isAdminOrDept && (
-                        <NotesSection
-                            title="Admin Notes"
-                            notes={student.adminNotes || []}
-                            canWrite={isAdminOrDept}
-                            onAddNote={handleAddAdminNote}
-                            placeholder="Add a new internal note..."
-                        />
-                    )}
-
                     {student.transferHistory && student.transferHistory.length > 0 && (
                         <TransferHistory transferHistory={student.transferHistory} />
                     )}
                 </div>
             </div>
             
-            <TaskHistory tasks={tasks || []} studentId={studentId} />
+            <TaskHistory tasks={tasks || []} studentId={studentId} currentUser={currentUser} isLoading={tasksLoading} />
         </>
       )}
     </div>
