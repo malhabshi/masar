@@ -67,7 +67,7 @@ export function RequestTransferDialog({ student, currentUser }: RequestTransferD
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
+        <Button className="bg-yellow-500 text-black hover:bg-yellow-600">
           <ArrowRightLeft className="mr-2 h-4 w-4" />
           Request Transfer
         </Button>

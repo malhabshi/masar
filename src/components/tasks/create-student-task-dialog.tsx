@@ -70,7 +70,7 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
+        <Button>
           <ClipboardList className="mr-2 h-4 w-4" />
           New Task
         </Button>
