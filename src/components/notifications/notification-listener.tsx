@@ -39,12 +39,6 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  useEffect(() => {
-    if (user && !isUserLoading) {
-      console.log(`👂 Notification Listener active for: ${user.email}`);
-    }
-  }, [user, isUserLoading]);
-
   // Tasks constraints to avoid unfiltered list permission error
   const tasksConstraints = useMemoFirebase(() => {
     if (!user) return null;
@@ -53,7 +47,7 @@ export function NotificationListener() {
     return [where('recipientId', 'in', [user.id, 'all'])];
   }, [user?.id, user?.role]);
 
-  const { data: tasks } = useCollection<Task>(tasksConstraints ? 'tasks' : '', ...(tasksConstraints || []));
+  const { data: tasks } = useCollection<Task>(tasksConstraints !== null ? 'tasks' : '', ...(tasksConstraints || []));
   const { data: events } = useCollection<UpcomingEvent>(user ? 'upcoming_events' : '');
 
   const studentQueryConstraints = useMemoFirebase(() => {
@@ -69,7 +63,7 @@ export function NotificationListener() {
   }, [user?.role, user?.civilId]);
 
   const { data: students } = useCollection<Student>(
-    studentQueryConstraints ? 'students' : '', 
+    studentQueryConstraints !== null ? 'students' : '', 
     ...(studentQueryConstraints || [])
   );
 
@@ -170,7 +164,6 @@ export function NotificationListener() {
             const uploader = userMap.get(newDoc.authorId);
             
             if (uploader && uploader.id !== user.id) {
-                console.log(`✅ NOTIFICATION: Document detected. Uploader: ${uploader.email}, Current User: ${user.email}`);
                 playNotificationSound();
                 toast({
                     title: 'New Document Received',
@@ -185,7 +178,6 @@ export function NotificationListener() {
             const isAdminOrDept = ['admin', 'department'].includes(user.role);
             const requester = userMap.get(currentStudent.deletionRequested.requestedBy);
             if (isAdminOrDept && requester) {
-                console.log(`✅ NOTIFICATION: Deletion request for ${currentStudent.name} by ${requester.name}`);
                 playNotificationSound(1400);
                 toast({
                     title: 'Deletion Request',

@@ -28,53 +28,41 @@ export default function UnassignedStudentsPage() {
   const [isMounted, setIsMounted] = useState(false);
   const { user: currentUser, isUserLoading } = useUser();
 
-  // Debug log at the very top of render
-  console.log('📄 UnassignedStudentsPage rendering', { 
-    uid: currentUser?.id, 
-    role: currentUser?.role,
-    isUserLoading 
-  });
-
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const studentsPath = (isMounted && currentUser) ? 'students' : '';
-  
+  // Construct constraints only when the user is available.
+  // This prevents unfiltered 'list' requests that trigger permission errors.
   const studentsConstraints = useMemo(() => {
     if (!isMounted || !currentUser) return null;
     
     if (currentUser.role === 'employee') {
-      // Use only createdBy filter to avoid composite index requirement (employeeId == null)
-      // We will filter for employeeId == null on the client side.
+      // Query for students created by this employee.
+      // We will filter for employeeId == null on the client.
       return [where('createdBy', '==', currentUser.id)];
     }
     
-    // For admin/dept, they can query employeeId == null directly (single field index)
+    // For admin/dept, query all unassigned students directly.
     return [where('employeeId', '==', null)];
   }, [isMounted, currentUser]);
 
-  // Debug log right before the hook
-  console.log('🔍 Preparing useCollection hook', { 
-    path: studentsPath, 
-    hasConstraints: !!studentsConstraints 
-  });
-
   const { data: rawStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(
-    studentsPath,
+    studentsConstraints ? 'students' : '',
     ...(studentsConstraints || [])
   );
 
   const unassignedStudents = useMemo(() => {
     if (!rawStudents) return [];
     if (currentUser?.role === 'employee') {
-        // Client-side filter for unassigned students among those created by the employee
+        // Show only the unassigned ones from their created list.
         return rawStudents.filter(s => !s.employeeId);
     }
     return rawStudents;
   }, [rawStudents, currentUser?.role]);
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     (isMounted && canManage) ? 'users' : ''
   );
@@ -95,15 +83,14 @@ export default function UnassignedStudentsPage() {
   }
 
   if (error) {
-    console.error('Error fetching unassigned students:', error);
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-destructive">Error Loading Students</CardTitle>
           <CardDescription>
             {error.message.includes('permission') 
-              ? "You don't have permission to view these students. This might happen if your profile is not fully set up."
-              : "There was a problem fetching the list of unassigned students."}
+              ? "Access denied. Your profile might not be fully configured."
+              : "There was a problem fetching the unassigned students."}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -124,7 +111,7 @@ export default function UnassignedStudentsPage() {
   }
 
   const descriptionText = currentUser.role === 'employee'
-    ? "View the students you've added that are waiting to be assigned to an employee by an administrator."
+    ? "Students you've added that are pending assignment by an administrator."
     : "Review new student profiles and assign them to an employee.";
   
   return (
@@ -167,14 +154,14 @@ export default function UnassignedStudentsPage() {
                               {canManage ? (
                                   <AssignStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />
                               ) : (
-                                <span className="text-sm text-muted-foreground">Pending Assignment</span>
+                                <span className="text-sm text-muted-foreground italic">Pending Assignment</span>
                               )}
                           </TableCell>
                       </TableRow>
                   ))
                   ) : (
                   <TableRow>
-                      <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center">
+                      <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center text-muted-foreground">
                         {currentUser.role === 'employee' 
                             ? 'You have no students pending assignment.' 
                             : 'There are no unassigned students.'}
