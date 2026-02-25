@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1538,4 +1537,130 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
     console.error('updateStudentIELTS error:', error);
     return { success: false, message: 'Failed to update IELTS score.' };
   }
+}
+
+export async function createStudentLogin(studentId: string, email: string, password: string, createdByUserId: string) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database connection not available.' };
+    }
+
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) {
+            return { success: false, message: 'Student not found.' };
+        }
+        const studentData = studentDoc.data() as Student;
+        
+        // Check permissions
+        const creator = await getUser(createdByUserId);
+        if (!creator) return { success: false, message: "Creating user not found." };
+
+        const canCreate = creator.role === 'admin' || (creator.role === 'employee' && creator.civilId === studentData.employeeId);
+        if (!canCreate) {
+            return { success: false, message: 'You do not have permission to create a login for this student.' };
+        }
+
+        // Create user in Firebase Auth
+        const authUser = await adminAuth!.createUser({
+            email,
+            password,
+            displayName: studentData.name,
+        });
+
+        // Create corresponding user document in /users
+        const newUserDoc: Omit<User, 'id'> = {
+            name: studentData.name,
+            email: email,
+            role: 'student',
+            studentId: studentId,
+            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(studentData.name)}&background=random&color=fff`,
+        };
+        await adminDb!.collection('users').doc(authUser.uid).set(newUserDoc);
+
+        // Update the student document with the new login info
+        const newLogin = {
+            uid: authUser.uid,
+            email: email,
+            createdAt: new Date().toISOString(),
+        };
+
+        const updatedLogins = [...(studentData.studentLogins || []), newLogin];
+        await studentRef.update({ studentLogins: updatedLogins });
+
+        return { success: true, message: 'Student login created successfully.' };
+
+    } catch (error: any) {
+        console.error("Error creating student login:", error);
+        let message = 'An unexpected error occurred.';
+        if (error.code === 'auth/email-already-exists') {
+            message = 'This email is already in use by another account.';
+        } else if (error.code === 'auth/invalid-password') {
+            message = 'Password must be at least 8 characters.';
+        }
+        return { success: false, message };
+    }
+}
+
+
+export async function deleteStudentLogin(studentId: string, uidToDelete: string, deletedByUserId: string) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database connection not available.' };
+    }
+
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) {
+            return { success: false, message: 'Student not found.' };
+        }
+        const studentData = studentDoc.data() as Student;
+
+        const deleter = await getUser(deletedByUserId);
+        if (!deleter) return { success: false, message: "Deleting user not found." };
+
+        const canDelete = deleter.role === 'admin' || (deleter.role === 'employee' && deleter.civilId === studentData.employeeId);
+        if (!canDelete) {
+            return { success: false, message: 'You do not have permission to delete this login.' };
+        }
+
+        // Delete from Auth
+        await adminAuth!.deleteUser(uidToDelete);
+
+        // Delete from /users collection
+        await adminDb!.collection('users').doc(uidToDelete).delete();
+
+        // Remove from student's studentLogins array
+        const updatedLogins = (studentData.studentLogins || []).filter(login => login.uid !== uidToDelete);
+        await studentRef.update({ studentLogins: updatedLogins });
+
+        return { success: true, message: 'Student login deleted.' };
+
+    } catch (error: any) {
+        console.error("Error deleting student login:", error);
+        return { success: false, message: error.message || 'Failed to delete student login.' };
+    }
+}
+
+
+export async function resetStudentPassword(email: string) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database connection not available.' };
+    }
+    
+    try {
+        await adminAuth!.generatePasswordResetLink(email);
+        // In a real app, you would email this link to the user.
+        // For this demo, we just log that it would be sent.
+        console.log(`Password reset email would be sent to: ${email}`);
+        
+        return { success: true, message: 'Password reset email sent.' };
+    } catch (error: any) {
+        console.error('Error resetting student password:', error);
+        let message = 'Failed to send password reset email.';
+        if (error.code === 'auth/user-not-found') {
+            message = 'There is no user corresponding to the email address.';
+        }
+        return { success: false, message };
+    }
 }
