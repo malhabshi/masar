@@ -150,6 +150,47 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
 
 // --- TASK ACTIONS ---
 
+export async function createStudentTask(authorId: string, studentId: string, requestTypeId: string, description: string) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    }
+
+    try {
+        const requestTypeRef = adminDb!.collection('request_types').doc(requestTypeId);
+        const requestTypeDoc = await requestTypeRef.get();
+        if (!requestTypeDoc.exists) {
+            return { success: false, message: 'Selected request type not found.' };
+        }
+        const requestTypeData = requestTypeDoc.data() as { name: string; defaultRecipientId: string };
+
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) {
+            return { success: false, message: 'Student not found.' };
+        }
+        const studentData = studentDoc.data() as Student;
+
+        const newTask: Omit<Task, 'id'> = {
+            authorId,
+            recipientId: requestTypeData.defaultRecipientId,
+            content: description,
+            createdAt: new Date().toISOString(),
+            status: 'new',
+            replies: [],
+            studentId: studentId,
+            studentName: studentData.name,
+            taskType: requestTypeData.name,
+        };
+
+        await adminDb!.collection('tasks').add(newTask);
+        
+        return { success: true, message: 'Task created successfully and routed to the appropriate user.' };
+    } catch (error) {
+        console.error('createStudentTask error:', error);
+        return { success: false, message: 'Failed to create task.' };
+    }
+}
+
 export async function sendTask(authorId: string, recipientId: string, content: string) {
     if (!checkAdminServices()) {
         console.error('adminDb is null - check FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 env var');
