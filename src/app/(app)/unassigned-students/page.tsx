@@ -28,31 +28,55 @@ export default function UnassignedStudentsPage() {
   const [isMounted, setIsMounted] = useState(false);
   const { user: currentUser, isUserLoading } = useUser();
 
+  // Debug log at the very top of render
+  console.log('📄 UnassignedStudentsPage rendering', { 
+    uid: currentUser?.id, 
+    role: currentUser?.role,
+    isUserLoading 
+  });
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const studentsPath = currentUser ? 'students' : '';
+  const studentsPath = (isMounted && currentUser) ? 'students' : '';
+  
   const studentsConstraints = useMemo(() => {
-    if (!currentUser) return [];
+    if (!isMounted || !currentUser) return null;
+    
     if (currentUser.role === 'employee') {
-      return [
-        where('employeeId', '==', null),
-        where('createdBy', '==', currentUser.id),
-      ];
+      // Use only createdBy filter to avoid composite index requirement (employeeId == null)
+      // We will filter for employeeId == null on the client side.
+      return [where('createdBy', '==', currentUser.id)];
     }
-    // For admin/dept
+    
+    // For admin/dept, they can query employeeId == null directly (single field index)
     return [where('employeeId', '==', null)];
-  }, [currentUser]);
+  }, [isMounted, currentUser]);
 
-  const { data: unassignedStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(
+  // Debug log right before the hook
+  console.log('🔍 Preparing useCollection hook', { 
+    path: studentsPath, 
+    hasConstraints: !!studentsConstraints 
+  });
+
+  const { data: rawStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(
     studentsPath,
-    ...studentsConstraints
+    ...(studentsConstraints || [])
   );
+
+  const unassignedStudents = useMemo(() => {
+    if (!rawStudents) return [];
+    if (currentUser?.role === 'employee') {
+        // Client-side filter for unassigned students among those created by the employee
+        return rawStudents.filter(s => !s.employeeId);
+    }
+    return rawStudents;
+  }, [rawStudents, currentUser?.role]);
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
-    canManage ? 'users' : ''
+    (isMounted && canManage) ? 'users' : ''
   );
 
   const employeeUsers = useMemo(() => {
@@ -77,7 +101,9 @@ export default function UnassignedStudentsPage() {
         <CardHeader>
           <CardTitle className="text-destructive">Error Loading Students</CardTitle>
           <CardDescription>
-            There was a problem fetching the list of unassigned students. This is likely due to a permissions issue or a missing Firestore index for the composite query.
+            {error.message.includes('permission') 
+              ? "You don't have permission to view these students. This might happen if your profile is not fully set up."
+              : "There was a problem fetching the list of unassigned students."}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -97,7 +123,9 @@ export default function UnassignedStudentsPage() {
     );
   }
 
-  const descriptionText = "Add new students here. They will appear in the unassigned list for an admin to review and assign.";
+  const descriptionText = currentUser.role === 'employee'
+    ? "View the students you've added that are waiting to be assigned to an employee by an administrator."
+    : "Review new student profiles and assign them to an employee.";
   
   return (
     <div className="space-y-6">

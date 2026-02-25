@@ -41,7 +41,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     if (!path) return null;
     try {
         const collectionRef = collection(firestore, path);
-        // Ensure queryConstraints is an array
         const constraints = Array.isArray(queryConstraints) ? queryConstraints : [];
         return query(collectionRef, ...constraints);
     } catch(e) {
@@ -52,39 +51,16 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
 
   useEffect(() => {
-    console.log('🔍 useCollection executing with:', {
-      path,
+    console.log(`🔍 useCollection starting: ${path || '(empty path)'}`, {
       constraintsCount: queryConstraints?.length || 0,
-      constraints: queryConstraints?.map(c => c?.toString?.() || 'unknown') || [],
       timestamp: new Date().toISOString()
     });
     
     if (!memoizedQuery) {
-      console.log('❌ No memoized query - path:', path);
       setIsLoading(false);
       return;
     }
     
-    // --- DEBUG LOGGING ---
-    // This will log every query executed by this hook.
-    if ((memoizedQuery as any)?._query?.path) {
-        const q = (memoizedQuery as any)._query;
-        // Guard against undefined constraints for queries without where clauses
-        const constraintStrings = (q.constraints || []).map((c: any) => {
-            const field = c._field.segments.join('.');
-            const op = c._op;
-            // Attempt to access value, acknowledging it might not exist on all constraint types
-            const value = c._value?.value?.stringValue ?? c._value?.value?.integerValue ?? '[complex value]';
-            return `${field} ${op} '${value}'`;
-        });
-
-        console.log('⚡️ Running Firestore Query:', {
-            path: q.path.segments.join('/'),
-            constraints: constraintStrings.join(', ') || 'none'
-        });
-    }
-    // --- END DEBUG LOGGING ---
-
     let isMounted = true;
     setIsLoading(true);
     const unsubscribe = onSnapshot(memoizedQuery, 
@@ -102,8 +78,9 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       },
       (err) => {
         if (isMounted) {
+            console.error(`❌ Firestore query denied: ${path}`, err);
             const permissionError = new FirestorePermissionError({
-                path: (memoizedQuery as any)._query.path.segments.join('/'),
+                path: path,
                 operation: 'list'
             });
             errorEmitter.emit('permission-error', permissionError);

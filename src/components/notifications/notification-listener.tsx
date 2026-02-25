@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -42,12 +41,20 @@ export function NotificationListener() {
   
   useEffect(() => {
     if (user && !isUserLoading) {
-      console.log(`👂 Notification Listener running for user: ${user.email}, role: ${user.role}`);
+      console.log(`👂 Notification Listener active for: ${user.email}`);
     }
   }, [user, isUserLoading]);
 
-  const { data: tasks } = useCollection<Task>(user ? `tasks` : '');
-  const { data: events } = useCollection<UpcomingEvent>(user ? `upcoming_events` : '');
+  // Tasks constraints to avoid unfiltered list permission error
+  const tasksConstraints = useMemoFirebase(() => {
+    if (!user) return null;
+    if (user.role === 'admin' || user.role === 'department') return [];
+    // Employees only listen for tasks where they are recipients or broadcast tasks
+    return [where('recipientId', 'in', [user.id, 'all'])];
+  }, [user?.id, user?.role]);
+
+  const { data: tasks } = useCollection<Task>(tasksConstraints ? 'tasks' : '', ...(tasksConstraints || []));
+  const { data: events } = useCollection<UpcomingEvent>(user ? 'upcoming_events' : '');
 
   const studentQueryConstraints = useMemoFirebase(() => {
     if (!user) return null;
@@ -55,6 +62,7 @@ export function NotificationListener() {
         return [];
     }
     if (user.role === 'employee' && user.civilId) {
+        // Employees only listen for their assigned students
         return [where('employeeId', '==', user.civilId)];
     }
     return null; 
