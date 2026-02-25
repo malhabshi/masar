@@ -1,50 +1,51 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { FinalizedStudentsTable } from '@/components/dashboard/finalized-students-table';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface FinalizedStudent extends Student {
-    finalChoiceUniversity: string;
+  finalChoiceUniversity: string;
 }
 
 export default function FinalizedStudentsPage() {
+  const [isMounted, setIsMounted] = useState(false);
   const { user: currentUser, isUserLoading } = useUser();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const studentsQuery = useMemo(() => {
     const baseQuery = [where('finalChoiceUniversity', '>', '')];
 
-    if (!currentUser) {
-      // Not logged in, don't query
+    if (!isMounted || !currentUser) {
       return null;
     }
 
     if (currentUser.role === 'employee') {
       if (!currentUser.civilId) {
-        // Employee data not fully loaded, don't query yet
         return null;
       }
-      // Employee query
       return [...baseQuery, where('employeeId', '==', currentUser.civilId)];
     }
 
-    // Admin/Department query
     return baseQuery;
-  }, [currentUser]);
+  }, [isMounted, currentUser]);
 
-  const { data: finalizedStudents, isLoading: studentsAreLoading } = useCollection<Student>(
-    // Only set the path if the query is ready to be executed
+  const { data: finalizedStudents, isLoading: studentsAreLoading, error: studentsError } = useCollection<Student>(
     studentsQuery ? 'students' : '',
     ...(studentsQuery || [])
   );
 
-  const isLoading = isUserLoading || (!!currentUser && studentsAreLoading);
-  
+  const isLoading = isUserLoading || !isMounted || (studentsQuery && studentsAreLoading);
+
   const pageDescription = currentUser?.role === 'employee' 
     ? "A list of your students who have made their final university choice."
     : "All students who have made their final university choice.";
@@ -64,7 +65,6 @@ export default function FinalizedStudentsPage() {
        )
   }
 
-  // Add a specific check for employees without civilId, just in case.
   if (currentUser.role === 'employee' && !currentUser.civilId) {
     return (
         <Card>
@@ -74,6 +74,24 @@ export default function FinalizedStudentsPage() {
             </CardHeader>
         </Card>
     )
+  }
+
+  if (studentsError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-destructive">Permission Error</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Could not load finalized students. This is likely a Firestore security rule issue. Please contact support.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
