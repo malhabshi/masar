@@ -140,18 +140,16 @@ export function NotificationListener() {
         const prevStudent = prevStudentsMap.get(currentStudent.id);
 
         if (!prevStudent) {
-            // New Student Creation Notification
-            const isAdminOrDept = ['admin', 'department'].includes(user.role);
-            if (isAdminOrDept) {
-                const creator = userMap.get(currentStudent.createdBy);
-                if (creator && creator.role === 'employee') {
-                    playNotificationSound(1200);
-                    toast({
-                        title: 'New Student Added',
-                        description: `'${currentStudent.name}' was added by ${creator.name}.`,
-                        action: <ToastAction altText="View" onClick={() => router.push(`/unassigned-students`)}>View</ToastAction>,
-                    });
-                }
+            const isAdmin = user.role === 'admin';
+            const creator = userMap.get(currentStudent.createdBy);
+            
+            if (isAdmin && creator && creator.id !== user.id) {
+                playNotificationSound(1200);
+                toast({
+                    title: 'New Unassigned Student',
+                    description: `'${currentStudent.name}' was added by ${creator.name}.`,
+                    action: <ToastAction altText="View" onClick={() => router.push(`/unassigned-students`)}>View</ToastAction>,
+                });
             }
             return;
         }

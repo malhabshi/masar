@@ -372,27 +372,17 @@ export async function createStudent(
   },
   creatingUserId: string,
   creatingUserRole: UserRole,
-  creatingUserCivilId?: string | null,
+  creatingUserCivilId?: string | null
 ) {
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    return { success: false, message: 'Server database connection not available.' };
   }
 
   const { studentName, studentEmail, phone, targetCountries, otherCountry, notes } = values;
 
-  const shouldBeAssigned = creatingUserRole === 'employee';
-
-  if (shouldBeAssigned && !creatingUserCivilId) {
-    return {
-      success: false,
-      message:
-        'Your Civil ID is missing. Admin must add it before you can create assigned students.',
-    };
-  }
-  
   let finalTargetCountries = targetCountries;
   if (otherCountry && otherCountry.trim()) {
-      finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
+    finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
   }
 
   try {
@@ -403,10 +393,10 @@ export async function createStudent(
       name: studentName,
       email: studentEmail || '',
       phone: phone,
-      employeeId: shouldBeAssigned ? creatingUserCivilId! : null,
-      ...(shouldBeAssigned && { isNewForEmployee: true }),
+      employeeId: null, // Students are always created as unassigned
       applications: [],
-      employeeNotes: notes
+      employeeNotes: [],
+      adminNotes: notes
         ? [
             {
               id: `note-${Date.now()}`,
@@ -416,7 +406,6 @@ export async function createStudent(
             },
           ]
         : [],
-      adminNotes: [],
       documents: [],
       createdAt: new Date().toISOString(),
       createdBy: creatingUserId,
@@ -433,11 +422,36 @@ export async function createStudent(
         readyToTravel: false,
         financialStatementsProvided: false,
         visaGranted: false,
-        medicalFitnessSubmitted: false
+        medicalFitnessSubmitted: false,
       },
     };
 
     await studentRef.set(newStudentData);
+
+    // Notify all admins about the new unassigned student
+    const creator = await getUser(creatingUserId);
+    const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
+    
+    if (!adminsSnapshot.empty) {
+      const batch = adminDb!.batch();
+      const taskContent = `New unassigned student '${studentName}' was added by ${creator?.name || 'a user'}. Please assign them to an employee.`;
+      
+      adminsSnapshot.forEach(adminDoc => {
+        const taskRef = adminDb!.collection('tasks').doc();
+        const newTask: Omit<Task, 'id'> = {
+          authorId: creatingUserId,
+          recipientId: adminDoc.id,
+          content: taskContent,
+          status: 'new',
+          studentId: studentRef.id,
+          studentName: studentName,
+          createdAt: new Date().toISOString(),
+          replies: [],
+        };
+        batch.set(taskRef, newTask);
+      });
+      await batch.commit();
+    }
 
     return { success: true, studentId: studentRef.id, studentName };
   } catch (error) {
@@ -1669,5 +1683,3 @@ export async function resetStudentPassword(email: string) {
         return { success: false, message };
     }
 }
-
-    

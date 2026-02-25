@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -84,8 +85,7 @@ export function AddStudentDialog() {
             );
 
             if (result.success && result.studentName) {
-                const shouldBeAssigned = currentUser.role === 'employee';
-                const returnTo = shouldBeAssigned ? '/applicants' : '/unassigned-students';
+                const returnTo = '/unassigned-students';
                 router.push(`/student-added?studentName=${encodeURIComponent(result.studentName)}&returnTo=${returnTo}`);
                 setIsOpen(false);
                 form.reset();
@@ -108,9 +108,7 @@ export function AddStudentDialog() {
         }
     }
     
-    const descriptionText = currentUser?.role === 'employee'
-        ? "Create a new student profile that will be automatically assigned to you."
-        : "Create a new student profile that will be added to the 'Unassigned' list for an admin to assign.";
+    const descriptionText = "Create a new student profile. The student will be added to the 'Unassigned' list for an admin to review and assign.";
 
 
     return (

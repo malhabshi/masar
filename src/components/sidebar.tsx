@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sidebar,
@@ -49,19 +50,20 @@ export function AppSidebar() {
     const mainNav = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
         { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
+        { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'employee', 'department'] },
         { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'employee', 'department'] },
         { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'employee', 'department'] },
         { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'employee', 'department'] },
     ];
     
     const managementNav = [
-        { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'department'] },
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'] },
         { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'] },
     ];
 
     const adminNav = [
         { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin', 'department'] },
+        { href: '/employee-activity', label: 'User Activity', icon: LineChart, roles: ['admin'] },
         { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin', 'department'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin', 'department'] },

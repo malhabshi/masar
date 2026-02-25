@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { Student } from '@/lib/types';
+import type { Student, User } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
@@ -19,19 +20,19 @@ import { AddStudentDialog } from '@/components/student/add-student-dialog';
 export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
-  // Define the query to fetch students where employeeId is null
   const unassignedQuery = useMemo(() => [where('employeeId', '==', null)], []);
 
   const { data: unassignedStudents, isLoading: studentsAreLoading } =
     useCollection<Student>(
-      // Only fetch if the user is an admin or department member
-      currentUser && ['admin', 'department'].includes(currentUser.role)
-        ? 'students'
-        : '',
+      currentUser ? 'students' : '',
       ...unassignedQuery
     );
+  
+  const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
+    currentUser ? 'users' : ''
+  );
 
-  const isLoading = isUserLoading || studentsAreLoading;
+  const isLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
   if (isLoading) {
     return (
@@ -41,7 +42,7 @@ export default function UnassignedStudentsPage() {
     );
   }
 
-  if (!currentUser || !['admin', 'department'].includes(currentUser.role)) {
+  if (!currentUser) {
     return (
       <Card>
         <CardHeader>
@@ -61,8 +62,7 @@ export default function UnassignedStudentsPage() {
           <div>
             <CardTitle>Unassigned Students</CardTitle>
             <CardDescription>
-              A list of newly added students who need to be assigned to an
-              employee.
+              Add new students here. They will appear in this list for an admin to assign.
             </CardDescription>
           </div>
           <AddStudentDialog />
@@ -71,7 +71,7 @@ export default function UnassignedStudentsPage() {
           <StudentTable
             students={unassignedStudents || []}
             currentUser={currentUser}
-            showEmployee={false} // Employee column is not needed here
+            allUsers={allUsers || []}
             emptyStateMessage="There are no unassigned students."
           />
         </CardContent>
