@@ -41,12 +41,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     if (!path) return null;
     try {
         const collectionRef = collection(firestore, path);
-        return query(collectionRef, ...queryConstraints);
+        // Ensure queryConstraints is an array
+        const constraints = Array.isArray(queryConstraints) ? queryConstraints : [];
+        return query(collectionRef, ...constraints);
     } catch(e) {
         console.error("Failed to create query:", e);
         return null;
     }
-  }, [path, ...queryConstraints]);
+  }, [path, ...(Array.isArray(queryConstraints) ? queryConstraints : [])]);
 
 
   useEffect(() => {
@@ -59,7 +61,8 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     // This will log every query executed by this hook.
     if ((memoizedQuery as any)?._query?.path) {
         const q = (memoizedQuery as any)._query;
-        const constraintStrings = q.constraints.map((c: any) => {
+        // Guard against undefined constraints for queries without where clauses
+        const constraintStrings = (q.constraints || []).map((c: any) => {
             const field = c._field.segments.join('.');
             const op = c._op;
             // Attempt to access value, acknowledging it might not exist on all constraint types
