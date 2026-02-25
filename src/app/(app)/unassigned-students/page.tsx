@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import {
   Table,
@@ -20,32 +20,45 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
-import { Loader2, UserPlus } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { AssignStudentDialog } from '@/components/student/assign-student-dialog';
 
 export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
-  const canViewList = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
 
-  const unassignedQuery = useMemo(() => [where('employeeId', '==', null)], []);
+  const unassignedQuery = useMemoFirebase(() => {
+    if (!currentUser) return [];
+
+    if (canManage) {
+      return [where('employeeId', '==', null)];
+    }
+    
+    if (currentUser.role === 'employee') {
+      return [where('employeeId', '==', null), where('createdBy', '==', currentUser.id)];
+    }
+    
+    return [];
+  }, [currentUser?.id, currentUser?.role, canManage]);
 
   const { data: unassignedStudents, isLoading: studentsAreLoading } =
     useCollection<Student>(
-      canViewList ? 'students' : '',
+      currentUser ? 'students' : '',
       ...unassignedQuery
     );
   
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
-    canViewList ? 'users' : ''
+    canManage ? 'users' : ''
   );
 
-  const isLoading = isUserLoading || (canViewList && (studentsAreLoading || usersAreLoading));
+  const isLoading = isUserLoading || studentsAreLoading || (canManage && usersAreLoading);
 
   const employeeUsers = useMemo(() => {
+    if (!canManage) return [];
     return (allUsers || []).filter(u => u.role === 'employee');
-  }, [allUsers]);
+  }, [allUsers, canManage]);
 
   if (isLoading) {
     return (
@@ -68,9 +81,7 @@ export default function UnassignedStudentsPage() {
     );
   }
 
-  const descriptionText = canViewList
-    ? 'Add new students here. They will appear in this list for an admin to assign.'
-    : 'You can add a new student here. An administrator will then review and assign them.';
+  const descriptionText = "Add new students here. They will appear in the unassigned list for an admin to review and assign.";
 
   return (
     <div className="space-y-6">
@@ -84,56 +95,50 @@ export default function UnassignedStudentsPage() {
           </div>
           <AddStudentDialog />
         </CardHeader>
-        {canViewList ? (
-            <CardContent>
-            <div className="rounded-lg border">
-                <Table>
-                <TableHeader>
-                    <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Created By</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {unassignedStudents && unassignedStudents.length > 0 ? (
-                    unassignedStudents.map((student) => {
-                        const creator = allUsers?.find(u => u.id === student.createdBy);
-                        return (
-                        <TableRow key={student.id}>
-                            <TableCell>
+        <CardContent>
+          <div className="rounded-lg border">
+              <Table>
+              <TableHeader>
+                  <TableRow>
+                  <TableHead>Student</TableHead>
+                  {canManage && <TableHead>Created By</TableHead>}
+                  <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+              </TableHeader>
+              <TableBody>
+                  {unassignedStudents && unassignedStudents.length > 0 ? (
+                  unassignedStudents.map((student) => (
+                      <TableRow key={student.id}>
+                          <TableCell>
                             <div className="font-medium">{student.name}</div>
                             <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
                             <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
-                            </TableCell>
-                            <TableCell>
-                                {creator?.name || 'Unknown'}
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <AssignStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />
-                            </TableCell>
-                        </TableRow>
-                        );
-                    })
-                    ) : (
-                    <TableRow>
-                        <TableCell colSpan={3} className="h-24 text-center">
-                        There are no unassigned students.
-                        </TableCell>
-                    </TableRow>
-                    )}
-                </TableBody>
-                </Table>
-            </div>
-            </CardContent>
-        ) : (
-            <CardContent>
-                <div className="text-center text-muted-foreground py-16">
-                    <UserPlus className="mx-auto h-12 w-12 text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-500">Only administrators and department users can view the unassigned student list.</p>
-                </div>
-            </CardContent>
-        )}
+                          </TableCell>
+                          {canManage && (
+                              <TableCell>
+                                  {allUsers?.find(u => u.id === student.createdBy)?.name || 'Unknown'}
+                              </TableCell>
+                          )}
+                          <TableCell className="text-right">
+                              {canManage ? (
+                                  <AssignStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />
+                              ) : (
+                                <span className="text-sm text-muted-foreground">Pending Assignment</span>
+                              )}
+                          </TableCell>
+                      </TableRow>
+                  ))
+                  ) : (
+                  <TableRow>
+                      <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center">
+                      There are no unassigned students.
+                      </TableCell>
+                  </TableRow>
+                  )}
+              </TableBody>
+              </Table>
+          </div>
+        </CardContent>
       </Card>
     </div>
   );

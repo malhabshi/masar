@@ -96,7 +96,10 @@ service cloud.firestore {
       allow get: if request.auth != null && hasStudentReadAccess(resource.data);
       allow list: if request.auth != null && (
         isOneOfRoles(['admin', 'department']) ||
-        (isRole('employee') && request.query.employeeId == getUserData().civilId)
+        // Employees can list their assigned students
+        (isRole('employee') && request.query.employeeId == getUserData().civilId) ||
+        // Employees can list unassigned students they created
+        (isRole('employee') && request.query.employeeId == null && request.query.createdBy == request.auth.uid)
       );
       allow write: if request.auth != null && hasStudentWriteAccess(resource.data);
     }
