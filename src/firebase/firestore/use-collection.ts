@@ -53,6 +53,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
 
   useEffect(() => {
+    // DEBUG: Log the call stack to see where unfiltered queries are coming from
+    if (path === 'students' && (!queryConstraints || queryConstraints.length === 0)) {
+        console.group('⚠️ POTENTIAL UNFILTERED STUDENTS QUERY');
+        console.log('Path:', path);
+        console.trace('Stack Trace:');
+        console.groupEnd();
+    }
+
     if (!memoizedQuery) {
       setIsLoading(false);
       return;

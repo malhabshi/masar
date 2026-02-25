@@ -23,8 +23,12 @@ export function AdminApplicantsPage() {
     setIsMounted(true);
   }, []);
 
+  // SECURE: Only attempt to fetch the full students collection if user is admin or department.
+  // This prevents permission errors if an employee accidentally renders this component.
+  const canFetchAll = currentUser && ['admin', 'department'].includes(currentUser.role);
+
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(
-    currentUser ? 'students' : ''
+    canFetchAll ? 'students' : ''
   );
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     currentUser ? 'users' : ''
@@ -40,8 +44,8 @@ export function AdminApplicantsPage() {
     );
   }
   
-  if (!currentUser) {
-    return <p>Loading user...</p>;
+  if (!currentUser || !canFetchAll) {
+    return <p>Access denied. You do not have permission to view all applicants.</p>;
   }
 
   return (
