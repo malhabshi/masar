@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -14,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X } from 'lucide-react';
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert } from 'lucide-react';
 import type { Student, PipelineStatus, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import {
@@ -24,12 +25,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { updateStudentPipelineStatus } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { formatRelativeTime } from '@/lib/timestamp-utils';
+import { useUserCacheById } from '@/hooks/use-user-cache';
 
 interface StudentTableProps {
   students: Student[];
@@ -67,6 +71,12 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  const deletionRequesters = useMemo(() => {
+      return [...new Set(students.map(s => s.deletionRequested?.requestedBy).filter(Boolean) as string[])];
+  }, [students]);
+
+  const { userMap: deletionRequesterMap } = useUserCacheById(deletionRequesters);
 
 
   useEffect(() => {
@@ -238,6 +248,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
                 const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
                 const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+                const requester = student.deletionRequested?.requestedBy ? deletionRequesterMap.get(student.deletionRequested.requestedBy) : null;
 
                 return (
                 <TableRow key={student.id}>
@@ -284,6 +295,21 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                                   <ArrowRightLeft className="mr-1 h-3 w-3" />
                                   Transfer Requested
                               </Badge>
+                          )}
+                          {student.deletionRequested?.status === 'pending' && isAdminOrDept && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Badge variant="destructive" className="flex items-center gap-1">
+                                    <ShieldAlert className="h-3 w-3" />
+                                    Deletion Requested
+                                    </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : ''}</p>
+                                </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                           )}
                           {wasTransferred && (
                               <Badge variant="outline" className="border-blue-500 text-blue-600">

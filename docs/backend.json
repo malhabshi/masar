@@ -45,6 +45,16 @@
         "ieltsOverall": { "type": "number", "description": "The student's overall IELTS score." },
         "profileCompletionStatus": { "$ref": "#/entities/ProfileCompletionStatus" },
         "transferRequested": { "type": "boolean", "description": "Flag indicating if a transfer has been requested for this student." },
+        "deletionRequested": {
+            "type": "object",
+            "description": "Information about a pending, approved, or rejected deletion request.",
+            "properties": {
+                "requestedBy": { "type": "string" },
+                "reason": { "type": "string" },
+                "requestedAt": { "type": "string", "format": "date-time" },
+                "status": { "type": "string", "enum": ["pending", "approved", "rejected"] }
+            }
+        },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
         "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." }
       },

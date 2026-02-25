@@ -5,6 +5,7 @@
 
 
 
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -523,6 +524,53 @@ export async function requestTransfer(studentId: string, reason: string, request
   }
 }
 
+export async function requestStudentDeletion(studentId: string, employeeId: string, reason: string) {
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+    
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const employee = await getUser(employeeId);
+        
+        if (!employee || employee.id !== employeeId) return { success: false, message: "Invalid employee." };
+
+        const deletionRequest = {
+            requestedBy: employeeId,
+            reason: reason,
+            requestedAt: new Date().toISOString(),
+            status: 'pending' as const
+        };
+
+        await studentRef.update({ deletionRequested: deletionRequest });
+
+        // Notify admins
+        const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
+        if (!adminsSnap.empty) {
+            const student = (await studentRef.get()).data() as Student;
+            const batch = adminDb!.batch();
+            const taskContent = `Employee ${employee.name} has requested deletion for student ${student.name}. Reason: ${reason}`;
+            adminsSnap.forEach(adminDoc => {
+                const taskRef = adminDb!.collection('tasks').doc();
+                const newTask: Omit<Task, 'id'> = {
+                    authorId: employeeId,
+                    recipientId: adminDoc.id,
+                    content: taskContent,
+                    status: 'new',
+                    createdAt: new Date().toISOString(),
+                    replies: []
+                };
+                batch.set(taskRef, newTask);
+            });
+            await batch.commit();
+        }
+
+        return { success: true, message: 'Deletion request submitted.' };
+    } catch (error) {
+        console.error('requestStudentDeletion error:', error);
+        return { success: false, message: 'Failed to submit deletion request.' };
+    }
+}
+
+
 export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
@@ -882,29 +930,46 @@ export async function deleteStudent(studentId: string, adminId: string) {
         // 3. Delete student document
         await studentRef.delete();
 
-        // 4. Create task for other admins
-        const taskContent = `Admin ${adminUser.name} has permanently deleted the profile for student: ${studentData.name} (ID: ${studentId}).`;
+        // 4. Create task for relevant parties
+        const batch = adminDb!.batch();
+
+        // Notify other admins
+        const adminTaskContent = `Admin ${adminUser.name} has permanently deleted the profile for student: ${studentData.name} (ID: ${studentId}).`;
         const adminsSnapshot = await adminDb!.collection('users')
             .where('role', '==', 'admin')
             .where(FieldPath.documentId(), '!=', adminId)
             .get();
 
-        if (!adminsSnapshot.empty) {
-            const adminBatch = adminDb!.batch();
-            adminsSnapshot.forEach(doc => {
-                const taskRef = adminDb!.collection('tasks').doc();
-                const newTask: Omit<Task, 'id'> = {
-                    authorId: adminId,
-                    recipientId: doc.id,
-                    content: taskContent,
-                    createdAt: new Date().toISOString(),
-                    status: 'new',
-                    replies: []
-                };
-                adminBatch.set(taskRef, newTask);
-            });
-            await adminBatch.commit();
+        adminsSnapshot.forEach(doc => {
+            const taskRef = adminDb!.collection('tasks').doc();
+            const newTask: Omit<Task, 'id'> = {
+                authorId: adminId,
+                recipientId: doc.id,
+                content: adminTaskContent,
+                createdAt: new Date().toISOString(),
+                status: 'new',
+                replies: []
+            };
+            batch.set(taskRef, newTask);
+        });
+
+        // Notify the employee who requested deletion, if applicable
+        if (studentData.deletionRequested?.requestedBy) {
+            const employeeId = studentData.deletionRequested.requestedBy;
+            const employeeTaskContent = `Your request to delete student '${studentData.name}' has been approved and completed by ${adminUser.name}.`;
+            const employeeTaskRef = adminDb!.collection('tasks').doc();
+            const employeeTask: Omit<Task, 'id'> = {
+                authorId: adminId,
+                recipientId: employeeId,
+                content: employeeTaskContent,
+                createdAt: new Date().toISOString(),
+                status: 'new',
+                replies: []
+            };
+            batch.set(employeeTaskRef, employeeTask);
         }
+
+        await batch.commit();
 
         return { success: true, message: `Student ${studentData.name} deleted successfully.` };
     } catch (error: any) {

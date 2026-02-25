@@ -1,6 +1,7 @@
 
 
 
+
 export type UserRole = 'admin' | 'employee' | 'department';
 
 export interface User {
@@ -87,7 +88,12 @@ export interface Student {
   ieltsOverall?: number;
   profileCompletionStatus?: ProfileCompletionStatus;
   transferRequested?: boolean;
-  deletionRequested?: boolean;
+  deletionRequested?: {
+    requestedBy: string;
+    reason: string;
+    requestedAt: string;
+    status: 'pending' | 'approved' | 'rejected';
+  };
   isNewForEmployee?: boolean;
   term?: string;
 }

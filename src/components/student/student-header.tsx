@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useMemo } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -12,6 +13,11 @@ import { RequestTransferDialog } from './request-transfer-dialog';
 import { TransferStudentDialog } from './transfer-student-dialog';
 import { DeleteStudentDialog } from './delete-student-dialog';
 import { useCollection } from '@/firebase/client';
+import { RequestDeletionDialog } from './request-deletion-dialog';
+import { ApproveDeletionDialog } from './approve-deletion-dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUserCacheById } from '@/hooks/use-user-cache';
+import { formatRelativeTime } from '@/lib/timestamp-utils';
 
 
 interface StudentHeaderProps {
@@ -40,6 +46,10 @@ function StudentHeaderSkeleton() {
 export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
+  const requesterId = student?.deletionRequested?.requestedBy;
+  const { userMap } = useUserCacheById(requesterId ? [requesterId] : []);
+  const requester = requesterId ? userMap.get(requesterId) : null;
+
   if (isLoading || !student || !currentUser || usersLoading) {
     return <StudentHeaderSkeleton />;
   }
@@ -50,9 +60,12 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const canEdit = canManage || isAssignedEmployee;
 
   const canRequestTransfer = isAssignedEmployee && !student.transferRequested;
+  const canRequestDeletion = isAssignedEmployee && !student.deletionRequested;
   const canAssign = canManage && !student.employeeId;
   const canApproveTransfer = canManage && student.transferRequested;
   const canFinalize = canManage && !student.finalChoiceUniversity;
+  const canApproveDeletion = isAdmin && student.deletionRequested?.status === 'pending';
+  
   const employeeUsers = (users || []).filter(u => u.role === 'employee');
 
   const countryEmojis: Record<Country, string> = {
@@ -90,14 +103,31 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                     Transfer Requested
                 </BadgeComponent>
             )}
+            {student.deletionRequested?.status === 'pending' && (
+                <TooltipProvider>
+                    <Tooltip>
+                    <TooltipTrigger>
+                        <BadgeComponent variant="destructive" className="flex items-center gap-1 text-base py-1 px-3">
+                            <ShieldAlert className="mr-1 h-4 w-4" />
+                            Deletion Requested
+                        </BadgeComponent>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Requested by {requester?.name || '...'} {formatRelativeTime(student.deletionRequested.requestedAt)}</p>
+                    </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
             {canEdit && <EditStudentDialog student={student} />}
             {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
+            {canRequestDeletion && <RequestDeletionDialog student={student} currentUser={currentUser} />}
             {/* Explicitly separate Assign from Transfer Approve */}
             {canAssign && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="assign" />}
             {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="transfer" />}
 
             {canFinalize && <FinalizeStudentDialog student={student} currentUser={currentUser} />}
-            {isAdmin && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
+            {canApproveDeletion && <ApproveDeletionDialog student={student} currentUser={currentUser} />}
+            {isAdmin && !canApproveDeletion && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
           </div>
           {student.finalChoiceUniversity && (
             <div className="flex items-center gap-2 mt-2 text-lg font-semibold text-success">

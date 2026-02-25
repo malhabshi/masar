@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -39,24 +40,20 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  // Minimal console log as requested
   useEffect(() => {
-    if (user) {
-      console.log('👂 Notification Listener is running for user:', user.email, 'role:', user.role);
+    if (user && !isUserLoading) {
+      console.log(`👂 Notification Listener running for user: ${user.email}, role: ${user.role}`);
     }
-  }, [user]);
+  }, [user, isUserLoading]);
 
   const { data: tasks } = useCollection<Task>(user ? `tasks` : '');
   const { data: events } = useCollection<UpcomingEvent>(user ? `upcoming_events` : '');
 
-  // Fetch students based on user role
   const studentQueryConstraints = useMemoFirebase(() => {
     if (!user) return null;
-    // Admins and departments get all students to listen for new student creation.
     if (user.role === 'admin' || user.role === 'department') {
         return [];
     }
-    // Employees will get their own students to listen for document uploads from admins.
     if (user.role === 'employee' && user.civilId) {
         return [where('employeeId', '==', user.civilId)];
     }
@@ -68,7 +65,6 @@ export function NotificationListener() {
     ...(studentQueryConstraints || [])
   );
 
-  // Cache all user profiles needed for notifications
   const allUserIds = useMemo(() => {
     const ids = new Set<string>();
     (tasks || []).forEach(task => {
@@ -78,15 +74,16 @@ export function NotificationListener() {
     (events || []).forEach(event => ids.add(event.authorId));
     (students || []).forEach(student => {
       if (student.createdBy) ids.add(student.createdBy);
-      // We also need authors of documents to check who uploaded it
       student.documents?.forEach(doc => ids.add(doc.authorId));
+      if (student.deletionRequested?.requestedBy) {
+        ids.add(student.deletionRequested.requestedBy);
+      }
     });
     return Array.from(ids);
   }, [tasks, events, students]);
 
   const { userMap } = useUserCacheById(allUserIds);
 
-  // Effect for new tasks
   useEffect(() => {
     if (!tasks || !user || !prevTasksRef.current) {
         prevTasksRef.current = tasks;
@@ -109,7 +106,6 @@ export function NotificationListener() {
     prevTasksRef.current = tasks;
   }, [tasks, user, toast, router]);
 
-  // Effect for new events
   useEffect(() => {
     if (!events || !user || !prevEventsRef.current) {
         prevEventsRef.current = events;
@@ -129,12 +125,10 @@ export function NotificationListener() {
     prevEventsRef.current = events;
   }, [events, user, toast, router]);
 
-  // Effect for new students and document uploads
   useEffect(() => {
     if (!students || !user || !userMap.size || isUserLoading) {
         return;
     }
-    // Set initial state without triggering notifications
     if (!prevStudentsRef.current) {
         prevStudentsRef.current = students;
         return;
@@ -145,77 +139,55 @@ export function NotificationListener() {
     students.forEach(currentStudent => {
         const prevStudent = prevStudentsMap.get(currentStudent.id);
 
-        // --- New Student Creation Notification ---
         if (!prevStudent) {
+            // New Student Creation Notification
             const isAdminOrDept = ['admin', 'department'].includes(user.role);
             if (isAdminOrDept) {
                 const creator = userMap.get(currentStudent.createdBy);
                 if (creator && creator.role === 'employee') {
-                    console.log(`✅ NOTIFICATION: Triggering 'New Student' for admin ${user.email}`);
                     playNotificationSound(1200);
                     toast({
                         title: 'New Student Added',
                         description: `'${currentStudent.name}' was added by ${creator.name}.`,
-                        action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
+                        action: <ToastAction altText="View" onClick={() => router.push(`/unassigned-students`)}>View</ToastAction>,
                     });
                 }
             }
-            return; // Stop further processing for new students
+            return;
         }
 
-
-        // --- New Document Upload Notification ---
-        const isEmployee = user.role === 'employee';
-        const isAdminOrDept = ['admin', 'department'].includes(user.role);
-
-        // Check if an employee should be notified
-        const newDocsForEmployee = currentStudent.newDocumentsForEmployee || 0;
-        const prevDocsForEmployee = prevStudent.newDocumentsForEmployee || 0;
-        
-        if (isEmployee && newDocsForEmployee > prevDocsForEmployee) {
-            console.log(`📊 Student data changed for employee: ${currentStudent.id}. Counter is now ${newDocsForEmployee}. Previously ${prevDocsForEmployee}`);
-            // More robustly find the new document(s)
-            const prevDocIds = new Set((prevStudent.documents || []).map(d => d.id));
-            const newDocs = (currentStudent.documents || []).filter(d => !prevDocIds.has(d.id));
-
-            if (newDocs.length > 0) {
-                const newDoc = newDocs[newDocs.length - 1]; // Notify for the latest one
-                const uploader = userMap.get(newDoc.authorId);
-                
-                // Don't notify the uploader
-                if (uploader && uploader.id !== user.id) {
-                    console.log(`✅ NOTIFICATION: Triggering 'New Document' for employee ${user.email}`);
-                    playNotificationSound();
-                    toast({
-                        title: 'New Document Received',
-                        description: `${uploader.name} uploaded a document for ${currentStudent.name}.`,
-                        action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
-                    });
-                }
-            }
-        }
-
-        // Check if an admin/dept should be notified
-        const newDocsForAdmin = currentStudent.newDocumentsForAdmin || 0;
-        const prevDocsForAdmin = prevStudent.newDocumentsForAdmin || 0;
-        if (isAdminOrDept && newDocsForAdmin > prevDocsForAdmin) {
-            console.log(`📊 Student data changed for admin: ${currentStudent.id}. Counter is now ${newDocsForAdmin}. Previously ${prevDocsForAdmin}`);
-            const prevDocIds = new Set((prevStudent.documents || []).map(d => d.id));
-            const newDocs = (currentStudent.documents || []).filter(d => !prevDocIds.has(d.id));
+        // New Document Upload Notification
+        const prevDocIds = new Set((prevStudent.documents || []).map(d => d.id));
+        const newDocs = (currentStudent.documents || []).filter(d => !prevDocIds.has(d.id));
+        if (newDocs.length > 0) {
+            const newDoc = newDocs[newDocs.length - 1]; // Notify for the latest one
+            const uploader = userMap.get(newDoc.authorId);
             
-            if (newDocs.length > 0) {
-                const newDoc = newDocs[newDocs.length - 1];
-                const uploader = userMap.get(newDoc.authorId);
-
-                if (uploader && uploader.id !== user.id) {
-                    console.log(`✅ NOTIFICATION: Triggering 'New Document' for admin ${user.email}`);
-                    playNotificationSound();
-                    toast({
-                        title: 'New Document Uploaded',
-                        description: `${uploader.name} uploaded a document for ${currentStudent.name}.`,
-                        action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
-                    });
-                }
+            if (uploader && uploader.id !== user.id) {
+                console.log(`✅ NOTIFICATION: Document detected. Uploader: ${uploader.email}, Current User: ${user.email}`);
+                playNotificationSound();
+                toast({
+                    title: 'New Document Received',
+                    description: `${uploader.name} uploaded a document for ${currentStudent.name}.`,
+                    action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
+                });
+            }
+        }
+        
+        // Deletion Request Notification
+        if (!prevStudent.deletionRequested && currentStudent.deletionRequested?.status === 'pending') {
+            const isAdminOrDept = ['admin', 'department'].includes(user.role);
+            const requester = userMap.get(currentStudent.deletionRequested.requestedBy);
+            if (isAdminOrDept && requester) {
+                console.log(`✅ NOTIFICATION: Deletion request for ${currentStudent.name} by ${requester.name}`);
+                playNotificationSound(1400);
+                toast({
+                    title: 'Deletion Request',
+                    description: `${requester.name} has requested to delete student: ${currentStudent.name}`,
+                    action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
+                    variant: 'destructive',
+                    duration: 10000,
+                });
             }
         }
     });
