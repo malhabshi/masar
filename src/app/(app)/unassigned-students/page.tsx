@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
@@ -25,55 +25,53 @@ import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { AssignStudentDialog } from '@/components/student/assign-student-dialog';
 
 export default function UnassignedStudentsPage() {
+  const [isMounted, setIsMounted] = useState(false);
   const { user: currentUser, isUserLoading } = useUser();
 
-  const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
-  
-  // The query is now simplified. It only filters by one field, avoiding the need for a composite index.
-  const studentsQuery = useMemo(() => {
-    if (!currentUser) return null;
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // This constructs the query constraints array based on user role.
+  const studentsQueryConstraints = useMemo(() => {
+    if (!isMounted || !currentUser) {
+      return null;
+    }
     
+    // For admins/departments, fetch all unassigned students.
     if (currentUser.role === 'admin' || currentUser.role === 'department') {
-      // Admins and Dept users query for all unassigned students directly.
       return [where('employeeId', '==', null)];
     }
     
-    if (currentUser.role === 'employee') {
-      if (!currentUser.id) return null;
-      // Employees query for ALL students they created. Filtering for 'unassigned' happens on the client.
-      return [where('createdBy', '==', currentUser.id)];
+    // For employees, fetch unassigned students they created.
+    if (currentUser.role === 'employee' && currentUser.id) {
+      return [
+        where('employeeId', '==', null),
+        where('createdBy', '==', currentUser.id)
+      ];
     }
-
+    
+    // Return null if no valid query can be constructed
     return null;
-  }, [currentUser]);
+  }, [isMounted, currentUser]);
 
-  const { data: fetchedStudents, isLoading: studentsAreLoading } =
-    useCollection<Student>(
-      studentsQuery ? 'students' : '',
-      ...(studentsQuery || [])
-    );
-  
-  // For employees, we perform the second part of the filter on the client.
-  const unassignedStudents = useMemo(() => {
-    if (!fetchedStudents) return [];
-    if (currentUser?.role === 'employee') {
-      return fetchedStudents.filter(student => student.employeeId === null);
-    }
-    // For admins/depts, the query already filtered, so we use the data directly.
-    return fetchedStudents;
-  }, [fetchedStudents, currentUser?.role]);
-  
-  
+  const { data: unassignedStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(
+    // Only run query if constraints are ready
+    studentsQueryConstraints ? 'students' : '',
+    ...(studentsQueryConstraints || [])
+  );
+
+  const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     canManage ? 'users' : ''
   );
-
-  const isLoading = isUserLoading || studentsAreLoading || (canManage && usersAreLoading);
 
   const employeeUsers = useMemo(() => {
     if (!canManage) return [];
     return (allUsers || []).filter(u => u.role === 'employee');
   }, [allUsers, canManage]);
+
+  const isLoading = isUserLoading || !isMounted || studentsAreLoading || (canManage && usersAreLoading);
 
   if (isLoading) {
     return (
@@ -83,6 +81,20 @@ export default function UnassignedStudentsPage() {
     );
   }
 
+  if (error) {
+    console.error('Error fetching unassigned students:', error);
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-destructive">Error Loading Students</CardTitle>
+          <CardDescription>
+            There was a problem fetching the list of unassigned students. This may be due to a permissions issue.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+  
   if (!currentUser) {
     return (
       <Card>
@@ -97,7 +109,7 @@ export default function UnassignedStudentsPage() {
   }
 
   const descriptionText = "Add new students here. They will appear in the unassigned list for an admin to review and assign.";
-
+  
   return (
     <div className="space-y-6">
       <Card>
@@ -146,7 +158,9 @@ export default function UnassignedStudentsPage() {
                   ) : (
                   <TableRow>
                       <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center">
-                      There are no unassigned students.
+                        {currentUser.role === 'employee' 
+                            ? 'You have no students pending assignment.' 
+                            : 'There are no unassigned students.'}
                       </TableCell>
                   </TableRow>
                   )}
