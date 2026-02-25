@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -47,8 +48,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No destination provided.' }, { status: 400 });
     }
 
-    // Explicitly set the bucket name as requested
-    const bucket = storage.bucket('studio-9484431255-91d96.firebasestorage.app');
+    // Use the default bucket configured during Admin SDK initialization.
+    const bucket = storage.bucket();
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
     if (destination === 'student') {
