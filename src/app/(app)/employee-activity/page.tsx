@@ -133,15 +133,15 @@ export default function EmployeeActivityPage() {
         );
     }
     
-    const canFilterEmployees = currentUser.role === 'admin' || currentUser.role === 'department';
+    const canFilterUsers = currentUser.role === 'admin' || currentUser.role === 'department';
 
     return (
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Employee Activity</CardTitle>
+                    <CardTitle>User Activity</CardTitle>
                     <CardDescription>
-                        Track employee clock-in and clock-out times.
+                        Track employee and department user clock-in and clock-out times.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -166,7 +166,7 @@ export default function EmployeeActivityPage() {
                         </Card>
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Average Hours per Employee</CardTitle>
+                                <CardTitle className="text-sm font-medium">Average Hours per User</CardTitle>
                                 <BarChart className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
@@ -213,15 +213,15 @@ export default function EmployeeActivityPage() {
                             </PopoverContent>
                         </Popover>
 
-                        {canFilterEmployees && (
+                        {canFilterUsers && (
                             <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
                                 <SelectTrigger className="w-full md:w-[240px]">
-                                    <SelectValue placeholder="Select an employee" />
+                                    <SelectValue placeholder="Select a user" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Employees</SelectItem>
-                                    {(users || []).filter(u => u.role === 'employee').map(emp => (
-                                        <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                                    <SelectItem value="all">All Users</SelectItem>
+                                    {(users || []).filter(u => ['employee', 'department'].includes(u.role)).map(emp => (
+                                        <SelectItem key={emp.id} value={emp.id}>{emp.name} ({emp.role})</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
