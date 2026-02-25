@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
-import type { User, Student } from '@/lib/types';
+import type { User, Student, SharedDocument, Country } from '@/lib/types';
 import type { Document as StudentDocument } from '@/lib/types';
 
 // Re-using the getUser helper from actions.ts, but defined locally for the route
@@ -117,6 +117,30 @@ export async function POST(req: NextRequest) {
         await adminDb.collection('users').doc(decodedToken.uid).update({ avatarUrl: downloadURL });
         return NextResponse.json({ success: true, downloadURL });
 
+    } else if (destination === 'shared') {
+        const description = formData.get('description') as string | null;
+        const country = formData.get('country') as string | null;
+
+        const filePath = `shared_documents/${Date.now()}_${file.name}`;
+        const blob = bucket.file(filePath);
+        await blob.save(fileBuffer, { metadata: { contentType: file.type } });
+        await blob.makePublic();
+        const url = blob.publicUrl();
+
+        const newDocData: Omit<SharedDocument, 'id'> = {
+            name: customName || file.name,
+            description: description || '',
+            url: url,
+            authorId: decodedToken.uid,
+            uploadedAt: new Date().toISOString(),
+            size: file.size,
+            ...(country && country !== 'all' && { country: country as Country }),
+        };
+
+        const newDocRef = await adminDb!.collection('shared_documents').add(newDocData);
+        
+        return NextResponse.json({ success: true, document: { id: newDocRef.id, ...newDocData } });
+        
     } else {
         return NextResponse.json({ error: 'Invalid destination provided.' }, { status: 400 });
     }
