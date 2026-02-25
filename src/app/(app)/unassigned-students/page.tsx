@@ -32,33 +32,22 @@ export default function UnassignedStudentsPage() {
     setIsMounted(true);
   }, []);
 
-  // This constructs the query constraints array based on user role.
-  const studentsQueryConstraints = useMemo(() => {
-    if (!isMounted || !currentUser) {
-      return null;
-    }
-    
-    // For admins/departments, fetch all unassigned students.
-    if (currentUser.role === 'admin' || currentUser.role === 'department') {
-      return [where('employeeId', '==', null)];
-    }
-    
-    // For employees, fetch unassigned students they created.
-    if (currentUser.role === 'employee' && currentUser.id) {
+  const studentsPath = currentUser ? 'students' : '';
+  const studentsConstraints = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'employee') {
       return [
         where('employeeId', '==', null),
-        where('createdBy', '==', currentUser.id)
+        where('createdBy', '==', currentUser.id),
       ];
     }
-    
-    // Return null if no valid query can be constructed
-    return null;
-  }, [isMounted, currentUser]);
+    // For admin/dept
+    return [where('employeeId', '==', null)];
+  }, [currentUser]);
 
   const { data: unassignedStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(
-    // Only run query if constraints are ready
-    studentsQueryConstraints ? 'students' : '',
-    ...(studentsQueryConstraints || [])
+    studentsPath,
+    ...studentsConstraints
   );
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
@@ -88,7 +77,7 @@ export default function UnassignedStudentsPage() {
         <CardHeader>
           <CardTitle className="text-destructive">Error Loading Students</CardTitle>
           <CardDescription>
-            There was a problem fetching the list of unassigned students. This may be due to a permissions issue.
+            There was a problem fetching the list of unassigned students. This is likely due to a permissions issue or a missing Firestore index for the composite query.
           </CardDescription>
         </CardHeader>
       </Card>
