@@ -4,15 +4,16 @@
     "User": {
       "title": "User",
       "type": "object",
-      "description": "Represents an individual user within the UniApply Hub system, either an employee or an administrator. This entity stores core user information and their role.",
+      "description": "Represents an individual user within the UniApply Hub system. Can be an admin, employee, department, or student.",
       "properties": {
         "name": { "type": "string", "description": "The full name of the user." },
         "email": { "type": "string", "description": "The email address of the user, used for identification and communication.", "format": "email" },
         "phone": { "type": "string", "description": "The phone number of the user." },
-        "role": { "type": "string", "description": "The role of the user within the system (e.g., 'admin', 'employee', 'department').", "enum": ["admin", "employee", "department"] },
+        "role": { "type": "string", "description": "The role of the user within the system.", "enum": ["admin", "employee", "department", "student"] },
         "civilId": { "type": "string", "description": "The user's 12-digit Civil ID, used for uniquely identifying employees." },
         "employeeId": { "type": "string", "description": "A short employee ID, often derived from the Civil ID." },
-        "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the user's profile picture." }
+        "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the user's profile picture." },
+        "studentId": { "type": ["string", "null"], "description": "If the user is a student, this links to their main student profile ID." }
       },
       "required": ["name", "email", "role"]
     },
@@ -57,9 +58,22 @@
             }
         },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
-        "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." }
+        "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." },
+        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." }
       },
       "required": ["id", "name", "phone", "createdAt"]
+    },
+    "StudentLogin": {
+        "title": "Student Login",
+        "type": "object",
+        "description": "Represents a student's login credentials.",
+        "properties": {
+          "uid": { "type": "string", "description": "The Firebase Auth UID for the student user." },
+          "description": { "type": "string", "description": "A description for the login's purpose, e.g., 'MOHE Portal'." },
+          "email": { "type": "string", "description": "The email (username) for the student user." },
+          "createdAt": { "type": "string", "format": "date-time", "description": "When the login was created." }
+        },
+        "required": ["uid", "description", "email", "createdAt"]
     },
     "Application": {
       "title": "Application",
@@ -155,7 +169,10 @@
         "content": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "status": { "type": "string", "enum": ["new", "in-progress", "completed", "archived"] },
-        "replies": { "type": "array", "items": { "$ref": "#/entities/TaskReply" } }
+        "replies": { "type": "array", "items": { "$ref": "#/entities/TaskReply" } },
+        "studentId": { "type": "string", "description": "The ID of the student this task relates to." },
+        "studentName": { "type": "string", "description": "The name of the student for quick reference." },
+        "taskType": { "type": "string", "description": "The category or type of the task, from Request Settings." }
       },
       "required": ["id", "authorId", "recipientId", "content", "status", "createdAt"]
     },

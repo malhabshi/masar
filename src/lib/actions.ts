@@ -1540,7 +1540,7 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
   }
 }
 
-export async function createStudentLogin(studentId: string, name: string, username: string, password: string, createdByUserId: string) {
+export async function createStudentLogin(studentId: string, description: string, username: string, createdByUserId: string) {
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1563,6 +1563,9 @@ export async function createStudentLogin(studentId: string, name: string, userna
         
         const email = `${username.trim().toLowerCase()}@student.uniapply.hub`;
 
+        // Auto-generate a secure password.
+        const password = Math.random().toString(36).slice(-10);
+
         const authUser = await adminAuth!.createUser({
             email,
             password,
@@ -1581,7 +1584,7 @@ export async function createStudentLogin(studentId: string, name: string, userna
         const newLogin = {
             uid: authUser.uid,
             email: email,
-            name: name,
+            description: description,
             createdAt: new Date().toISOString(),
         };
 
@@ -1647,10 +1650,12 @@ export async function resetStudentPassword(email: string) {
     }
     
     try {
-        await adminAuth!.generatePasswordResetLink(email);
-        console.log(`Password reset email would be sent to: ${email}`);
+        const link = await adminAuth!.generatePasswordResetLink(email);
+        // In a real app, you would email this link to the student.
+        // For this demo, we'll just log it.
+        console.log(`Password reset link for ${email}: ${link}`);
         
-        return { success: true, message: 'Password reset email sent.' };
+        return { success: true, message: 'Password reset link generated. Check server logs.' };
     } catch (error: any) {
         console.error('Error resetting student password:', error);
         let message = 'Failed to send password reset email.';

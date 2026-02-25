@@ -66,7 +66,7 @@ export interface ProfileCompletionStatus {
 
 export interface StudentLogin {
     uid: string;
-    name: string;
+    description: string;
     email: string;
     createdAt: string;
 }

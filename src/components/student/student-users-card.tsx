@@ -6,14 +6,14 @@ import type { Student, User, StudentLogin } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { formatDate } from '@/lib/timestamp-utils';
-import { deleteStudentLogin } from '@/lib/actions';
+import { deleteStudentLogin, resetStudentPassword } from '@/lib/actions';
 
 // UI Components
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { PlusCircle, Trash2, Loader2 } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, KeyRound } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AddStudentUserDialog } from './add-student-user-dialog';
 
@@ -43,17 +43,29 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
     return email.split('@')[0];
   }
 
-  const handleDelete = async (uid: string, name: string) => {
+  const handleDelete = async (uid: string, description: string) => {
     setIsMutating(`delete-${uid}`);
     const result = await deleteStudentLogin(student.id, uid, currentUser.id);
 
     if (result.success) {
-      toast({ title: 'Student User Deleted', description: `Login for ${name} has been removed.` });
+      toast({ title: 'Student User Deleted', description: `Login for ${description} has been removed.` });
     } else {
       toast({ variant: 'destructive', title: 'Deletion Failed', description: result.message });
     }
     setIsMutating(null);
   };
+  
+  const handleResetPassword = async (email: string, description: string) => {
+    setIsMutating(`reset-${email}`);
+    const result = await resetStudentPassword(email);
+
+    if (result.success) {
+      toast({ title: 'Password Reset Triggered', description: `A password reset link for ${description} has been logged on the server. In a real app, this would be emailed.` });
+    } else {
+      toast({ variant: 'destructive', title: 'Reset Failed', description: result.message });
+    }
+    setIsMutating(null);
+  }
 
   if (!canManage) {
     return null;
@@ -72,7 +84,7 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name/Purpose</TableHead>
+                <TableHead>Description</TableHead>
                 <TableHead>Username</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -81,11 +93,15 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
             <TableBody>
               {studentUsers.map(su => (
                 <TableRow key={su.uid}>
-                  <TableCell className="font-medium">{su.name}</TableCell>
+                  <TableCell className="font-medium">{su.description}</TableCell>
                   <TableCell>{getUsername(su.email)}</TableCell>
                   <TableCell>{formatDate(su.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                       <Button variant="outline" size="sm" disabled={!!isMutating} onClick={() => handleResetPassword(su.email, su.description)}>
+                           {isMutating === `reset-${su.email}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                            <span className="ml-2 hidden sm:inline">Reset Password</span>
+                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="destructive" size="sm" disabled={!!isMutating}>
@@ -97,12 +113,12 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
                           <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will permanently delete the login for {su.name} ({getUsername(su.email)}). The student will no longer be able to access their portal. This action cannot be undone.
+                              This will permanently delete the login for {su.description} ({getUsername(su.email)}). The student will no longer be able to access their portal. This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(su.uid, su.name)}>Delete User</AlertDialogAction>
+                            <AlertDialogAction onClick={() => handleDelete(su.uid, su.description)}>Delete User</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
