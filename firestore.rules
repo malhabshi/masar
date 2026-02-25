@@ -15,6 +15,19 @@ service cloud.firestore {
       return getUserData().role in roles;
     }
 
+    function hasStudentReadAccess(studentData) {
+      let user = getUserData();
+      return user.role in ['admin', 'department'] || 
+            (studentData.employeeId != null && studentData.employeeId == user.civilId) ||
+            (user.role == 'student' && user.studentId == studentData.id);
+    }
+
+    function hasStudentWriteAccess(studentData) {
+      let user = getUserData();
+      return user.role in ['admin', 'department'] || 
+            (studentData.employeeId != null && studentData.employeeId == user.civilId);
+    }
+
     // Check if a user has access to a specific student's data.
     // Access is granted to admins, department users, and the assigned employee.
     function hasStudentAccess(studentId) {
@@ -35,16 +48,25 @@ service cloud.firestore {
     
     // Users collection - custom rules for admin vs regular users
     match /users/{userId} {
-      // Allow any authenticated user to read all user profiles.
-      // This is necessary for employees to see who is assigned to students on the main list.
-      allow read: if request.auth != null;
+      // Admins can read all profiles. Employees/Depts can read other employee/dept/admin profiles.
+      // Students can only read their own profile.
+      allow read: if request.auth != null && (
+        isOneOfRoles(['admin', 'department', 'employee']) ||
+        request.auth.uid == userId
+      );
       
-      // Users can write their own document, but cannot change their own role.
-      // Only admins can change roles.
-      allow write: if request.auth != null && (
-        (isRole('admin')) ||
+      // Admins can create/edit anyone.
+      // Employees can create student users for their assigned students.
+      // Users can edit their own profile, but cannot change their role.
+      allow create: if request.auth != null && (
+        isRole('admin') ||
+        (isRole('employee') && request.resource.data.role == 'student')
+      );
+      allow update: if request.auth != null && (
+        isRole('admin') ||
         (request.auth.uid == userId && !('role' in request.resource.data))
       );
+      allow delete: if request.auth != null && isRole('admin');
     }
     
     // Tasks collection rules
@@ -71,19 +93,8 @@ service cloud.firestore {
     
     // Students collection rules
     match /students/{studentId} {
-      // Allow read if:
-      // - User is admin/dept (can read all)
-      // - OR user is employee and this student is assigned to them (by civilId)
-      allow read: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'department'] ||
-        resource.data.employeeId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.civilId
-      );
-      
-      // Write rules remain the same
-      allow write: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'department'] ||
-        resource.data.employeeId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.civilId
-      );
+      allow read: if request.auth != null && hasStudentReadAccess(resource.data);
+      allow write: if request.auth != null && hasStudentWriteAccess(resource.data);
     }
     
     // Approved universities - admins and dept can write, all can read

@@ -4,7 +4,8 @@
 
 
 
-export type UserRole = 'admin' | 'employee' | 'department';
+
+export type UserRole = 'admin' | 'employee' | 'department' | 'student';
 
 export interface User {
   id: string;
@@ -15,6 +16,7 @@ export interface User {
   phone?: string;
   civilId?: string;
   employeeId?: string;
+  studentId?: string; // Links a student user to a student profile
 }
 
 export type ApplicationStatus = 'Pending' | 'Submitted' | 'In Review' | 'Accepted' | 'Rejected';
@@ -61,6 +63,12 @@ export interface ProfileCompletionStatus {
   readyToTravel: boolean;
 }
 
+export interface StudentLogin {
+    uid: string;
+    email: string;
+    createdAt: string;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -99,6 +107,7 @@ export interface Student {
   };
   isNewForEmployee?: boolean;
   term?: string;
+  studentLogins?: StudentLogin[];
 }
 
 export interface ChatMessage {

@@ -22,6 +22,7 @@ import { StudentChat } from '@/components/student/student-chat';
 import { MissingItemsSection } from '@/components/student/missing-items-section';
 import { ReadinessChecklist } from '@/components/student/readiness-checklist';
 import { IeltsCard } from '@/components/student/ielts-card';
+import { StudentUsersCard } from '@/components/student/student-users-card';
 
 
 function StudentPageContentSkeleton() {
@@ -143,6 +144,7 @@ export default function StudentDetailPage() {
                     <StudentApplications student={student} />
                     <IeltsCard student={student} currentUser={currentUser} />
                     <ReadinessChecklist student={student} currentUser={currentUser} />
+                    <StudentUsersCard student={student} currentUser={currentUser} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
                     <NotesSection
