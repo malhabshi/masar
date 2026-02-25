@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student } from '@/lib/types';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { useCollection } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -16,28 +16,34 @@ interface FinalizedStudent extends Student {
 export default function FinalizedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
-  const studentsQuery = useMemoFirebase(() => {
-    if (!currentUser) return [];
-
-    // Firestore does not support '!=' or 'is not null'. 
-    // The common workaround is to check if the string is greater than an empty string.
+  const studentsQuery = useMemo(() => {
     const baseQuery = [where('finalChoiceUniversity', '>', '')];
-    
+
+    if (!currentUser) {
+      // Not logged in, don't query
+      return null;
+    }
+
     if (currentUser.role === 'employee') {
-      if (!currentUser.civilId) return []; // Employee must have civilId to query their students
+      if (!currentUser.civilId) {
+        // Employee data not fully loaded, don't query yet
+        return null;
+      }
+      // Employee query
       return [...baseQuery, where('employeeId', '==', currentUser.civilId)];
     }
 
-    // For admin/department, just the base query is fine.
+    // Admin/Department query
     return baseQuery;
-  }, [currentUser?.role, currentUser?.civilId]);
+  }, [currentUser]);
 
   const { data: finalizedStudents, isLoading: studentsAreLoading } = useCollection<Student>(
-    currentUser ? 'students' : '',
-    ...studentsQuery
+    // Only set the path if the query is ready to be executed
+    studentsQuery ? 'students' : '',
+    ...(studentsQuery || [])
   );
 
-  const isLoading = isUserLoading || studentsAreLoading;
+  const isLoading = isUserLoading || (!!currentUser && studentsAreLoading);
   
   const pageDescription = currentUser?.role === 'employee' 
     ? "A list of your students who have made their final university choice."
@@ -56,6 +62,18 @@ export default function FinalizedStudentsPage() {
             </CardHeader>
         </Card>
        )
+  }
+
+  // Add a specific check for employees without civilId, just in case.
+  if (currentUser.role === 'employee' && !currentUser.civilId) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Profile Incomplete</CardTitle>
+                <CardDescription>Your user profile is missing a Civil ID. Please contact an administrator.</CardDescription>
+            </CardHeader>
+        </Card>
+    )
   }
 
   return (
