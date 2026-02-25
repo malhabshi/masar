@@ -1,16 +1,8 @@
-
-
-
-
-
-
-
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -977,6 +969,86 @@ export async function deleteStudent(studentId: string, adminId: string) {
         return { success: false, message: 'An unexpected server error occurred while deleting the student.' };
     }
 }
+
+export async function deleteStudentDocument(studentId: string, documentId: string, documentUrl: string, deleterId: string) {
+    if (!checkAdminServices()) {
+        return { success: false, message: 'Server database connection not available.' };
+    }
+    
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) {
+            return { success: false, message: 'Student not found.' };
+        }
+        const studentData = studentDoc.data() as Student;
+        const docToDelete = studentData.documents.find(d => d.id === documentId);
+        
+        const deleter = await getUser(deleterId);
+        if (!deleter) return { success: false, message: "Invalid user." };
+
+        const isAssignedEmployee = deleter.role === 'employee' && deleter.civilId === studentData.employeeId;
+        const isAdminOrDept = ['admin', 'department'].includes(deleter.role);
+        
+        if (!isAssignedEmployee && !isAdminOrDept) {
+            return { success: false, message: 'You do not have permission to delete documents for this student.' };
+        }
+
+        // Delete from storage
+        const bucket = storage!.bucket();
+        const url = new URL(documentUrl);
+        const bucketName = bucket.name;
+        let filePath = decodeURIComponent(url.pathname.substring(1));
+        if (filePath.startsWith(`${bucketName}/`)) {
+            filePath = filePath.substring(bucketName.length + 1);
+        }
+
+        if (filePath) {
+            await bucket.file(filePath).delete();
+        } else {
+            console.warn(`Could not determine file path from URL, skipping storage deletion: ${documentUrl}`);
+        }
+
+        // Delete from Firestore array
+        const updatedDocuments = (studentData.documents || []).filter(doc => doc.id !== documentId);
+        const updates: { documents: StudentDoc[]; [key: string]: any } = {
+            documents: updatedDocuments
+        };
+
+        if (docToDelete?.isNew) {
+            const author = await getUser(docToDelete.authorId);
+            if (author?.role === 'employee') {
+                if (studentData.newDocumentsForAdmin && studentData.newDocumentsForAdmin > 0) {
+                    updates.newDocumentsForAdmin = studentData.newDocumentsForAdmin - 1;
+                }
+            } else if (author?.role === 'admin' || author?.role === 'department') {
+                if (studentData.newDocumentsForEmployee && studentData.newDocumentsForEmployee > 0) {
+                    updates.newDocumentsForEmployee = studentData.newDocumentsForEmployee - 1;
+                }
+            }
+        }
+        
+        await studentRef.update(updates);
+        
+        return { success: true, message: 'Document deleted successfully.' };
+
+    } catch (error: any) {
+        console.error('deleteStudentDocument error:', error);
+        if (error.code === 404) {
+             console.warn(`File not found in storage, but proceeding to remove Firestore entry: ${documentUrl}`);
+             const studentRef = adminDb!.collection('students').doc(studentId);
+             const studentDoc = await studentRef.get();
+             if (studentDoc.exists) {
+                const studentData = studentDoc.data() as Student;
+                const updatedDocuments = (studentData.documents || []).filter(doc => doc.id !== documentId);
+                await studentRef.update({ documents: updatedDocuments });
+                return { success: true, message: 'Document removed from list (was not found in storage).' };
+             }
+        }
+        return { success: false, message: 'Failed to delete document.' };
+    }
+}
+
 
 export async function handleEmployeeLogin(userId: string) {
   if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };

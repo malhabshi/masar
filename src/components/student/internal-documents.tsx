@@ -6,7 +6,7 @@ import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, Trash2, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
@@ -15,6 +15,9 @@ import { doc } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
+import { deleteStudentDocument } from '@/lib/actions';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return '0 Bytes';
@@ -37,6 +40,9 @@ interface InternalDocumentsProps {
 
 export function InternalDocuments({ student, currentUser, title, allowUpload }: InternalDocumentsProps) {
   const [isClient, setIsClient] = useState(false);
+  const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
   const authorIds = useMemo(() => {
     return (student.documents || []).map(doc => doc.authorId);
   }, [student.documents]);
@@ -81,6 +87,19 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, currentUser?.id]);
+  
+  const handleDelete = async (docToDelete: Document) => {
+    if (!currentUser) return;
+    setIsDeleting(docToDelete.id);
+    const result = await deleteStudentDocument(student.id, docToDelete.id, docToDelete.url, currentUser.id);
+
+    if(result.success) {
+        toast({ title: 'Document Deleted', description: `'${docToDelete.name}' has been deleted.` });
+    } else {
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: result.message });
+    }
+    setIsDeleting(null);
+  };
 
 
   return (
@@ -103,6 +122,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
             <TableBody>
               {documents.slice().sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()).map((doc) => {
                 const author = userMap.get(doc.authorId);
+                const isBeingDeleted = isDeleting === doc.id;
                 return (
                   <TableRow key={doc.id}>
                     <TableCell className="flex items-center gap-2">
@@ -126,11 +146,34 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                     <TableCell>{isClient ? formatDate(doc.uploadedAt) : '...'}</TableCell>
                     <TableCell>{formatBytes(doc.size || 0)}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" asChild>
-                        <a href={doc.url} download={doc.originalName || doc.name} target="_blank" rel="noopener noreferrer">
-                          <Download className="h-4 w-4" />
-                        </a>
-                      </Button>
+                      <div className="flex items-center justify-end">
+                        {allowUpload && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" disabled={isBeingDeleted}>
+                                {isBeingDeleted ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently delete the document "{doc.name}". This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(doc)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                        <Button variant="ghost" size="icon" asChild>
+                          <a href={doc.url} download={doc.originalName || doc.name} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
