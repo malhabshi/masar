@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -29,33 +28,41 @@ export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
-
-  // Memoize the query to prevent re-creation on every render
-  const unassignedStudentsQuery = useMemo(() => {
-    if (!currentUser) return null; // Don't query if no user
-
-    const baseQuery = where('employeeId', '==', null);
-    
-    if (currentUser.role === 'employee') {
-      // Employees can only see unassigned students they created
-      if (!currentUser.id) return null; // Guard against missing ID
-      return [baseQuery, where('createdBy', '==', currentUser.id)];
-    }
+  
+  // The query is now simplified. It only filters by one field, avoiding the need for a composite index.
+  const studentsQuery = useMemo(() => {
+    if (!currentUser) return null;
     
     if (currentUser.role === 'admin' || currentUser.role === 'department') {
-      // Admins/Depts can see all unassigned students
-      return [baseQuery];
+      // Admins and Dept users query for all unassigned students directly.
+      return [where('employeeId', '==', null)];
+    }
+    
+    if (currentUser.role === 'employee') {
+      if (!currentUser.id) return null;
+      // Employees query for ALL students they created. Filtering for 'unassigned' happens on the client.
+      return [where('createdBy', '==', currentUser.id)];
     }
 
-    return null; // Should not happen
+    return null;
   }, [currentUser]);
 
-
-  const { data: unassignedStudents, isLoading: studentsAreLoading } =
+  const { data: fetchedStudents, isLoading: studentsAreLoading } =
     useCollection<Student>(
-      unassignedStudentsQuery ? 'students' : '',
-      ...(unassignedStudentsQuery || [])
+      studentsQuery ? 'students' : '',
+      ...(studentsQuery || [])
     );
+  
+  // For employees, we perform the second part of the filter on the client.
+  const unassignedStudents = useMemo(() => {
+    if (!fetchedStudents) return [];
+    if (currentUser?.role === 'employee') {
+      return fetchedStudents.filter(student => student.employeeId === null);
+    }
+    // For admins/depts, the query already filtered, so we use the data directly.
+    return fetchedStudents;
+  }, [fetchedStudents, currentUser?.role]);
+  
   
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     canManage ? 'users' : ''

@@ -96,7 +96,7 @@ service cloud.firestore {
       allow list: if request.auth != null && (
         isOneOfRoles(['admin', 'department']) ||
         (isRole('employee') && request.query.employeeId == getUserData().civilId) ||
-        (isRole('employee') && request.query.createdBy == request.auth.uid && request.query.employeeId == null)
+        (isRole('employee') && request.query.createdBy == request.auth.uid)
       );
 
       allow get: if request.auth != null && (
