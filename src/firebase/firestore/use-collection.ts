@@ -52,7 +52,15 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
 
   useEffect(() => {
+    console.log('🔍 useCollection executing with:', {
+      path,
+      constraintsCount: queryConstraints?.length || 0,
+      constraints: queryConstraints?.map(c => c?.toString?.() || 'unknown') || [],
+      timestamp: new Date().toISOString()
+    });
+    
     if (!memoizedQuery) {
+      console.log('❌ No memoized query - path:', path);
       setIsLoading(false);
       return;
     }
