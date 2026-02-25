@@ -44,6 +44,15 @@ export default function FinalizedStudentsPage() {
     ...(studentsQuery || [])
   );
 
+  // Debugging logs as requested
+  if (currentUser?.role === 'employee' && isMounted) {
+    console.log('Employee civilId:', currentUser?.civilId);
+    console.log('Query being sent:', {
+      path: studentsQuery ? 'students' : '(no query)',
+      filters: studentsQuery
+    });
+  }
+
   const isLoading = isUserLoading || !isMounted || (studentsQuery && studentsAreLoading);
 
   const pageDescription = currentUser?.role === 'employee' 
