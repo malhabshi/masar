@@ -2,7 +2,8 @@
 
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { orderBy } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
   Card,
@@ -23,11 +24,17 @@ export function AdminApplicantsPage() {
     setIsMounted(true);
   }, []);
 
-  // SECURE: Use the path-guard pattern to ensure NO student queries run until role is confirmed.
-  const studentsPath = (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'students' : '';
-  const usersPath = currentUser ? 'users' : '';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const studentsPath = (isMounted && isAdmin) ? 'students' : '';
+  const usersPath = (isMounted && currentUser) ? 'users' : '';
 
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath);
+  const studentsConstraints = useMemoFirebase(() => {
+    if (!studentsPath) return [];
+    // Explicit ordering fulfills the "at least one constraint" safety requirement for the students collection
+    return [orderBy('createdAt', 'desc')];
+  }, [studentsPath]);
+
+  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
 
   const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
@@ -40,7 +47,7 @@ export function AdminApplicantsPage() {
     );
   }
   
-  if (!currentUser || !studentsPath) {
+  if (!currentUser || !isAdmin) {
     return (
       <Card>
         <CardHeader>

@@ -50,14 +50,11 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     // 1. Path must be non-empty
     if (!path) return null;
 
-    // 2. SAFETY GUARD: Prevent unfiltered queries on the students collection
-    // This is the most common source of permission errors for employees.
+    // 2. SAFETY GUARD: Prevent unfiltered queries on the students collection.
+    // This is a fail-safe to prevent permission errors if a component initiates a query before filters are ready.
     const isStudentsPath = path === 'students' || path.endsWith('/students');
     if (isStudentsPath && (!queryConstraints || queryConstraints.length === 0)) {
-        // We only allow unfiltered student queries for Admins, but we can't check role 
-        // inside this memo without creating a circular dependency. 
-        // Instead, we rely on the component-level guards to provide constraints.
-        // If we get here with 0 constraints on 'students', it's a risky query.
+        // If we get here with 0 constraints on 'students', it's a risky query that would likely fail rules.
         return null; 
     }
 

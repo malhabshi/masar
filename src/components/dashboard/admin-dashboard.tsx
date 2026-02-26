@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { orderBy } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { Users, FileText, UserPlus } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
@@ -15,11 +16,16 @@ import type { AppUser } from '@/hooks/use-user';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
-  // SECURE: Use path-guard pattern.
-  const studentsPath = (currentUser?.role === 'admin') ? 'students' : '';
+  const isAdmin = currentUser?.role === 'admin';
+  const studentsPath = isAdmin ? 'students' : '';
   const tasksPath = currentUser ? 'tasks' : '';
 
-  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath);
+  const studentsConstraints = useMemoFirebase(() => {
+    if (!studentsPath) return [];
+    return [orderBy('createdAt', 'desc')];
+  }, [studentsPath]);
+
+  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
   const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksPath);
 
   const students = useMemo(() => studentsData || [], [studentsData]);
@@ -40,7 +46,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     return { totalStudents, unassignedStudents, totalApplications };
   }, [students]);
 
-  if (currentUser?.role !== 'admin') return null;
+  if (!isAdmin) return null;
 
   return (
     <div className="space-y-6">

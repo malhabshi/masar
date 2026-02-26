@@ -8,7 +8,7 @@ import type { Task, UpcomingEvent, Student } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { ToastAction } from '@/components/ui/toast';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { where } from 'firebase/firestore';
+import { where, orderBy } from 'firebase/firestore';
 
 function playNotificationSound(frequency = 800) {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -39,15 +39,17 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  // SECURE: Guard the paths strictly.
+  // SECURE: Guard the paths strictly. Only query when user role is known.
   const tasksPath = user?.role ? 'tasks' : '';
   const studentsPath = user?.role ? 'students' : '';
   const eventsPath = user ? 'upcoming_events' : '';
 
   const tasksConstraints = useMemoFirebase(() => {
     if (!tasksPath || !user) return [];
-    if (user.role === 'admin' || user.role === 'department') return [];
-    return [where('recipientId', 'in', [user.id, 'all'])];
+    if (user.role === 'admin' || user.role === 'department') {
+        return [orderBy('createdAt', 'desc')];
+    }
+    return [where('recipientId', 'in', [user.id, 'all']), orderBy('createdAt', 'desc')];
   }, [tasksPath, user?.id, user?.role]);
 
   const { data: tasks } = useCollection<Task>(tasksPath, ...tasksConstraints);
@@ -56,12 +58,12 @@ export function NotificationListener() {
   const studentQueryConstraints = useMemoFirebase(() => {
     if (!studentsPath || !user) return [];
     if (user.role === 'admin' || user.role === 'department') {
-        return [];
+        return [orderBy('createdAt', 'desc')];
     }
     if (user.role === 'employee' && user.civilId) {
-        return [where('employeeId', '==', user.civilId)];
+        return [where('employeeId', '==', user.civilId), orderBy('createdAt', 'desc')];
     }
-    // If we're an employee but civilId is missing, return a dummy filter that won't match but IS a filter.
+    // Return a dummy filter that won't match but IS a filter to satisfy safety requirements.
     return [where('employeeId', '==', 'NONE')]; 
   }, [studentsPath, user?.role, user?.civilId]);
 

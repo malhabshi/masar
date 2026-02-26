@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { orderBy } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { Users, FileText } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
@@ -15,11 +16,17 @@ import { SendTaskForm } from './send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
-     // SECURE: Only attempt to fetch the full students collection if user is department or admin.
-     const canFetch = currentUser && ['admin', 'department'].includes(currentUser.role);
+     const isDept = currentUser?.role === 'department' || currentUser?.role === 'admin';
+     const studentsPath = isDept ? 'students' : '';
+     const tasksPath = currentUser ? 'tasks' : '';
 
-     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(canFetch ? 'students' : '');
-     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
+     const studentsConstraints = useMemoFirebase(() => {
+        if (!studentsPath) return [];
+        return [orderBy('createdAt', 'desc')];
+     }, [studentsPath]);
+
+     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
+     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksPath);
      
      const students = useMemo(() => studentsData || [], [studentsData]);
      const tasks = useMemo(() => tasksData || [], [tasksData]);
@@ -37,6 +44,8 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         const totalApplications = students.reduce((acc, s) => acc + (s.applications?.length || 0), 0);
         return { totalStudents, totalApplications };
     }, [students]);
+
+    if (!isDept) return null;
 
     return (
         <div className="space-y-6">
