@@ -58,9 +58,10 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     // Add logging to find unfiltered queries
     if (path === 'students') {
       console.log(`🔍 useCollection('students') executing with ${constraintsCount} constraints.`);
+      console.trace('🔥🔥🔥 STACK TRACE FOR STUDENT QUERY:');
+      
       if (constraintsCount === 0) {
         console.error('❌ CRITICAL: Unfiltered query on students detected!');
-        console.trace('🔥🔥🔥 STACK TRACE FOR UNFILTERED QUERY:');
       }
     }
 

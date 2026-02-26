@@ -29,22 +29,25 @@ export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   useEffect(() => {
+    console.log('📄 UnassignedStudentsPage rendering', { user: currentUser?.id, role: currentUser?.role });
     setIsMounted(true);
-  }, []);
+  }, [currentUser]);
 
   // Construct constraints only when the user is available.
-  // This prevents unfiltered 'list' requests that trigger permission errors.
   const studentsConstraints = useMemo(() => {
     if (!isMounted || !currentUser) return null;
     
     if (currentUser.role === 'employee') {
       // Query for students created by this employee.
-      // We will filter for employeeId == null on the client.
       return [where('createdBy', '==', currentUser.id)];
     }
     
-    // For admin/dept, query all unassigned students directly.
-    return [where('employeeId', '==', null)];
+    if (currentUser.role === 'admin' || currentUser.role === 'department') {
+        // For admin/dept, query all unassigned students directly.
+        return [where('employeeId', '==', null)];
+    }
+    
+    return null;
   }, [isMounted, currentUser]);
 
   const { data: rawStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(

@@ -43,6 +43,17 @@ export default function ApplicantsPage() {
     return <EmployeeApplicantsPage />;
   }
 
-  // Default to Admin/Department view.
-  return <AdminApplicantsPage />;
+  if (user.role === 'admin' || user.role === 'department') {
+    return <AdminApplicantsPage />;
+  }
+
+  // Fallback for roles that shouldn't see this page anyway
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Access Denied</CardTitle>
+        <CardDescription>Your account role does not have access to this list.</CardDescription>
+      </CardHeader>
+    </Card>
+  );
 }
