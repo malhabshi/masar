@@ -129,9 +129,6 @@ export default function StudentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {canRenderContent && isAdminOrDept && (
-        <AcademicIntakeCard student={student} currentUser={currentUser} />
-      )}
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
       {canRenderContent && (
@@ -166,6 +163,9 @@ export default function StudentDetailPage() {
                 </div>
 
                 <div className="space-y-6">
+                    {isAdminOrDept && (
+                        <AcademicIntakeCard student={student} currentUser={currentUser} />
+                    )}
                     <Card>
                         <CardHeader>
                             <CardTitle>Internal Chat</CardTitle>

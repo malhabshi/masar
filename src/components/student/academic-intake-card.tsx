@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Loader2, FilePenLine, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Loader2, FilePenLine, CheckCircle, XCircle, PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface AcademicIntakeCardProps {
@@ -77,15 +77,15 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
       <CardHeader className="flex flex-row items-center justify-between py-4">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-primary" />
-          <CardTitle className="text-lg">Academic Intake</CardTitle>
+          <CardTitle className="text-lg">Academic term</CardTitle>
           <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] h-5">
             Admin/Dept Only
           </Badge>
         </div>
-        {!isEditing && (
-          <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
-            <FilePenLine className="h-4 w-4 mr-2" />
-            {student.academicIntakeSemester ? 'Change' : 'Add Intake'}
+        {!isEditing && student.academicIntakeSemester && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditing(true)}>
+            <FilePenLine className="h-4 w-4" />
+            <span className="sr-only">Edit term</span>
           </Button>
         )}
       </CardHeader>
@@ -93,57 +93,65 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
         {!isEditing ? (
           <div className="flex items-center gap-3">
             {student.academicIntakeSemester ? (
-              <div className="flex items-center gap-2 bg-background border px-4 py-2 rounded-full shadow-sm">
-                <span className="font-bold text-primary">{student.academicIntakeSemester}</span>
-                <span className="font-mono text-muted-foreground">{student.academicIntakeYear}</span>
+              <div className="flex items-center gap-2 bg-background border px-4 py-2 rounded-full shadow-sm w-full justify-between">
+                <div className="flex items-center gap-2">
+                    <span className="font-bold text-primary">{student.academicIntakeSemester}</span>
+                    <span className="font-mono text-muted-foreground">{student.academicIntakeYear}</span>
+                </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No academic intake set for this student.</p>
+              <div className="flex flex-col items-center w-full py-4 space-y-3">
+                <p className="text-sm text-muted-foreground italic">No academic intake set</p>
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Add Intake
+                </Button>
+              </div>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">Semester</label>
-              <Select value={tempSemester} onValueChange={setTempSemester}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Select Semester" />
-                </SelectTrigger>
-                <SelectContent>
-                  {semesters.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase">Semester</label>
+                <Select value={tempSemester} onValueChange={setTempSemester}>
+                    <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select Semester" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {semesters.map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+                </div>
+                <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase">Year</label>
+                <Select value={tempYear} onValueChange={setTempYear}>
+                    <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {years.map(y => (
+                        <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+                </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">Year</label>
-              <Select value={tempYear} onValueChange={setTempYear}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Select Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map(y => (
-                    <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={handleCancel} disabled={isLoading}>
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Cancel
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                    Save
+                </Button>
             </div>
           </div>
         )}
       </CardContent>
-      {isEditing && (
-        <CardFooter className="flex justify-end gap-2 border-t pt-4">
-          <Button variant="outline" size="sm" onClick={handleCancel} disabled={isLoading}>
-            <XCircle className="h-4 w-4 mr-2" />
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={isLoading}>
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-            Save Selection
-          </Button>
-        </CardFooter>
-      )}
     </Card>
   );
 }
