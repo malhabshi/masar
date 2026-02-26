@@ -23,6 +23,7 @@ import { MissingItemsSection } from '@/components/student/missing-items-section'
 import { ReadinessChecklist } from '@/components/student/readiness-checklist';
 import { IeltsCard } from '@/components/student/ielts-card';
 import { StudentUsersCard } from '@/components/student/student-users-card';
+import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-banner';
 
 
 function StudentPageContentSkeleton() {
@@ -140,6 +141,9 @@ export default function StudentDetailPage() {
       
       {canRenderContent && (
         <>
+            {student.duplicatePhoneWarning && (
+              <DuplicateWarningBanner student={student} currentUser={currentUser} />
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
                     <StudentApplications student={student} />

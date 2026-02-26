@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -389,6 +388,20 @@ export async function createStudent(
   }
 
   try {
+    // DUPLICATE CHECK: Check for existing phone number
+    const existingSnap = await adminDb!.collection('students')
+      .where('phone', '==', phone)
+      .limit(1)
+      .get();
+    
+    let duplicateInfo = {};
+    if (!existingSnap.empty) {
+      duplicateInfo = {
+        duplicatePhoneWarning: true,
+        duplicateOfStudentId: existingSnap.docs[0].id
+      };
+    }
+
     // Generate new prefix-based ID
     const studentId = `U-${creatingUserCivilId}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -431,6 +444,7 @@ export async function createStudent(
         visaGranted: false,
         medicalFitnessSubmitted: false,
       },
+      ...duplicateInfo,
     };
 
     await studentRef.set(newStudentData);
@@ -464,6 +478,26 @@ export async function createStudent(
   } catch (error) {
     console.error('createStudent error:', error);
     return { success: false, message: 'Failed to create student on the server.' };
+  }
+}
+
+export async function resolveDuplicate(studentId: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') {
+      return { success: false, message: 'Only administrators can resolve duplicate warnings.' };
+    }
+    
+    await adminDb!.collection('students').doc(studentId).update({
+      duplicatePhoneWarning: false,
+      duplicateOfStudentId: null
+    });
+    
+    return { success: true, message: 'Duplicate warning resolved.' };
+  } catch (error) {
+    console.error('resolveDuplicate error:', error);
+    return { success: false, message: 'Failed to resolve duplicate warning.' };
   }
 }
 

@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 export type UserRole = 'admin' | 'employee' | 'department' | 'student';
 
 export interface User {
@@ -113,6 +103,8 @@ export interface Student {
   isNewForEmployee?: boolean;
   term?: string;
   studentLogins?: StudentLogin[];
+  duplicatePhoneWarning?: boolean;
+  duplicateOfStudentId?: string | null;
 }
 
 export interface ChatMessage {
@@ -253,5 +245,3 @@ export interface EmployeeStats {
   dailyCounts: EmployeeDailyCount[];
   monthlyTotals: EmployeeMonthlyTotal[];
 }
-
-    
