@@ -26,6 +26,7 @@ import { IeltsCard } from '@/components/student/ielts-card';
 import { StudentUsersCard } from '@/components/student/student-users-card';
 import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-banner';
 import { TargetCountriesCard } from '@/components/student/target-countries-card';
+import { AcademicIntakeCard } from '@/components/student/academic-intake-card';
 
 
 function StudentPageContentSkeleton() {
@@ -46,13 +47,13 @@ function StudentPageContentSkeleton() {
                     <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
                     <CardContent><Skeleton className="h-48 w-full" /></CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
                     <CardContent><Skeleton className="h-48 w-full" /></CardContent>
                 </Card>
             </div>
-      </div>
-    )
+        </div>
+    );
 }
 
 
@@ -139,7 +140,12 @@ export default function StudentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {canRenderContent && <TargetCountriesCard student={student} currentUser={currentUser} />}
+      {canRenderContent && (
+        <div className="space-y-6">
+          <AcademicIntakeCard student={student} currentUser={currentUser} />
+          <TargetCountriesCard student={student} currentUser={currentUser} />
+        </div>
+      )}
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
       {canRenderContent && (

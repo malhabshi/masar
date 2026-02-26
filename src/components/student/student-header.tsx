@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -110,6 +110,15 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-bold">{student.name || 'Unknown Student'}</h1>
+            
+            {/* Academic Intake Badge next to name (Admin/Dept only) */}
+            {canManage && student.academicIntakeSemester && (
+              <BadgeComponent variant="default" className="bg-primary text-primary-foreground flex items-center gap-1.5 px-3 py-1 text-sm font-bold shadow-sm">
+                <Calendar className="h-3.5 w-3.5" />
+                {student.academicIntakeSemester} {student.academicIntakeYear}
+              </BadgeComponent>
+            )}
+
             {student.transferRequested && !canApproveTransfer && (
                 <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3">
                     <ArrowRightLeft className="mr-2 h-4 w-4" />

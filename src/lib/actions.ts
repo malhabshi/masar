@@ -1818,3 +1818,35 @@ export async function updateStudentTargetCountries(studentId: string, countries:
         return { success: false, message: error instanceof Error ? error.message : 'Failed to update target countries.' };
     }
 }
+
+export async function updateStudentAcademicIntake(studentId: string, semester: string, year: number, updaterId: string) {
+    console.log('📤 Server action started:', { action: 'updateStudentAcademicIntake', studentId, semester, year, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+        const updater = await getUser(updaterId);
+        if (!updater || !['admin', 'department'].includes(updater.role)) {
+            return { success: false, message: 'You do not have permission to update academic intake.' };
+        }
+
+        const studentData = studentDoc.data() as Student;
+        await studentRef.update({ academicIntakeSemester: semester, academicIntakeYear: year });
+        
+        const newNote: Note = {
+            id: `note-academic-intake-${Date.now()}`,
+            authorId: updaterId,
+            content: `Academic intake updated to: ${semester} ${year}`,
+            createdAt: new Date().toISOString(),
+        };
+        await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
+
+        console.log('✅ Server action finished:', { action: 'updateStudentAcademicIntake', success: true });
+        return { success: true, message: 'Academic intake updated successfully.' };
+    } catch (error) {
+        console.error('❌ Server action failed:', { action: 'updateStudentAcademicIntake', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to update academic intake.' };
+    }
+}

@@ -106,6 +106,8 @@ export interface Student {
   studentLogins?: StudentLogin[];
   duplicatePhoneWarning?: boolean;
   duplicateOfStudentIds?: string[] | null;
+  academicIntakeSemester?: string;
+  academicIntakeYear?: number;
 }
 
 export interface ChatMessage {
