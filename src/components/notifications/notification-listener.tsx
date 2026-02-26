@@ -39,33 +39,35 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  // SECURE: Filter tasks based on role to avoid permission errors
+  // SECURE: Guard the paths strictly.
+  const tasksPath = user?.role ? 'tasks' : '';
+  const studentsPath = user?.role ? 'students' : '';
+  const eventsPath = user ? 'upcoming_events' : '';
+
   const tasksConstraints = useMemoFirebase(() => {
-    if (!user) return null;
+    if (!tasksPath || !user) return [];
     if (user.role === 'admin' || user.role === 'department') return [];
-    // Employees only listen for tasks where they are recipients or broadcast tasks
     return [where('recipientId', 'in', [user.id, 'all'])];
-  }, [user?.id, user?.role]);
+  }, [tasksPath, user?.id, user?.role]);
 
-  const { data: tasks } = useCollection<Task>(tasksConstraints !== null ? 'tasks' : '', ...(tasksConstraints || []));
-  const { data: events } = useCollection<UpcomingEvent>(user ? 'upcoming_events' : '');
+  const { data: tasks } = useCollection<Task>(tasksPath, ...tasksConstraints);
+  const { data: events } = useCollection<UpcomingEvent>(eventsPath);
 
-  // SECURE: Filter student updates based on role
   const studentQueryConstraints = useMemoFirebase(() => {
-    if (!user) return null;
+    if (!studentsPath || !user) return [];
     if (user.role === 'admin' || user.role === 'department') {
         return [];
     }
     if (user.role === 'employee' && user.civilId) {
-        // Employees only listen for their assigned students
         return [where('employeeId', '==', user.civilId)];
     }
-    return null; 
-  }, [user?.role, user?.civilId]);
+    // If we're an employee but civilId is missing, return a dummy filter that won't match but IS a filter.
+    return [where('employeeId', '==', 'NONE')]; 
+  }, [studentsPath, user?.role, user?.civilId]);
 
   const { data: students } = useCollection<Student>(
-    studentQueryConstraints !== null ? 'students' : '', 
-    ...(studentQueryConstraints || [])
+    studentsPath, 
+    ...studentQueryConstraints
   );
 
   const allUserIds = useMemo(() => {

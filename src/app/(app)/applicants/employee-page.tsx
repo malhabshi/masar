@@ -2,7 +2,7 @@
 
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { Loader2, AlertTriangle } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function EmployeeApplicantsPage() {
@@ -25,31 +25,19 @@ export function EmployeeApplicantsPage() {
     setIsMounted(true);
   }, []);
 
-  // This is the key fix. The query is now constructed atomically.
-  // The path and the 'where' clause are inseparable.
-  const myStudentsQuery = useMemo(() => {
-    if (isMounted && currentUser?.civilId) {
-      // Debug log to confirm query is being created with the correct filter
-      console.log('🔍 Querying students with:', {
-        path: 'students',
-        filter: `employeeId == ${currentUser.civilId}`,
-      });
-      return [where('employeeId', '==', currentUser.civilId)];
-    }
-    // If conditions aren't met, we don't query.
-    return null;
-  }, [isMounted, currentUser?.civilId]);
+  // SECURE: Guard the path and query constraints strictly.
+  const studentsPath = (isMounted && currentUser?.role === 'employee' && currentUser?.civilId) ? 'students' : '';
+  
+  const myStudentsQuery = useMemoFirebase(() => {
+    if (!studentsPath || !currentUser?.civilId) return [];
+    return [where('employeeId', '==', currentUser.civilId)];
+  }, [studentsPath, currentUser?.civilId]);
 
   const {
     data: myStudents,
     isLoading: studentsAreLoading,
     error: studentsError,
-  } = useCollection<Student>(
-    // The path is now simply dependent on whether the query was constructed.
-    myStudentsQuery ? 'students' : '',
-    // If the query is null, this will spread no arguments, but the path will also be empty.
-    ...(myStudentsQuery || [])
-  );
+  } = useCollection<Student>(studentsPath, ...myStudentsQuery);
 
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     currentUser ? 'users' : ''
@@ -69,7 +57,7 @@ export function EmployeeApplicantsPage() {
     return <p>Loading user...</p>;
   }
 
-  if (!currentUser.civilId) {
+  if (currentUser.role === 'employee' && !currentUser.civilId) {
     return (
       <Card>
         <CardHeader>
@@ -98,10 +86,7 @@ export function EmployeeApplicantsPage() {
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Could not load your students. This is likely because your account
-              does not have permission to read the 'students' collection with the
-              query for your Civil ID ({currentUser.civilId}). Please check
-              Firestore security rules.
+              Could not load your students. Please check your network connection or contact support.
             </AlertDescription>
           </Alert>
         </CardContent>

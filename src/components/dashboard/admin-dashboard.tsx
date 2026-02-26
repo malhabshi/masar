@@ -15,11 +15,12 @@ import type { AppUser } from '@/hooks/use-user';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
-  // SECURE: Strictly only fetch if user is admin.
-  const canFetch = currentUser && currentUser.role === 'admin';
+  // SECURE: Use path-guard pattern.
+  const studentsPath = (currentUser?.role === 'admin') ? 'students' : '';
+  const tasksPath = currentUser ? 'tasks' : '';
 
-  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(canFetch ? 'students' : '');
-  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
+  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath);
+  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksPath);
 
   const students = useMemo(() => studentsData || [], [studentsData]);
   const tasks = useMemo(() => tasksData || [], [tasksData]);
@@ -39,7 +40,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     return { totalStudents, unassignedStudents, totalApplications };
   }, [students]);
 
-  if (!canFetch) return null;
+  if (currentUser?.role !== 'admin') return null;
 
   return (
     <div className="space-y-6">

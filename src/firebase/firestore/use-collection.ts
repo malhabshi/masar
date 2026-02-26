@@ -47,7 +47,20 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   }, []);
 
   const memoizedQuery = useMemoFirebase(() => {
+    // 1. Path must be non-empty
     if (!path) return null;
+
+    // 2. SAFETY GUARD: Prevent unfiltered queries on the students collection
+    // This is the most common source of permission errors for employees.
+    const isStudentsPath = path === 'students' || path.endsWith('/students');
+    if (isStudentsPath && (!queryConstraints || queryConstraints.length === 0)) {
+        // We only allow unfiltered student queries for Admins, but we can't check role 
+        // inside this memo without creating a circular dependency. 
+        // Instead, we rely on the component-level guards to provide constraints.
+        // If we get here with 0 constraints on 'students', it's a risky query.
+        return null; 
+    }
+
     try {
         const collectionRef = collection(firestore, path);
         const constraints = Array.isArray(queryConstraints) ? queryConstraints : [];
@@ -61,9 +74,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
   useEffect(() => {
     // 1. Wait for Firebase Auth to initialize
-    if (!isAuthReady) {
-      return;
-    }
+    if (!isAuthReady) return;
 
     // 2. Prevent queries if no user is authenticated
     if (!auth.currentUser) {
@@ -72,7 +83,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       return;
     }
 
-    // 3. Prevent queries if no valid query is constructed
+    // 3. Prevent queries if no valid query is constructed (due to guards or empty path)
     if (!memoizedQuery) {
       setIsLoading(false);
       return;
@@ -80,13 +91,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     
     let isMounted = true;
     setIsLoading(true);
+    
     const unsubscribe = onSnapshot(memoizedQuery, 
       (snapshot) => {
         if (isMounted) {
             const items = snapshot.docs.map(doc => {
-            const docData = doc.data();
-            const converted = convertTimestamps<DocumentData>(docData);
-            return { id: doc.id, ...converted } as T;
+                const docData = doc.data();
+                const converted = convertTimestamps<DocumentData>(docData);
+                return { id: doc.id, ...converted } as T;
             });
             setData(items);
             setIsLoading(false);
@@ -95,8 +107,8 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       },
       (err) => {
         if (isMounted) {
-            // Check if this is a standard permission error
-            if (err.message.includes('permissions')) {
+            // Check if this is a permission error
+            if (err.message.toLowerCase().includes('permissions')) {
                 const permissionError = new FirestorePermissionError({
                     path: path,
                     operation: 'list'

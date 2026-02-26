@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import {
   Table,
@@ -29,13 +29,14 @@ export default function UnassignedStudentsPage() {
   const { user: currentUser, isUserLoading } = useUser();
 
   useEffect(() => {
-    console.log('📄 UnassignedStudentsPage rendering', { user: currentUser?.id, role: currentUser?.role });
     setIsMounted(true);
-  }, [currentUser]);
+  }, []);
 
-  // Construct constraints only when the user is available.
-  const studentsConstraints = useMemo(() => {
-    if (!isMounted || !currentUser) return null;
+  // SECURE: Strictly guard the path.
+  const studentsPath = (isMounted && currentUser?.role) ? 'students' : '';
+
+  const studentsConstraints = useMemoFirebase(() => {
+    if (!studentsPath || !currentUser) return [];
     
     if (currentUser.role === 'employee') {
       // Query for students created by this employee.
@@ -47,18 +48,18 @@ export default function UnassignedStudentsPage() {
         return [where('employeeId', '==', null)];
     }
     
-    return null;
-  }, [isMounted, currentUser]);
+    return [];
+  }, [studentsPath, currentUser?.id, currentUser?.role]);
 
   const { data: rawStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(
-    studentsConstraints ? 'students' : '',
-    ...(studentsConstraints || [])
+    studentsPath,
+    ...studentsConstraints
   );
 
   const unassignedStudents = useMemo(() => {
     if (!rawStudents) return [];
     if (currentUser?.role === 'employee') {
-        // Show only the unassigned ones from their created list.
+        // Show only the unassigned ones from their created list (client-side filter).
         return rawStudents.filter(s => !s.employeeId);
     }
     return rawStudents;
@@ -91,9 +92,7 @@ export default function UnassignedStudentsPage() {
         <CardHeader>
           <CardTitle className="text-destructive">Error Loading Students</CardTitle>
           <CardDescription>
-            {error.message.includes('permission') 
-              ? "Access denied. Your profile might not be fully configured."
-              : "There was a problem fetching the unassigned students."}
+            There was a problem fetching the unassigned students. Please contact support if this persists.
           </CardDescription>
         </CardHeader>
       </Card>

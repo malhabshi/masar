@@ -23,16 +23,12 @@ export function AdminApplicantsPage() {
     setIsMounted(true);
   }, []);
 
-  // SECURE: Only attempt to fetch the full students collection if user is admin or department.
-  // This prevents permission errors if an employee accidentally renders this component.
-  const canFetchAll = currentUser && ['admin', 'department'].includes(currentUser.role);
+  // SECURE: Use the path-guard pattern to ensure NO student queries run until role is confirmed.
+  const studentsPath = (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'students' : '';
+  const usersPath = currentUser ? 'users' : '';
 
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(
-    canFetchAll ? 'students' : ''
-  );
-  const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
-    currentUser ? 'users' : ''
-  );
+  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath);
+  const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
 
   const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
@@ -44,8 +40,15 @@ export function AdminApplicantsPage() {
     );
   }
   
-  if (!currentUser || !canFetchAll) {
-    return <p>Access denied. You do not have permission to view all applicants.</p>;
+  if (!currentUser || !studentsPath) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Access Denied</CardTitle>
+          <CardDescription>You do not have permission to view the master applicants list.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
   }
 
   return (
