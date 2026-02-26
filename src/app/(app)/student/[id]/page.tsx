@@ -144,13 +144,7 @@ export default function StudentDetailPage() {
                     <StudentUsersCard student={student} currentUser={currentUser} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
-                    <NotesSection
-                        title="Employee Notes"
-                        notes={student.employeeNotes || []}
-                        canWrite={isAssignedEmployee}
-                        onAddNote={handleAddEmployeeNote}
-                        placeholder="Add a new employee note..."
-                    />
+                    
                     {isAdminOrDept && (
                         <NotesSection
                             title="Admin Notes"
@@ -165,6 +159,15 @@ export default function StudentDetailPage() {
                 <div className="space-y-6">
                     <AcademicIntakeCard student={student} currentUser={currentUser} />
                     <IeltsCard student={student} currentUser={currentUser} />
+                    
+                    <NotesSection
+                        title="Employee Notes"
+                        notes={student.employeeNotes || []}
+                        canWrite={isAssignedEmployee}
+                        onAddNote={handleAddEmployeeNote}
+                        placeholder="Add a new employee note..."
+                    />
+
                     <Card>
                         <CardHeader>
                             <CardTitle>Internal Chat</CardTitle>
