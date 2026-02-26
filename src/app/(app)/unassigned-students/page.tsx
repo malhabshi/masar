@@ -27,7 +27,7 @@ export default function UnassignedStudentsPage() {
   const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const isEmployee = currentUser?.role === 'employee';
   
-  // Guard the path strictly based on role-readiness
+  // Guard the path: only query if user role is known
   const studentsPath = (isMounted && currentUser?.role) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 
@@ -35,15 +35,17 @@ export default function UnassignedStudentsPage() {
     if (!studentsPath || !currentUser?.role) return [];
     
     if (isAdminOrDept) {
+      // Admins see all unassigned students. We use orderBy to satisfy the "not unfiltered" guard.
       return [where('employeeId', '==', null), orderBy('createdAt', 'desc')];
     }
     
     if (isEmployee) {
-      // Employees query students they created to find the unassigned ones
-      return [where('createdBy', '==', currentUser.id), orderBy('createdAt', 'desc')];
+      // Employees see students they created. Filtering for unassigned happens on client.
+      // We don't use orderBy here to avoid composite index requirements.
+      return [where('createdBy', '==', currentUser.id)];
     }
     
-    return [where('id', '==', 'NONE')]; // Safety fallback
+    return [where('id', '==', 'NONE')]; 
   }, [studentsPath, currentUser?.role, currentUser?.id, isAdminOrDept, isEmployee]);
 
   const { data: rawStudents, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
@@ -51,23 +53,12 @@ export default function UnassignedStudentsPage() {
 
   const unassignedStudents = useMemo(() => {
     if (!rawStudents) return [];
-    // For employees, we query all they created and filter for unassigned status here.
+    // For employees, we filter for unassigned status here.
     if (currentUser?.role === 'employee') {
       return rawStudents.filter(s => s.employeeId === null);
     }
     return rawStudents;
   }, [rawStudents, currentUser?.role]);
-
-  // Debug logging for Admin investigation
-  useEffect(() => {
-    if (isMounted && !studentsLoading && currentUser) {
-        console.log('📊 Unassigned students data loaded:', {
-            role: currentUser.role,
-            count: unassignedStudents.length,
-            path: studentsPath
-        });
-    }
-  }, [unassignedStudents, studentsLoading, isMounted, currentUser, studentsPath]);
 
   if (!isMounted || isUserLoading || studentsLoading || usersAreLoading) {
     return (

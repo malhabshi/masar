@@ -50,7 +50,8 @@ export function NotificationListener() {
         return [orderBy('createdAt', 'desc')];
     }
     // Employees only see tasks addressed to them or 'all'
-    return [where('recipientId', 'in', [user.id, 'all']), orderBy('createdAt', 'desc')];
+    // We remove orderBy here to avoid index requirements for notifications.
+    return [where('recipientId', 'in', [user.id, 'all'])];
   }, [tasksPath, user?.id, user?.role]);
 
   const { data: tasks } = useCollection<Task>(tasksPath, ...tasksConstraints);
@@ -64,8 +65,8 @@ export function NotificationListener() {
     }
     
     if (user.role === 'employee' && user.civilId) {
-        // Query assigned students. Unassigned created by me is handled in specialized pages.
-        return [where('employeeId', '==', user.civilId), orderBy('createdAt', 'desc')];
+        // We remove orderBy here to avoid index requirements for background notifications.
+        return [where('employeeId', '==', user.civilId)];
     }
     
     // Default safety filter

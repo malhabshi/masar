@@ -38,7 +38,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [error, setError] = useState<Error | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Track auth readiness to prevent early queries
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(() => {
       setIsAuthReady(true);
@@ -47,15 +46,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   }, []);
 
   const memoizedQuery = useMemoFirebase(() => {
-    // 1. Path must be non-empty
     if (!path) return null;
-
-    // 2. SAFETY GUARD: Prevent unfiltered queries on the students collection.
-    // This is a fail-safe to prevent permission errors if a component initiates a query before filters are ready.
-    const isStudentsPath = path === 'students' || path.endsWith('/students');
-    if (isStudentsPath && (!queryConstraints || queryConstraints.length === 0)) {
-        return null; 
-    }
 
     try {
         const collectionRef = collection(firestore, path);
@@ -69,17 +60,29 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
 
   useEffect(() => {
-    // 1. Wait for Firebase Auth to initialize
     if (!isAuthReady) return;
 
-    // 2. Prevent queries if no user is authenticated
     if (!auth.currentUser) {
       setIsLoading(false);
       setData([]);
       return;
     }
 
-    // 3. Prevent queries if no valid query is constructed (due to guards or empty path)
+    // 🔥🔥🔥 GLOBAL DEBUG LOGGING
+    console.group('🔥🔥🔥 FIRESTORE QUERY DETECTED');
+    console.log('Path:', path);
+    console.log('Constraints count:', queryConstraints.length);
+    console.log('User UID:', auth.currentUser?.uid);
+    console.log('Stack trace:', new Error().stack);
+    console.groupEnd();
+
+    // ❌❌❌ SAFETY VALVE: Block unfiltered queries on the students collection
+    if (path === 'students' && queryConstraints.length === 0) {
+      console.error('❌❌❌ BLOCKED UNFILTERED STUDENT QUERY. Check stack trace above.');
+      setIsLoading(false);
+      return; 
+    }
+
     if (!memoizedQuery) {
       setIsLoading(false);
       return;
@@ -103,7 +106,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       },
       (err) => {
         if (isMounted) {
-            // Check if this is a permission error
             if (err.message.toLowerCase().includes('permissions')) {
                 const permissionError = new FirestorePermissionError({
                     path: path,
@@ -121,7 +123,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         isMounted = false;
         unsubscribe();
     };
-  }, [memoizedQuery, path, isAuthReady]);
+  }, [memoizedQuery, path, isAuthReady, queryConstraints.length]);
 
   return { data, isLoading, error };
 }

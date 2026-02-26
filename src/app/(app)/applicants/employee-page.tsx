@@ -3,7 +3,7 @@
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where, orderBy } from 'firebase/firestore';
+import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
   Card,
@@ -32,7 +32,8 @@ export function EmployeeApplicantsPage() {
   
   const myStudentsQuery = useMemoFirebase(() => {
     if (!studentsPath || !currentUser?.civilId) return [];
-    return [where('employeeId', '==', currentUser.civilId), orderBy('createdAt', 'desc')];
+    // We remove orderBy here to avoid composite index requirements when filtering by employeeId.
+    return [where('employeeId', '==', currentUser.civilId)];
   }, [studentsPath, currentUser?.civilId]);
 
   const {
