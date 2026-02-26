@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Student, AcademicTerm } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
@@ -44,13 +44,21 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   const canManage = isAdmin || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
 
   // Memoize sorted terms (newest first)
-  const terms = useMemo(() => {
+  const sortedTerms = useMemo(() => {
     if (!rawTerms || rawTerms.length === 0) return [];
+    console.log('[TermSelectionCard] Terms updated:', rawTerms.length);
     return [...rawTerms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
   }, [rawTerms]);
 
+  // Log terms presence for debugging
+  useEffect(() => {
+    if (rawTerms.length > 0) {
+      console.log('[TermSelectionCard] Current term options available:', sortedTerms.map(t => t.name));
+    }
+  }, [sortedTerms, rawTerms.length]);
+
   const handleTermChange = async (newTerm: string) => {
-    if (!canManage) return;
+    if (!canManage || newTerm === 'none' || newTerm === 'loading') return;
     
     setIsUpdating(true);
     const result = await updateStudentTerm(student.id, newTerm, currentUser.id);
@@ -141,7 +149,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select 
-              key={`${terms.length}-${student.term || 'none'}`}
+              key={`${sortedTerms.length}-${student.term || 'none'}`}
               value={student.term || 'none'} 
               onValueChange={handleTermChange}
               disabled={!canManage || isUpdating || termsLoading}
@@ -160,15 +168,15 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                 ) : (
                   <>
                     <SelectItem value="none" disabled>Select an intake...</SelectItem>
-                    {terms.map((term) => (
+                    {sortedTerms.map((term) => (
                       <SelectItem key={term.id} value={term.name}>
                         {term.name}
                       </SelectItem>
                     ))}
                     
-                    {terms.length === 0 && (
+                    {sortedTerms.length === 0 && (
                       <SelectItem value="no-data" disabled>
-                        No terms available. Ask admin to create options.
+                        No terms available. contact any admin user.
                       </SelectItem>
                     )}
                   </>
