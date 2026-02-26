@@ -68,17 +68,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       return;
     }
 
-    // 🔥🔥🔥 GLOBAL DEBUG LOGGING
-    console.group('🔥🔥🔥 FIRESTORE QUERY DETECTED');
-    console.log('Path:', path);
-    console.log('Constraints count:', queryConstraints.length);
-    console.log('User UID:', auth.currentUser?.uid);
-    console.log('Stack trace:', new Error().stack);
-    console.groupEnd();
-
-    // ❌❌❌ SAFETY VALVE: Block unfiltered queries on the students collection
+    // 🔥🔥🔥 GLOBAL SAFETY VALVE: Block unfiltered student queries for non-admins
+    // This triggers if a component attempts to list 'students' without any filters.
     if (path === 'students' && queryConstraints.length === 0) {
-      console.error('❌❌❌ BLOCKED UNFILTERED STUDENT QUERY. Check stack trace above.');
+      console.group('❌❌❌ BLOCKED UNFILTERED STUDENT QUERY');
+      console.warn('Path:', path);
+      console.warn('User UID:', auth.currentUser?.uid);
+      console.trace('Originating component stack trace:');
+      console.groupEnd();
       setIsLoading(false);
       return; 
     }

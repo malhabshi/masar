@@ -27,12 +27,11 @@ export function EmployeeApplicantsPage() {
 
   const isEmployee = currentUser?.role === 'employee';
   
-  // Guard the path strictly: path is empty unless role and civilId are confirmed
+  // Guard the path strictly: path is empty until user is identified and has a Civil ID
   const studentsPath = (isMounted && isEmployee && currentUser?.civilId) ? 'students' : '';
   
   const myStudentsQuery = useMemoFirebase(() => {
     if (!studentsPath || !currentUser?.civilId) return [];
-    // We remove orderBy here to avoid composite index requirements when filtering by employeeId.
     return [where('employeeId', '==', currentUser.civilId)];
   }, [studentsPath, currentUser?.civilId]);
 

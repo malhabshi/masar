@@ -26,7 +26,7 @@ export function AdminApplicantsPage() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'department';
   
-  // Guard the path strictly based on role
+  // Guard the path: only query if user role is confirmed as Admin/Dept
   const studentsPath = (isMounted && isAdmin) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 

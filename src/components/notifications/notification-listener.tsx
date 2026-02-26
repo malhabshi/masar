@@ -39,39 +39,42 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  // SECURE: Only query when role is confirmed. Use empty path otherwise.
-  const tasksPath = user?.role ? 'tasks' : '';
-  const studentsPath = user?.role ? 'students' : '';
+  // SECURE: Use stricter conditions for the collection path to prevent early unfiltered queries.
+  const isEmployee = user?.role === 'employee';
+  const isAdminDept = user?.role === 'admin' || user?.role === 'department';
+  
+  const tasksPath = (isAdminDept || (isEmployee && user?.id)) ? 'tasks' : '';
+  const studentsPath = (isAdminDept || (isEmployee && user?.civilId)) ? 'students' : '';
   const eventsPath = user ? 'upcoming_events' : '';
 
   const tasksConstraints = useMemoFirebase(() => {
-    if (!tasksPath || !user?.role) return [];
-    if (user.role === 'admin' || user.role === 'department') {
+    if (!tasksPath) return [];
+    if (isAdminDept) {
         return [orderBy('createdAt', 'desc')];
     }
-    // Employees only see tasks addressed to them or 'all'
-    // We remove orderBy here to avoid index requirements for notifications.
-    return [where('recipientId', 'in', [user.id, 'all'])];
-  }, [tasksPath, user?.id, user?.role]);
+    if (isEmployee && user?.id) {
+        return [where('recipientId', 'in', [user.id, 'all'])];
+    }
+    return [where('id', '==', 'NONE')]; 
+  }, [tasksPath, user?.id, isAdminDept, isEmployee]);
 
   const { data: tasks } = useCollection<Task>(tasksPath, ...tasksConstraints);
   const { data: events } = useCollection<UpcomingEvent>(eventsPath);
 
   const studentQueryConstraints = useMemoFirebase(() => {
-    if (!studentsPath || !user?.role) return [];
+    if (!studentsPath) return [];
     
-    if (user.role === 'admin' || user.role === 'department') {
+    if (isAdminDept) {
         return [orderBy('createdAt', 'desc')];
     }
     
-    if (user.role === 'employee' && user.civilId) {
-        // We remove orderBy here to avoid index requirements for background notifications.
+    if (isEmployee && user?.civilId) {
+        // Must filter by employeeId to satisfy security rules for background listening.
         return [where('employeeId', '==', user.civilId)];
     }
     
-    // Default safety filter
     return [where('id', '==', 'NONE')]; 
-  }, [studentsPath, user?.role, user?.civilId]);
+  }, [studentsPath, user?.civilId, isAdminDept, isEmployee]);
 
   const { data: students } = useCollection<Student>(
     studentsPath, 
