@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -37,6 +36,7 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
 
   const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
 
+  // Security: Only visible to Admin/Dept
   if (!isAdminOrDept) return null;
 
   const handleSave = async () => {

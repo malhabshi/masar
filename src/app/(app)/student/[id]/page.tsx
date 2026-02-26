@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -77,9 +76,6 @@ export default function StudentDetailPage() {
   const isLoading = isUserLoading || studentIsLoading || tasksLoading;
 
   useEffect(() => {
-    // When the assigned employee views the page, mark the student as "viewed"
-    // by clearing the `isNewForEmployee` flag. This will move them from the 
-    // "Newly Assigned" section to the main portfolio on the Applicants page.
     if (student?.isNewForEmployee && currentUser?.civilId === student?.employeeId) {
         const studentDocRef = doc(firestore, 'students', student.id);
         updateDocumentNonBlocking(studentDocRef, { isNewForEmployee: false });
@@ -90,8 +86,6 @@ export default function StudentDetailPage() {
     if (isLoading || studentError) return;
     if (!currentUser || !student) return;
 
-    // If the current user is an employee, verify they are still assigned to this student.
-    // If not, redirect them away to prevent a crash.
     if (currentUser.role === 'employee' && student.employeeId !== currentUser.civilId) {
         toast({
             title: 'Student Transferred',
@@ -113,20 +107,15 @@ export default function StudentDetailPage() {
   }
 
   if (studentError) {
-    // If the error is a permission issue and the user is an employee,
-    // they've likely lost access. Redirect them gracefully.
     if (studentError.message.includes('permission') && currentUser?.role === 'employee') {
       router.push('/applicants');
       toast({ title: 'Access Denied', description: 'You no longer have access to this student.' });
-      return null; // Render nothing while redirecting
+      return null;
     }
     return <div className="text-destructive">Error: {studentError.message}</div>
   }
   
-  // This check happens after loading, if the student is truly not found
   if (!student) {
-    // The redirection logic now handles the permission error case,
-    // so this is primarily for genuinely non-existent student IDs.
     return <div>Student not found or you do not have permission to view this page.</div>;
   }
   
@@ -140,11 +129,8 @@ export default function StudentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {canRenderContent && (
-        <div className="space-y-6">
-          <AcademicIntakeCard student={student} currentUser={currentUser} />
-          <TargetCountriesCard student={student} currentUser={currentUser} />
-        </div>
+      {canRenderContent && isAdminOrDept && (
+        <AcademicIntakeCard student={student} currentUser={currentUser} />
       )}
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
