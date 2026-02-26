@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Student, AcademicTerm } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
@@ -41,6 +41,12 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
 
   const isAdmin = currentUser.role === 'admin';
   const canManage = isAdmin || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
+
+  // Memoize sorted terms
+  const sortedTerms = useMemo(() => {
+    if (!terms) return [];
+    return [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+  }, [terms]);
 
   const handleTermChange = async (newTerm: string) => {
     if (!canManage) return;
@@ -83,12 +89,6 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
     }
   };
 
-  // Memoize sorted terms to prevent unnecessary re-renders
-  const sortedTerms = useMemo(() => {
-    if (!terms) return [];
-    return [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
-  }, [terms]);
-
   return (
     <Card className="border-primary/20">
       <CardHeader className="py-4 flex flex-row items-center justify-between space-y-0">
@@ -127,9 +127,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                 </div>
               </div>
               <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleQuickAddTerm} disabled={isAdding || !newTermName.trim()}>
                   {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Add Option
@@ -143,7 +141,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select 
-              value={student.term || ''} 
+              value={student.term || 'none'} 
               onValueChange={handleTermChange}
               disabled={!canManage || isUpdating || termsLoading}
             >
@@ -156,11 +154,14 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 ) : sortedTerms.length > 0 ? (
-                  sortedTerms.map((term) => (
-                    <SelectItem key={term.id} value={term.name}>
-                      {term.name}
-                    </SelectItem>
-                  ))
+                  <>
+                    <SelectItem value="none" disabled>Select an option...</SelectItem>
+                    {sortedTerms.map((term) => (
+                      <SelectItem key={term.id} value={term.name}>
+                        {term.name}
+                      </SelectItem>
+                    ))}
+                  </>
                 ) : (
                   <div className="p-2 text-sm text-muted-foreground text-center">
                     No terms available. Ask any admin to create options.

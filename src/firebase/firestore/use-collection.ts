@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, QueryConstraint, DocumentData } from 'firebase/firestore';
 import { firestore, auth } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
@@ -42,6 +42,8 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [user, setUser] = useState(auth.currentUser);
+  
+  const lastPathRef = useRef(path);
 
   // Sync with auth state to ensure permissions are checked correctly
   useEffect(() => {
@@ -62,26 +64,24 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         console.error(`[useCollection:${path}] Failed to create query:`, e);
         return null;
     }
-  }, [path, ...(Array.isArray(queryConstraints) ? queryConstraints : [])]);
+  }, [path, JSON.stringify(queryConstraints)]);
 
 
   useEffect(() => {
-    // 1. Prevent queries if no path is provided
-    if (!path || !memoizedQuery) {
-      setIsLoading(false);
-      setData([]);
-      return;
+    // Reset data and loading state if path changes
+    if (path !== lastPathRef.current) {
+        setIsLoading(true);
+        setData([]);
+        lastPathRef.current = path;
     }
 
-    // 2. Prevent queries if no user is logged in (standard security rules behavior)
-    if (!user) {
-      setData([]);
+    if (!path || !memoizedQuery || !user) {
       setIsLoading(false);
+      if (!user) setData([]);
       return;
     }
     
     let isMounted = true;
-    setIsLoading(true);
     
     const unsubscribe = onSnapshot(memoizedQuery, 
       (snapshot) => {
