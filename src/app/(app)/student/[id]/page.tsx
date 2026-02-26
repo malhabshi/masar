@@ -25,6 +25,7 @@ import { IeltsCard } from '@/components/student/ielts-card';
 import { StudentUsersCard } from '@/components/student/student-users-card';
 import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-banner';
 import { AcademicIntakeCard } from '@/components/student/academic-intake-card';
+import { TargetCountriesCard } from '@/components/student/target-countries-card';
 
 
 function StudentPageContentSkeleton() {
@@ -138,6 +139,7 @@ export default function StudentDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
                     <StudentApplications student={student} />
+                    <TargetCountriesCard student={student} currentUser={currentUser} />
                     <IeltsCard student={student} currentUser={currentUser} />
                     <ReadinessChecklist student={student} currentUser={currentUser} />
                     <StudentUsersCard student={student} currentUser={currentUser} />
