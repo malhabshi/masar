@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Student, AcademicTerm } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
@@ -66,19 +66,28 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   const handleQuickAddTerm = async () => {
     if (!newTermName.trim()) return;
     setIsAdding(true);
-    const result = await addAcademicTerm(newTermName.trim(), currentUser.id);
-    if (result.success) {
-      toast({ title: 'Term Created', description: result.message });
-      setNewTermName('');
-      setIsDialogOpen(false);
-    } else {
-      toast({ variant: 'destructive', title: 'Error', description: result.message });
+    
+    try {
+      const result = await addAcademicTerm(newTermName.trim(), currentUser.id);
+      if (result.success) {
+        toast({ title: 'Term Created', description: result.message });
+        setNewTermName('');
+        setIsDialogOpen(false);
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+      }
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to create term.' });
+    } finally {
+      setIsAdding(false);
     }
-    setIsAdding(false);
   };
 
-  // Safe sorting of terms
-  const sortedTerms = [...(terms || [])].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+  // Memoize sorted terms to prevent unnecessary re-renders
+  const sortedTerms = useMemo(() => {
+    if (!terms) return [];
+    return [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+  }, [terms]);
 
   return (
     <Card className="border-primary/20">
@@ -108,7 +117,12 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                     placeholder="e.g. 7/8 2026, Spring 2026" 
                     value={newTermName}
                     onChange={(e) => setNewTermName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleQuickAddTerm()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleQuickAddTerm();
+                      }
+                    }}
                   />
                 </div>
               </div>

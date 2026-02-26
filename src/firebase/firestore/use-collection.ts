@@ -7,7 +7,9 @@ import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 import { useMemoFirebase } from './memo';
 
-// Recursively convert all Timestamps to Date objects
+/**
+ * Recursively convert all Timestamps to Date objects within a data structure.
+ */
 function convertTimestamps<T>(data: any): T {
   if (!data) return data as T;
   
@@ -32,20 +34,22 @@ function convertTimestamps<T>(data: any): T {
   return data as T;
 }
 
+/**
+ * Hook to subscribe to a Firestore collection with real-time updates.
+ */
 export function useCollection<T>(path: string, ...queryConstraints: QueryConstraint[]) {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [user, setUser] = useState(auth.currentUser);
 
+  // Sync with auth state to ensure permissions are checked correctly
   useEffect(() => {
-    // onAuthStateChanged always fires at least once with the current user state
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      console.log(`[useCollection:${path}] Auth state changed. User:`, user?.uid || 'none');
-      setIsAuthReady(true);
+    const unsubscribe = auth.onAuthStateChanged((u) => {
+      setUser(u);
     });
     return () => unsubscribe();
-  }, [path]);
+  }, []);
 
   const memoizedQuery = useMemoFirebase(() => {
     if (!path) return null;
@@ -62,17 +66,16 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
 
   useEffect(() => {
-    if (!isAuthReady) return;
-
-    if (!auth.currentUser) {
-      console.log(`[useCollection:${path}] No user logged in. Clearing data.`);
+    // 1. Prevent queries if no path is provided
+    if (!path || !memoizedQuery) {
       setIsLoading(false);
       setData([]);
       return;
     }
 
-    if (!memoizedQuery) {
-      console.log(`[useCollection:${path}] No query available.`);
+    // 2. Prevent queries if no user is logged in (standard security rules behavior)
+    if (!user) {
+      setData([]);
       setIsLoading(false);
       return;
     }
@@ -80,7 +83,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     let isMounted = true;
     setIsLoading(true);
     
-    console.log(`[useCollection:${path}] Setting up listener...`);
     const unsubscribe = onSnapshot(memoizedQuery, 
       (snapshot) => {
         if (isMounted) {
@@ -89,7 +91,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
                 const converted = convertTimestamps<DocumentData>(docData);
                 return { id: doc.id, ...converted } as T;
             });
-            console.log(`[useCollection:${path}] Received ${items.length} items.`);
             setData(items);
             setIsLoading(false);
             setError(null);
@@ -115,7 +116,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         isMounted = false;
         unsubscribe();
     };
-  }, [memoizedQuery, path, isAuthReady, queryConstraints.length]);
+  }, [memoizedQuery, path, user]);
 
   return { data, isLoading, error };
 }
