@@ -157,6 +157,7 @@ export default function StudentDetailPage() {
 
                 <div className="space-y-6">
                     <ReadinessChecklist student={student} currentUser={currentUser} />
+                    <MissingItemsSection student={student} currentUser={currentUser} />
                     <AcademicIntakeCard student={student} currentUser={currentUser} />
                     <IeltsCard student={student} currentUser={currentUser} />
                     
@@ -174,7 +175,7 @@ export default function StudentDetailPage() {
                         </CardHeader>
                         <StudentChat student={student} currentUser={currentUser} />
                     </Card>
-                    <MissingItemsSection student={student} currentUser={currentUser} />
+                    
                     {student.transferHistory && student.transferHistory.length > 0 && (
                         <TransferHistory transferHistory={student.transferHistory} />
                     )}
