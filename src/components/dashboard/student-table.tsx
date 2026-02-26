@@ -161,7 +161,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     }
   }
 
-  const numColumns = 6;
+  const numColumns = 8;
 
   const currentEmptyStateMessage = displayedStudents.length === 0 && isFiltered 
       ? 'No students match your current filters.' 
@@ -234,9 +234,11 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
           <TableHeader>
             <TableRow>
               <TableHead>Student</TableHead>
+              <TableHead>Apps</TableHead>
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Employee</TableHead>
               <TableHead>IELTS Overall</TableHead>
+              <TableHead>App. Countries</TableHead>
               <TableHead>Term</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -249,6 +251,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
                 const requester = student.deletionRequested?.requestedBy ? deletionRequesterMap.get(student.deletionRequested.requestedBy) : null;
                 const canAssign = isAdminOrDept && !student.employeeId;
+                const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
                 return (
                 <TableRow key={student.id}>
@@ -330,6 +333,11 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                     </div>
                   </TableCell>
                   <TableCell>
+                    <Badge variant="secondary" className="font-mono">
+                      {student.applications?.length || 0}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>
                       {pipelineStatusLabels[student.pipelineStatus || 'none']}
                     </Badge>
@@ -339,6 +347,19 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                     <Badge variant={student.ieltsOverall ? 'secondary' : 'outline'}>
                         {(student.ieltsOverall ?? 0).toFixed(1)}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {appCountries.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 max-w-[120px]">
+                            {appCountries.map(c => (
+                                <Badge key={c} variant="outline" className="text-[10px] px-1 h-5 whitespace-nowrap">
+                                    {c}
+                                </Badge>
+                            ))}
+                        </div>
+                    ) : (
+                        <span className="text-xs text-muted-foreground italic">None</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {student.term ? (
