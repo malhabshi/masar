@@ -134,7 +134,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                       </>
                     ) : (
                       <div className="p-2 text-sm text-muted-foreground text-center">
-                        No terms available.
+                        No terms available. Ask admin to create options.
                       </div>
                     )}
 
@@ -170,7 +170,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         )}
       </CardContent>
 
-      {/* Hidden Dialog triggered by the "Add New Intake..." option */}
+      {/* Quick Add Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>

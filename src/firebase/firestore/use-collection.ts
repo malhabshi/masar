@@ -42,10 +42,8 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  // Track path changes to reset state
   const lastPathRef = useRef(path);
 
-  // Stable query reference
   const memoizedQuery = useMemoFirebase(() => {
     if (!path) return null;
     try {
@@ -58,7 +56,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   }, [path, ...queryConstraints]);
 
   useEffect(() => {
-    // Reset if path changes
     if (path !== lastPathRef.current) {
         setIsLoading(true);
         setData([]);
@@ -71,19 +68,26 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     }
 
     let isMounted = true;
+    let unsubscribeSnapshot: (() => void) | null = null;
 
-    // Use onAuthStateChanged to ensure the user is ready before listening (rules requirement)
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (!user) {
         if (isMounted) {
           setData([]);
           setIsLoading(false);
         }
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
         return;
       }
 
-      // Establish the Firestore listener
-      const unsubscribeSnapshot = onSnapshot(memoizedQuery as Query, 
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+
+      unsubscribeSnapshot = onSnapshot(memoizedQuery as Query, 
         (snapshot) => {
           if (isMounted) {
             const items = snapshot.docs.map(doc => {
@@ -98,7 +102,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         },
         (err) => {
           if (isMounted) {
-            console.error(`[useCollection:${path}] Snapshot error:`, err);
             if (err.message.toLowerCase().includes('permissions')) {
               const permissionError = new FirestorePermissionError({
                 path: path,
@@ -111,13 +114,12 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
           }
         }
       );
-
-      return () => unsubscribeSnapshot();
     });
 
     return () => {
       isMounted = false;
       unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
     };
   }, [memoizedQuery, path]);
 
