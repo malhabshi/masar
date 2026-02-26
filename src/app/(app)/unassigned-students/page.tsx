@@ -12,7 +12,7 @@ import {
 import { Loader2 } from 'lucide-react';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where } from 'firebase/firestore';
+import { where, orderBy } from 'firebase/firestore';
 import type { Student, User } from '@/lib/types';
 import { StudentTable } from '@/components/dashboard/student-table';
 
@@ -24,20 +24,27 @@ export default function UnassignedStudentsPage() {
     setIsMounted(true);
   }, []);
 
-  const studentsPath = (isMounted && currentUser) ? 'students' : '';
+  const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const isEmployee = currentUser?.role === 'employee';
+  
+  // Guard the path strictly based on role-readiness
+  const studentsPath = (isMounted && currentUser?.role) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 
   const studentsConstraints = useMemoFirebase(() => {
-    if (!studentsPath || !currentUser) return [];
-    if (currentUser.role === 'admin' || currentUser.role === 'department') {
-      return [where('employeeId', '==', null)];
+    if (!studentsPath || !currentUser?.role) return [];
+    
+    if (isAdminOrDept) {
+      return [where('employeeId', '==', null), orderBy('createdAt', 'desc')];
     }
-    if (currentUser.role === 'employee') {
-      // Employees query students they created
-      return [where('createdBy', '==', currentUser.id)];
+    
+    if (isEmployee) {
+      // Employees query students they created to find the unassigned ones
+      return [where('createdBy', '==', currentUser.id), orderBy('createdAt', 'desc')];
     }
-    return [];
-  }, [studentsPath, currentUser?.role, currentUser?.id]);
+    
+    return [where('id', '==', 'NONE')]; // Safety fallback
+  }, [studentsPath, currentUser?.role, currentUser?.id, isAdminOrDept, isEmployee]);
 
   const { data: rawStudents, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
@@ -51,12 +58,16 @@ export default function UnassignedStudentsPage() {
     return rawStudents;
   }, [rawStudents, currentUser?.role]);
 
-  // Debug logging as requested
+  // Debug logging for Admin investigation
   useEffect(() => {
     if (isMounted && !studentsLoading && currentUser) {
-        console.log('📊 Unassigned students data:', unassignedStudents);
+        console.log('📊 Unassigned students data loaded:', {
+            role: currentUser.role,
+            count: unassignedStudents.length,
+            path: studentsPath
+        });
     }
-  }, [unassignedStudents, studentsLoading, isMounted, currentUser]);
+  }, [unassignedStudents, studentsLoading, isMounted, currentUser, studentsPath]);
 
   if (!isMounted || isUserLoading || studentsLoading || usersAreLoading) {
     return (

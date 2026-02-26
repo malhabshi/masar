@@ -25,6 +25,8 @@ export function AdminApplicantsPage() {
   }, []);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  
+  // Guard the path strictly based on role
   const studentsPath = (isMounted && isAdmin) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 

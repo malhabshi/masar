@@ -39,16 +39,17 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  // SECURE: Guard the paths strictly. Only query when user role is known.
+  // SECURE: Only query when role is confirmed. Use empty path otherwise.
   const tasksPath = user?.role ? 'tasks' : '';
   const studentsPath = user?.role ? 'students' : '';
   const eventsPath = user ? 'upcoming_events' : '';
 
   const tasksConstraints = useMemoFirebase(() => {
-    if (!tasksPath || !user) return [];
+    if (!tasksPath || !user?.role) return [];
     if (user.role === 'admin' || user.role === 'department') {
         return [orderBy('createdAt', 'desc')];
     }
+    // Employees only see tasks addressed to them or 'all'
     return [where('recipientId', 'in', [user.id, 'all']), orderBy('createdAt', 'desc')];
   }, [tasksPath, user?.id, user?.role]);
 
@@ -56,15 +57,19 @@ export function NotificationListener() {
   const { data: events } = useCollection<UpcomingEvent>(eventsPath);
 
   const studentQueryConstraints = useMemoFirebase(() => {
-    if (!studentsPath || !user) return [];
+    if (!studentsPath || !user?.role) return [];
+    
     if (user.role === 'admin' || user.role === 'department') {
         return [orderBy('createdAt', 'desc')];
     }
+    
     if (user.role === 'employee' && user.civilId) {
+        // Query assigned students. Unassigned created by me is handled in specialized pages.
         return [where('employeeId', '==', user.civilId), orderBy('createdAt', 'desc')];
     }
-    // Return a dummy filter that won't match but IS a filter to satisfy safety requirements.
-    return [where('employeeId', '==', 'NONE')]; 
+    
+    // Default safety filter
+    return [where('id', '==', 'NONE')]; 
   }, [studentsPath, user?.role, user?.civilId]);
 
   const { data: students } = useCollection<Student>(

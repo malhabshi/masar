@@ -54,7 +54,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     // This is a fail-safe to prevent permission errors if a component initiates a query before filters are ready.
     const isStudentsPath = path === 'students' || path.endsWith('/students');
     if (isStudentsPath && (!queryConstraints || queryConstraints.length === 0)) {
-        // If we get here with 0 constraints on 'students', it's a risky query that would likely fail rules.
         return null; 
     }
 

@@ -3,7 +3,7 @@
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where } from 'firebase/firestore';
+import { where, orderBy } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
   Card,
@@ -25,11 +25,14 @@ export function EmployeeApplicantsPage() {
     setIsMounted(true);
   }, []);
 
-  const studentsPath = (isMounted && currentUser?.role === 'employee' && currentUser?.civilId) ? 'students' : '';
+  const isEmployee = currentUser?.role === 'employee';
+  
+  // Guard the path strictly: path is empty unless role and civilId are confirmed
+  const studentsPath = (isMounted && isEmployee && currentUser?.civilId) ? 'students' : '';
   
   const myStudentsQuery = useMemoFirebase(() => {
     if (!studentsPath || !currentUser?.civilId) return [];
-    return [where('employeeId', '==', currentUser.civilId)];
+    return [where('employeeId', '==', currentUser.civilId), orderBy('createdAt', 'desc')];
   }, [studentsPath, currentUser?.civilId]);
 
   const {
@@ -39,7 +42,7 @@ export function EmployeeApplicantsPage() {
   } = useCollection<Student>(studentsPath, ...myStudentsQuery);
 
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
-    currentUser ? 'users' : ''
+    (isMounted && currentUser) ? 'users' : ''
   );
 
   const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
@@ -52,11 +55,18 @@ export function EmployeeApplicantsPage() {
     );
   }
 
-  if (!currentUser) {
-    return <p>Loading user...</p>;
+  if (!currentUser || !isEmployee) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Access Denied</CardTitle>
+          <CardDescription>This page is intended for employee accounts.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
   }
 
-  if (currentUser.role === 'employee' && !currentUser.civilId) {
+  if (!currentUser.civilId) {
     return (
       <Card>
         <CardHeader>
@@ -85,7 +95,7 @@ export function EmployeeApplicantsPage() {
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Could not load your students. Please check your network connection or contact support.
+              Could not load your students. Please ensure you have the correct permissions.
             </AlertDescription>
           </Alert>
         </CardContent>
