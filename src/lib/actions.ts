@@ -240,7 +240,7 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
 
 // --- TASK ACTIONS ---
 
-export async function createStudentTask(authorId: string, studentId: string, requestTypeId: string, description: string) {
+export async function createStudentTask(authorId: string, studentId: string, requestTypeId: string, description: string, dynamicData?: any) {
     console.log('📤 Server action started:', { action: 'createStudentTask', studentId, requestTypeId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
@@ -271,6 +271,8 @@ export async function createStudentTask(authorId: string, studentId: string, req
           });
         }
 
+        const creator = await getUser(authorId);
+
         const newTask: Omit<Task, 'id'> = {
             authorId,
             recipientId: recipientIds[0] || 'all', // Legacy
@@ -283,6 +285,13 @@ export async function createStudentTask(authorId: string, studentId: string, req
             studentId: studentId,
             studentName: studentData.name,
             taskType: requestTypeData.name,
+            ...(dynamicData && { data: {
+              ...dynamicData,
+              studentEmail: studentData.email,
+              studentPhone: studentData.phone,
+              requestedBy: creator?.email,
+              requestedByName: creator?.name
+            }})
         };
 
         await adminDb!.collection('tasks').add(newTask);
