@@ -99,7 +99,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   }, [allUsers]);
 
   const displayedStudents = useMemo(() => {
-    return students.filter(student => {
+    const filtered = students.filter(student => {
         const searchLower = debouncedSearchQuery.toLowerCase();
         const matchesSearch = !debouncedSearchQuery || 
             student.name.toLowerCase().includes(searchLower) ||
@@ -126,9 +126,43 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
         
         return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts;
     });
+
+    // Sort: Students with notifications first
+    return [...filtered].sort((a, b) => {
+        const getNotificationScore = (s: Student) => {
+            let score = 0;
+            if (currentUser.role === 'admin' || currentUser.role === 'department') {
+                // Admin/Dept: Count unread chat updates + new documents from employees
+                score += (s.unreadUpdates || 0);
+                score += (s.newDocumentsForAdmin || 0);
+                // Also prioritize deletion requests as they require immediate attention
+                if (s.deletionRequested?.status === 'pending') score += 100;
+            } else if (currentUser.role === 'employee') {
+                // Employee: Count messages from admins + new documents from admins + new missing items
+                score += (s.employeeUnreadMessages || 0);
+                score += (s.newDocumentsForEmployee || 0);
+                score += (s.newMissingItemsForEmployee || 0);
+                // Newly assigned students are also prioritized
+                if (s.isNewForEmployee) score += 50;
+            }
+            return score;
+        };
+
+        const scoreA = getNotificationScore(a);
+        const scoreB = getNotificationScore(b);
+
+        if (scoreA !== scoreB) {
+            return scoreB - scoreA; // Higher score comes first
+        }
+
+        // Secondary sort: Creation date (newest first)
+        const dateA = new Date(a.createdAt).getTime() || 0;
+        const dateB = new Date(b.createdAt).getTime() || 0;
+        return dateB - dateA;
+    });
   }, [
     students, debouncedSearchQuery,
-    pipelineFilter, employeeFilter, ieltsFilter, employeeMapByCivilId
+    pipelineFilter, employeeFilter, ieltsFilter, employeeMapByCivilId, currentUser
   ]);
 
   const handleClearFilters = () => {
@@ -158,7 +192,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     }
   }
 
-  const numColumns = 8; // Incremented for the new Term column
+  const numColumns = 8; 
 
   const currentEmptyStateMessage = displayedStudents.length === 0 && isFiltered 
       ? 'No students match your current filters.' 
