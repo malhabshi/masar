@@ -26,7 +26,6 @@ import { IeltsCard } from '@/components/student/ielts-card';
 import { StudentUsersCard } from '@/components/student/student-users-card';
 import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-banner';
 import { TargetCountriesCard } from '@/components/student/target-countries-card';
-import { TermSelectionCard } from '@/components/student/term-selection-card';
 
 
 function StudentPageContentSkeleton() {
@@ -175,7 +174,6 @@ export default function StudentDetailPage() {
                 </div>
 
                 <div className="space-y-6">
-                    <TermSelectionCard student={student} currentUser={currentUser} />
                     <Card>
                         <CardHeader>
                             <CardTitle>Internal Chat</CardTitle>

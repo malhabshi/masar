@@ -1,8 +1,9 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, AcademicTerm } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1816,136 +1817,4 @@ export async function updateStudentTargetCountries(studentId: string, countries:
         console.error('❌ Server action failed:', { action: 'updateStudentTargetCountries', error });
         return { success: false, message: error instanceof Error ? error.message : 'Failed to update target countries.' };
     }
-}
-
-// --- ACADEMIC TERM ACTIONS ---
-
-export async function addAcademicTerm(name: string, adminId: string) {
-  console.log('📤 Server action started:', { action: 'addAcademicTerm', name, timestamp: new Date().toISOString() });
-  if (!checkAdminServices()) return { success: false, message: 'Admin services not available.' };
-
-  try {
-    const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') {
-      return { success: false, message: 'Unauthorized. Only admins can manage terms.' };
-    }
-
-    const termData: Omit<AcademicTerm, 'id'> = {
-      name,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    const docRef = await adminDb!.collection('academic_terms').add(termData);
-    
-    console.log('✅ Server action finished:', { action: 'addAcademicTerm', success: true, id: docRef.id });
-    return { success: true, message: `Term '${name}' added.` };
-  } catch (error: any) {
-    console.error('❌ Server action failed:', { action: 'addAcademicTerm', error });
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to add term.' };
-  }
-}
-
-export async function deleteAcademicTerm(termId: string, adminId: string) {
-  console.log('📤 Server action started:', { action: 'deleteAcademicTerm', termId, timestamp: new Date().toISOString() });
-  if (!checkAdminServices()) return { success: false, message: 'Admin services not available.' };
-
-  try {
-    const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') {
-      return { success: false, message: 'Unauthorized.' };
-    }
-
-    await adminDb!.collection('academic_terms').doc(termId).delete();
-    
-    console.log('✅ Server action finished:', { action: 'deleteAcademicTerm', success: true });
-    return { success: true, message: 'Term deleted.' };
-  } catch (error: any) {
-    console.error('❌ Server action failed:', { action: 'deleteAcademicTerm', error });
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to delete term.' };
-  }
-}
-
-export async function updateStudentTerm(studentId: string, termName: string, updaterId: string) {
-  console.log('📤 Server action started:', { action: 'updateStudentTerm', studentId, termName, timestamp: new Date().toISOString() });
-  if (!checkAdminServices()) return { success: false, message: 'Database connection not available.' };
-
-  try {
-    const updater = await getUser(updaterId);
-    if (!updater) return { success: false, message: 'User not found.' };
-
-    const studentRef = adminDb!.collection('students').doc(studentId);
-    const studentDoc = await studentRef.get();
-    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
-
-    const studentData = studentDoc.data() as Student;
-    const isAssignedEmployee = updater.role === 'employee' && updater.civilId === studentData.employeeId;
-    const isAdminOrDept = ['admin', 'department'].includes(updater.role);
-
-    if (!isAssignedEmployee && !isAdminOrDept) {
-      return { success: false, message: 'You do not have permission to update this student\'s term.' };
-    }
-
-    await studentRef.update({ term: termName });
-
-    const newNote: Note = {
-      id: `note-term-${Date.now()}`,
-      authorId: updaterId,
-      content: `Academic Term updated to: ${termName}`,
-      createdAt: new Date().toISOString(),
-    };
-    await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
-
-    console.log('✅ Server action finished:', { action: 'updateStudentTerm', success: true });
-    return { success: true, message: 'Student intake term updated.' };
-  } catch (error: any) {
-    console.error('❌ Server action failed:', { action: 'updateStudentTerm', error });
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to update student term.' };
-  }
-}
-
-export async function seedAcademicTerms(adminId: string) {
-  console.log('📤 Server action started:', { action: 'seedAcademicTerms', adminId, timestamp: new Date().toISOString() });
-  if (!checkAdminServices()) return { success: false, message: 'Admin services not available.' };
-
-  try {
-    const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') {
-      return { success: false, message: 'Unauthorized. Only admins can seed terms.' };
-    }
-
-    const termsToSeed = [
-      "summar 2026 (6/7)",
-      "FALL 2026 (8/9)",
-      "SPRING 2027 (1)",
-      "March 2027 (3)",
-      "summar 2027 (6/7)",
-      "FALL 2027 (8/9)",
-      "SPRING 2028 (1)",
-      "March 2028 (3)",
-      "summar 2028 (6/7)"
-    ];
-
-    const batch = adminDb!.batch();
-    const collectionRef = adminDb!.collection('academic_terms');
-
-    // To prevent immediate duplicates if clicked twice quickly, 
-    // we use the term name as a part of the ID or just proceed with batch add.
-    for (const termName of termsToSeed) {
-      const docRef = collectionRef.doc();
-      batch.set(docRef, {
-        name: termName,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      });
-    }
-
-    await batch.commit();
-    
-    console.log('✅ Server action finished:', { action: 'seedAcademicTerms', success: true });
-    return { success: true, message: `${termsToSeed.length} terms seeded successfully.` };
-  } catch (error: any) {
-    console.error('❌ Server action failed:', { action: 'seedAcademicTerms', error });
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to seed terms.' };
-  }
 }

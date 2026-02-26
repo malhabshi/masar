@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -66,7 +67,6 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
-  const [termFilter, setTermFilter] = useState('');
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -124,13 +124,11 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
             }
         }
         
-        const matchesTerm = !termFilter.trim() || (student.term && student.term.toLowerCase().includes(termFilter.trim().toLowerCase()));
-
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesTerm;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts;
     });
   }, [
     students, debouncedSearchQuery,
-    pipelineFilter, employeeFilter, ieltsFilter, termFilter, employeeMapByCivilId
+    pipelineFilter, employeeFilter, ieltsFilter, employeeMapByCivilId
   ]);
 
   const handleClearFilters = () => {
@@ -138,9 +136,8 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     setPipelineFilter('all');
     setEmployeeFilter('all');
     setIeltsFilter('all');
-    setTermFilter('');
   };
-  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || termFilter;
+  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -161,7 +158,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     }
   }
 
-  const numColumns = 8;
+  const numColumns = 7;
 
   const currentEmptyStateMessage = displayedStudents.length === 0 && isFiltered 
       ? 'No students match your current filters.' 
@@ -219,12 +216,6 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                         <SelectItem value=">=6.5">6.5+</SelectItem>
                     </SelectContent>
                 </Select>
-                <Input
-                    placeholder="Filter by term..."
-                    value={termFilter}
-                    onChange={(e) => setTermFilter(e.target.value)}
-                    className="w-full flex-1"
-                />
                 {isFiltered && <Button variant="ghost" onClick={handleClearFilters} className="w-full md:w-auto"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
             </div>
         </div>
@@ -239,7 +230,6 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
               <TableHead>Assigned Employee</TableHead>
               <TableHead>IELTS Overall</TableHead>
               <TableHead>App. Countries</TableHead>
-              <TableHead>Term</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -359,13 +349,6 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                         </div>
                     ) : (
                         <span className="text-xs text-muted-foreground italic">None</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {student.term ? (
-                        <Badge variant="outline">{student.term}</Badge>
-                    ) : (
-                        <span className="text-sm text-muted-foreground">N/A</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">

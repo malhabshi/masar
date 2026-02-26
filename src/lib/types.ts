@@ -103,7 +103,6 @@ export interface Student {
     status: 'pending' | 'approved' | 'rejected';
   };
   isNewForEmployee?: boolean;
-  term?: string;
   studentLogins?: StudentLogin[];
   duplicatePhoneWarning?: boolean;
   duplicateOfStudentIds?: string[] | null;
@@ -246,11 +245,4 @@ export interface EmployeeStats {
   totalStudents: number;
   dailyCounts: EmployeeDailyCount[];
   monthlyTotals: EmployeeMonthlyTotal[];
-}
-
-export interface AcademicTerm {
-  id: string;
-  name: string;
-  isActive: boolean;
-  createdAt: string;
 }
