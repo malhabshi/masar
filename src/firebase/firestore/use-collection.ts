@@ -68,18 +68,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       return;
     }
 
-    // 🔥🔥🔥 GLOBAL SAFETY VALVE: Block unfiltered student queries for non-admins
-    // This triggers if a component attempts to list 'students' without any filters.
-    if (path === 'students' && queryConstraints.length === 0) {
-      console.group('❌❌❌ BLOCKED UNFILTERED STUDENT QUERY');
-      console.warn('Path:', path);
-      console.warn('User UID:', auth.currentUser?.uid);
-      console.trace('Originating component stack trace:');
-      console.groupEnd();
-      setIsLoading(false);
-      return; 
-    }
-
     if (!memoizedQuery) {
       setIsLoading(false);
       return;

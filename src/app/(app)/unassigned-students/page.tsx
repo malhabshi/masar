@@ -9,12 +9,14 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where, orderBy } from 'firebase/firestore';
+import { where } from 'firebase/firestore';
 import type { Student, User } from '@/lib/types';
 import { StudentTable } from '@/components/dashboard/student-table';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { sortByDate } from '@/lib/timestamp-utils';
 
 export default function UnassignedStudentsPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -27,7 +29,7 @@ export default function UnassignedStudentsPage() {
   const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const isEmployee = currentUser?.role === 'employee';
   
-  // Guard the path: only query if user role is known
+  // Path guard: Only attempt query if we have a valid role and the component is client-mounted
   const studentsPath = (isMounted && currentUser?.role) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 
@@ -35,29 +37,43 @@ export default function UnassignedStudentsPage() {
     if (!studentsPath || !currentUser?.role) return [];
     
     if (isAdminOrDept) {
-      // Admins see all unassigned students. We use orderBy to satisfy the "not unfiltered" guard.
-      return [where('employeeId', '==', null), orderBy('createdAt', 'desc')];
+      // Admins see all unassigned students. We filter for null employeeId.
+      // We avoid orderBy here to prevent requiring a composite index.
+      return [where('employeeId', '==', null)];
     }
     
     if (isEmployee) {
-      // Employees see students they created. Filtering for unassigned happens on client.
-      // We don't use orderBy here to avoid composite index requirements.
+      // Employees see students they created.
       return [where('createdBy', '==', currentUser.id)];
     }
     
+    // Default to a no-op query if role is unknown
     return [where('id', '==', 'NONE')]; 
   }, [studentsPath, currentUser?.role, currentUser?.id, isAdminOrDept, isEmployee]);
 
-  const { data: rawStudents, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
-  const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
+  const { 
+    data: rawStudents, 
+    isLoading: studentsLoading, 
+    error: studentsError 
+  } = useCollection<Student>(studentsPath, ...studentsConstraints);
+
+  const { 
+    data: allUsers, 
+    isLoading: usersAreLoading 
+  } = useCollection<User>(usersPath);
 
   const unassignedStudents = useMemo(() => {
     if (!rawStudents) return [];
-    // For employees, we filter for unassigned status here.
+    
+    let filtered = rawStudents;
+    
+    // For employees, we query by createdBy, so we must filter for those that are still unassigned.
     if (currentUser?.role === 'employee') {
-      return rawStudents.filter(s => s.employeeId === null);
+      filtered = rawStudents.filter(s => s.employeeId === null);
     }
-    return rawStudents;
+    
+    // Sort by creation date descending (newest first)
+    return [...filtered].sort((a, b) => sortByDate(a, b));
   }, [rawStudents, currentUser?.role]);
 
   if (!isMounted || isUserLoading || studentsLoading || usersAreLoading) {
@@ -98,12 +114,22 @@ export default function UnassignedStudentsPage() {
           <AddStudentDialog />
         </CardHeader>
         <CardContent>
-          <StudentTable
-            students={unassignedStudents}
-            currentUser={currentUser}
-            allUsers={allUsers || []}
-            emptyStateMessage="No unassigned students at this time."
-          />
+          {studentsError ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error Loading Data</AlertTitle>
+              <AlertDescription>
+                {studentsError.message || "Could not load unassigned students. Please ensure you have permission."}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <StudentTable
+              students={unassignedStudents}
+              currentUser={currentUser}
+              allUsers={allUsers || []}
+              emptyStateMessage="No unassigned students at this time."
+            />
+          )}
         </CardContent>
       </Card>
     </div>
