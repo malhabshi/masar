@@ -111,10 +111,10 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-bold">{student.name || 'Unknown Student'}</h1>
             
-            {/* Academic Intake Badge next to name (Admin/Dept only) */}
-            {canManage && student.academicIntakeSemester && (
-              <BadgeComponent variant="default" className="bg-primary text-primary-foreground flex items-center gap-1.5 px-3 py-1 text-sm font-bold shadow-sm">
-                <Calendar className="h-3.5 w-3.5" />
+            {/* Academic Intake Badge next to name (Visible to all if set) */}
+            {student.academicIntakeSemester && (
+              <BadgeComponent variant="default" className="bg-primary text-primary-foreground flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold shadow-sm rounded-full">
+                <Calendar className="h-4 w-4" />
                 {student.academicIntakeSemester} {student.academicIntakeYear}
               </BadgeComponent>
             )}
