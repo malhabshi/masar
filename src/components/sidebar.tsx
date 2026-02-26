@@ -131,11 +131,11 @@ export function AppSidebar() {
             <SidebarMenu>
             {mainNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
-                    <Link href={item.href}>
-                        <SidebarMenuButton isActive={pathname.startsWith(item.href)}>
+                    <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)}>
+                        <Link href={item.href}>
                             <item.icon /> <span>{item.label}</span>
-                        </SidebarMenuButton>
-                    </Link>
+                        </Link>
+                    </SidebarMenuButton>
                     {item.label === 'Applicants' && totalNotifications > 0 && (
                         <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
                             {totalNotifications}
@@ -148,11 +148,11 @@ export function AppSidebar() {
             
             {managementNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
-                    <Link href={item.href}>
-                        <SidebarMenuButton isActive={pathname.startsWith(item.href)}>
+                    <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)}>
+                        <Link href={item.href}>
                             <item.icon /> <span>{item.label}</span>
-                        </SidebarMenuButton>
-                    </Link>
+                        </Link>
+                    </SidebarMenuButton>
                 </SidebarMenuItem>
             ))}
 
@@ -160,11 +160,11 @@ export function AppSidebar() {
             
             {adminNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
-                    <Link href={item.href}>
-                        <SidebarMenuButton isActive={pathname.startsWith(item.href)}>
+                    <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)}>
+                        <Link href={item.href}>
                             <item.icon /> <span>{item.label}</span>
-                        </SidebarMenuButton>
-                    </Link>
+                        </Link>
+                    </SidebarMenuButton>
                 </SidebarMenuItem>
             ))}
             </SidebarMenu>
