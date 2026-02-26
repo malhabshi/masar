@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,6 +71,17 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
 
   const { userMap } = useUserCacheById(allUserIds);
 
+  // Filter tasks to only show updates from admin and department roles
+  const filteredTasks = useMemo(() => {
+    if (tasks.length > 0 && userMap.size === 0) return []; // Wait for cache to avoid showing employee requests
+    
+    return tasks.filter(task => {
+      const author = userMap.get(task.authorId);
+      // Only show tasks sent by admins or department users (Broadcast Updates)
+      return author && (author.role === 'admin' || author.role === 'department');
+    });
+  }, [tasks, userMap]);
+
   const getUserName = (userId: string) => {
     return userMap.get(userId)?.name || '...';
   };
@@ -139,10 +150,10 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
         <CardTitle>Task Feed</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {tasks.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">No tasks found.</p>
+        {filteredTasks.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No recent updates.</p>
         ) : (
-          tasks.map((task) => (
+          filteredTasks.map((task) => (
             <div key={task.id} className={cn(
                 "space-y-4 border-b pb-4 last:border-0 transition-colors duration-500 p-4 rounded-lg",
                 newItems.has(task.id) && "bg-blue-500/10"

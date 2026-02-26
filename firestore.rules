@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -63,7 +64,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /** @description Access rules for Student profiles. Restricted fields for intake. */
+    /** @description Access rules for Student profiles. */
     match /students/{studentId} {
       allow read, list: if isSignedIn();
       
