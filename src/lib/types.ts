@@ -151,6 +151,7 @@ export interface Task {
   studentId?: string;
   studentName?: string;
   taskType?: string;
+  category?: 'update' | 'system' | 'request';
 }
 
 export interface ResourceLink {

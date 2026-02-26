@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -78,14 +79,12 @@ export function ApprovedUniversitiesView() {
     });
 
     const taskContent = `New approved university added: ${newUniversity.name} (${newUniversity.major}).`;
-    await sendTask(user.id, 'all', taskContent);
-    
-    const tasksCollection = collection(firestore, 'tasks');
-    addDocumentNonBlocking(tasksCollection, { authorId: user.id, recipientId: 'all', content: taskContent, createdAt: new Date().toISOString(), status: 'new' as const, replies: [] });
+    // Pass 'system' category to hide from manual updates feed
+    await sendTask(user.id, 'all', taskContent, 'system');
 
     toast({
       title: "Employees Notified",
-      description: "A task has been sent to all employees about the new university."
+      description: "A notification has been sent to all employees about the new university."
     });
   }, [user, toast]);
 
@@ -100,14 +99,12 @@ export function ApprovedUniversitiesView() {
     });
 
     const taskContent = `Approved university updated: ${updatedUniversity.name} (${updatedUniversity.major}). Please review the changes.`;
-    await sendTask(user.id, 'all', taskContent);
-    
-    const tasksCollection = collection(firestore, 'tasks');
-    addDocumentNonBlocking(tasksCollection, { authorId: user.id, recipientId: 'all', content: taskContent, createdAt: new Date().toISOString(), status: 'new' as const, replies: [] });
+    // Pass 'system' category to hide from manual updates feed
+    await sendTask(user.id, 'all', taskContent, 'system');
 
     toast({
       title: "Employees Notified",
-      description: "A task has been sent to all employees about the university update."
+      description: "A notification has been sent to all employees about the university update."
     });
   }, [user, toast]);
 

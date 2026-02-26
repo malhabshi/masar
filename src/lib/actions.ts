@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -97,6 +98,7 @@ export async function addApplication(studentId: string, universityName: string, 
               content: taskContent,
               createdAt: new Date().toISOString(),
               status: 'new',
+              category: 'system',
               replies: []
           };
           await adminDb!.collection('tasks').add(newTask);
@@ -143,6 +145,7 @@ export async function updateApplicationStatus(studentId: string, universityName:
                 content: taskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
+                category: 'system',
                 replies: []
             };
             await adminDb!.collection('tasks').add(newTask);
@@ -214,6 +217,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
             content: description,
             createdAt: new Date().toISOString(),
             status: 'new',
+            category: 'request',
             replies: [],
             studentId: studentId,
             studentName: studentData.name,
@@ -230,7 +234,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
     }
 }
 
-export async function sendTask(authorId: string, recipientId: string, content: string) {
+export async function sendTask(authorId: string, recipientId: string, content: string, category: 'update' | 'system' = 'update') {
     console.log('📤 Server action started:', { action: 'sendTask', recipientId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
@@ -248,6 +252,7 @@ export async function sendTask(authorId: string, recipientId: string, content: s
             content,
             createdAt: new Date().toISOString(),
             status: 'new',
+            category,
             replies: []
         };
         await adminDb!.collection('tasks').add(newTask);
@@ -300,6 +305,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
               content: taskContent,
               createdAt: new Date().toISOString(),
               status: 'new',
+              category: 'system',
               replies: [],
             };
             await adminDb!.collection('tasks').add(notificationTask);
@@ -340,6 +346,7 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
                     content: taskContent,
                     createdAt: new Date().toISOString(),
                     status: 'new',
+                    category: 'system',
                     replies: []
                 };
                 await adminDb!.collection('tasks').add(notificationTask);
@@ -516,6 +523,7 @@ export async function createStudent(
               recipientId: adminDoc.id,
               content: taskContent,
               status: 'new',
+              category: 'system',
               studentId: studentRef.id,
               studentName: studentName,
               createdAt: new Date().toISOString(),
@@ -605,6 +613,7 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
                 content: taskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
+                category: 'system',
                 replies: []
             };
             await adminDb!.collection('tasks').add(newTask);
@@ -659,6 +668,7 @@ export async function requestTransfer(studentId: string, reason: string, request
                 content: taskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
+                category: 'request',
                 replies: []
             };
             batch.set(taskRef, newTask);
@@ -706,6 +716,7 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
                     recipientId: adminDoc.id,
                     content: taskContent,
                     status: 'new',
+                    category: 'request',
                     createdAt: new Date().toISOString(),
                     replies: []
                 };
@@ -1062,6 +1073,7 @@ export async function setStudentFinalChoice(studentId: string, university: strin
                     content: taskContent,
                     createdAt: new Date().toISOString(),
                     status: 'new',
+                    category: 'system',
                     replies: []
                 };
                 batch.set(taskRef, newTask);
@@ -1188,6 +1200,7 @@ export async function deleteStudent(studentId: string, adminId: string) {
                 content: adminTaskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
+                category: 'system',
                 replies: []
             };
             batch.set(taskRef, newTask);
@@ -1204,6 +1217,7 @@ export async function deleteStudent(studentId: string, adminId: string) {
                 content: employeeTaskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
+                category: 'system',
                 replies: []
             };
             batch.set(employeeTaskRef, employeeTask);

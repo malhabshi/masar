@@ -71,14 +71,15 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
 
   const { userMap } = useUserCacheById(allUserIds);
 
-  // Filter tasks to only show updates from admin and department roles
+  // Filter tasks to only show manual updates from management (Updates section)
   const filteredTasks = useMemo(() => {
-    if (tasks.length > 0 && userMap.size === 0) return []; // Wait for cache to avoid showing employee requests
+    if (tasks.length > 0 && userMap.size === 0) return []; // Wait for cache
     
     return tasks.filter(task => {
       const author = userMap.get(task.authorId);
-      // Only show tasks sent by admins or department users (Broadcast Updates)
-      return author && (author.role === 'admin' || author.role === 'department');
+      // ONLY show tasks tagged as 'update' category sent by management
+      return task.category === 'update' && 
+             author && (author.role === 'admin' || author.role === 'department');
     });
   }, [tasks, userMap]);
 
@@ -133,7 +134,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Task Feed</CardTitle>
+          <CardTitle>Update Feed</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center py-8">
@@ -147,7 +148,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Task Feed</CardTitle>
+        <CardTitle>Update Feed</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {filteredTasks.length === 0 ? (
