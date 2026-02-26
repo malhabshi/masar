@@ -30,7 +30,6 @@ export function AdminApplicantsPage() {
 
   const studentsConstraints = useMemoFirebase(() => {
     if (!studentsPath) return [];
-    // Explicit ordering fulfills the "at least one constraint" safety requirement for the students collection
     return [orderBy('createdAt', 'desc')];
   }, [studentsPath]);
 

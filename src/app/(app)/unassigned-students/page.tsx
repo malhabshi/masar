@@ -1,18 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { Student, User } from '@/lib/types';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where } from 'firebase/firestore';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Card,
   CardContent,
@@ -22,7 +11,6 @@ import {
 } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
-import { AssignStudentDialog } from '@/components/student/assign-student-dialog';
 
 export default function UnassignedStudentsPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -32,73 +20,14 @@ export default function UnassignedStudentsPage() {
     setIsMounted(true);
   }, []);
 
-  // SECURE: Strictly guard the path.
-  const studentsPath = (isMounted && currentUser?.role) ? 'students' : '';
-
-  const studentsConstraints = useMemoFirebase(() => {
-    if (!studentsPath || !currentUser) return [];
-    
-    if (currentUser.role === 'employee') {
-      // Query for students created by this employee.
-      return [where('createdBy', '==', currentUser.id)];
-    }
-    
-    if (currentUser.role === 'admin' || currentUser.role === 'department') {
-        // For admin/dept, query all unassigned students directly.
-        return [where('employeeId', '==', null)];
-    }
-    
-    return [];
-  }, [studentsPath, currentUser?.id, currentUser?.role]);
-
-  const { data: rawStudents, isLoading: studentsAreLoading, error } = useCollection<Student>(
-    studentsPath,
-    ...studentsConstraints
-  );
-
-  const unassignedStudents = useMemo(() => {
-    if (!rawStudents) return [];
-    if (currentUser?.role === 'employee') {
-        // Show only the unassigned ones from their created list (client-side filter).
-        return rawStudents.filter(s => !s.employeeId);
-    }
-    return rawStudents;
-  }, [rawStudents, currentUser?.role]);
-
-  const canManage = currentUser?.role === 'admin' || currentUser?.role === 'department';
-  
-  const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
-    (isMounted && canManage) ? 'users' : ''
-  );
-
-  const employeeUsers = useMemo(() => {
-    if (!canManage) return [];
-    return (allUsers || []).filter(u => u.role === 'employee');
-  }, [allUsers, canManage]);
-
-  const isLoading = isUserLoading || !isMounted || studentsAreLoading || (canManage && usersAreLoading);
-
-  if (isLoading) {
+  if (!isMounted || isUserLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
+      <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-destructive">Error Loading Students</CardTitle>
-          <CardDescription>
-            There was a problem fetching the unassigned students. Please contact support if this persists.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-  
   if (!currentUser) {
     return (
       <Card>
@@ -129,49 +58,8 @@ export default function UnassignedStudentsPage() {
           <AddStudentDialog />
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border">
-              <Table>
-              <TableHeader>
-                  <TableRow>
-                  <TableHead>Student</TableHead>
-                  {canManage && <TableHead>Created By</TableHead>}
-                  <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-              </TableHeader>
-              <TableBody>
-                  {unassignedStudents && unassignedStudents.length > 0 ? (
-                  unassignedStudents.map((student) => (
-                      <TableRow key={student.id}>
-                          <TableCell>
-                            <div className="font-medium">{student.name}</div>
-                            <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
-                            <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
-                          </TableCell>
-                          {canManage && (
-                              <TableCell>
-                                  {allUsers?.find(u => u.id === student.createdBy)?.name || 'Unknown'}
-                              </TableCell>
-                          )}
-                          <TableCell className="text-right">
-                              {canManage ? (
-                                  <AssignStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} />
-                              ) : (
-                                <span className="text-sm text-muted-foreground italic">Pending Assignment</span>
-                              )}
-                          </TableCell>
-                      </TableRow>
-                  ))
-                  ) : (
-                  <TableRow>
-                      <TableCell colSpan={canManage ? 3 : 2} className="h-24 text-center text-muted-foreground">
-                        {currentUser.role === 'employee' 
-                            ? 'You have no students pending assignment.' 
-                            : 'There are no unassigned students.'}
-                      </TableCell>
-                  </TableRow>
-                  )}
-              </TableBody>
-              </Table>
+          <div className="flex items-center justify-center h-32 border rounded-lg border-dashed text-muted-foreground">
+            No unassigned students at this time.
           </div>
         </CardContent>
       </Card>

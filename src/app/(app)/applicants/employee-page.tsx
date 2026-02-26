@@ -25,7 +25,6 @@ export function EmployeeApplicantsPage() {
     setIsMounted(true);
   }, []);
 
-  // SECURE: Guard the path and query constraints strictly.
   const studentsPath = (isMounted && currentUser?.role === 'employee' && currentUser?.civilId) ? 'students' : '';
   
   const myStudentsQuery = useMemoFirebase(() => {
