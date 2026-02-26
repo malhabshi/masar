@@ -74,7 +74,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                   ))
                 ) : (
                   <div className="p-2 text-sm text-muted-foreground text-center">
-                    No terms available. Ask admin to create options.
+                    No terms available. Ask any of the admin users to create options.
                   </div>
                 )}
               </SelectContent>
