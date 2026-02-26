@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 export function AdminApplicantsPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -37,6 +37,12 @@ export function AdminApplicantsPage() {
 
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
+
+  // Filter for ONLY assigned students (employeeId is not null)
+  const assignedStudents = useMemo(() => {
+    if (!allStudents) return [];
+    return allStudents.filter(s => s.employeeId !== null);
+  }, [allStudents]);
 
   const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
@@ -66,14 +72,14 @@ export function AdminApplicantsPage() {
           <div>
             <CardTitle>Applicants</CardTitle>
             <CardDescription>
-              A filterable list of all students in the system.
+              A filterable list of all assigned students in the system.
             </CardDescription>
           </div>
           {['admin', 'employee'].includes(currentUser.role) && <AddStudentDialog />}
         </CardHeader>
         <CardContent>
           <StudentTable
-            students={allStudents || []}
+            students={assignedStudents}
             currentUser={currentUser}
             allUsers={allUsers || []}
           />

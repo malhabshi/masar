@@ -37,8 +37,7 @@ export default function UnassignedStudentsPage() {
     if (!studentsPath || !currentUser?.role) return [];
     
     if (isAdminOrDept) {
-      // Admins see all unassigned students. We filter for null employeeId.
-      // We avoid orderBy here to prevent requiring a composite index.
+      // Admins see all unassigned students.
       return [where('employeeId', '==', null)];
     }
     
@@ -47,7 +46,6 @@ export default function UnassignedStudentsPage() {
       return [where('createdBy', '==', currentUser.id)];
     }
     
-    // Default to a no-op query if role is unknown
     return [where('id', '==', 'NONE')]; 
   }, [studentsPath, currentUser?.role, currentUser?.id, isAdminOrDept, isEmployee]);
 
@@ -119,7 +117,7 @@ export default function UnassignedStudentsPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error Loading Data</AlertTitle>
               <AlertDescription>
-                {studentsError.message || "Could not load unassigned students. Please ensure you have permission."}
+                {studentsError.message || "Could not load unassigned students."}
               </AlertDescription>
             </Alert>
           ) : (
