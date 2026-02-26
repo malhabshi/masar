@@ -34,7 +34,8 @@ async function getUser(userId: string): Promise<User | null> {
 // --- APPLICATION ACTIONS ---
 
 export async function addApplication(studentId: string, universityName: string, country: string, major: string, studentName: string, employeeId: string | null) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+  console.log('📤 Server action started:', { action: 'addApplication', studentId, universityName, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -70,15 +71,17 @@ export async function addApplication(studentId: string, universityName: string, 
       }
     }
 
+    console.log('✅ Server action finished:', { action: 'addApplication', success: true });
     return { success: true, message: `Application for ${universityName} added.` };
   } catch (error) {
-    console.error('addApplication error:', error);
-    return { success: false, message: 'Failed to add application.' };
+    console.error('❌ Server action failed:', { action: 'addApplication', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to add application.' };
   }
 }
 
 export async function updateApplicationStatus(studentId: string, universityName: string, major: string, newStatus: ApplicationStatus, studentName: string, employeeId: string | null) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+  console.log('📤 Server action started:', { action: 'updateApplicationStatus', studentId, universityName, newStatus, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
 
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -114,15 +117,17 @@ export async function updateApplicationStatus(studentId: string, universityName:
         }
     }
 
+    console.log('✅ Server action finished:', { action: 'updateApplicationStatus', success: true });
     return { success: true, message: 'Status updated.' };
   } catch (error) {
-    console.error('updateApplicationStatus error:', error);
-    return { success: false, message: 'Failed to update status.' };
+    console.error('❌ Server action failed:', { action: 'updateApplicationStatus', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to update status.' };
   }
 }
 
 export async function updateStudentPipelineStatus(studentId: string, status: string, userName: string, studentName: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    console.log('📤 Server action started:', { action: 'updateStudentPipelineStatus', studentId, status, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -140,18 +145,20 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
         };
         await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
         
+        console.log('✅ Server action finished:', { action: 'updateStudentPipelineStatus', success: true });
         return { success: true, message: 'Status updated.' };
     } catch(error) {
-        console.error('updateStudentPipelineStatus error:', error);
-        return { success: false, message: 'Failed to update pipeline status.' };
+        console.error('❌ Server action failed:', { action: 'updateStudentPipelineStatus', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to update pipeline status.' };
     }
 }
 
 // --- TASK ACTIONS ---
 
 export async function createStudentTask(authorId: string, studentId: string, requestTypeId: string, description: string) {
+    console.log('📤 Server action started:', { action: 'createStudentTask', studentId, requestTypeId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
-        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+        return { success: false, message: 'Server database connection not available.' };
     }
 
     try {
@@ -183,17 +190,18 @@ export async function createStudentTask(authorId: string, studentId: string, req
 
         await adminDb!.collection('tasks').add(newTask);
         
+        console.log('✅ Server action finished:', { action: 'createStudentTask', success: true });
         return { success: true, message: 'Task created successfully and routed to the appropriate user.' };
     } catch (error) {
-        console.error('createStudentTask error:', error);
-        return { success: false, message: 'Failed to create task.' };
+        console.error('❌ Server action failed:', { action: 'createStudentTask', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to create task.' };
     }
 }
 
 export async function sendTask(authorId: string, recipientId: string, content: string) {
+    console.log('📤 Server action started:', { action: 'sendTask', recipientId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
-        console.error('adminDb is null - check FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 env var');
-        return { success: false, message: 'Server database connection not available - check service account' };
+        return { success: false, message: 'Server database connection not available.' };
     }
     
     try {
@@ -212,17 +220,19 @@ export async function sendTask(authorId: string, recipientId: string, content: s
         };
         await adminDb!.collection('tasks').add(newTask);
         
+        console.log('✅ Server action finished:', { action: 'sendTask', success: true });
         return { success: true, message: 'Update sent.' };
 
     } catch(error) {
-        console.error('sendTask error:', error);
-        return { success: false, message: 'Failed to send task.' };
+        console.error('❌ Server action failed:', { action: 'sendTask', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to send task.' };
     }
 }
 
 export async function addReplyToTask(taskId: string, authorId: string, content: string, taskAuthorId: string) {
+    console.log('📤 Server action started:', { action: 'addReplyToTask', taskId, authorId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
-      return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+      return { success: false, message: 'Server database connection not available.' };
     }
 
     try {
@@ -264,15 +274,17 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
           }
         }
         
+        console.log('✅ Server action finished:', { action: 'addReplyToTask', success: true });
         return { success: true, message: 'Reply sent.' };
     } catch (error) {
-        console.error('addReplyToTask error:', error);
-        return { success: false, message: 'Failed to add reply.' };
+        console.error('❌ Server action failed:', { action: 'addReplyToTask', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to add reply.' };
     }
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus, updaterId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    console.log('📤 Server action started:', { action: 'updateTaskStatus', taskId, status, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const updater = await getUser(updaterId);
         if (!updater || !['admin', 'department'].includes(updater.role)) {
@@ -302,10 +314,11 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
             }
         }
         
+        console.log('✅ Server action finished:', { action: 'updateTaskStatus', success: true });
         return { success: true, message: 'Status updated.' };
     } catch(error) {
-        console.error('updateTaskStatus error:', error);
-        return { success: false, message: 'Failed to update task status.' };
+        console.error('❌ Server action failed:', { action: 'updateTaskStatus', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to update task status.' };
     }
 }
 
@@ -320,6 +333,7 @@ export async function createNewUser(userData: {
   phone: string;
   role: 'admin' | 'employee' | 'department';
 }) {
+  console.log('📤 Server action started:', { action: 'createNewUser', email: userData.email, role: userData.role, timestamp: new Date().toISOString() });
   if (!checkAdminServices()) {
     return { success: false, message: 'Admin services not available.' };
   }
@@ -347,16 +361,17 @@ export async function createNewUser(userData: {
 
     await adminDb!.collection('users').doc(authUser.uid).set(newUserForDb);
     
+    console.log('✅ Server action finished:', { action: 'createNewUser', success: true, uid: authUser.uid });
     return { success: true, message: `${userData.name} has been added.` };
   } catch (error: any) {
-    console.error("Error creating user:", error);
+    console.error("❌ Server action failed:", { action: 'createNewUser', error });
     let message = 'An unexpected error occurred during user creation.';
     if (error.code === 'auth/email-already-exists') {
       message = 'This email address is already in use by another account.';
     } else if (error.code === 'auth/invalid-password') {
       message = 'The password must be at least 6 characters long.';
     }
-    return { success: false, message: message };
+    return { success: false, message: error instanceof Error ? error.message : message };
   }
 }
 
@@ -374,6 +389,11 @@ export async function createStudent(
   creatingUserCivilId?: string | null,
   assignedEmployeeId?: string | null
 ) {
+  console.log('📤 Server action started:', { 
+    action: 'createStudent', 
+    studentName: values.studentName,
+    timestamp: new Date().toISOString() 
+  });
   if (!checkAdminServices()) {
     return { success: false, message: 'Server database connection not available.' };
   }
@@ -475,14 +495,16 @@ export async function createStudent(
         }
     }
 
+    console.log('✅ Server action finished:', { action: 'createStudent', success: true, studentId: studentRef.id });
     return { success: true, studentId: studentRef.id, studentName };
   } catch (error) {
-    console.error('createStudent error:', error);
-    return { success: false, message: 'Failed to create student on the server.' };
+    console.error('❌ Server action failed:', { action: 'createStudent', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to create student on the server.' };
   }
 }
 
 export async function resolveDuplicate(studentId: string, adminId: string) {
+  console.log('📤 Server action started:', { action: 'resolveDuplicate', studentId, timestamp: new Date().toISOString() });
   if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   try {
     const admin = await getUser(adminId);
@@ -495,15 +517,17 @@ export async function resolveDuplicate(studentId: string, adminId: string) {
       duplicateOfStudentIds: null
     });
     
+    console.log('✅ Server action finished:', { action: 'resolveDuplicate', success: true });
     return { success: true, message: 'Duplicate warning resolved.' };
   } catch (error) {
-    console.error('resolveDuplicate error:', error);
-    return { success: false, message: 'Failed to resolve duplicate warning.' };
+    console.error('❌ Server action failed:', { action: 'resolveDuplicate', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to resolve duplicate warning.' };
   }
 }
 
 export async function transferStudent(studentId: string, newEmployee: User, adminId: string, studentName: string, fromEmployeeName: string | null) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    console.log('📤 Server action started:', { action: 'transferStudent', studentId, toEmployee: newEmployee.name, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     if (!newEmployee.civilId) {
         return { success: false, message: 'Employee missing Civil ID.' };
     }
@@ -554,15 +578,17 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
             await adminDb!.collection('tasks').add(newTask);
         }
 
+        console.log('✅ Server action finished:', { action: 'transferStudent', success: true });
         return { success: true, message: `Student ${studentName} transferred to ${newEmployee.name}.` };
     } catch (error) {
-        console.error('transferStudent error:', error);
-        return { success: false, message: 'Failed to transfer student.' };
+        console.error('❌ Server action failed:', { action: 'transferStudent', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to transfer student.' };
     }
 }
 
 export async function requestTransfer(studentId: string, reason: string, requestingEmployeeId: string, studentName: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+  console.log('📤 Server action started:', { action: 'requestTransfer', studentId, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -608,14 +634,16 @@ export async function requestTransfer(studentId: string, reason: string, request
         await batch.commit();
     }
     
+    console.log('✅ Server action finished:', { action: 'requestTransfer', success: true });
     return { success: true, message: 'Transfer request submitted. An admin will review it.' };
   } catch (error) {
-    console.error('requestTransfer error:', error);
-    return { success: false, message: 'Failed to submit transfer request.' };
+    console.error('❌ Server action failed:', { action: 'requestTransfer', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to submit transfer request.' };
   }
 }
 
 export async function requestStudentDeletion(studentId: string, employeeId: string, reason: string) {
+    console.log('📤 Server action started:', { action: 'requestStudentDeletion', studentId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     
     try {
@@ -654,17 +682,19 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
             await batch.commit();
         }
 
+        console.log('✅ Server action finished:', { action: 'requestStudentDeletion', success: true });
         return { success: true, message: 'Deletion request submitted.' };
     } catch (error) {
-        console.error('requestStudentDeletion error:', error);
-        return { success: false, message: 'Failed to submit deletion request.' };
+        console.error('❌ Server action failed:', { action: 'requestStudentDeletion', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to submit deletion request.' };
     }
 }
 
 
 export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
+    console.log('📤 Server action started:', { action: 'bulkTransferStudents', fromEmployeeId, toEmployeeId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
-        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+        return { success: false, message: 'Server database connection not available.' };
     }
     try {
         const fromEmployee = await getUser(fromEmployeeId);
@@ -706,14 +736,16 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 
         await batch.commit();
         
+        console.log('✅ Server action finished:', { action: 'bulkTransferStudents', success: true, studentCount: snapshot.size });
         return { success: true, message: `${snapshot.size} students were transferred successfully.` };
     } catch (error: any) {
-        console.error('bulkTransferStudents error:', error);
-        return { success: false, message: 'An unexpected error occurred during the bulk transfer.' };
+        console.error('❌ Server action failed:', { action: 'bulkTransferStudents', error });
+        return { success: false, message: error instanceof Error ? error.message : 'An unexpected error occurred.' };
     }
 }
 
 export async function addEmployeeNote(studentId: string, authorId: string, content: string) {
+    console.log('📤 Server action started:', { action: 'addEmployeeNote', studentId, authorId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
@@ -735,14 +767,17 @@ export async function addEmployeeNote(studentId: string, authorId: string, conte
             createdAt: new Date().toISOString(),
         };
         await studentRef.update({ employeeNotes: [...(studentData.employeeNotes || []), newNote] });
+        
+        console.log('✅ Server action finished:', { action: 'addEmployeeNote', success: true });
         return { success: true, message: 'Note added.' };
     } catch (error) {
-        console.error('addEmployeeNote error:', error);
-        return { success: false, message: 'Failed to add employee note.' };
+        console.error('❌ Server action failed:', { action: 'addEmployeeNote', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to add employee note.' };
     }
 }
 
 export async function addAdminNote(studentId: string, authorId: string, content: string) {
+    console.log('📤 Server action started:', { action: 'addAdminNote', studentId, authorId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
@@ -762,15 +797,18 @@ export async function addAdminNote(studentId: string, authorId: string, content:
             createdAt: new Date().toISOString(),
         };
         await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
+        
+        console.log('✅ Server action finished:', { action: 'addAdminNote', success: true });
         return { success: true, message: 'Admin note added.' };
     } catch (error) {
-        console.error('addAdminNote error:', error);
-        return { success: false, message: 'Failed to add admin note.' };
+        console.error('❌ Server action failed:', { action: 'addAdminNote', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to add admin note.' };
     }
 }
 
 export async function addMissingItemToStudent(studentId: string, item: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    console.log('📤 Server action started:', { action: 'addMissingItemToStudent', studentId, item, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -783,15 +821,18 @@ export async function addMissingItemToStudent(studentId: string, item: string) {
             newMissingItemsForEmployee: (studentData.newMissingItemsForEmployee || 0) + 1,
         };
         await studentRef.update(updates);
+        
+        console.log('✅ Server action finished:', { action: 'addMissingItemToStudent', success: true });
         return { success: true, message: 'Missing item added.' };
     } catch (error) {
-        console.error('addMissingItemToStudent error:', error);
-        return { success: false, message: 'Failed to add missing item.' };
+        console.error('❌ Server action failed:', { action: 'addMissingItemToStudent', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to add missing item.' };
     }
 }
 
 export async function removeMissingItemFromStudent(studentId: string, itemToRemove: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    console.log('📤 Server action started:', { action: 'removeMissingItemFromStudent', studentId, itemToRemove, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -800,15 +841,18 @@ export async function removeMissingItemFromStudent(studentId: string, itemToRemo
         const studentData = studentDoc.data() as Student;
         const updatedItems = (studentData.missingItems || []).filter(item => item !== itemToRemove);
         await studentRef.update({ missingItems: updatedItems });
+        
+        console.log('✅ Server action finished:', { action: 'removeMissingItemFromStudent', success: true });
         return { success: true, message: 'Missing item removed.' };
     } catch (error) {
-        console.error('removeMissingItemFromStudent error:', error);
-        return { success: false, message: 'Failed to remove missing item.' };
+        console.error('❌ Server action failed:', { action: 'removeMissingItemFromStudent', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to remove missing item.' };
     }
 }
 
 export async function markMissingItemAsReceived(studentId: string, itemReceived: string, userId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    console.log('📤 Server action started:', { action: 'markMissingItemAsReceived', studentId, itemReceived, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -830,10 +874,12 @@ export async function markMissingItemAsReceived(studentId: string, itemReceived:
             unreadUpdates: (studentData.unreadUpdates || 0) + 1,
         };
         await studentRef.update(updates);
+        
+        console.log('✅ Server action finished:', { action: 'markMissingItemAsReceived', success: true });
         return { success: true, message: 'Item marked as received.' };
     } catch (error) {
-        console.error('markMissingItemAsReceived error:', error);
-        return { success: false, message: 'Failed to mark item as received.' };
+        console.error('❌ Server action failed:', { action: 'markMissingItemAsReceived', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to mark item as received.' };
     }
 }
 
@@ -841,6 +887,7 @@ export async function markMissingItemAsReceived(studentId: string, itemReceived:
 // --- TODO ACTIONS ---
 
 export async function addTodo(userId: string, content: string) {
+  console.log('📤 Server action started:', { action: 'addTodo', userId, timestamp: new Date().toISOString() });
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   
   try {
@@ -851,42 +898,51 @@ export async function addTodo(userId: string, content: string) {
         completed: false,
         createdAt: new Date().toISOString()
     });
+    
+    console.log('✅ Server action finished:', { action: 'addTodo', success: true });
     return { success: true, message: "To-do added." };
   } catch (error) {
-    console.error('addTodo error:', error);
-    return { success: false, message: 'Failed to add to-do.' };
+    console.error('❌ Server action failed:', { action: 'addTodo', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to add to-do.' };
   }
 }
 
 export async function toggleTodo(userId: string, todoId: string, completed: boolean) {
+    console.log('📤 Server action started:', { action: 'toggleTodo', userId, todoId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
         const todoRef = adminDb!.collection('users').doc(userId).collection('personal_todos').doc(todoId);
         await todoRef.update({ completed: !completed });
+        
+        console.log('✅ Server action finished:', { action: 'toggleTodo', success: true });
         return { success: true, message: 'To-do updated.' };
     } catch (error) {
-        console.error('toggleTodo error:', error);
-        return { success: false, message: 'Failed to update to-do.' };
+        console.error('❌ Server action failed:', { action: 'toggleTodo', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to update to-do.' };
     }
 }
 
 export async function deleteTodo(userId: string, todoId: string) {
+    console.log('📤 Server action started:', { action: 'deleteTodo', userId, todoId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
         const todoRef = adminDb!.collection('users').doc(userId).collection('personal_todos').doc(todoId);
         await todoRef.delete();
+        
+        console.log('✅ Server action finished:', { action: 'deleteTodo', success: true });
         return { success: true, message: 'To-do deleted.' };
     } catch (error) {
-        console.error('deleteTodo error:', error);
-        return { success: false, message: 'Failed to delete to-do.' };
+        console.error('❌ Server action failed:', { action: 'deleteTodo', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to delete to-do.' };
     }
 }
 
 // --- MISC ACTIONS ---
 
 export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean, authorId: string) {
+    console.log('📤 Server action started:', { action: 'updateChecklistItem', studentId, itemKey, value, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
-        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+        return { success: false, message: 'Server database connection not available.' };
     }
 
     try {
@@ -908,19 +964,21 @@ export async function updateChecklistItem(studentId: string, itemKey: keyof Prof
             return { success: false, message: 'Only the assigned employee can update the readiness checklist.' };
         }
 
-        // Use dot notation to update a field in a map
         await studentRef.update({
             [`profileCompletionStatus.${itemKey}`]: value
         });
+        
+        console.log('✅ Server action finished:', { action: 'updateChecklistItem', success: true });
         return { success: true, message: 'Checklist updated.' };
     } catch (error) {
-        console.error('updateChecklistItem error:', error);
-        return { success: false, message: 'Failed to update checklist item.' };
+        console.error('❌ Server action failed:', { action: 'updateChecklistItem', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to update checklist item.' };
     }
 }
 
 export async function setStudentFinalChoice(studentId: string, university: string, major: string, updaterId: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+  console.log('📤 Server action started:', { action: 'setStudentFinalChoice', studentId, university, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -984,10 +1042,11 @@ export async function setStudentFinalChoice(studentId: string, university: strin
       ? `Final choice changed to ${university}.`
       : `Final choice set to ${university}.`;
       
+    console.log('✅ Server action finished:', { action: 'setStudentFinalChoice', success: true });
     return { success: true, message: successMessage };
   } catch (error) {
-    console.error('setStudentFinalChoice error:', error);
-    return { success: false, message: 'Failed to set final choice.' };
+    console.error('❌ Server action failed:', { action: 'setStudentFinalChoice', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to set final choice.' };
   }
 }
 
@@ -1024,8 +1083,9 @@ async function deleteQueryBatch(query: FirebaseFirestore.Query, resolve: (value:
 }
 
 export async function deleteStudent(studentId: string, adminId: string) {
+    console.log('📤 Server action started:', { action: 'deleteStudent', studentId, adminId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
-        return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+        return { success: false, message: 'Server database connection not available.' };
     }
 
     try {
@@ -1055,7 +1115,6 @@ export async function deleteStudent(studentId: string, adminId: string) {
                     }
                     
                     if(filePath) {
-                        console.log(`Deleting file from storage: ${filePath}`);
                         return bucket.file(filePath).delete().catch(err => {
                             console.error(`Failed to delete file ${filePath}:`, err.message);
                         });
@@ -1120,14 +1179,16 @@ export async function deleteStudent(studentId: string, adminId: string) {
 
         await batch.commit();
 
+        console.log('✅ Server action finished:', { action: 'deleteStudent', success: true });
         return { success: true, message: `Student ${studentData.name} deleted successfully.` };
     } catch (error: any) {
-        console.error('deleteStudent error:', error);
-        return { success: false, message: 'An unexpected server error occurred while deleting the student.' };
+        console.error('❌ Server action failed:', { action: 'deleteStudent', error });
+        return { success: false, message: error instanceof Error ? error.message : 'An unexpected server error occurred.' };
     }
 }
 
 export async function deleteStudentDocument(studentId: string, documentId: string, documentUrl: string, deleterId: string) {
+    console.log('📤 Server action started:', { action: 'deleteStudentDocument', studentId, documentId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1162,8 +1223,6 @@ export async function deleteStudentDocument(studentId: string, documentId: strin
 
         if (filePath) {
             await bucket.file(filePath).delete();
-        } else {
-            console.warn(`Could not determine file path from URL, skipping storage deletion: ${documentUrl}`);
         }
 
         // Delete from Firestore array
@@ -1187,28 +1246,19 @@ export async function deleteStudentDocument(studentId: string, documentId: strin
         
         await studentRef.update(updates);
         
+        console.log('✅ Server action finished:', { action: 'deleteStudentDocument', success: true });
         return { success: true, message: 'Document deleted successfully.' };
 
     } catch (error: any) {
-        console.error('deleteStudentDocument error:', error);
-        if (error.code === 404) {
-             console.warn(`File not found in storage, but proceeding to remove Firestore entry: ${documentUrl}`);
-             const studentRef = adminDb!.collection('students').doc(studentId);
-             const studentDoc = await studentRef.get();
-             if (studentDoc.exists) {
-                const studentData = studentDoc.data() as Student;
-                const updatedDocuments = (studentData.documents || []).filter(doc => doc.id !== documentId);
-                await studentRef.update({ documents: updatedDocuments });
-                return { success: true, message: 'Document removed from list (was not found in storage).' };
-             }
-        }
-        return { success: false, message: 'Failed to delete document.' };
+        console.error('❌ Server action failed:', { action: 'deleteStudentDocument', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to delete document.' };
     }
 }
 
 
 export async function handleEmployeeLogin(userId: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+  console.log('📤 Server action started:', { action: 'handleEmployeeLogin', userId, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   
   try {
     const user = await getUser(userId);
@@ -1229,7 +1279,6 @@ export async function handleEmployeeLogin(userId: string) {
         batch.update(doc.ref, { clockOut: new Date().toISOString() });
       });
       await batch.commit();
-      console.warn(`Closed ${activeLogQuery.size} dangling session(s) for employee ${userId}.`);
     }
     
     const newLog = {
@@ -1242,15 +1291,17 @@ export async function handleEmployeeLogin(userId: string) {
     
     await timeLogsRef.add(newLog);
     
+    console.log('✅ Server action finished:', { action: 'handleEmployeeLogin', success: true });
     return { success: true, message: 'Login session started.' };
   } catch (error) {
-    console.error('handleEmployeeLogin error:', error);
-    return { success: false, message: 'Failed to start login session.' };
+    console.error('❌ Server action failed:', { action: 'handleEmployeeLogin', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to start login session.' };
   }
 }
 
 export async function handleEmployeeLogout(userId: string) {
-  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+  console.log('📤 Server action started:', { action: 'handleEmployeeLogout', userId, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   
   try {
     const timeLogsRef = adminDb!.collection('time_logs');
@@ -1271,10 +1322,11 @@ export async function handleEmployeeLogout(userId: string) {
       clockOut: new Date().toISOString(),
     });
     
+    console.log('✅ Server action finished:', { action: 'handleEmployeeLogout', success: true });
     return { success: true, message: 'Session ended.' };
   } catch (error) {
-    console.error('handleEmployeeLogout error:', error);
-    return { success: false, message: 'Failed to end session.' };
+    console.error('❌ Server action failed:', { action: 'handleEmployeeLogout', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to end session.' };
   }
 }
 
@@ -1295,7 +1347,6 @@ export async function keepAlive(userId: string) {
         }
         return { success: true };
     } catch (error) {
-        console.error('keepAlive error:', error);
         return { success: false, message: 'Failed to update session.' };
     }
 }
@@ -1317,29 +1368,30 @@ export async function closeInactiveSessions() {
         const batch = adminDb!.batch();
         inactiveSessionsQuery.docs.forEach(doc => {
             const log = doc.data() as TimeLog;
-            // Clock out at the last seen time
             batch.update(doc.ref, { clockOut: log.lastSeen });
         });
         await batch.commit();
 
         return { success: true, message: `Closed ${inactiveSessionsQuery.size} inactive sessions.` };
     } catch (error) {
-        console.error('closeInactiveSessions error:', error);
         return { success: false, message: 'Failed to close inactive sessions.' };
     }
 }
 
 export async function updateUserAvatar(userId: string, avatarUrl: string) {
+  console.log('📤 Server action started:', { action: 'updateUserAvatar', userId, timestamp: new Date().toISOString() });
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    return { success: false, message: 'Server database connection not available.' };
   }
   try {
     const userRef = adminDb!.collection('users').doc(userId);
     await userRef.update({ avatarUrl });
+    
+    console.log('✅ Server action finished:', { action: 'updateUserAvatar', success: true });
     return { success: true, message: 'Avatar updated successfully.' };
   } catch (error) {
-    console.error('updateUserAvatar error:', error);
-    return { success: false, message: 'Failed to update avatar.' };
+    console.error('❌ Server action failed:', { action: 'updateUserAvatar', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to update avatar.' };
   }
 }
 
@@ -1347,8 +1399,9 @@ export async function getReportStats(dateRange: {
   from: string;
   to: string;
 }): Promise<{ success: boolean; data?: ReportStats; message?: string }> {
+  console.log('📤 Server action started:', { action: 'getReportStats', timestamp: new Date().toISOString() });
   if (!checkAdminServices()) {
-    return { success: false, message: 'Server database connection not available. Please check server logs for configuration errors.' };
+    return { success: false, message: 'Server database connection not available.' };
   }
 
   try {
@@ -1356,7 +1409,6 @@ export async function getReportStats(dateRange: {
     const toDate = parseISO(dateRange.to);
     const interval = { start: fromDate, end: toDate };
 
-    // Fetch all necessary data
     const [studentsSnap, usersSnap, timeLogsSnap] = await Promise.all([
       adminDb!.collection('students').get(),
       adminDb!.collection('users').get(),
@@ -1367,9 +1419,6 @@ export async function getReportStats(dateRange: {
     const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
     const allTimeLogs = timeLogsSnap.docs.map(doc => doc.data() as TimeLog);
 
-    // --- Aggregations ---
-
-    // Filter students and applications by date range
     const studentsInDateRange = allStudents.filter(s =>
       isWithinInterval(parseISO(s.createdAt), interval)
     );
@@ -1377,7 +1426,6 @@ export async function getReportStats(dateRange: {
       .flatMap(s => s.applications || [])
       .filter(app => isWithinInterval(parseISO(app.updatedAt), interval));
 
-    // 1. Totals
     const totalStudents = allStudents.length;
     const totalApplications = allStudents.reduce(
       (acc, s) => acc + (s.applications?.length || 0),
@@ -1385,7 +1433,6 @@ export async function getReportStats(dateRange: {
     );
     const totalEmployees = allUsers.filter(u => u.role === 'employee').length;
 
-    // 2. Application Status (within date range)
     const statusCounts = applicationsInDateRange.reduce((acc, app) => {
       acc[app.status] = (acc[app.status] || 0) + 1;
       return acc;
@@ -1394,7 +1441,6 @@ export async function getReportStats(dateRange: {
       ([name, count]) => ({ name, count })
     );
 
-    // 3. Students per Employee (snapshot, not date-based)
     const employeeMap = new Map<string, string>();
     allUsers
       .filter(u => u.role === 'employee')
@@ -1411,7 +1457,6 @@ export async function getReportStats(dateRange: {
       ([name, count]) => ({ name, count })
     );
 
-    // 4. Student Growth (within date range)
     const growthCounts = studentsInDateRange.reduce((acc, student) => {
       const date = format(parseISO(student.createdAt), 'yyyy-MM-dd');
       acc[date] = (acc[date] || 0) + 1;
@@ -1421,14 +1466,12 @@ export async function getReportStats(dateRange: {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // 5. Applications by Country (within date range)
     const countryCounts = applicationsInDateRange.reduce((acc, app) => {
         acc[app.country] = (acc[app.country] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
     const applicationCountryData = Object.entries(countryCounts).map(([name, count]) => ({ name, count }));
 
-    // 6. Employee Hours Logged (within date range)
     const employeeHours = allTimeLogs
       .filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval))
       .reduce((acc, log) => {
@@ -1453,14 +1496,16 @@ export async function getReportStats(dateRange: {
       employeeHoursData
     };
 
+    console.log('✅ Server action finished:', { action: 'getReportStats', success: true });
     return { success: true, data: stats };
   } catch (error: any) {
-    console.error('getReportStats error:', error);
-    return { success: false, message: 'An error occurred while generating the report data.' };
+    console.error('❌ Server action failed:', { action: 'getReportStats', error });
+    return { success: false, message: error instanceof Error ? error.message : 'An error occurred.' };
   }
 }
 
 export async function addEvent(authorId: string, title: string, description: string, date: string) {
+    console.log('📤 Server action started:', { action: 'addEvent', title, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const author = await getUser(authorId);
@@ -1475,14 +1520,17 @@ export async function addEvent(authorId: string, title: string, description: str
             createdAt: new Date().toISOString(),
         };
         await adminDb!.collection('upcoming_events').add(newEvent);
+        
+        console.log('✅ Server action finished:', { action: 'addEvent', success: true });
         return { success: true, message: 'Event added.' };
     } catch (error) {
-        console.error('addEvent error:', error);
-        return { success: false, message: 'Failed to add event.' };
+        console.error('❌ Server action failed:', { action: 'addEvent', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to add event.' };
     }
 }
 
 export async function deleteEvent(eventId: string, userId: string) {
+    console.log('📤 Server action started:', { action: 'deleteEvent', eventId, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const user = await getUser(userId);
@@ -1490,15 +1538,18 @@ export async function deleteEvent(eventId: string, userId: string) {
             return { success: false, message: 'You do not have permission to delete events.' };
         }
         await adminDb!.collection('upcoming_events').doc(eventId).delete();
+        
+        console.log('✅ Server action finished:', { action: 'deleteEvent', success: true });
         return { success: true, message: 'Event deleted.' };
     } catch (error) {
-        console.error('deleteEvent error:', error);
-        return { success: false, message: 'Failed to delete event.' };
+        console.error('❌ Server action failed:', { action: 'deleteEvent', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to delete event.' };
     }
 }
 
 
 export async function getEmployeeStudentStats(): Promise<{ success: boolean; data?: EmployeeStats[]; message?: string; }> {
+    console.log('📤 Server action started:', { action: 'getEmployeeStudentStats', timestamp: new Date().toISOString() });
     if (!checkAdminServices()) return { success: false, message: "Server not available" };
 
     try {
@@ -1519,19 +1570,14 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
 
             for (const student of createdStudents) {
                 const createdAt = parseISO(student.createdAt);
-                
-                // Monthly total
                 const monthKey = format(createdAt, 'yyyy-MM');
                 monthlyTotalsMap[monthKey] = (monthlyTotalsMap[monthKey] || 0) + 1;
-                
-                // Daily total (last 30 days)
                 if (createdAt >= thirtyDaysAgo) {
                     const dayKey = format(createdAt, 'yyyy-MM-dd');
                     dailyCountsMap[dayKey] = (dailyCountsMap[dayKey] || 0) + 1;
                 }
             }
 
-            // Fill in missing days for the last 30 days
             const dailyCounts = [];
             for (let i = 0; i < 30; i++) {
                 const date = subDays(new Date(), i);
@@ -1555,15 +1601,17 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
             };
         });
 
+        console.log('✅ Server action finished:', { action: 'getEmployeeStudentStats', success: true });
         return { success: true, data: stats };
 
     } catch (error: any) {
-        console.error("getEmployeeStudentStats error:", error);
-        return { success: false, message: error.message };
+        console.error("❌ Server action failed:", { action: 'getEmployeeStudentStats', error });
+        return { success: false, message: error instanceof Error ? error.message : 'An error occurred.' };
     }
 }
 
 export async function updateStudentIELTS(studentId: string, overallScore: number, authorId: string) {
+  console.log('📤 Server action started:', { action: 'updateStudentIELTS', studentId, overallScore, timestamp: new Date().toISOString() });
   if (!checkAdminServices()) {
     return { success: false, message: 'Server database connection not available.' };
   }
@@ -1578,7 +1626,6 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
 
     await studentRef.update({ ieltsOverall: overallScore });
 
-    // Add a note for the update
     const author = await getUser(authorId);
     const noteContent = `IELTS overall score updated to ${overallScore.toFixed(1)} by ${author?.name || 'an employee'}.`;
     const newNote: Note = {
@@ -1589,14 +1636,16 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
     };
     await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
 
+    console.log('✅ Server action finished:', { action: 'updateStudentIELTS', success: true });
     return { success: true, message: 'IELTS score updated successfully.' };
   } catch (error) {
-    console.error('updateStudentIELTS error:', error);
-    return { success: false, message: 'Failed to update IELTS score.' };
+    console.error('❌ Server action failed:', { action: 'updateStudentIELTS', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to update IELTS score.' };
   }
 }
 
 export async function createStudentLogin(studentId: string, description: string, username: string, notes: string | undefined, createdByUserId: string) {
+    console.log('📤 Server action started:', { action: 'createStudentLogin', studentId, username, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1618,8 +1667,6 @@ export async function createStudentLogin(studentId: string, description: string,
         }
         
         const email = `${username.trim().toLowerCase()}@student.uniapply.hub`;
-
-        // Auto-generate a secure password.
         const password = Math.random().toString(36).slice(-10);
 
         const authUser = await adminAuth!.createUser({
@@ -1651,24 +1698,26 @@ export async function createStudentLogin(studentId: string, description: string,
         const updatedLogins = [...(studentData.studentLogins || []), newLogin];
         await studentRef.update({ studentLogins: updatedLogins });
 
+        console.log('✅ Server action finished:', { action: 'createStudentLogin', success: true, uid: authUser.uid });
         return { success: true, message: 'Student login created successfully.' };
 
     } catch (error: any) {
-        console.error("Error creating student login:", error);
+        console.error("❌ Server action failed:", { action: 'createStudentLogin', error });
         let message = 'An unexpected error occurred.';
         if (error.code === 'auth/email-already-exists') {
             message = 'This username is already taken. Please choose a different one.';
         } else if (error.code === 'auth/invalid-password') {
             message = 'Password must be at least 8 characters.';
         } else if (error.code === 'auth/invalid-email') {
-            message = 'The username contains invalid characters. Please use only letters, numbers, and basic symbols.'
+            message = 'The username contains invalid characters.'
         }
-        return { success: false, message };
+        return { success: false, message: error instanceof Error ? error.message : message };
     }
 }
 
 
 export async function deleteStudentLogin(studentId: string, uidToDelete: string, deletedByUserId: string) {
+    console.log('📤 Server action started:', { action: 'deleteStudentLogin', studentId, uidToDelete, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1695,33 +1744,34 @@ export async function deleteStudentLogin(studentId: string, uidToDelete: string,
         const updatedLogins = (studentData.studentLogins || []).filter(login => login.uid !== uidToDelete);
         await studentRef.update({ studentLogins: updatedLogins });
 
+        console.log('✅ Server action finished:', { action: 'deleteStudentLogin', success: true });
         return { success: true, message: 'Student login deleted.' };
 
     } catch (error: any) {
-        console.error("Error deleting student login:", error);
-        return { success: false, message: error.message || 'Failed to delete student login.' };
+        console.error("❌ Server action failed:", { action: 'deleteStudentLogin', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to delete student login.' };
     }
 }
 
 
 export async function resetStudentPassword(email: string) {
+    console.log('📤 Server action started:', { action: 'resetStudentPassword', email, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
     
     try {
         const link = await adminAuth!.generatePasswordResetLink(email);
-        // In a real app, you would email this link to the student.
-        // For this demo, we'll just log it.
         console.log(`Password reset link for ${email}: ${link}`);
         
+        console.log('✅ Server action finished:', { action: 'resetStudentPassword', success: true });
         return { success: true, message: 'Password reset link generated. Check server logs.' };
     } catch (error: any) {
-        console.error('Error resetting student password:', error);
+        console.error('❌ Server action failed:', { action: 'resetStudentPassword', error });
         let message = 'Failed to send password reset email.';
         if (error.code === 'auth/user-not-found') {
             message = 'There is no user corresponding to the email address.';
         }
-        return { success: false, message };
+        return { success: false, message: error instanceof Error ? error.message : message };
     }
 }
