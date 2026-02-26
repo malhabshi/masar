@@ -247,3 +247,10 @@ export interface EmployeeStats {
   dailyCounts: EmployeeDailyCount[];
   monthlyTotals: EmployeeMonthlyTotal[];
 }
+
+export interface AcademicTerm {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}

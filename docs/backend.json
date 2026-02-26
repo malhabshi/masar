@@ -59,23 +59,34 @@
         },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
         "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." },
-        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login records for external websites associated with this student." }
+        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." }
       },
       "required": ["id", "name", "phone", "createdAt", "createdBy"]
+    },
+    "AcademicTerm": {
+      "title": "Academic Term",
+      "type": "object",
+      "description": "Represents a global academic intake period (e.g., Fall 2025).",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "isActive", "createdAt"]
     },
     "StudentLogin": {
         "title": "Student Login",
         "type": "object",
-        "description": "Represents a reference for external portal credentials.",
+        "description": "Represents a student's login credentials.",
         "properties": {
-          "id": { "type": "string", "description": "Unique identifier for the record." },
+          "uid": { "type": "string", "description": "The Firebase Auth UID for the student user." },
           "description": { "type": "string", "description": "A description for the login's purpose, e.g., 'MOHE Portal'." },
-          "username": { "type": "string", "description": "The username used for this external site." },
-          "password": { "type": "string", "description": "The password used for this external site." },
+          "email": { "type": "string", "description": "The email (username) for the student user." },
           "notes": { "type": "string", "description": "Optional notes for this login." },
-          "createdAt": { "type": "string", "format": "date-time", "description": "When the record was created." }
+          "createdAt": { "type": "string", "format": "date-time", "description": "When the login was created." }
         },
-        "required": ["id", "description", "username", "createdAt"]
+        "required": ["uid", "description", "email", "createdAt"]
     },
     "Application": {
       "title": "Application",
@@ -367,6 +378,10 @@
     "/notification_logs/{logId}": {
       "schema": { "$ref": "#/entities/NotificationLog" },
       "description": "Logs of system notifications. (Future use)"
+    },
+    "/academic_terms/{termId}": {
+      "schema": { "$ref": "#/entities/AcademicTerm" },
+      "description": "Stores available academic terms created by admins."
     }
   }
 }
