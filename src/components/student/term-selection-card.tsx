@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import type { Student, AcademicTerm } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
@@ -9,8 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { sortByDate } from '@/lib/timestamp-utils';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
-import { Calendar, Loader2, CheckCircle2, Plus } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar, Loader2, CheckCircle2, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
   Dialog, 
@@ -18,7 +18,9 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogFooter,
-  DialogClose
+  DialogClose,
+  DialogTrigger,
+  DialogDescription
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,24 +37,19 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   const [newTermName, setNewTermName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Real-time listener for terms
+  // Real-time listener for global intake terms
   const { data: rawTerms, isLoading: termsLoading } = useCollection<AcademicTerm>('academic_terms');
 
   const isAdmin = currentUser.role === 'admin';
   const canManage = isAdmin || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
 
-  // Memoize sorted terms
+  // Memoize sorted terms (newest first)
   const terms = useMemo(() => {
     if (!rawTerms || rawTerms.length === 0) return [];
     return [...rawTerms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
   }, [rawTerms]);
 
   const handleTermChange = async (newTerm: string) => {
-    if (newTerm === '___ADD_NEW_TERM___') {
-      setIsDialogOpen(true);
-      return;
-    }
-
     if (!canManage) return;
     
     setIsUpdating(true);
@@ -95,19 +92,62 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
           <Calendar className="h-5 w-5 text-primary" />
           <CardTitle className="text-lg">Academic Intake</CardTitle>
         </div>
+        {isAdmin && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10">
+                <PlusCircle className="h-5 w-5" />
+                <span className="sr-only">Add New Intake</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Global Intake Option</DialogTitle>
+                <DialogDescription>
+                  This term will become available for all students across the system.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="quick-term-name">Term Name</Label>
+                  <Input 
+                    id="quick-term-name" 
+                    placeholder="e.g. 7/8 2026, Spring 2026" 
+                    value={newTermName}
+                    onChange={(e) => setNewTermName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleQuickAddTerm();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleQuickAddTerm} disabled={isAdding || !newTermName.trim()}>
+                  {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Term
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select 
-              // Force remount when term list length or student selection changes
               key={`${terms.length}-${student.term || 'none'}`}
               value={student.term || 'none'} 
               onValueChange={handleTermChange}
               disabled={!canManage || isUpdating || termsLoading}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={termsLoading ? "Loading..." : "Select Intake Term"} />
+                <SelectValue placeholder={termsLoading ? "Syncing..." : "Select Intake Term"} />
               </SelectTrigger>
               <SelectContent>
                 {termsLoading ? (
@@ -126,23 +166,10 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                       </SelectItem>
                     ))}
                     
-                    {terms.length === 0 && !isAdmin && (
-                      <SelectItem value="no-data" disabled>No terms available</SelectItem>
-                    )}
-
-                    {isAdmin && (
-                      <>
-                        <SelectSeparator />
-                        <SelectItem 
-                          value="___ADD_NEW_TERM___" 
-                          className="text-primary font-bold focus:bg-primary/10 cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Plus className="h-4 w-4" />
-                            Add New Intake...
-                          </div>
-                        </SelectItem>
-                      </>
+                    {terms.length === 0 && (
+                      <SelectItem value="no-data" disabled>
+                        No terms available. Ask admin to create options.
+                      </SelectItem>
                     )}
                   </>
                 )}
@@ -156,40 +183,6 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
           ) : null}
         </div>
       </CardContent>
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Global Intake Option</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="quick-term-name">Term Name</Label>
-              <Input 
-                id="quick-term-name" 
-                placeholder="e.g. 7/8 2026, Spring 2026" 
-                value={newTermName}
-                onChange={(e) => setNewTermName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleQuickAddTerm();
-                  }
-                }}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button onClick={handleQuickAddTerm} disabled={isAdding || !newTermName.trim()}>
-              {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Term
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, QueryConstraint, DocumentData, type Query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
@@ -41,21 +41,8 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  // Use stringified constraints to check for deep equality
-  const memoizedQuery = useMemo(() => {
-    if (!path) return null;
-    try {
-      const collectionRef = collection(firestore, path);
-      return query(collectionRef, ...queryConstraints);
-    } catch (e) {
-      console.error(`[useCollection:${path}] Failed to create query:`, e);
-      return null;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, JSON.stringify(queryConstraints)]);
-
   useEffect(() => {
-    if (!path || !memoizedQuery) {
+    if (!path) {
       setData([]);
       setIsLoading(false);
       return;
@@ -64,41 +51,50 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     let isMounted = true;
     setIsLoading(true);
 
-    const unsubscribe = onSnapshot(memoizedQuery as Query, 
-      (snapshot) => {
-        if (!isMounted) return;
-        
-        const items = snapshot.docs.map(doc => {
-          const docData = doc.data();
-          const converted = convertTimestamps<DocumentData>(docData);
-          return { id: doc.id, ...converted } as T;
-        });
-        
-        setData(items);
-        setIsLoading(false);
-        setError(null);
-      },
-      (err) => {
-        if (!isMounted) return;
-        
-        console.error(`[useCollection:${path}] Firestore error:`, err);
-        if (err.message.toLowerCase().includes('permissions')) {
-          const permissionError = new FirestorePermissionError({
-            path: path,
-            operation: 'list'
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
-        setError(err);
-        setIsLoading(false);
-      }
-    );
+    try {
+      const collectionRef = collection(firestore, path);
+      const q = query(collectionRef, ...queryConstraints);
 
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [memoizedQuery, path]);
+      const unsubscribe = onSnapshot(q, 
+        (snapshot) => {
+          if (!isMounted) return;
+          
+          const items = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            const converted = convertTimestamps<DocumentData>(docData);
+            return { id: doc.id, ...converted } as T;
+          });
+          
+          setData(items);
+          setIsLoading(false);
+          setError(null);
+        },
+        (err) => {
+          if (!isMounted) return;
+          
+          console.error(`[useCollection:${path}] Firestore error:`, err);
+          if (err.message.toLowerCase().includes('permissions')) {
+            const permissionError = new FirestorePermissionError({
+              path: path,
+              operation: 'list'
+            });
+            errorEmitter.emit('permission-error', permissionError);
+          }
+          setError(err);
+          setIsLoading(false);
+        }
+      );
+
+      return () => {
+        isMounted = false;
+        unsubscribe();
+      };
+    } catch (e: any) {
+      console.error(`[useCollection:${path}] Failed to create listener:`, e);
+      setIsLoading(false);
+      setError(e);
+    }
+  }, [path, JSON.stringify(queryConstraints)]);
 
   return { data, isLoading, error };
 }
