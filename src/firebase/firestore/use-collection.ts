@@ -39,11 +39,13 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(() => {
+    // onAuthStateChanged always fires at least once with the current user state
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      console.log(`[useCollection:${path}] Auth state changed. User:`, user?.uid || 'none');
       setIsAuthReady(true);
     });
     return () => unsubscribe();
-  }, []);
+  }, [path]);
 
   const memoizedQuery = useMemoFirebase(() => {
     if (!path) return null;
@@ -53,7 +55,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         const constraints = Array.isArray(queryConstraints) ? queryConstraints : [];
         return query(collectionRef, ...constraints);
     } catch(e) {
-        console.error("Failed to create query:", e);
+        console.error(`[useCollection:${path}] Failed to create query:`, e);
         return null;
     }
   }, [path, ...(Array.isArray(queryConstraints) ? queryConstraints : [])]);
@@ -63,12 +65,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     if (!isAuthReady) return;
 
     if (!auth.currentUser) {
+      console.log(`[useCollection:${path}] No user logged in. Clearing data.`);
       setIsLoading(false);
       setData([]);
       return;
     }
 
     if (!memoizedQuery) {
+      console.log(`[useCollection:${path}] No query available.`);
       setIsLoading(false);
       return;
     }
@@ -76,6 +80,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     let isMounted = true;
     setIsLoading(true);
     
+    console.log(`[useCollection:${path}] Setting up listener...`);
     const unsubscribe = onSnapshot(memoizedQuery, 
       (snapshot) => {
         if (isMounted) {
@@ -84,6 +89,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
                 const converted = convertTimestamps<DocumentData>(docData);
                 return { id: doc.id, ...converted } as T;
             });
+            console.log(`[useCollection:${path}] Received ${items.length} items.`);
             setData(items);
             setIsLoading(false);
             setError(null);
@@ -91,6 +97,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       },
       (err) => {
         if (isMounted) {
+            console.error(`[useCollection:${path}] Snapshot error:`, err);
             if (err.message.toLowerCase().includes('permissions')) {
                 const permissionError = new FirestorePermissionError({
                     path: path,

@@ -6,6 +6,7 @@ import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
 import { updateStudentTerm, addAcademicTerm } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
+import { sortByDate } from '@/lib/timestamp-utils';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -76,6 +77,9 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
     setIsAdding(false);
   };
 
+  // Safe sorting of terms
+  const sortedTerms = [...(terms || [])].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+
   return (
     <Card className="border-primary/20">
       <CardHeader className="py-4 flex flex-row items-center justify-between space-y-0">
@@ -137,9 +141,8 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                   <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
-                ) : terms && terms.length > 0 ? (
-                  // Sort newest to oldest so recently added terms are easy to find
-                  [...terms].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((term) => (
+                ) : sortedTerms.length > 0 ? (
+                  sortedTerms.map((term) => (
                     <SelectItem key={term.id} value={term.name}>
                       {term.name}
                     </SelectItem>
