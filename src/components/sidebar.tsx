@@ -92,6 +92,21 @@ export function AppSidebar() {
       }, 0);
     }, [students, user]);
 
+    // Aggregated chat specific notifications for the "Chats" menu badge
+    const chatNotificationsCount = useMemo(() => {
+      if (!students || !user) return 0;
+      return students.reduce((acc, student) => {
+        if (user.role === 'admin' || user.role === 'department') {
+          // Count threads with unread updates from employees
+          return acc + (student.unreadUpdates || 0);
+        } else if (user.role === 'employee') {
+          // Count threads with unread responses from management
+          return acc + (student.employeeUnreadMessages || 0);
+        }
+        return acc;
+      }, 0);
+    }, [students, user]);
+
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
     
     const mainNav = [
@@ -105,7 +120,7 @@ export function AppSidebar() {
     
     const managementNav = [
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'] },
-        { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'] },
+        { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department', 'employee'] },
     ];
 
     const adminNav = [
@@ -144,7 +159,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
             ))}
 
-            {(userHasRole(['admin', 'department'])) && <SidebarSeparator />}
+            {(userHasRole(['admin', 'department', 'employee'])) && <SidebarSeparator />}
             
             {managementNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
@@ -153,6 +168,11 @@ export function AppSidebar() {
                             <item.icon /> <span>{item.label}</span>
                         </Link>
                     </SidebarMenuButton>
+                    {item.label === 'Chats' && chatNotificationsCount > 0 && (
+                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
+                            {chatNotificationsCount}
+                        </SidebarMenuBadge>
+                    )}
                 </SidebarMenuItem>
             ))}
 
