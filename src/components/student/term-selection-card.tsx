@@ -35,20 +35,20 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   const [newTermName, setNewTermName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Fetch the global list of terms.
+  // Fetch the global list of terms with real-time updates.
   const { data: terms, isLoading: termsLoading } = useCollection<AcademicTerm>('academic_terms');
 
   const isAdmin = currentUser.role === 'admin';
   const canManage = isAdmin || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
 
-  // Memoize sorted terms
+  // Memoize sorted terms whenever the raw terms array changes from the database.
   const sortedTerms = useMemo(() => {
     if (!terms || terms.length === 0) return [];
     return [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
   }, [terms]);
 
   const handleTermChange = async (newTerm: string) => {
-    // If admin picks the special "Add New" option
+    // If admin picks the special "Add New" option, open the creation dialog.
     if (newTerm === '___ADD_NEW_TERM___') {
       setIsDialogOpen(true);
       return;
@@ -107,8 +107,13 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
       <CardContent>
         <div className="flex items-center gap-4">
           <div className="flex-1">
+            {/* 
+              The 'key' ensures the entire Select component is remounted when 
+              the terms list updates or the student's term is changed, 
+              forcing Radix to refresh its internal state.
+            */}
             <Select 
-              key={sortedTerms.length + (student.term || 'none')} 
+              key={`${sortedTerms.length}-${student.term || 'none'}`} 
               value={student.term || 'none'} 
               onValueChange={handleTermChange}
               disabled={!canManage || isUpdating || termsLoading}
@@ -134,7 +139,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                       </>
                     ) : (
                       <div className="p-2 text-sm text-muted-foreground text-center">
-                        No terms available. Ask admin to create options.
+                        No terms available. Any admin user can create options.
                       </div>
                     )}
 
@@ -170,7 +175,6 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         )}
       </CardContent>
 
-      {/* Quick Add Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>

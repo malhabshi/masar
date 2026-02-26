@@ -64,62 +64,47 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
     if (!path || !memoizedQuery) {
       setIsLoading(false);
+      setData([]);
       return;
     }
 
     let isMounted = true;
-    let unsubscribeSnapshot: (() => void) | null = null;
+    setIsLoading(true);
 
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (!user) {
+    // Establish a direct real-time listener.
+    // Firestore handles auth state changes internally; if permissions are denied
+    // due to lack of auth, the error callback will fire.
+    const unsubscribe = onSnapshot(memoizedQuery as Query, 
+      (snapshot) => {
         if (isMounted) {
-          setData([]);
+          const items = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            const converted = convertTimestamps<DocumentData>(docData);
+            return { id: doc.id, ...converted } as T;
+          });
+          setData(items);
+          setIsLoading(false);
+          setError(null);
+        }
+      },
+      (err) => {
+        if (isMounted) {
+          if (err.message.toLowerCase().includes('permissions')) {
+            const permissionError = new FirestorePermissionError({
+              path: path,
+              operation: 'list'
+            });
+            errorEmitter.emit('permission-error', permissionError);
+          }
+          setError(err);
           setIsLoading(false);
         }
-        if (unsubscribeSnapshot) {
-          unsubscribeSnapshot();
-          unsubscribeSnapshot = null;
-        }
-        return;
       }
-
-      if (unsubscribeSnapshot) {
-        unsubscribeSnapshot();
-      }
-
-      unsubscribeSnapshot = onSnapshot(memoizedQuery as Query, 
-        (snapshot) => {
-          if (isMounted) {
-            const items = snapshot.docs.map(doc => {
-              const docData = doc.data();
-              const converted = convertTimestamps<DocumentData>(docData);
-              return { id: doc.id, ...converted } as T;
-            });
-            setData(items);
-            setIsLoading(false);
-            setError(null);
-          }
-        },
-        (err) => {
-          if (isMounted) {
-            if (err.message.toLowerCase().includes('permissions')) {
-              const permissionError = new FirestorePermissionError({
-                path: path,
-                operation: 'list'
-              });
-              errorEmitter.emit('permission-error', permissionError);
-            }
-            setError(err);
-            setIsLoading(false);
-          }
-        }
-      );
-    });
+    );
 
     return () => {
       isMounted = false;
-      unsubscribeAuth();
-      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      unsubscribe();
     };
   }, [memoizedQuery, path]);
 
