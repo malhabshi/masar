@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, QueryConstraint, DocumentData } from 'firebase/firestore';
-import { firestore } from '@/firebase';
+import { firestore, auth } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 import { useMemoFirebase } from './memo';
@@ -36,6 +37,15 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // Track auth readiness to prevent early queries
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const memoizedQuery = useMemoFirebase(() => {
     // If no path is provided, we don't build a query.
@@ -53,18 +63,19 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
 
   useEffect(() => {
-    const constraintsCount = queryConstraints?.length || 0;
-    
-    // Add logging to find unfiltered queries
-    if (path === 'students') {
-      console.log(`🔍 useCollection('students') executing with ${constraintsCount} constraints.`);
-      console.trace('🔥🔥🔥 STACK TRACE FOR STUDENT QUERY:');
-      
-      if (constraintsCount === 0) {
-        console.error('❌ CRITICAL: Unfiltered query on students detected!');
-      }
+    // 1. Wait for Firebase Auth to initialize
+    if (!isAuthReady) {
+      return;
     }
 
+    // 2. Prevent queries if no user is authenticated (since rules require auth for all collections)
+    if (!auth.currentUser) {
+      setIsLoading(false);
+      setData([]);
+      return;
+    }
+
+    // 3. Prevent queries if no valid query is constructed
     if (!memoizedQuery) {
       setIsLoading(false);
       return;
@@ -102,7 +113,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         isMounted = false;
         unsubscribe();
     };
-  }, [memoizedQuery, path]);
+  }, [memoizedQuery, path, isAuthReady]);
 
   return { data, isLoading, error };
 }

@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot, DocumentData } from 'firebase/firestore';
-import { firestore } from '@/firebase';
+import { firestore, auth } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 import { useMemoFirebase } from './memo';
@@ -37,6 +38,15 @@ export function useDoc<T>(path: string, ...pathSegments: string[]) {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // Track auth readiness to prevent early queries
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
   
   const memoizedDocRef = useMemoFirebase(() => {
     // Ensure path segments are valid before creating a reference
@@ -53,6 +63,19 @@ export function useDoc<T>(path: string, ...pathSegments: string[]) {
 
 
   useEffect(() => {
+    // 1. Wait for Firebase Auth to initialize
+    if (!isAuthReady) {
+      return;
+    }
+
+    // 2. Prevent queries if no user is authenticated (since rules require auth for all documents)
+    if (!auth.currentUser) {
+      setIsLoading(false);
+      setData(null);
+      return;
+    }
+
+    // 3. Prevent queries if no valid doc reference is provided
     if (!memoizedDocRef) {
       setIsLoading(false);
       return;
@@ -91,7 +114,7 @@ export function useDoc<T>(path: string, ...pathSegments: string[]) {
         isMounted = false;
         unsubscribe();
     };
-  }, [memoizedDocRef]);
+  }, [memoizedDocRef, isAuthReady]);
 
   return { data, isLoading, error };
 }
