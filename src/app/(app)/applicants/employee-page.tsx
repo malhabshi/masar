@@ -13,8 +13,8 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
-import { Loader2, AlertTriangle } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Loader2, AlertTriangle, Sparkles } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function EmployeeApplicantsPage() {
@@ -44,6 +44,10 @@ export function EmployeeApplicantsPage() {
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(
     (isMounted && currentUser) ? 'users' : ''
   );
+
+  // Group students into "New" and "Portfolio"
+  const newlyAssigned = useMemo(() => (myStudents || []).filter(s => s.isNewForEmployee), [myStudents]);
+  const portfolio = useMemo(() => (myStudents || []).filter(s => !s.isNewForEmployee), [myStudents]);
 
   const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
@@ -105,10 +109,33 @@ export function EmployeeApplicantsPage() {
 
   return (
     <div className="space-y-6">
+      {newlyAssigned.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-blue-700">
+                <Sparkles className="h-5 w-5" />
+                Newly Assigned Students
+              </CardTitle>
+              <CardDescription>
+                Students recently transferred or assigned to you. Review these profiles to clear their "New" status.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <StudentTable
+              students={newlyAssigned}
+              currentUser={currentUser}
+              allUsers={allUsers || []}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>My Applicants</CardTitle>
+            <CardTitle>My Portfolio</CardTitle>
             <CardDescription>
               A filterable list of your assigned students.
             </CardDescription>
@@ -117,9 +144,10 @@ export function EmployeeApplicantsPage() {
         </CardHeader>
         <CardContent>
           <StudentTable
-            students={myStudents || []}
+            students={portfolio}
             currentUser={currentUser}
             allUsers={allUsers || []}
+            emptyStateMessage={newlyAssigned.length > 0 ? "All your students are in the 'Newly Assigned' section." : "No students assigned to your portfolio."}
           />
         </CardContent>
       </Card>

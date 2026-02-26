@@ -46,7 +46,7 @@ function StudentPageContentSkeleton() {
                  <Card>
                     <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
                     <CardContent><Skeleton className="h-48 w-full" /></CardContent>
-                </Card>
+                </div>
             </div>
       </div>
     )
@@ -74,7 +74,8 @@ export default function StudentDetailPage() {
 
   useEffect(() => {
     // When the assigned employee views the page, mark the student as "viewed"
-    // by clearing the `isNewForEmployee` flag. This will hide the "New" badge.
+    // by clearing the `isNewForEmployee` flag. This will move them from the 
+    // "Newly Assigned" section to the main portfolio on the Applicants page.
     if (student?.isNewForEmployee && currentUser?.civilId === student?.employeeId) {
         const studentDocRef = doc(firestore, 'students', student.id);
         updateDocumentNonBlocking(studentDocRef, { isNewForEmployee: false });
