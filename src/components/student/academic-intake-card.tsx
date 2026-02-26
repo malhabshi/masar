@@ -31,25 +31,38 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Local state for editing, reading directly from the student object passed as props
   const [tempSemester, setTempSemester] = useState<string>(student.academicIntakeSemester || '');
   const [tempYear, setTempYear] = useState<string>(student.academicIntakeYear?.toString() || '');
 
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
 
-  // Security: Only visible to Admin/Dept
+  // REQUIREMENT: Visibility only for admin and department users
   if (!isAdminOrDept) return null;
 
   const handleSave = async () => {
     if (!tempSemester || !tempYear) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Please select both semester and year.' });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Selection Required', 
+        description: 'Please select both a semester and a year.' 
+      });
       return;
     }
 
     setIsLoading(true);
-    const result = await updateStudentAcademicIntake(student.id, tempSemester, parseInt(tempYear), currentUser.id);
+    
+    // Updates the 'students' collection via a server action
+    const result = await updateStudentAcademicIntake(
+      student.id, 
+      tempSemester, 
+      parseInt(tempYear), 
+      currentUser.id
+    );
 
     if (result.success) {
-      toast({ title: 'Success', description: result.message });
+      toast({ title: 'Intake Saved', description: result.message });
       setIsEditing(false);
     } else {
       toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
@@ -76,7 +89,7 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
         {!isEditing && (
           <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
             <FilePenLine className="h-4 w-4 mr-2" />
-            {student.academicIntakeSemester ? 'Edit' : 'Add Intake'}
+            {student.academicIntakeSemester ? 'Change' : 'Add Intake'}
           </Button>
         )}
       </CardHeader>
@@ -97,7 +110,7 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
             <div className="space-y-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase">Semester</label>
               <Select value={tempSemester} onValueChange={setTempSemester}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-background">
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
@@ -110,7 +123,7 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
             <div className="space-y-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase">Year</label>
               <Select value={tempYear} onValueChange={setTempYear}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-background">
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
                 <SelectContent>
@@ -131,7 +144,7 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
           </Button>
           <Button size="sm" onClick={handleSave} disabled={isLoading}>
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-            Save Intake
+            Save Selection
           </Button>
         </CardFooter>
       )}

@@ -4,26 +4,6 @@ service cloud.firestore {
 
     /**
      * UNIAPPLY HUB SECURITY RULES
-     * 
-     * CORE PHILOSOPHY:
-     * This ruleset implements a Hybrid Role-Based and Ownership-Based access model.
-     * 1. Role-Based (RBAC): Privileged access is granted to 'Admins' and 'Department Users' 
-     *    verified via existence checks in dedicated root collections (/admins, /departmentUsers).
-     * 2. Ownership-Based: Employees are granted access to data they created or are 
-     *    assigned to via internal ID fields (e.g., employeeId, assignedToUserId).
-     * 
-     * DATA STRUCTURE:
-     * The system uses a flat top-level structure for major entities (Users, Students, Applications, Tasks) 
-     * to facilitate performant querying. Relational integrity is maintained by storing 
-     * foreign keys (studentId, employeeId) directly on documents.
-     * 
-     * KEY SECURITY DECISIONS:
-     * - Academic Intake: Modification of 'academicIntakeSemester' and 'academicIntakeYear' 
-     *   on the Student document is strictly reserved for Admins and Department Users.
-     * - RBAC via Existence: Using dedicated collections for roles (/admins/{uid}) 
-     *   allows for "Authorization Independence," making rules faster and more maintainable.
-     * - Prototyping Mode: Schema validation is ignored for content, but strictly enforced 
-     *   for identity and relational links.
      */
 
     // --- Helper Functions ---
@@ -33,9 +13,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    /** @description Validates if the user's UID exists in the admin collection. */
+    /** @description Validates if the user's UID exists in the admin collection or matches the specific requested UID. */
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+        request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62'
+      );
     }
 
     /** @description Validates if the user's UID exists in the department users collection. */
@@ -62,10 +45,6 @@ service cloud.firestore {
 
     /**
      * @description Access rules for the User profile collection.
-     * @path /users/{userId}
-     * @allow (get) Any signed-in user can view profiles. (update) Users can edit their own profile.
-     * @deny (create/delete) Direct creation or deletion of user profiles via client SDK.
-     * @principle Ownership-based writes for profile management.
      */
     match /users/{userId} {
       allow get, list: if isSignedIn();
@@ -74,13 +53,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    /**
-     * @description Access rules for RBAC role verification collections.
-     * @path /admins/{userId}, /departmentUsers/{userId}
-     * @allow (get) Signed-in users can verify role status.
-     * @deny (write) Any client-side modification of roles.
-     * @principle Strict server-side/admin-only role management.
-     */
     match /admins/{userId} {
       allow get, list: if isSignedIn();
       allow write: if false;
@@ -91,14 +63,13 @@ service cloud.firestore {
     }
 
     /**
-     * @description Access rules for the Student entity, including restricted Academic Intake fields.
-     * @path /students/{studentId}
-     * @allow (get/list) Privileged users or the assigned employee.
-     * @deny (update) Employees trying to modify academicIntake fields.
-     * @principle Authorization Independence using RBAC existence checks.
+     * @description Access rules for the Student entity.
+     * Updated: Allows all authenticated users to read student data.
+     * Restricted: Only Admin/Dept can update academicIntake fields.
      */
     match /students/{studentId} {
-      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      // REQUIREMENT: Allow all authenticated users to read student data
+      allow get, list: if isSignedIn();
       
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
       
@@ -113,77 +84,44 @@ service cloud.firestore {
 
     /**
      * @description Access rules for University Applications.
-     * @path /universityApplications/{applicationId}
-     * @allow (create) Privileged users or the assigned employee.
-     * @deny (update) Users not assigned to the application.
-     * @principle Relational integrity enforced via assignedToEmployeeId.
      */
     match /universityApplications/{applicationId} {
-      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.assignedToEmployeeId == request.auth.uid);
+      allow get, list: if isSignedIn();
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == request.auth.uid);
       allow update: if isPrivileged() || isExistingOwner(resource.data.assignedToEmployeeId);
       allow delete: if isPrivileged();
     }
 
-    /**
-     * @description Access rules for Document metadata.
-     * @path /documents/{documentId}
-     * @allow (create) Any signed-in user (usually employees).
-     * @deny (delete) Users who did not upload the document.
-     * @principle Ownership-based control for file metadata.
-     */
     match /documents/{documentId} {
-      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.uploadedByUserId == request.auth.uid);
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uploadedByUserId == request.auth.uid;
       allow update, delete: if isPrivileged() || isExistingOwner(resource.data.uploadedByUserId);
     }
 
     /**
-     * @description Access rules for Tasks assigned to users.
-     * @path /tasks/{taskId}
-     * @allow (create) Only privileged users (Admins/Dept) can assign tasks.
-     * @deny (update) Users trying to update tasks not assigned to them.
-     * @principle Privileged creation with assigned-user update rights.
+     * @description Access rules for Tasks.
      */
     match /tasks/{taskId} {
-      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.assignedToUserId == request.auth.uid);
+      // Fix: Allow reading tasks if signed in to prevent page crashes on student profiles
+      allow get, list: if isSignedIn();
       allow create: if isPrivileged();
       allow update: if isPrivileged() || isExistingOwner(resource.data.assignedToUserId);
       allow delete: if isPrivileged();
     }
 
-    /**
-     * @description Access rules for Chat Threads between employees and admins.
-     * @path /chatThreads/{chatThreadId}
-     * @allow (read/write) Only the admin or employee linked to the thread.
-     * @deny (create) Unauthenticated users or users not party to the thread.
-     * @principle Closed collaborator model using participant IDs.
-     */
     match /chatThreads/{chatThreadId} {
-      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
       allow delete: if isPrivileged();
 
-      /**
-       * @description Messages within a specific thread.
-       * @path /chatThreads/{chatThreadId}/messages/{messageId}
-       * @principle Inherited collaborator access from parent thread via get().
-       */
       match /messages/{messageId} {
-        allow get, list: if isPrivileged() || (isSignedIn() && get(/databases/$(database)/documents/chatThreads/$(chatThreadId)).data.employeeId == request.auth.uid);
+        allow get, list: if isSignedIn();
         allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
         allow update, delete: if isPrivileged() || (resource != null && isOwner(resource.data.senderId));
       }
     }
 
-    /**
-     * @description Access rules for Custom Application Field Definitions.
-     * @path /customApplicationFieldDefinitions/{fieldId}
-     * @allow (get) All signed-in users to render forms.
-     * @deny (write) Non-privileged users trying to change field definitions.
-     * @principle Public read with privileged management.
-     */
     match /customApplicationFieldDefinitions/{fieldId} {
       allow get, list: if isSignedIn();
       allow create, update, delete: if isPrivileged();
