@@ -1,42 +1,63 @@
 'use client';
 
 import { useUser } from '@/hooks/use-user';
-import type { Student } from '@/lib/types';
+import type { Student, User } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StudentTable } from '@/components/dashboard/student-table';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MessageSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function InternalChatPage() {
   const { user: currentUser, isUserLoading } = useUser();
+  const [isMounted, setIsMounted] = useState(false);
 
-  // Only attempt to fetch data if the user is an admin or department member.
-  const canFetch = currentUser && ['admin', 'department'].includes(currentUser.role);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
-  // Query for students with unread messages for admins/depts.
+  const isAdminDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const isEmployee = currentUser?.role === 'employee';
+
+  // Management sees students with unread employee messages
+  // Employees see students with unread management updates
   const studentsQuery = useMemoFirebase(() => {
-    if (!canFetch) return [];
-    return [where('unreadUpdates', '>', 0)];
-  }, [canFetch]);
+    if (!isMounted || !currentUser) return [];
+    
+    if (isAdminDept) {
+      return [where('unreadUpdates', '>', 0)];
+    }
+    
+    if (isEmployee && currentUser.civilId) {
+      return [
+        where('employeeId', '==', currentUser.civilId),
+        where('employeeUnreadMessages', '>', 0)
+      ];
+    }
+    
+    return [where('id', '==', 'NONE')];
+  }, [isMounted, currentUser, isAdminDept, isEmployee]);
 
   const { data: studentsWithUnread, isLoading: studentsAreLoading } = useCollection<Student>(
-    canFetch ? 'students' : '', 
+    (isMounted && currentUser) ? 'students' : '', 
     ...studentsQuery
   );
+
+  const { data: allUsers } = useCollection<User>((isMounted && currentUser) ? 'users' : '');
   
-  const isLoading = isUserLoading || studentsAreLoading;
+  const isLoading = isUserLoading || !isMounted || studentsAreLoading;
 
   if (isLoading) {
     return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
   }
 
-  if (!canFetch) {
+  if (!currentUser) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Access Denied</CardTitle>
-          <CardDescription>You do not have permission to view this page.</CardDescription>
+          <CardDescription>You must be logged in to view your chat inbox.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -44,18 +65,25 @@ export default function InternalChatPage() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Internal Chats</CardTitle>
-        <CardDescription>
-          Students with unread messages or updates from employees.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-primary" />
+            Chat Inbox
+          </CardTitle>
+          <CardDescription>
+            {isAdminDept 
+              ? "Students with unread messages from employees waiting for review." 
+              : "Your students with new updates or responses from management."}
+          </CardDescription>
+        </div>
       </CardHeader>
       <CardContent>
         <StudentTable 
             students={studentsWithUnread || []} 
             currentUser={currentUser}
-            showEmployee
-            emptyStateMessage="No students have unread messages."
+            allUsers={allUsers || []}
+            emptyStateMessage={isAdminDept ? "No students have unread messages for management." : "No unread updates for your students."}
         />
       </CardContent>
     </Card>

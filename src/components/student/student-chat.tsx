@@ -24,7 +24,6 @@ import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 
-
 interface StudentChatProps {
   student: Student;
   currentUser: User;
@@ -47,7 +46,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
 
   const messages = useMemo(() => {
     if (!messagesData) return [];
-    return messagesData.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return [...messagesData].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [messagesData]);
   
   const authorIds = useMemo(() => (messages || []).map(m => m.authorId), [messages]);
@@ -62,20 +61,22 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Effect to clear document notification counters upon viewing.
   useEffect(() => {
     if (!student || !currentUser) return;
     const studentDocRef = doc(firestore, 'students', student.id);
     const isAdminDept = ['admin', 'department'].includes(currentUser.role);
     const isEmployee = currentUser.role === 'employee';
 
-    if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0) {
-      updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: 0 });
-    } else if (isAdminDept && student.unreadUpdates && student.unreadUpdates > 0) {
+    // Management clears employee-sent updates
+    if (isAdminDept && student.unreadUpdates && student.unreadUpdates > 0) {
       updateDocumentNonBlocking(studentDocRef, { unreadUpdates: 0 });
+    } 
+    // Employee clears management-sent messages
+    else if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0) {
+      updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: 0 });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [student?.id, currentUser?.id]);
-
+  }, [student.id, student.unreadUpdates, student.employeeUnreadMessages, currentUser.role]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -88,7 +89,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
           description: validation.message,
         });
         setFile(null);
-        if (e.target) e.target.value = ''; // Reset input
+        if (e.target) e.target.value = '';
         return;
       }
       setFile(selectedFile);
@@ -99,7 +100,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     if (!newMessage.trim() && !file) return;
 
     if (!authUser) {
-        toast({ variant: 'destructive', title: 'Authentication Error', description: 'Cannot send message. Please refresh the page.' });
+        toast({ variant: 'destructive', title: 'Authentication Error', description: 'Cannot send message. Please refresh.' });
         return;
     }
 
@@ -107,7 +108,6 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     let documentPayload: { name: string; url: string } | undefined = undefined;
 
     try {
-        // 1. Handle file upload if a file is attached
         if (file) {
             const formData = new FormData();
             formData.append('file', file);
@@ -122,33 +122,26 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
             });
 
             const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to upload file.');
-            }
-            documentPayload = { name: file.name, url: result.downloadURL };
+            if (!response.ok) throw new Error(result.error || 'Failed to upload file.');
+            documentPayload = { name: result.document.name, url: result.document.url };
         }
 
-        // 2. Prepare and send the message
         let finalMessageContent = newMessage.trim();
         const recipientUser = recipientId ? managementUsers.find(u => u.id === recipientId) : null;
-        let toastDescription = 'Your message has been added to the chat.';
 
         if (currentUser.role === 'employee' && recipientId) {
             if (recipientId === 'admins') {
                 finalMessageContent = `@Admins: ${finalMessageContent}`;
-                toastDescription = 'Your message addressing all admins has been added.';
             } else if (recipientId === 'departments') {
                 finalMessageContent = `@Departments: ${finalMessageContent}`;
-                toastDescription = 'Your message addressing all department users has been added.';
             } else if (recipientUser) {
                 finalMessageContent = `@${recipientUser.name}: ${finalMessageContent}`;
-                toastDescription = `Your message addressing ${recipientUser.name} has been added.`;
             }
         }
 
         const message: Omit<ChatMessage, 'id'> = {
             authorId: currentUser.id,
-            content: finalMessageContent || (documentPayload ? `Shared a file` : ''),
+            content: finalMessageContent || (documentPayload ? `Shared a file: ${documentPayload.name}` : ''),
             timestamp: new Date().toISOString(),
             ...(documentPayload && { document: documentPayload }),
         };
@@ -156,37 +149,56 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         const messagesCollection = collection(firestore, 'chats', studentId, 'messages');
         addDocumentNonBlocking(messagesCollection, message);
 
-        // 3. Update unread counters
-        if (student) {
-            const studentDocRef = doc(firestore, 'students', student.id);
-            if (['admin', 'department'].includes(currentUser.role) && student.employeeId) {
-                const currentUnread = student.employeeUnreadMessages || 0;
-                updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: currentUnread + 1 });
-            } else if (currentUser.role === 'employee') {
-                const currentUnread = student.unreadUpdates || 0;
-                updateDocumentNonBlocking(studentDocRef, { unreadUpdates: currentUnread + 1 });
-            }
+        // Update counters
+        const studentDocRef = doc(firestore, 'students', student.id);
+        const isAdminDept = ['admin', 'department'].includes(currentUser.role);
+        
+        if (isAdminDept) {
+            const current = student.employeeUnreadMessages || 0;
+            updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: current + 1 });
+        } else {
+            const current = student.unreadUpdates || 0;
+            updateDocumentNonBlocking(studentDocRef, { unreadUpdates: current + 1 });
         }
 
-        // 4. Reset state and show toast
         setNewMessage('');
         setFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
         setRecipientId('');
-        toast({ title: 'Message Sent', description: documentPayload ? `File '${documentPayload.name}' sent.` : toastDescription });
+        toast({ title: 'Message Sent' });
     
     } catch (error: any) {
-        console.error("Failed to send message:", error);
-        toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not send the message.' });
+        toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
         setIsLoading(false);
     }
   };
 
+  const renderMessageContent = (content: string) => {
+    if (!content) return null;
+    
+    // Highlight mentions (@Admins, @Departments, @Name)
+    const mentionRegex = /^(@[A-Za-z\s]+:)/;
+    const match = content.match(mentionRegex);
+    
+    if (match) {
+      const mention = match[1];
+      const rest = content.slice(mention.length);
+      return (
+        <p className="whitespace-pre-wrap">
+          <span className="font-bold underline text-accent-foreground/90">{mention}</span>
+          {rest}
+        </p>
+      );
+    }
+    
+    return <p className="whitespace-pre-wrap">{content}</p>;
+  };
+
   return (
     <>
       <CardContent className="flex-1 overflow-hidden pt-0">
-        <ScrollArea className="h-80 pr-4">
+        <ScrollArea className="h-[400px] pr-4">
           <div className="space-y-4">
             {messages.map(message => {
               const author = userMap.get(message.authorId);
@@ -199,133 +211,108 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                     isCurrentUser ? 'justify-end' : 'justify-start'
                   )}
                 >
-                  {!isCurrentUser && author && (
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={author.avatarUrl} alt={author.name} />
-                      <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
+                  {!isCurrentUser && (
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarImage src={author?.avatarUrl} alt={author?.name} />
+                      <AvatarFallback>{author?.name?.charAt(0) || '?'}</AvatarFallback>
                     </Avatar>
                   )}
                   <div
                     className={cn(
-                      'max-w-xs rounded-lg p-3 text-sm',
+                      'max-w-[80%] rounded-lg p-3 text-sm shadow-sm',
                       isCurrentUser
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
+                        ? 'bg-primary text-primary-foreground rounded-br-none'
+                        : 'bg-muted text-muted-foreground rounded-bl-none border'
                     )}
                   >
-                    {message.content && <p className="whitespace-pre-wrap">{message.content}</p>}
+                    {!isCurrentUser && author && (
+                        <div className="text-[10px] font-bold opacity-70 mb-1 uppercase">
+                            {author.name} ({author.role})
+                        </div>
+                    )}
+                    {renderMessageContent(message.content)}
                     {message.document && (
                       <a
                         href={message.document.url}
-                        download={message.document.name}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={cn(
-                          'flex items-center gap-2 mt-2 p-2 rounded-md',
+                          'flex items-center gap-2 mt-2 p-2 rounded-md transition-colors',
                           isCurrentUser
                             ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
-                            : 'bg-background/50 hover:bg-background'
+                            : 'bg-background hover:bg-background/80 border'
                         )}
                       >
-                        <FileText className="h-4 w-4 flex-shrink-0" />
-                        <span className="truncate font-medium">{message.document.name}</span>
-                        <Download className="h-4 w-4 ml-auto flex-shrink-0"/>
+                        <FileText className="h-4 w-4 shrink-0" />
+                        <span className="truncate font-medium flex-1">{message.document.name}</span>
+                        <Download className="h-3 w-3 opacity-70" />
                       </a>
                     )}
+                    <div className={cn(
+                        "text-[9px] mt-1 text-right opacity-60",
+                        isCurrentUser ? "text-primary-foreground" : "text-muted-foreground"
+                    )}>
+                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
                   </div>
-                  {isCurrentUser && author && (
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={author.avatarUrl} alt={author.name} />
-                      <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                  )}
                 </div>
               );
             })}
             <div ref={messagesEndRef} />
             {messages.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No messages yet. Start a conversation!
-              </p>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <MessageSquare className="h-12 w-12 mb-2 opacity-20" />
+                <p className="text-sm">Start a conversation about this student.</p>
+              </div>
             )}
           </div>
         </ScrollArea>
       </CardContent>
-      <CardFooter className="border-t pt-4">
+      <CardFooter className="border-t pt-4 bg-muted/10">
         <div className="w-full space-y-2">
           {currentUser.role === 'employee' && (
             <Select onValueChange={setRecipientId} value={recipientId}>
-              <SelectTrigger disabled={isLoading || usersLoading}>
-                <SelectValue placeholder={usersLoading ? "Loading..." : "Address message to..."} />
+              <SelectTrigger className="bg-background h-8 text-xs border-dashed" disabled={isLoading || usersLoading}>
+                <SelectValue placeholder="Address message to... (Optional)" />
               </SelectTrigger>
               <SelectContent>
-                {hasMultipleAdmins && (
-                  <SelectItem value="admins">Admins (Group)</SelectItem>
-                )}
-                {hasDepartments && (
-                  <SelectItem value="departments">Departments (Group)</SelectItem>
-                )}
+                {hasMultipleAdmins && <SelectItem value="admins">Admins (Group)</SelectItem>}
+                {hasDepartments && <SelectItem value="departments">Departments (Group)</SelectItem>}
                 {managementUsers.map(user => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.name} ({user.role})
-                  </SelectItem>
+                  <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
+          
           {file && (
-            <div className="flex items-center justify-between p-2 text-sm bg-muted rounded-md">
+            <div className="flex items-center justify-between p-2 text-xs bg-accent text-accent-foreground rounded-md animate-in fade-in slide-in-from-bottom-1">
               <div className="flex items-center gap-2 truncate">
-                <FileText className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{file.name}</span>
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="truncate font-medium">{file.name}</span>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 flex-shrink-0"
-                onClick={() => {
-                  setFile(null);
-                  if (fileInputRef.current) fileInputRef.current.value = '';
-                }}
-              >
-                <X className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setFile(null)}>
+                <X className="h-3 w-3" />
               </Button>
             </div>
           )}
+
           <div className="flex w-full items-center space-x-2">
-            <Input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept={ALLOWED_FILE_EXTENSIONS}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-            >
+            <Input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={ALLOWED_FILE_EXTENSIONS} />
+            <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
               <Paperclip className="h-4 w-4" />
-              <span className="sr-only">Attach file</span>
             </Button>
             <Input
               type="text"
               placeholder="Type a message..."
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
+              onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
               disabled={isLoading}
+              className="flex-1"
             />
             <Button type="button" size="icon" onClick={handleSendMessage} disabled={isLoading || (!newMessage.trim() && !file)}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              <span className="sr-only">Send</span>
             </Button>
           </div>
         </div>
