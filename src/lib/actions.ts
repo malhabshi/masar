@@ -371,7 +371,8 @@ export async function createStudent(
   },
   creatingUserId: string,
   creatingUserRole: UserRole,
-  creatingUserCivilId?: string | null
+  creatingUserCivilId?: string | null,
+  assignedEmployeeId?: string | null
 ) {
   if (!checkAdminServices()) {
     return { success: false, message: 'Server database connection not available.' };
@@ -405,14 +406,12 @@ export async function createStudent(
     const studentId = `U-${creatingUserCivilId}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
 
-    console.log(`[SERVER] Creating student with ID: ${studentId} by user ${creatingUserId}`);
-
     const newStudentData: Omit<Student, 'avatarUrl' | 'ielts'> = {
       id: studentId,
       name: studentName,
       email: studentEmail || '',
       phone: phone,
-      employeeId: null, // Students are always created as unassigned
+      employeeId: assignedEmployeeId || null, 
       applications: [],
       employeeNotes: [],
       adminNotes: notes
@@ -431,6 +430,7 @@ export async function createStudent(
       targetCountries: finalTargetCountries as Country[],
       missingItems: [],
       pipelineStatus: 'none',
+      isNewForEmployee: !!assignedEmployeeId,
       profileCompletionStatus: {
         submitUniversityApplication: false,
         applyMoheScholarship: false,
@@ -448,29 +448,31 @@ export async function createStudent(
 
     await studentRef.set(newStudentData);
 
-    // Notify all admins about the new unassigned student
-    const creator = await getUser(creatingUserId);
-    const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
-    
-    if (!adminsSnapshot.empty) {
-      const batch = adminDb!.batch();
-      const taskContent = `New unassigned student '${studentName}' was added by ${creator?.name || 'a user'}. Please assign them to an employee.`;
-      
-      adminsSnapshot.forEach(adminDoc => {
-        const taskRef = adminDb!.collection('tasks').doc();
-        const newTask: Omit<Task, 'id'> = {
-          authorId: creatingUserId,
-          recipientId: adminDoc.id,
-          content: taskContent,
-          status: 'new',
-          studentId: studentRef.id,
-          studentName: studentName,
-          createdAt: new Date().toISOString(),
-          replies: [],
-        };
-        batch.set(taskRef, newTask);
-      });
-      await batch.commit();
+    // Only notify admins if the student is unassigned
+    if (!assignedEmployeeId) {
+        const creator = await getUser(creatingUserId);
+        const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
+        
+        if (!adminsSnapshot.empty) {
+          const batch = adminDb!.batch();
+          const taskContent = `New unassigned student '${studentName}' was added by ${creator?.name || 'a user'}. Please assign them to an employee.`;
+          
+          adminsSnapshot.forEach(adminDoc => {
+            const taskRef = adminDb!.collection('tasks').doc();
+            const newTask: Omit<Task, 'id'> = {
+              authorId: creatingUserId,
+              recipientId: adminDoc.id,
+              content: taskContent,
+              status: 'new',
+              studentId: studentRef.id,
+              studentName: studentName,
+              createdAt: new Date().toISOString(),
+              replies: [],
+            };
+            batch.set(taskRef, newTask);
+          });
+          await batch.commit();
+        }
     }
 
     return { success: true, studentId: studentRef.id, studentName };

@@ -109,7 +109,7 @@ export default function UnassignedStudentsPage() {
               {descriptionText}
             </CardDescription>
           </div>
-          <AddStudentDialog />
+          <AddStudentDialog source="unassigned" />
         </CardHeader>
         <CardContent>
           {studentsError ? (

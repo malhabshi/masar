@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,7 +6,7 @@ import * as z from 'zod';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
-import type { Country } from '@/lib/types';
+import type { Country, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,7 +44,11 @@ const formSchema = z.object({
   path: ['targetCountries'],
 });
 
-export function AddStudentDialog() {
+interface AddStudentDialogProps {
+  source: 'applicants' | 'unassigned';
+}
+
+export function AddStudentDialog({ source }: AddStudentDialogProps) {
     const { user: currentUser } = useUser();
     const router = useRouter();
     const { toast } = useToast();
@@ -77,18 +80,28 @@ export function AddStudentDialog() {
         }
 
         try {
+            // Logic for auto-assignment based on source
+            const assignedEmployeeId = source === 'applicants' && currentUser.role === 'employee' ? currentUser.civilId : null;
+
             const result = await createStudent(
                 values,
                 currentUser.id,
                 currentUser.role,
-                currentUser.civilId
+                currentUser.civilId,
+                assignedEmployeeId
             );
 
             if (result.success && result.studentName) {
-                router.push('/unassigned-students');
+                // If created from applicants page and assigned to self, stay here or go to applicants.
+                // If created from unassigned pool, go to unassigned pool.
+                const targetPath = assignedEmployeeId ? '/applicants' : '/unassigned-students';
+                router.push(targetPath);
+                
                 toast({
                     title: 'Student Added',
-                    description: `${result.studentName} has been added to the unassigned list.`
+                    description: assignedEmployeeId 
+                        ? `${result.studentName} has been added to your portfolio.`
+                        : `${result.studentName} has been added to the unassigned list.`
                 });
                 setIsOpen(false);
                 form.reset();
@@ -111,7 +124,9 @@ export function AddStudentDialog() {
         }
     }
     
-    const descriptionText = "Create a new student profile. The student will be added to the 'Unassigned' list for an admin to review and assign.";
+    const descriptionText = source === 'unassigned' 
+        ? "Create a new student profile. The student will be added to the 'Unassigned' list for an admin to review and assign."
+        : "Create a new student profile. The student will be automatically assigned to your portfolio.";
 
 
     return (

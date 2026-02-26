@@ -140,7 +140,7 @@ export function EmployeeApplicantsPage() {
               A filterable list of your assigned students.
             </CardDescription>
           </div>
-          <AddStudentDialog />
+          <AddStudentDialog source="applicants" />
         </CardHeader>
         <CardContent>
           <StudentTable

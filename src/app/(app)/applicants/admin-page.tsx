@@ -75,7 +75,7 @@ export function AdminApplicantsPage() {
               A filterable list of all assigned students in the system.
             </CardDescription>
           </div>
-          {['admin', 'employee'].includes(currentUser.role) && <AddStudentDialog />}
+          {['admin', 'employee'].includes(currentUser.role) && <AddStudentDialog source="applicants" />}
         </CardHeader>
         <CardContent>
           <StudentTable
