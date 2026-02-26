@@ -36,23 +36,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** @description Checks if a document exists and the user is the owner. */
-    function isExistingOwner(userId) {
-      return resource != null && isOwner(userId);
+    /** @description Retrieves the user's data from their profile document. */
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     // --- Rules ---
 
-    /**
-     * @description Access rules for the User profile collection.
-     */
+    /** @description Access rules for User profiles and personal data. */
     match /users/{userId} {
       allow get, list: if isSignedIn();
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if false;
+      allow update: if isOwner(userId);
 
-      /** @description rules for personal todos subcollection */
       match /personal_todos/{todoId} {
         allow read, write: if isOwner(userId);
       }
@@ -67,61 +63,54 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /**
-     * @description Access rules for the Student entity.
-     * Allows all authenticated users to read student data.
-     * Restricted: Only Admin/Dept can update academicIntake fields.
-     */
+    /** @description Access rules for Student profiles. Restricted fields for intake. */
     match /students/{studentId} {
-      allow get, list: if isSignedIn();
+      allow read, list: if isSignedIn();
       
-      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().civilId);
       
       allow update: if resource != null && (
         isPrivileged() || 
-        (isOwner(resource.data.employeeId) && 
+        (isSignedIn() && getUserData().civilId == resource.data.employeeId && 
          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['academicIntakeSemester', 'academicIntakeYear']))
       );
       
       allow delete: if isPrivileged();
     }
 
-    /**
-     * @description Access rules for University Applications.
-     */
+    /** @description Rules for student university applications. */
     match /universityApplications/{applicationId} {
       allow get, list: if isSignedIn();
-      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == request.auth.uid);
-      allow update: if isPrivileged() || isExistingOwner(resource.data.assignedToEmployeeId);
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().civilId);
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.assignedToEmployeeId);
       allow delete: if isPrivileged();
     }
 
     match /documents/{documentId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.uploadedByUserId == request.auth.uid;
-      allow update, delete: if isPrivileged() || isExistingOwner(resource.data.uploadedByUserId);
+      allow create: if isSignedIn();
+      allow update, delete: if isPrivileged() || isOwner(resource.data.authorId);
     }
 
-    /**
-     * @description Access rules for Tasks.
-     */
     match /tasks/{taskId} {
       allow get, list: if isSignedIn();
-      allow create: if isPrivileged();
-      allow update: if isPrivileged() || isExistingOwner(resource.data.recipientId);
+      allow create: if isPrivileged() || isSignedIn();
+      allow update: if isPrivileged() || isOwner(resource.data.recipientId) || isOwner(resource.data.authorId);
       allow delete: if isPrivileged();
+    }
+
+    /** @description Rules for internal chats and messages. */
+    match /chats/{studentId} {
+      allow read, write: if isSignedIn();
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
     }
 
     match /chatThreads/{chatThreadId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
-      allow delete: if isPrivileged();
-
+      allow read, write: if isSignedIn();
       match /messages/{messageId} {
-        allow get, list: if isSignedIn();
-        allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if isPrivileged() || (resource != null && isOwner(resource.data.senderId));
+        allow read, write: if isSignedIn();
       }
     }
 
@@ -130,7 +119,6 @@ service cloud.firestore {
       allow create, update, delete: if isPrivileged();
     }
 
-    /** @description Access rules for Global Settings and Utilities */
     match /upcoming_events/{eventId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
@@ -158,6 +146,11 @@ service cloud.firestore {
     }
     
     match /approved_universities/{uniId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+
+    match /academic_terms/{termId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
     }

@@ -32,13 +32,11 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Local state for editing, reading directly from the student object
   const [tempSemester, setTempSemester] = useState<string>(student.academicIntakeSemester || '');
   const [tempYear, setTempYear] = useState<string>(student.academicIntakeYear?.toString() || '');
 
   const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
 
-  // Visibility restricted to admin and department users
   if (!isAdminOrDept) return null;
 
   const handleSave = async () => {
@@ -52,8 +50,6 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
     }
 
     setIsLoading(true);
-    
-    // Updates the 'students' collection via a server action
     const result = await updateStudentAcademicIntake(
       student.id, 
       tempSemester, 
