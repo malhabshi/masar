@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Globe, FilePenLine, Loader2 } from 'lucide-react';
+import { Globe, FilePenLine, Loader2, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,17 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
@@ -41,9 +52,15 @@ export function TargetCountriesCard({ student, currentUser }: TargetCountriesCar
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [selectedCountries, setSelectedCountries] = useState<Country[]>(student.targetCountries || []);
 
-  const canManage = ['admin', 'department'].includes(currentUser.role);
+  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const isAssignedEmployee = currentUser.role === 'employee' && currentUser.civilId === student.employeeId;
+  
+  // Both admins and assigned employees can clear. Only admins can edit individually.
+  const canClear = isAdminOrDept || isAssignedEmployee;
+  const canEdit = isAdminOrDept;
 
   // Compute union of explicit target countries and application countries
   const displayCountries = useMemo(() => {
@@ -73,6 +90,18 @@ export function TargetCountriesCard({ student, currentUser }: TargetCountriesCar
     setIsLoading(false);
   };
 
+  const handleClearAll = async () => {
+    setIsClearing(true);
+    const result = await updateStudentTargetCountries(student.id, [], currentUser.id);
+
+    if (result.success) {
+      toast({ title: 'Target Countries Cleared', description: 'All explicit target countries have been removed.' });
+    } else {
+      toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
+    }
+    setIsClearing(false);
+  };
+
   return (
     <Card className="bg-primary/5 border-primary/20">
       <CardHeader className="flex flex-row items-center justify-between py-4">
@@ -80,48 +109,76 @@ export function TargetCountriesCard({ student, currentUser }: TargetCountriesCar
           <Globe className="h-5 w-5 text-primary" />
           <CardTitle className="text-lg">Target Countries</CardTitle>
         </div>
-        {canManage && (
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedCountries(student.targetCountries || [])}>
-                <FilePenLine className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Target Countries</DialogTitle>
-                <DialogDescription>
-                  Select the primary countries this student is interested in.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid grid-cols-2 gap-4 py-4">
-                {countryList.map((country) => (
-                  <div key={country} className="flex items-center space-x-3 space-y-0 rounded-md border p-3">
-                    <Checkbox
-                      id={`country-${country}`}
-                      checked={selectedCountries.includes(country)}
-                      onCheckedChange={() => handleToggleCountry(country)}
-                    />
-                    <Label htmlFor={`country-${country}`} className="flex items-center gap-2 cursor-pointer font-medium">
-                      <span>{countryEmojis[country]}</span>
-                      <span>{country}</span>
-                    </Label>
-                  </div>
-                ))}
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline" type="button">Cancel</Button>
-                </DialogClose>
-                <Button onClick={handleSave} disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedCountries(student.targetCountries || [])}>
+                  <FilePenLine className="h-4 w-4 mr-2" />
+                  Edit
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Target Countries</DialogTitle>
+                  <DialogDescription>
+                    Select the primary countries this student is interested in.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-2 gap-4 py-4">
+                  {countryList.map((country) => (
+                    <div key={country} className="flex items-center space-x-3 space-y-0 rounded-md border p-3">
+                      <Checkbox
+                        id={`country-${country}`}
+                        checked={selectedCountries.includes(country)}
+                        onCheckedChange={() => handleToggleCountry(country)}
+                      />
+                      <Label htmlFor={`country-${country}`} className="flex items-center gap-2 cursor-pointer font-medium">
+                        <span>{countryEmojis[country]}</span>
+                        <span>{country}</span>
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline" type="button">Cancel</Button>
+                  </DialogClose>
+                  <Button onClick={handleSave} disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+          
+          {canClear && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Clear All</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear All Target Countries?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove all selected target countries for {student.name}. Countries associated with active applications will still remain visible.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearAll} className="bg-destructive hover:bg-destructive/90" disabled={isClearing}>
+                    {isClearing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Clear All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {displayCountries.length > 0 ? (

@@ -1785,13 +1785,19 @@ export async function updateStudentTargetCountries(studentId: string, countries:
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
 
         const updater = await getUser(updaterId);
-        if (!updater || !['admin', 'department'].includes(updater.role)) {
-            return { success: false, message: 'Only admins or department users can update target countries.' };
+        if (!updater) return { success: false, message: 'Updater not found.' };
+
+        const studentData = studentDoc.data() as Student;
+        
+        const isAssignedEmployee = updater.role === 'employee' && updater.civilId === studentData.employeeId;
+        const isAdminOrDept = ['admin', 'department'].includes(updater.role);
+
+        if (!isAssignedEmployee && !isAdminOrDept) {
+            return { success: false, message: 'You do not have permission to update target countries.' };
         }
 
         await studentRef.update({ targetCountries: countries });
         
-        const studentData = studentDoc.data() as Student;
         const newNote: Note = {
             id: `note-target-countries-${Date.now()}`,
             authorId: updaterId,
