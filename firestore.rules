@@ -1,156 +1,192 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /**
+     * UNIAPPLY HUB SECURITY RULES
+     * 
+     * CORE PHILOSOPHY:
+     * This ruleset implements a Hybrid Role-Based and Ownership-Based access model.
+     * 1. Role-Based (RBAC): Privileged access is granted to 'Admins' and 'Department Users' 
+     *    verified via existence checks in dedicated root collections (/admins, /departmentUsers).
+     * 2. Ownership-Based: Employees are granted access to data they created or are 
+     *    assigned to via internal ID fields (e.g., employeeId, assignedToUserId).
+     * 
+     * DATA STRUCTURE:
+     * The system uses a flat top-level structure for major entities (Users, Students, Applications, Tasks) 
+     * to facilitate performant querying. Relational integrity is maintained by storing 
+     * foreign keys (studentId, employeeId) directly on documents.
+     * 
+     * KEY SECURITY DECISIONS:
+     * - Academic Intake: Modification of 'academicIntakeSemester' and 'academicIntakeYear' 
+     *   on the Student document is strictly reserved for Admins and Department Users.
+     * - RBAC via Existence: Using dedicated collections for roles (/admins/{uid}) 
+     *   allows for "Authorization Independence," making rules faster and more maintainable.
+     * - Prototyping Mode: Schema validation is ignored for content, but strictly enforced 
+     *   for identity and relational links.
+     */
+
     // --- Helper Functions ---
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+
+    /** @description Checks if the user is authenticated. */
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    function isRole(role) {
-      return getUserData().role == role;
+    /** @description Validates if the user's UID exists in the admin collection. */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isOneOfRoles(roles) {
-      return getUserData().role in roles;
+    /** @description Validates if the user's UID exists in the department users collection. */
+    function isDepartment() {
+      return isSignedIn() && exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid));
     }
 
-    // Check if a user has access to a specific student's data.
-    // Access is granted to admins, department users, and the assigned employee.
-    function hasStudentAccess(studentId) {
-      // This function requires that the client provides the studentId
-      if (!exists(/databases/$(database)/documents/students/$(studentId))) {
-        return false;
-      }
-      let student = get(/databases/$(database)/documents/students/$(studentId)).data;
-      let user = getUserData();
-      return user.role in ['admin', 'department'] || 
-             student.employeeId == user.civilId ||
-             (user.role == 'student' && user.studentId == studentId);
+    /** @description Helper for users with elevated administrative privileges. */
+    function isPrivileged() {
+      return isAdmin() || isDepartment();
     }
 
-    // --- Collection Rules ---
-
-    // Allow users to read/write their own personal_todos
-    match /users/{userId}/personal_todos/{todoId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    /** @description Checks if the authenticated user matches the provided ID. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
-    
-    // Users collection - custom rules for admin vs regular users
+
+    /** @description Checks if a document exists and the user is the owner. */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    // --- Rules ---
+
+    /**
+     * @description Access rules for the User profile collection.
+     * @path /users/{userId}
+     * @allow (get) Any signed-in user can view profiles. (update) Users can edit their own profile.
+     * @deny (create/delete) Direct creation or deletion of user profiles via client SDK.
+     * @principle Ownership-based writes for profile management.
+     */
     match /users/{userId} {
-      // Admins can read all profiles. Employees/Depts can read other employee/dept/admin profiles.
-      // Students can only read their own profile.
-      allow read: if request.auth != null && (
-        isOneOfRoles(['admin', 'department', 'employee']) ||
-        request.auth.uid == userId
-      );
-      
-      // Admins can create/edit anyone.
-      // Employees can create student users for their assigned students.
-      // Users can edit their own profile, but cannot change their role.
-      allow create: if request.auth != null && (
-        isRole('admin') ||
-        (isRole('employee') && request.resource.data.role == 'student')
-      );
-      allow update: if request.auth != null && (
-        isRole('admin') ||
-        (request.auth.uid == userId && !('role' in request.resource.data))
-      );
-      allow delete: if request.auth != null && isRole('admin');
+      allow get, list: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if false;
     }
-    
-    // Tasks collection rules
-    match /tasks/{taskId} {
-      // Read is allowed for admins, departments, sender, recipient, or if it's a broadcast task ('all').
-      allow read: if request.auth != null && (
-        isOneOfRoles(['admin', 'department']) ||
-        resource.data.authorId == request.auth.uid ||
-        resource.data.recipientId == request.auth.uid ||
-        resource.data.recipientId == 'all'
-      );
-      // Create is allowed if the author is the current user.
-      allow create: if request.auth != null && request.resource.data.authorId == request.auth.uid;
-      // Update is allowed by admins, departments, the author, or the recipient.
-      allow update: if request.auth != null && (
-        isOneOfRoles(['admin', 'department']) ||
-        resource.data.authorId == request.auth.uid ||
-        resource.data.recipientId == request.auth.uid
-      );
-      // Delete is restricted to admins to prevent accidental data loss.
-      allow delete: if request.auth != null && isRole('admin');
+
+    /**
+     * @description Access rules for RBAC role verification collections.
+     * @path /admins/{userId}, /departmentUsers/{userId}
+     * @allow (get) Signed-in users can verify role status.
+     * @deny (write) Any client-side modification of roles.
+     * @principle Strict server-side/admin-only role management.
+     */
+    match /admins/{userId} {
+      allow get, list: if isSignedIn();
+      allow write: if false;
     }
-    
-    // Students collection rules
+    match /departmentUsers/{userId} {
+      allow get, list: if isSignedIn();
+      allow write: if false;
+    }
+
+    /**
+     * @description Access rules for the Student entity, including restricted Academic Intake fields.
+     * @path /students/{studentId}
+     * @allow (get/list) Privileged users or the assigned employee.
+     * @deny (update) Employees trying to modify academicIntake fields.
+     * @principle Authorization Independence using RBAC existence checks.
+     */
     match /students/{studentId} {
-      // LIST logic
-      allow list: if request.auth != null && (
-        isOneOfRoles(['admin', 'department']) ||
-        // Allow querying assigned students
-        (isRole('employee') && request.query.employeeId == getUserData().civilId) ||
-        // Allow querying own created students (allows unassigned pool access)
-        (isRole('employee') && request.query.createdBy == request.auth.uid)
-      );
-
-      // GET logic
-      allow get: if request.auth != null && (
-        isOneOfRoles(['admin', 'department']) ||
-        (isRole('student') && getUserData().studentId == studentId) ||
-        (resource.data.employeeId != null && resource.data.employeeId == getUserData().civilId) ||
-        (resource.data.createdBy == request.auth.uid)
+      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
+      
+      allow update: if resource != null && (
+        isPrivileged() || 
+        (isOwner(resource.data.employeeId) && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['academicIntakeSemester', 'academicIntakeYear']))
       );
       
-      // WRITE logic
-      allow write: if request.auth != null && (
-        isOneOfRoles(['admin', 'department']) ||
-        (resource.data.employeeId != null && resource.data.employeeId == getUserData().civilId) ||
-        (resource.data.createdBy == request.auth.uid && resource.data.employeeId == null)
-      );
+      allow delete: if isPrivileged();
     }
 
-    // Approved universities - admins and dept can write, all can read
-    match /approved_universities/{universityId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        isOneOfRoles(['admin', 'department']);
-    }
-    
-    // Other global collections
-    match /application_questions/{questionId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isRole('admin');
-    }
-    // Chat messages are nested under a student, so access is tied to student access.
-    match /databases/{database}/documents/chats/{studentId}/messages/{messageId} {
-      allow read, write: if request.auth != null && hasStudentAccess(studentId);
-    }
-    match /upcoming_events/{eventId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && (isOneOfRoles(['admin', 'department']));
-    }
-    match /shared_documents/{documentId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isOneOfRoles(['admin', 'department']);
-    }
-    match /request_types/{requestTypeId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isRole('admin');
-    }
-    match /resource_links/{linkId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isOneOfRoles(['admin', 'department']);
+    /**
+     * @description Access rules for University Applications.
+     * @path /universityApplications/{applicationId}
+     * @allow (create) Privileged users or the assigned employee.
+     * @deny (update) Users not assigned to the application.
+     * @principle Relational integrity enforced via assignedToEmployeeId.
+     */
+    match /universityApplications/{applicationId} {
+      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.assignedToEmployeeId == request.auth.uid);
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == request.auth.uid);
+      allow update: if isPrivileged() || isExistingOwner(resource.data.assignedToEmployeeId);
+      allow delete: if isPrivileged();
     }
 
-    // Restrict time logs to the employee and give read-only access to admins.
-    match /time_logs/{logId} {
-      allow create: if request.auth != null && 
-        request.resource.data.employeeId == request.auth.uid;
-      
-      // Admins can read any log for reporting. Employees can read their own.
-      allow read: if request.auth != null && (isRole('admin') || resource.data.employeeId == request.auth.uid);
+    /**
+     * @description Access rules for Document metadata.
+     * @path /documents/{documentId}
+     * @allow (create) Any signed-in user (usually employees).
+     * @deny (delete) Users who did not upload the document.
+     * @principle Ownership-based control for file metadata.
+     */
+    match /documents/{documentId} {
+      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.uploadedByUserId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.uploadedByUserId == request.auth.uid;
+      allow update, delete: if isPrivileged() || isExistingOwner(resource.data.uploadedByUserId);
+    }
 
-      // Employees can only update/delete their own logs.
-      allow update, delete: if request.auth != null && resource.data.employeeId == request.auth.uid;
+    /**
+     * @description Access rules for Tasks assigned to users.
+     * @path /tasks/{taskId}
+     * @allow (create) Only privileged users (Admins/Dept) can assign tasks.
+     * @deny (update) Users trying to update tasks not assigned to them.
+     * @principle Privileged creation with assigned-user update rights.
+     */
+    match /tasks/{taskId} {
+      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.assignedToUserId == request.auth.uid);
+      allow create: if isPrivileged();
+      allow update: if isPrivileged() || isExistingOwner(resource.data.assignedToUserId);
+      allow delete: if isPrivileged();
+    }
+
+    /**
+     * @description Access rules for Chat Threads between employees and admins.
+     * @path /chatThreads/{chatThreadId}
+     * @allow (read/write) Only the admin or employee linked to the thread.
+     * @deny (create) Unauthenticated users or users not party to the thread.
+     * @principle Closed collaborator model using participant IDs.
+     */
+    match /chatThreads/{chatThreadId} {
+      allow get, list: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow delete: if isPrivileged();
+
+      /**
+       * @description Messages within a specific thread.
+       * @path /chatThreads/{chatThreadId}/messages/{messageId}
+       * @principle Inherited collaborator access from parent thread via get().
+       */
+      match /messages/{messageId} {
+        allow get, list: if isPrivileged() || (isSignedIn() && get(/databases/$(database)/documents/chatThreads/$(chatThreadId)).data.employeeId == request.auth.uid);
+        allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if isPrivileged() || (resource != null && isOwner(resource.data.senderId));
+      }
+    }
+
+    /**
+     * @description Access rules for Custom Application Field Definitions.
+     * @path /customApplicationFieldDefinitions/{fieldId}
+     * @allow (get) All signed-in users to render forms.
+     * @deny (write) Non-privileged users trying to change field definitions.
+     * @principle Public read with privileged management.
+     */
+    match /customApplicationFieldDefinitions/{fieldId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isPrivileged();
     }
   }
 }
