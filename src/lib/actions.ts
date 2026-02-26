@@ -32,6 +32,54 @@ async function getUser(userId: string): Promise<User | null> {
     return { id: doc.id, ...doc.data() } as User;
 }
 
+// --- REQUEST SETTINGS ACTIONS ---
+
+export async function createRequestType(data: Omit<RequestType, 'id'>) {
+  console.log('📤 Server action started:', { action: 'createRequestType', name: data.name, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+
+  try {
+    const docRef = await adminDb!.collection('request_types').add({
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true, id: docRef.id, message: 'Request type created.' };
+  } catch (error: any) {
+    console.error('❌ Server action failed:', { action: 'createRequestType', error });
+    return { success: false, message: error.message || 'Failed to create request type.' };
+  }
+}
+
+export async function updateRequestType(id: string, data: Partial<RequestType>) {
+  console.log('📤 Server action started:', { action: 'updateRequestType', id, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+
+  try {
+    await adminDb!.collection('request_types').doc(id).update({
+      ...data,
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true, message: 'Request type updated.' };
+  } catch (error: any) {
+    console.error('❌ Server action failed:', { action: 'updateRequestType', error });
+    return { success: false, message: error.message || 'Failed to update request type.' };
+  }
+}
+
+export async function deleteRequestType(id: string) {
+  console.log('📤 Server action started:', { action: 'deleteRequestType', id, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+
+  try {
+    await adminDb!.collection('request_types').doc(id).delete();
+    return { success: true, message: 'Request type deleted.' };
+  } catch (error: any) {
+    console.error('❌ Server action failed:', { action: 'deleteRequestType', error });
+    return { success: false, message: error.message || 'Failed to delete request type.' };
+  }
+}
+
 // --- USER ACTIONS ---
 
 export async function deleteUser(userIdToDelete: string, adminId: string) {
@@ -221,9 +269,6 @@ export async function createStudentTask(authorId: string, studentId: string, req
             else if (r.type === 'group') recipientIds.push(r.id);
             else if (r.type === 'department') recipientIds.push(`dept:${r.id}`);
           });
-        } else if (requestTypeData.defaultRecipientId) {
-          // Fallback for old request types
-          recipientIds.push(requestTypeData.defaultRecipientId);
         }
 
         const newTask: Omit<Task, 'id'> = {

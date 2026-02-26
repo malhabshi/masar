@@ -196,16 +196,52 @@ export interface SharedDocument {
 export interface RecipientConfig {
   type: 'user' | 'group' | 'department';
   id: string;
+  name?: string;
+}
+
+export interface SpecialTaskConfig {
+  examTypes: ('ielts' | 'toefl')[];
+  ielts: {
+    showSubtypes: boolean;
+    subtypes: ('academic' | 'ukvi')[];
+    showDates: boolean;
+    dateRule: '5_days_from_today' | 'any';
+    showAmount: boolean;
+    amountCurrency: string;
+  };
+  toefl: {
+    showSubtypes: boolean;
+    showDates: boolean;
+    showAmount: boolean;
+  };
+  studentInfo: {
+    pullName: boolean;
+    pullEmail: boolean;
+    pullPhone: boolean;
+    passportNameField: boolean;
+  };
+  documents: {
+    allowSelection: boolean;
+    requireAtLeastOne: boolean;
+    allowUpload: boolean;
+  };
+  commonFields: {
+    showNotes: boolean;
+  };
 }
 
 export interface RequestType {
   id: string;
   name: string;
   description: string;
-  defaultRecipientId: string; // Legacy
-  recipients?: RecipientConfig[]; // New multi-recipient selection
+  recipients: RecipientConfig[];
   isActive: boolean;
   requiredFields: string[];
+  isSpecialTask?: boolean;
+  specialConfig?: SpecialTaskConfig;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
 }
 
 export interface ApplicationQuestion {
