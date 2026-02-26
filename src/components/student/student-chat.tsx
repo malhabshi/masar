@@ -6,7 +6,7 @@ import { CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Paperclip, FileText, X, Loader2, Download } from 'lucide-react';
+import { Send, Paperclip, FileText, X, Loader2, Download, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -68,11 +68,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     const isAdminDept = ['admin', 'department'].includes(currentUser.role);
     const isEmployee = currentUser.role === 'employee';
 
-    // Management clears employee-sent updates
+    // Management clears employee-sent updates (unreadUpdates)
     if (isAdminDept && student.unreadUpdates && student.unreadUpdates > 0) {
       updateDocumentNonBlocking(studentDocRef, { unreadUpdates: 0 });
     } 
-    // Employee clears management-sent messages
+    // Employee clears management-sent messages (employeeUnreadMessages)
     else if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0) {
       updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: 0 });
     }
@@ -154,9 +154,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         const isAdminDept = ['admin', 'department'].includes(currentUser.role);
         
         if (isAdminDept) {
+            // Admin sending -> notify Employee
             const current = student.employeeUnreadMessages || 0;
             updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: current + 1 });
         } else {
+            // Employee sending -> notify Admin
             const current = student.unreadUpdates || 0;
             updateDocumentNonBlocking(studentDocRef, { unreadUpdates: current + 1 });
         }
@@ -298,7 +300,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
           )}
 
           <div className="flex w-full items-center space-x-2">
-            <Input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={ALLOWED_FILE_EXTENSIONS} />
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={ALLOWED_FILE_EXTENSIONS} />
             <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
               <Paperclip className="h-4 w-4" />
             </Button>
