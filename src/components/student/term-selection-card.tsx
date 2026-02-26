@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Student, AcademicTerm } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
@@ -46,7 +46,9 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   // Memoize sorted terms (newest first)
   const sortedTerms = useMemo(() => {
     if (!rawTerms) return [];
-    return [...rawTerms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+    const sorted = [...rawTerms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+    console.log('[TermSelectionCard] Terms loaded:', sorted.length);
+    return sorted;
   }, [rawTerms]);
 
   const handleTermChange = async (newTerm: string) => {
@@ -55,7 +57,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
       return;
     }
 
-    if (!canManage || newTerm === 'none') return;
+    if (!canManage || newTerm === 'none' || newTerm === 'no-data') return;
     
     setIsUpdating(true);
     const result = await updateStudentTerm(student.id, newTerm, currentUser.id);
@@ -96,6 +98,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select 
+              // The key forces the component to remount when data arrives or changes
               key={`term-select-${sortedTerms.length}-${student.term || 'none'}`}
               value={student.term || 'none'} 
               onValueChange={handleTermChange}
@@ -123,7 +126,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                     <SelectItem value="ADD_NEW" className="text-primary font-semibold cursor-pointer">
                       <div className="flex items-center gap-2">
                         <PlusCircle className="h-4 w-4" />
-                        <span>Add New Intake Option...</span>
+                        <span>+ Add New Intake Option...</span>
                       </div>
                     </SelectItem>
                   </>
@@ -143,7 +146,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
             <DialogHeader>
               <DialogTitle>Create Global Intake Option</DialogTitle>
               <DialogDescription>
-                This term will become available for all students across the system.
+                This term (e.g. "Fall 2025") will become available for all students across the system.
               </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">

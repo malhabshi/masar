@@ -35,7 +35,7 @@ function convertTimestamps<T>(data: any): T {
 
 /**
  * Hook to subscribe to a Firestore collection with real-time updates.
- * Simplified to ensure maximum reliability for global sync.
+ * Simplified dependency tracking to ensure reliability.
  */
 export function useCollection<T>(path: string, ...queryConstraints: QueryConstraint[]) {
   const [data, setData] = useState<T[]>([]);
@@ -50,20 +50,18 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     }
 
     setIsLoading(true);
-    console.log(`[useCollection] Subscribing to: ${path}`);
+    let unsubscribe = () => {};
 
     try {
       const collectionRef = collection(firestore, path);
       const q = query(collectionRef, ...queryConstraints);
 
-      const unsubscribe = onSnapshot(q, 
+      unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const items = snapshot.docs.map(doc => {
             const converted = convertTimestamps<DocumentData>(doc.data());
             return { id: doc.id, ...converted } as T;
           });
-          
-          console.log(`[useCollection:${path}] Update received: ${items.length} items`);
           setData(items);
           setIsLoading(false);
           setError(null);
@@ -80,16 +78,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
           setIsLoading(false);
         }
       );
-
-      return () => {
-        console.log(`[useCollection] Unsubscribing from: ${path}`);
-        unsubscribe();
-      };
     } catch (e: any) {
       console.error(`[useCollection:${path}] setup error:`, e);
       setIsLoading(false);
       setError(e);
     }
+
+    return () => unsubscribe();
+    // We use path as the primary dependency. Constraints should be memoized by callers.
   }, [path, JSON.stringify(queryConstraints.map(c => c.type))]);
 
   return { data, isLoading, error };
