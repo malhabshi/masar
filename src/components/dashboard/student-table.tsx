@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -34,12 +33,14 @@ import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { TransferStudentDialog } from '@/components/student/transfer-student-dialog';
 
 interface StudentTableProps {
   students: Student[];
   currentUser: AppUser;
   allUsers: User[];
   emptyStateMessage?: string;
+  showEmployee?: boolean;
 }
 
 const pipelineStatusStyles: { [key: string]: string } = {
@@ -98,8 +99,6 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   }, [allUsers]);
 
   const displayedStudents = useMemo(() => {
-    // The parent component is now responsible for filtering by 'my assigned' vs 'all'.
-    // This component just filters the list it's given.
     return students.filter(student => {
         const searchLower = debouncedSearchQuery.toLowerCase();
         const matchesSearch = !debouncedSearchQuery || 
@@ -249,6 +248,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
                 const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
                 const requester = student.deletionRequested?.requestedBy ? deletionRequesterMap.get(student.deletionRequested.requestedBy) : null;
+                const canAssign = isAdminOrDept && !student.employeeId;
 
                 return (
                 <TableRow key={student.id}>
@@ -349,6 +349,14 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
+                        {canAssign && (
+                            <TransferStudentDialog 
+                                student={student} 
+                                employees={employeeOptions} 
+                                currentUser={currentUser} 
+                                actionType="assign" 
+                            />
+                        )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8">

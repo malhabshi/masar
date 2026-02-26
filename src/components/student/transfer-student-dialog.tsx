@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -22,12 +21,9 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { transferStudent } from '@/lib/actions';
-import type { Student, User, Note } from '@/lib/types';
+import type { Student, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Loader2, ArrowRightLeft } from 'lucide-react';
-import { updateDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { Loader2, UserPlus, ArrowRightLeft } from 'lucide-react';
 
 interface TransferStudentDialogProps {
   student: Student;
@@ -61,46 +57,18 @@ export function TransferStudentDialog({ student, employees, currentUser, actionT
 
     const newEmployeeCivilId = newEmployee.civilId;
     if (!newEmployeeCivilId) {
-        toast({ variant: 'destructive', title: 'Error', description: `Selected employee '${newEmployee.name}' is missing a Civil ID and cannot be assigned.` });
+        toast({ variant: 'destructive', title: 'Error', description: `Selected employee '${newEmployee.name}' is missing a Civil ID.` });
         return;
     }
     
     const fromEmployee = student.employeeId ? employees.find(e => e.civilId === student.employeeId) : null;
 
     setIsTransferring(true);
+    
+    // The server action handles all updates: employeeId, history, notes, and notifications.
     const result = await transferStudent(student.id, newEmployee, currentUser.id, student.name, fromEmployee?.name || null);
 
     if (result.success) {
-      const studentDocRef = doc(firestore, 'students', student.id);
-      
-      const updates: any = {
-        employeeId: newEmployeeCivilId,
-        transferRequested: false, 
-        isNewForEmployee: true,
-      };
-
-      const newTransferHistoryEntry = {
-        fromEmployeeId: student.employeeId, // This is the Civil ID
-        toEmployeeId: newEmployeeCivilId,
-        date: new Date().toISOString(),
-        transferredBy: currentUser.id,
-      };
-      updates.transferHistory = [...(student.transferHistory || []), newTransferHistoryEntry];
-
-      const noteContent = isAssignAction
-        ? `Student assigned to ${newEmployee?.name} by ${currentUser.name}.`
-        : `Student transferred from ${fromEmployee?.name || 'Unassigned'} to ${newEmployee?.name} by ${currentUser.name}.`;
-
-      const newNote: Note = {
-        id: `note-transfer-${Date.now()}`,
-        authorId: currentUser.id,
-        content: noteContent,
-        createdAt: new Date().toISOString(),
-      };
-      updates.notes = [...student.notes, newNote];
-
-      updateDocumentNonBlocking(studentDocRef, updates);
-
       toast({
         title: isAssignAction ? 'Student Assigned' : 'Student Transferred',
         description: result.message,
@@ -121,11 +89,16 @@ export function TransferStudentDialog({ student, employees, currentUser, actionT
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button 
-          variant='outline'
+          variant={isAssignAction ? "default" : "outline"}
+          size="sm"
           className={actionType === 'transfer' ? 'border-yellow-500 text-yellow-600 hover:bg-yellow-500/10 hover:text-yellow-700' : ''}
         >
-          <ArrowRightLeft className="mr-2 h-4 w-4" />
-          {isAssignAction ? 'Assign Student' : 'Approve Transfer'}
+          {isAssignAction ? (
+              <UserPlus className="mr-2 h-4 w-4" />
+          ) : (
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+          )}
+          {isAssignAction ? 'Assign' : 'Approve Transfer'}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -135,7 +108,7 @@ export function TransferStudentDialog({ student, employees, currentUser, actionT
             {isAssignAction
               ? 'Assign this student to an employee. The employee will be notified.'
               : `Transfer this student to another employee. The current employee (${currentEmployee?.name}) has requested this transfer.`}
-            {!isAssignAction && currentEmployee && !isAssignAction && (
+            {!isAssignAction && currentEmployee && (
               <>
                 <br />
                 Currently assigned to: <strong>{currentEmployee.name}</strong>
