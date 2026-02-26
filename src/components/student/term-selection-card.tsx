@@ -35,6 +35,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   const [newTermName, setNewTermName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+  // Fetch the global list of terms. useCollection provides a real-time listener.
   const { data: terms, isLoading: termsLoading } = useCollection<AcademicTerm>('academic_terms');
 
   const isAdmin = currentUser.role === 'admin';
@@ -132,15 +133,20 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                 <SelectValue placeholder={termsLoading ? "Loading terms..." : "Select Intake Term"} />
               </SelectTrigger>
               <SelectContent>
-                {terms && terms.length > 0 ? (
-                  terms.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((term) => (
+                {termsLoading ? (
+                  <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : terms && terms.length > 0 ? (
+                  // Sort newest to oldest so recently added terms are easy to find
+                  [...terms].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((term) => (
                     <SelectItem key={term.id} value={term.name}>
                       {term.name}
                     </SelectItem>
                   ))
                 ) : (
                   <div className="p-2 text-sm text-muted-foreground text-center">
-                    No terms available. Ask any of the admin users to create options.
+                    No terms available. Ask any admin to create options.
                   </div>
                 )}
               </SelectContent>
