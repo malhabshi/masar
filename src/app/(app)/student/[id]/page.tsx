@@ -24,6 +24,7 @@ import { ReadinessChecklist } from '@/components/student/readiness-checklist';
 import { IeltsCard } from '@/components/student/ielts-card';
 import { StudentUsersCard } from '@/components/student/student-users-card';
 import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-banner';
+import { TargetCountriesCard } from '@/components/student/target-countries-card';
 
 
 function StudentPageContentSkeleton() {
@@ -137,6 +138,7 @@ export default function StudentDetailPage() {
 
   return (
     <div className="space-y-6">
+      {canRenderContent && <TargetCountriesCard student={student} currentUser={currentUser} />}
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
       {canRenderContent && (

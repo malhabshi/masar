@@ -1775,3 +1775,35 @@ export async function resetStudentPassword(email: string) {
         return { success: false, message: error instanceof Error ? error.message : message };
     }
 }
+
+export async function updateStudentTargetCountries(studentId: string, countries: string[], updaterId: string) {
+    console.log('📤 Server action started:', { action: 'updateStudentTargetCountries', studentId, countries, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+        const updater = await getUser(updaterId);
+        if (!updater || !['admin', 'department'].includes(updater.role)) {
+            return { success: false, message: 'Only admins or department users can update target countries.' };
+        }
+
+        await studentRef.update({ targetCountries: countries });
+        
+        const studentData = studentDoc.data() as Student;
+        const newNote: Note = {
+            id: `note-target-countries-${Date.now()}`,
+            authorId: updaterId,
+            content: `Target countries updated to: ${countries.join(', ') || 'None'}`,
+            createdAt: new Date().toISOString(),
+        };
+        await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), newNote] });
+
+        console.log('✅ Server action finished:', { action: 'updateStudentTargetCountries', success: true });
+        return { success: true, message: 'Target countries updated.' };
+    } catch (error) {
+        console.error('❌ Server action failed:', { action: 'updateStudentTargetCountries', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to update target countries.' };
+    }
+}
