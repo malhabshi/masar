@@ -30,6 +30,7 @@ import { Loader2 } from 'lucide-react';
 const formSchema = z.object({
   description: z.string().min(3, { message: 'Description must be at least 3 characters.' }),
   username: z.string().min(3, { message: 'Username must be at least 3 characters.' }),
+  password: z.string().min(1, { message: 'Password is required for reference.' }),
   notes: z.string().optional(),
 });
 
@@ -49,19 +50,27 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
     defaultValues: {
       description: '',
       username: '',
+      password: '',
       notes: '',
     },
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
-    const result = await createStudentLogin(student.id, values.description, values.username, values.notes, currentUser.id);
+    const result = await createStudentLogin(
+        student.id, 
+        values.description, 
+        values.username, 
+        values.password,
+        values.notes, 
+        currentUser.id
+    );
     if (result.success) {
-      toast({ title: 'Student Login Created', description: `An account has been created for ${values.username}. The student will need to use the password reset flow to log in.` });
+      toast({ title: 'Record Added', description: `Login reference for ${values.description} has been saved.` });
       setIsOpen(false);
       form.reset();
     } else {
-      toast({ variant: 'destructive', title: 'Creation Failed', description: result.message });
+      toast({ variant: 'destructive', title: 'Failed', description: result.message });
     }
     setIsSubmitting(false);
   };
@@ -71,9 +80,9 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Login for {student.name}</DialogTitle>
+          <DialogTitle>Add Portal Reference for {student.name}</DialogTitle>
           <DialogDescription>
-            This will create a new, secure login account for the student to access their portal.
+            Store login credentials for external websites (e.g., MOHE, University portals) for reference. No system user will be created.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -83,9 +92,9 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>Website / Portal Name</FormLabel>
                   <FormControl>
-                    <Input type="text" placeholder="e.g., MOHE Portal, University Login" {...field} />
+                    <Input type="text" placeholder="e.g., MOHE Portal, UCAS Login" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -96,9 +105,22 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
               name="username"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Username</FormLabel>
+                  <FormLabel>Username / Email</FormLabel>
                   <FormControl>
-                    <Input type="text" placeholder="Enter username" {...field} />
+                    <Input type="text" placeholder="Enter username used on the external site" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input type="text" placeholder="Enter password for reference" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -109,9 +131,9 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormLabel>Additional Notes (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Add any relevant notes for this login..." {...field} />
+                    <Textarea placeholder="Add any security questions or specific instructions..." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -123,7 +145,7 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
               </DialogClose>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Login
+                Save Record
               </Button>
             </DialogFooter>
           </form>
@@ -132,5 +154,3 @@ export function AddStudentUserDialog({ student, currentUser, children }: AddStud
     </Dialog>
   );
 }
-
-    

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1644,7 +1645,7 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
   }
 }
 
-export async function createStudentLogin(studentId: string, description: string, username: string, notes: string | undefined, createdByUserId: string) {
+export async function createStudentLogin(studentId: string, description: string, username: string, password: string, notes: string | undefined, createdByUserId: string) {
     console.log('📤 Server action started:', { action: 'createStudentLogin', studentId, username, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
@@ -1663,30 +1664,13 @@ export async function createStudentLogin(studentId: string, description: string,
 
         const canCreate = creator.role === 'admin' || (creator.role === 'employee' && creator.civilId === studentData.employeeId);
         if (!canCreate) {
-            return { success: false, message: 'You do not have permission to create a login for this student.' };
+            return { success: false, message: 'You do not have permission to create a record for this student.' };
         }
         
-        const email = `${username.trim().toLowerCase()}@student.uniapply.hub`;
-        const password = Math.random().toString(36).slice(-10);
-
-        const authUser = await adminAuth!.createUser({
-            email,
-            password,
-            displayName: studentData.name,
-        });
-
-        const newUserDoc: Omit<User, 'id'> = {
-            name: studentData.name,
-            email: email,
-            role: 'student',
-            studentId: studentId,
-            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(studentData.name)}&background=random&color=fff`,
-        };
-        await adminDb!.collection('users').doc(authUser.uid).set(newUserDoc);
-
         const newLogin: StudentLogin = {
-            uid: authUser.uid,
-            email: email,
+            id: `login-${Date.now()}`,
+            username: username,
+            password: password,
             description: description,
             createdAt: new Date().toISOString(),
         };
@@ -1698,26 +1682,18 @@ export async function createStudentLogin(studentId: string, description: string,
         const updatedLogins = [...(studentData.studentLogins || []), newLogin];
         await studentRef.update({ studentLogins: updatedLogins });
 
-        console.log('✅ Server action finished:', { action: 'createStudentLogin', success: true, uid: authUser.uid });
-        return { success: true, message: 'Student login created successfully.' };
+        console.log('✅ Server action finished:', { action: 'createStudentLogin', success: true });
+        return { success: true, message: 'Student login record created successfully.' };
 
     } catch (error: any) {
         console.error("❌ Server action failed:", { action: 'createStudentLogin', error });
-        let message = 'An unexpected error occurred.';
-        if (error.code === 'auth/email-already-exists') {
-            message = 'This username is already taken. Please choose a different one.';
-        } else if (error.code === 'auth/invalid-password') {
-            message = 'Password must be at least 8 characters.';
-        } else if (error.code === 'auth/invalid-email') {
-            message = 'The username contains invalid characters.'
-        }
-        return { success: false, message: error instanceof Error ? error.message : message };
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to create login record.' };
     }
 }
 
 
-export async function deleteStudentLogin(studentId: string, uidToDelete: string, deletedByUserId: string) {
-    console.log('📤 Server action started:', { action: 'deleteStudentLogin', studentId, uidToDelete, timestamp: new Date().toISOString() });
+export async function deleteStudentLogin(studentId: string, idToDelete: string, deletedByUserId: string) {
+    console.log('📤 Server action started:', { action: 'deleteStudentLogin', studentId, idToDelete, timestamp: new Date().toISOString() });
     if (!checkAdminServices()) {
         return { success: false, message: 'Server database connection not available.' };
     }
@@ -1735,21 +1711,18 @@ export async function deleteStudentLogin(studentId: string, uidToDelete: string,
 
         const canDelete = deleter.role === 'admin' || (deleter.role === 'employee' && deleter.civilId === studentData.employeeId);
         if (!canDelete) {
-            return { success: false, message: 'You do not have permission to delete this login.' };
+            return { success: false, message: 'You do not have permission to delete this record.' };
         }
 
-        await adminAuth!.deleteUser(uidToDelete);
-        await adminDb!.collection('users').doc(uidToDelete).delete();
-
-        const updatedLogins = (studentData.studentLogins || []).filter(login => login.uid !== uidToDelete);
+        const updatedLogins = (studentData.studentLogins || []).filter(login => login.id !== idToDelete);
         await studentRef.update({ studentLogins: updatedLogins });
 
         console.log('✅ Server action finished:', { action: 'deleteStudentLogin', success: true });
-        return { success: true, message: 'Student login deleted.' };
+        return { success: true, message: 'Student login record deleted.' };
 
     } catch (error: any) {
         console.error("❌ Server action failed:", { action: 'deleteStudentLogin', error });
-        return { success: false, message: error instanceof Error ? error.message : 'Failed to delete student login.' };
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to delete student login record.' };
     }
 }
 
