@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1901,5 +1902,51 @@ export async function updateStudentTerm(studentId: string, termName: string, upd
   } catch (error: any) {
     console.error('❌ Server action failed:', { action: 'updateStudentTerm', error });
     return { success: false, message: error instanceof Error ? error.message : 'Failed to update student term.' };
+  }
+}
+
+export async function seedAcademicTerms(adminId: string) {
+  console.log('📤 Server action started:', { action: 'seedAcademicTerms', adminId, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) return { success: false, message: 'Admin services not available.' };
+
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') {
+      return { success: false, message: 'Unauthorized. Only admins can seed terms.' };
+    }
+
+    const termsToSeed = [
+      "summar  2026 (6/7)",
+      "FALL 2026 (8/9)",
+      "SPRING 2027 (1)",
+      "March 2027 (3)",
+      "summar  2027 (6/7)",
+      "FALL 2027 (8/9)",
+      "SPRING 2028 (1)",
+      "March 2028 (3)",
+      "summar  2028 (6/7)"
+    ];
+
+    const batch = adminDb!.batch();
+    const collectionRef = adminDb!.collection('academic_terms');
+
+    // To prevent immediate duplicates if clicked twice quickly, 
+    // we use the term name as a part of the ID or just proceed with batch add.
+    for (const termName of termsToSeed) {
+      const docRef = collectionRef.doc();
+      batch.set(docRef, {
+        name: termName,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    await batch.commit();
+    
+    console.log('✅ Server action finished:', { action: 'seedAcademicTerms', success: true });
+    return { success: true, message: `${termsToSeed.length} terms seeded successfully.` };
+  } catch (error: any) {
+    console.error('❌ Server action failed:', { action: 'seedAcademicTerms', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to seed terms.' };
   }
 }

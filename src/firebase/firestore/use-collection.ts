@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -35,7 +36,6 @@ function convertTimestamps<T>(data: any): T {
 
 /**
  * Hook to subscribe to a Firestore collection with real-time updates.
- * Simplified dependency tracking to ensure reliability.
  */
 export function useCollection<T>(path: string, ...queryConstraints: QueryConstraint[]) {
   const [data, setData] = useState<T[]>([]);
@@ -54,7 +54,10 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
     try {
       const collectionRef = collection(firestore, path);
-      const q = query(collectionRef, ...queryConstraints);
+      // Simplify query creation to ensure maximum reliability
+      const q = queryConstraints.length > 0 
+        ? query(collectionRef, ...queryConstraints)
+        : collectionRef;
 
       unsubscribe = onSnapshot(q, 
         (snapshot) => {
@@ -62,6 +65,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
             const converted = convertTimestamps<DocumentData>(doc.data());
             return { id: doc.id, ...converted } as T;
           });
+          console.log(`[useCollection:${path}] Received ${items.length} items.`);
           setData(items);
           setIsLoading(false);
           setError(null);
@@ -85,8 +89,9 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     }
 
     return () => unsubscribe();
-    // We use path as the primary dependency. Constraints should be memoized by callers.
-  }, [path, JSON.stringify(queryConstraints.map(c => c.type))]);
+    // Simplified dependency array to avoid race conditions with complex query objects
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, queryConstraints.length]);
 
   return { data, isLoading, error };
 }

@@ -1,16 +1,17 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import type { Student, AcademicTerm } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
-import { updateStudentTerm, addAcademicTerm } from '@/lib/actions';
+import { updateStudentTerm, addAcademicTerm, seedAcademicTerms } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { sortByDate } from '@/lib/timestamp-utils';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Loader2, CheckCircle2, PlusCircle } from 'lucide-react';
+import { Calendar, Loader2, CheckCircle2, PlusCircle, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
   Dialog, 
@@ -34,10 +35,11 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [newTermName, setNewTermName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Real-time listener for global intake terms
+  // Robust real-time listener for global intake terms
   const { data: rawTerms, isLoading: termsLoading } = useCollection<AcademicTerm>('academic_terms');
 
   const isAdmin = currentUser.role === 'admin';
@@ -46,15 +48,18 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   // Memoize sorted terms (newest first)
   const sortedTerms = useMemo(() => {
     if (!rawTerms) return [];
-    const sorted = [...rawTerms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
-    console.log('[TermSelectionCard] Terms loaded:', sorted.length);
-    return sorted;
+    return [...rawTerms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
   }, [rawTerms]);
 
   const handleTermChange = async (newTerm: string) => {
     if (newTerm === 'ADD_NEW') {
       setIsDialogOpen(true);
       return;
+    }
+
+    if (newTerm === 'SEED_TERMS') {
+        handleSeed();
+        return;
     }
 
     if (!canManage || newTerm === 'none' || newTerm === 'no-data') return;
@@ -86,6 +91,17 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
     setIsAdding(false);
   };
 
+  const handleSeed = async () => {
+      setIsSeeding(true);
+      const result = await seedAcademicTerms(currentUser.id);
+      if (result.success) {
+          toast({ title: 'Terms Seeded', description: result.message });
+      } else {
+          toast({ variant: 'destructive', title: 'Seeding Failed', description: result.message });
+      }
+      setIsSeeding(false);
+  };
+
   return (
     <Card className="border-primary/20">
       <CardHeader className="py-4">
@@ -98,7 +114,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select 
-              // The key forces the component to remount when data arrives or changes
+              // Force remount when data changes or when a selection is made
               key={`term-select-${sortedTerms.length}-${student.term || 'none'}`}
               value={student.term || 'none'} 
               onValueChange={handleTermChange}
@@ -126,15 +142,23 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                     <SelectItem value="ADD_NEW" className="text-primary font-semibold cursor-pointer">
                       <div className="flex items-center gap-2">
                         <PlusCircle className="h-4 w-4" />
-                        <span>+ Add New Intake Option...</span>
+                        <span>+ Add New Option...</span>
                       </div>
                     </SelectItem>
+                    {sortedTerms.length === 0 && (
+                        <SelectItem value="SEED_TERMS" className="text-blue-600 font-semibold cursor-pointer">
+                            <div className="flex items-center gap-2">
+                                <Database className="h-4 w-4" />
+                                <span>Seed Default Terms</span>
+                            </div>
+                        </SelectItem>
+                    )}
                   </>
                 )}
               </SelectContent>
             </Select>
           </div>
-          {isUpdating ? (
+          {isUpdating || isSeeding ? (
             <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
           ) : student.term ? (
             <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
@@ -154,7 +178,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                 <Label htmlFor="quick-term-name">Term Name</Label>
                 <Input 
                   id="quick-term-name" 
-                  placeholder="e.g. 7/8 2026, Spring 2026" 
+                  placeholder="e.g. Fall 2026 (8/9)" 
                   value={newTermName}
                   onChange={(e) => setNewTermName(e.target.value)}
                   onKeyDown={(e) => {
@@ -168,7 +192,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline" type="button">Cancel</Button>
               </DialogClose>
               <Button onClick={handleQuickAddTerm} disabled={isAdding || !newTermName.trim()}>
                 {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
