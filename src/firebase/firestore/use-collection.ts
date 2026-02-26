@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -48,11 +47,9 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   }, []);
 
   const memoizedQuery = useMemoFirebase(() => {
-    // If no path is provided, we don't build a query.
     if (!path) return null;
     try {
         const collectionRef = collection(firestore, path);
-        // Safely handle constraints to avoid spreading issues.
         const constraints = Array.isArray(queryConstraints) ? queryConstraints : [];
         return query(collectionRef, ...constraints);
     } catch(e) {
@@ -68,7 +65,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       return;
     }
 
-    // 2. Prevent queries if no user is authenticated (since rules require auth for all collections)
+    // 2. Prevent queries if no user is authenticated
     if (!auth.currentUser) {
       setIsLoading(false);
       setData([]);
@@ -80,6 +77,24 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       setIsLoading(false);
       return;
     }
+    
+    // --- DEBUG: LOG QUERY EXECUTION WITH STACK TRACE ---
+    console.trace('🔥🔥🔥 QUERY EXECUTED:', {
+      path,
+      constraintsCount: queryConstraints.length,
+      constraints: queryConstraints.map(c => {
+        try {
+          const constraint = c as any;
+          if (constraint._field && constraint._op) {
+            return `${constraint._field.segments?.join('.')} ${constraint._op} ${constraint._value?.value?.stringValue || 'value'}`;
+          }
+          return c.toString();
+        } catch (e) {
+          return 'unknown constraint';
+        }
+      }),
+      user: auth.currentUser?.uid
+    });
     
     let isMounted = true;
     setIsLoading(true);
@@ -98,11 +113,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       },
       (err) => {
         if (isMounted) {
-            const permissionError = new FirestorePermissionError({
-                path: path,
-                operation: 'list'
-            });
-            errorEmitter.emit('permission-error', permissionError);
+            // Check if this is a standard permission error
+            if (err.message.includes('permissions')) {
+                const permissionError = new FirestorePermissionError({
+                    path: path,
+                    operation: 'list'
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            }
             setError(err);
             setIsLoading(false);
         }
@@ -113,7 +131,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         isMounted = false;
         unsubscribe();
     };
-  }, [memoizedQuery, path, isAuthReady]);
+  }, [memoizedQuery, path, isAuthReady, queryConstraints]);
 
   return { data, isLoading, error };
 }
