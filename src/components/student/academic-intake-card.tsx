@@ -7,7 +7,7 @@ import { updateStudentAcademicIntake } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 
 // UI Components
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, Loader2, FilePenLine, CheckCircle, XCircle, PlusCircle } from 'lucide-react';
@@ -36,8 +36,8 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
   const [tempYear, setTempYear] = useState<string>(student.academicIntakeYear?.toString() || '');
 
   const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
-
-  if (!isAdminOrDept) return null;
+  const isAssignedEmployee = currentUser?.civilId === student.employeeId;
+  const canEdit = isAdminOrDept || isAssignedEmployee;
 
   const handleSave = async () => {
     if (!tempSemester || !tempYear) {
@@ -78,11 +78,8 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-primary" />
           <CardTitle className="text-lg">Academic term</CardTitle>
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] h-5">
-            Admin/Dept Only
-          </Badge>
         </div>
-        {!isEditing && student.academicIntakeSemester && (
+        {!isEditing && student.academicIntakeSemester && canEdit && (
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditing(true)}>
             <FilePenLine className="h-4 w-4" />
             <span className="sr-only">Edit term</span>
@@ -102,10 +99,12 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
             ) : (
               <div className="flex flex-col items-center w-full py-4 space-y-3">
                 <p className="text-sm text-muted-foreground italic">No academic intake set</p>
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Add Intake
-                </Button>
+                {canEdit && (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                      <PlusCircle className="h-4 w-4 mr-2" />
+                      Add Intake
+                  </Button>
+                )}
               </div>
             )}
           </div>

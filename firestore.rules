@@ -71,8 +71,7 @@ service cloud.firestore {
       
       allow update: if resource != null && (
         isPrivileged() || 
-        (isSignedIn() && getUserData().civilId == resource.data.employeeId && 
-         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['academicIntakeSemester', 'academicIntakeYear']))
+        (isSignedIn() && getUserData().civilId == resource.data.employeeId)
       );
       
       allow delete: if isPrivileged();

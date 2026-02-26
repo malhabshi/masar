@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1828,11 +1827,17 @@ export async function updateStudentAcademicIntake(studentId: string, semester: s
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
 
         const updater = await getUser(updaterId);
-        if (!updater || !['admin', 'department'].includes(updater.role)) {
+        if (!updater) return { success: false, message: 'Updater not found.' };
+
+        const studentData = studentDoc.data() as Student;
+        
+        const isAssignedEmployee = updater.role === 'employee' && updater.civilId === studentData.employeeId;
+        const isAdminOrDept = ['admin', 'department'].includes(updater.role);
+
+        if (!isAssignedEmployee && !isAdminOrDept) {
             return { success: false, message: 'You do not have permission to update academic intake.' };
         }
 
-        const studentData = studentDoc.data() as Student;
         await studentRef.update({ academicIntakeSemester: semester, academicIntakeYear: year });
         
         const newNote: Note = {
