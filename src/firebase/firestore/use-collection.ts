@@ -35,14 +35,12 @@ function convertTimestamps<T>(data: any): T {
 
 /**
  * Hook to subscribe to a Firestore collection with real-time updates.
+ * Simplified to ensure maximum reliability for global sync.
  */
 export function useCollection<T>(path: string, ...queryConstraints: QueryConstraint[]) {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  
-  // Create a stable string representation of constraints for the dependency array
-  const constraintsSerialized = JSON.stringify(queryConstraints.map(c => c.type || 'constraint'));
 
   useEffect(() => {
     if (!path) {
@@ -51,10 +49,8 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       return;
     }
 
-    let isMounted = true;
     setIsLoading(true);
-
-    console.log(`[useCollection] Establishing listener for: ${path}`);
+    console.log(`[useCollection] Subscribing to: ${path}`);
 
     try {
       const collectionRef = collection(firestore, path);
@@ -62,35 +58,23 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
       const unsubscribe = onSnapshot(q, 
         (snapshot) => {
-          if (!isMounted) return;
+          const items = snapshot.docs.map(doc => {
+            const converted = convertTimestamps<DocumentData>(doc.data());
+            return { id: doc.id, ...converted } as T;
+          });
           
-          try {
-            const items = snapshot.docs.map(doc => {
-              const docData = doc.data();
-              const converted = convertTimestamps<DocumentData>(docData);
-              return { id: doc.id, ...converted } as T;
-            });
-            
-            console.log(`[useCollection:${path}] Received ${items.length} items`);
-            setData(items);
-            setIsLoading(false);
-            setError(null);
-          } catch (mapError: any) {
-            console.error(`[useCollection:${path}] Mapping error:`, mapError);
-            setError(mapError);
-            setIsLoading(false);
-          }
+          console.log(`[useCollection:${path}] Update received: ${items.length} items`);
+          setData(items);
+          setIsLoading(false);
+          setError(null);
         },
         (err) => {
-          if (!isMounted) return;
-          
-          console.error(`[useCollection:${path}] Firestore snapshot error:`, err);
+          console.error(`[useCollection:${path}] error:`, err);
           if (err.message.toLowerCase().includes('permissions')) {
-            const permissionError = new FirestorePermissionError({
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
               path: path,
               operation: 'list'
-            });
-            errorEmitter.emit('permission-error', permissionError);
+            }));
           }
           setError(err);
           setIsLoading(false);
@@ -98,17 +82,15 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       );
 
       return () => {
-        console.log(`[useCollection] Cleaning up listener for: ${path}`);
-        isMounted = false;
+        console.log(`[useCollection] Unsubscribing from: ${path}`);
         unsubscribe();
       };
     } catch (e: any) {
-      console.error(`[useCollection:${path}] Failed to create listener:`, e);
+      console.error(`[useCollection:${path}] setup error:`, e);
       setIsLoading(false);
       setError(e);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, constraintsSerialized]);
+  }, [path, JSON.stringify(queryConstraints.map(c => c.type))]);
 
   return { data, isLoading, error };
 }
