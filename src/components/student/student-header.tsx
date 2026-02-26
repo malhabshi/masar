@@ -89,9 +89,8 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     'New Zealand': '🇳🇿',
   };
 
-  const targetCountriesFromProps = student.targetCountries || [];
-  const applicationCountries = student.applications?.map(app => app.country) || [];
-  const allCountries = [...new Set([...targetCountriesFromProps, ...applicationCountries])];
+  // Only use countries from active applications for the header flags
+  const allCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
   return (
     <div className="mb-6 relative">
