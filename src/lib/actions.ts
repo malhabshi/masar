@@ -1916,15 +1916,15 @@ export async function seedAcademicTerms(adminId: string) {
     }
 
     const termsToSeed = [
-      "summar  2026 (6/7)",
+      "summar 2026 (6/7)",
       "FALL 2026 (8/9)",
       "SPRING 2027 (1)",
       "March 2027 (3)",
-      "summar  2027 (6/7)",
+      "summar 2027 (6/7)",
       "FALL 2027 (8/9)",
       "SPRING 2028 (1)",
       "March 2028 (3)",
-      "summar  2028 (6/7)"
+      "summar 2028 (6/7)"
     ];
 
     const batch = adminDb!.batch();

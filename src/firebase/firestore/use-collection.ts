@@ -54,7 +54,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
     try {
       const collectionRef = collection(firestore, path);
-      // Simplify query creation to ensure maximum reliability
+      // Establishment of immediate real-time listener
       const q = queryConstraints.length > 0 
         ? query(collectionRef, ...queryConstraints)
         : collectionRef;
@@ -65,7 +65,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
             const converted = convertTimestamps<DocumentData>(doc.data());
             return { id: doc.id, ...converted } as T;
           });
-          console.log(`[useCollection:${path}] Received ${items.length} items.`);
           setData(items);
           setIsLoading(false);
           setError(null);
@@ -89,8 +88,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     }
 
     return () => unsubscribe();
-    // Simplified dependency array to avoid race conditions with complex query objects
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Simplified dependency to ensure maximum reactivity
   }, [path, queryConstraints.length]);
 
   return { data, isLoading, error };
