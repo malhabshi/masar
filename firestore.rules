@@ -52,7 +52,7 @@ service cloud.firestore {
       allow update: if isExistingOwner(userId);
       allow delete: if false;
 
-      /** @description Fixed: Added rules for personal todos subcollection */
+      /** @description rules for personal todos subcollection */
       match /personal_todos/{todoId} {
         allow read, write: if isOwner(userId);
       }
@@ -69,16 +69,14 @@ service cloud.firestore {
 
     /**
      * @description Access rules for the Student entity.
-     * Updated: Allows all authenticated users to read student data.
+     * Allows all authenticated users to read student data.
      * Restricted: Only Admin/Dept can update academicIntake fields.
      */
     match /students/{studentId} {
-      // REQUIREMENT: Allow all authenticated users to read student data
       allow get, list: if isSignedIn();
       
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
       
-      // REQUIREMENT: Only Admin/Dept can update academicIntake fields.
       allow update: if resource != null && (
         isPrivileged() || 
         (isOwner(resource.data.employeeId) && 
@@ -110,7 +108,7 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow get, list: if isSignedIn();
       allow create: if isPrivileged();
-      allow update: if isPrivileged() || isExistingOwner(resource.data.assignedToUserId);
+      allow update: if isPrivileged() || isExistingOwner(resource.data.recipientId);
       allow delete: if isPrivileged();
     }
 
@@ -130,6 +128,38 @@ service cloud.firestore {
     match /customApplicationFieldDefinitions/{fieldId} {
       allow get, list: if isSignedIn();
       allow create, update, delete: if isPrivileged();
+    }
+
+    /** @description Access rules for Global Settings and Utilities */
+    match /upcoming_events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /shared_documents/{documentId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /request_types/{typeId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /resource_links/{linkId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /time_logs/{logId} {
+      allow read: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isPrivileged() || resource.data.employeeId == request.auth.uid);
+    }
+    
+    match /approved_universities/{uniId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
     }
   }
 }
