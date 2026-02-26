@@ -44,7 +44,8 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
 
   // Memoize sorted terms
   const sortedTerms = useMemo(() => {
-    if (!terms) return [];
+    if (!terms || terms.length === 0) return [];
+    // Sort by creation date descending so newest additions are easy to find
     return [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
   }, [terms]);
 
@@ -70,11 +71,12 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   };
 
   const handleQuickAddTerm = async () => {
-    if (!newTermName.trim()) return;
-    setIsAdding(true);
+    const termName = newTermName.trim();
+    if (!termName) return;
     
+    setIsAdding(true);
     try {
-      const result = await addAcademicTerm(newTermName.trim(), currentUser.id);
+      const result = await addAcademicTerm(termName, currentUser.id);
       if (result.success) {
         toast({ title: 'Term Created', description: result.message });
         setNewTermName('');
@@ -83,6 +85,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         toast({ variant: 'destructive', title: 'Error', description: result.message });
       }
     } catch (err) {
+      console.error("Failed to quick-add term:", err);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to create term.' });
     } finally {
       setIsAdding(false);
@@ -127,7 +130,9 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
                 <Button onClick={handleQuickAddTerm} disabled={isAdding || !newTermName.trim()}>
                   {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Add Option
@@ -141,6 +146,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select 
+              key={sortedTerms.length} // Force re-render of Select when list changes
               value={student.term || 'none'} 
               onValueChange={handleTermChange}
               disabled={!canManage || isUpdating || termsLoading}

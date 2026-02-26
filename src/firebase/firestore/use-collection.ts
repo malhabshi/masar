@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { collection, onSnapshot, query, QueryConstraint, DocumentData } from 'firebase/firestore';
+import { collection, onSnapshot, query, QueryConstraint, DocumentData, type Query } from 'firebase/firestore';
 import { firestore, auth } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
@@ -41,82 +41,85 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [user, setUser] = useState(auth.currentUser);
   
+  // Track path changes to reset state
   const lastPathRef = useRef(path);
 
-  // Sync with auth state to ensure permissions are checked correctly
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
-  }, []);
-
+  // Stable query reference
   const memoizedQuery = useMemoFirebase(() => {
     if (!path) return null;
-
     try {
         const collectionRef = collection(firestore, path);
-        const constraints = Array.isArray(queryConstraints) ? queryConstraints : [];
-        return query(collectionRef, ...constraints);
+        return query(collectionRef, ...queryConstraints);
     } catch(e) {
         console.error(`[useCollection:${path}] Failed to create query:`, e);
         return null;
     }
-  }, [path, JSON.stringify(queryConstraints)]);
-
+  }, [path, ...queryConstraints]);
 
   useEffect(() => {
-    // Reset data and loading state if path changes
+    // Reset if path changes
     if (path !== lastPathRef.current) {
         setIsLoading(true);
         setData([]);
         lastPathRef.current = path;
     }
 
-    if (!path || !memoizedQuery || !user) {
+    if (!path || !memoizedQuery) {
       setIsLoading(false);
-      if (!user) setData([]);
       return;
     }
-    
+
     let isMounted = true;
-    
-    const unsubscribe = onSnapshot(memoizedQuery, 
-      (snapshot) => {
+
+    // Use onAuthStateChanged to ensure the user is ready before listening (rules requirement)
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (!user) {
         if (isMounted) {
+          setData([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      // Establish the Firestore listener
+      const unsubscribeSnapshot = onSnapshot(memoizedQuery as Query, 
+        (snapshot) => {
+          if (isMounted) {
             const items = snapshot.docs.map(doc => {
-                const docData = doc.data();
-                const converted = convertTimestamps<DocumentData>(docData);
-                return { id: doc.id, ...converted } as T;
+              const docData = doc.data();
+              const converted = convertTimestamps<DocumentData>(docData);
+              return { id: doc.id, ...converted } as T;
             });
             setData(items);
             setIsLoading(false);
             setError(null);
-        }
-      },
-      (err) => {
-        if (isMounted) {
+          }
+        },
+        (err) => {
+          if (isMounted) {
             console.error(`[useCollection:${path}] Snapshot error:`, err);
             if (err.message.toLowerCase().includes('permissions')) {
-                const permissionError = new FirestorePermissionError({
-                    path: path,
-                    operation: 'list'
-                });
-                errorEmitter.emit('permission-error', permissionError);
+              const permissionError = new FirestorePermissionError({
+                path: path,
+                operation: 'list'
+              });
+              errorEmitter.emit('permission-error', permissionError);
             }
             setError(err);
             setIsLoading(false);
+          }
         }
-      }
-    );
+      );
+
+      return () => unsubscribeSnapshot();
+    });
 
     return () => {
-        isMounted = false;
-        unsubscribe();
+      isMounted = false;
+      unsubscribeAuth();
     };
-  }, [memoizedQuery, path, user]);
+  }, [memoizedQuery, path]);
 
   return { data, isLoading, error };
 }
