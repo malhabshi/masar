@@ -49,7 +49,7 @@ function StudentPageContentSkeleton() {
                 <Card>
                     <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
                     <CardContent><Skeleton className="h-48 w-full" /></CardContent>
-                </Card>
+                </div>
             </div>
         </div>
     );
@@ -140,7 +140,6 @@ export default function StudentDetailPage() {
                 <div className="lg:col-span-2 space-y-6">
                     <TargetCountriesCard student={student} currentUser={currentUser} />
                     <StudentApplications student={student} />
-                    <ReadinessChecklist student={student} currentUser={currentUser} />
                     <StudentUsersCard student={student} currentUser={currentUser} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
                     <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
@@ -157,6 +156,7 @@ export default function StudentDetailPage() {
                 </div>
 
                 <div className="space-y-6">
+                    <ReadinessChecklist student={student} currentUser={currentUser} />
                     <AcademicIntakeCard student={student} currentUser={currentUser} />
                     <IeltsCard student={student} currentUser={currentUser} />
                     
