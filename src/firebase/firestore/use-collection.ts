@@ -78,24 +78,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       return;
     }
     
-    // --- DEBUG: LOG QUERY EXECUTION WITH STACK TRACE ---
-    console.trace('🔥🔥🔥 QUERY EXECUTED:', {
-      path,
-      constraintsCount: queryConstraints.length,
-      constraints: queryConstraints.map(c => {
-        try {
-          const constraint = c as any;
-          if (constraint._field && constraint._op) {
-            return `${constraint._field.segments?.join('.')} ${constraint._op} ${constraint._value?.value?.stringValue || 'value'}`;
-          }
-          return c.toString();
-        } catch (e) {
-          return 'unknown constraint';
-        }
-      }),
-      user: auth.currentUser?.uid
-    });
-    
     let isMounted = true;
     setIsLoading(true);
     const unsubscribe = onSnapshot(memoizedQuery, 
@@ -131,7 +113,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         isMounted = false;
         unsubscribe();
     };
-  }, [memoizedQuery, path, isAuthReady, queryConstraints]);
+  }, [memoizedQuery, path, isAuthReady]);
 
   return { data, isLoading, error };
 }

@@ -39,7 +39,7 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  // Tasks constraints to avoid unfiltered list permission error
+  // SECURE: Filter tasks based on role to avoid permission errors
   const tasksConstraints = useMemoFirebase(() => {
     if (!user) return null;
     if (user.role === 'admin' || user.role === 'department') return [];
@@ -50,6 +50,7 @@ export function NotificationListener() {
   const { data: tasks } = useCollection<Task>(tasksConstraints !== null ? 'tasks' : '', ...(tasksConstraints || []));
   const { data: events } = useCollection<UpcomingEvent>(user ? 'upcoming_events' : '');
 
+  // SECURE: Filter student updates based on role
   const studentQueryConstraints = useMemoFirebase(() => {
     if (!user) return null;
     if (user.role === 'admin' || user.role === 'department') {
