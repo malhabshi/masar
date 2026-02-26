@@ -35,22 +35,19 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   const [newTermName, setNewTermName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Fetch the global list of terms with real-time updates.
-  const { data: terms, isLoading: termsLoading } = useCollection<AcademicTerm>('academic_terms');
+  // Real-time listener for terms
+  const { data: rawTerms, isLoading: termsLoading } = useCollection<AcademicTerm>('academic_terms');
 
   const isAdmin = currentUser.role === 'admin';
   const canManage = isAdmin || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
 
-  // Memoize sorted terms whenever the raw terms array changes from the database.
-  const sortedTerms = useMemo(() => {
-    if (!terms || terms.length === 0) return [];
-    const sorted = [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
-    console.log('[TermSelectionCard] Updated sorted terms:', sorted.map(t => t.name));
-    return sorted;
-  }, [terms]);
+  // Memoize sorted terms
+  const terms = useMemo(() => {
+    if (!rawTerms || rawTerms.length === 0) return [];
+    return [...rawTerms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+  }, [rawTerms]);
 
   const handleTermChange = async (newTerm: string) => {
-    // If admin picks the special "Add New" option, open the creation dialog.
     if (newTerm === '___ADD_NEW_TERM___') {
       setIsDialogOpen(true);
       return;
@@ -62,16 +59,9 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
     const result = await updateStudentTerm(student.id, newTerm, currentUser.id);
     
     if (result.success) {
-      toast({ 
-        title: 'Term Updated', 
-        description: `Student intake set to ${newTerm}.` 
-      });
+      toast({ title: 'Term Updated', description: `Student intake set to ${newTerm}.` });
     } else {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Update Failed', 
-        description: result.message 
-      });
+      toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
     }
     setIsUpdating(false);
   };
@@ -91,7 +81,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         toast({ variant: 'destructive', title: 'Error', description: result.message });
       }
     } catch (err) {
-      console.error("[TermSelectionCard] Failed to quick-add term:", err);
+      console.error("[TermSelectionCard] Error adding term:", err);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to create term.' });
     } finally {
       setIsAdding(false);
@@ -110,37 +100,34 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select 
-              key={`${sortedTerms.length}-${student.term || 'none'}`} 
+              // Force remount when term list length or student selection changes
+              key={`${terms.length}-${student.term || 'none'}`}
               value={student.term || 'none'} 
               onValueChange={handleTermChange}
               disabled={!canManage || isUpdating || termsLoading}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={termsLoading ? "Loading terms..." : "Select Intake Term"} />
+                <SelectValue placeholder={termsLoading ? "Loading..." : "Select Intake Term"} />
               </SelectTrigger>
               <SelectContent>
                 {termsLoading ? (
                   <SelectItem value="loading" disabled>
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Loading terms...</span>
+                      <span>Syncing terms...</span>
                     </div>
                   </SelectItem>
                 ) : (
                   <>
-                    {sortedTerms.length > 0 ? (
-                      <>
-                        <SelectItem value="none" disabled>Select an option...</SelectItem>
-                        {sortedTerms.map((term) => (
-                          <SelectItem key={term.id} value={term.name}>
-                            {term.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    ) : (
-                      <SelectItem value="no-terms" disabled className="text-muted-foreground">
-                        No terms available. Ask an admin.
+                    <SelectItem value="none" disabled>Select an intake...</SelectItem>
+                    {terms.map((term) => (
+                      <SelectItem key={term.id} value={term.name}>
+                        {term.name}
                       </SelectItem>
+                    ))}
+                    
+                    {terms.length === 0 && !isAdmin && (
+                      <SelectItem value="no-data" disabled>No terms available</SelectItem>
                     )}
 
                     {isAdmin && (
@@ -148,7 +135,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                         <SelectSeparator />
                         <SelectItem 
                           value="___ADD_NEW_TERM___" 
-                          className="text-primary font-semibold focus:bg-primary/10 cursor-pointer"
+                          className="text-primary font-bold focus:bg-primary/10 cursor-pointer"
                         >
                           <div className="flex items-center gap-2">
                             <Plus className="h-4 w-4" />
@@ -168,17 +155,12 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
             <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
           ) : null}
         </div>
-        {!canManage && (
-          <p className="text-xs text-muted-foreground mt-2 italic">
-            Only the assigned employee or an admin can change this.
-          </p>
-        )}
       </CardContent>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add New Intake Term</DialogTitle>
+            <DialogTitle>Create Global Intake Option</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
@@ -203,7 +185,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
             </DialogClose>
             <Button onClick={handleQuickAddTerm} disabled={isAdding || !newTermName.trim()}>
               {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Global Option
+              Save Term
             </Button>
           </DialogFooter>
         </DialogContent>

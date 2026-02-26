@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, onSnapshot, query, QueryConstraint, DocumentData, type Query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
-import { useMemoFirebase } from './memo';
 
 /**
  * Recursively convert all Timestamps to Date objects within a data structure.
@@ -42,29 +41,23 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  const lastPathRef = useRef(path);
-
-  const memoizedQuery = useMemoFirebase(() => {
+  // Use stringified constraints to check for deep equality
+  const memoizedQuery = useMemo(() => {
     if (!path) return null;
     try {
-        const collectionRef = collection(firestore, path);
-        return query(collectionRef, ...queryConstraints);
-    } catch(e) {
-        console.error(`[useCollection:${path}] Failed to create query:`, e);
-        return null;
+      const collectionRef = collection(firestore, path);
+      return query(collectionRef, ...queryConstraints);
+    } catch (e) {
+      console.error(`[useCollection:${path}] Failed to create query:`, e);
+      return null;
     }
-  }, [path, ...queryConstraints]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, JSON.stringify(queryConstraints)]);
 
   useEffect(() => {
-    if (path !== lastPathRef.current) {
-        setIsLoading(true);
-        setData([]);
-        lastPathRef.current = path;
-    }
-
     if (!path || !memoizedQuery) {
-      setIsLoading(false);
       setData([]);
+      setIsLoading(false);
       return;
     }
 
@@ -73,32 +66,31 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
 
     const unsubscribe = onSnapshot(memoizedQuery as Query, 
       (snapshot) => {
-        if (isMounted) {
-          const items = snapshot.docs.map(doc => {
-            const docData = doc.data();
-            const converted = convertTimestamps<DocumentData>(docData);
-            return { id: doc.id, ...converted } as T;
-          });
-          
-          console.log(`[useCollection:${path}] Synchronized ${items.length} items.`);
-          setData(items);
-          setIsLoading(false);
-          setError(null);
-        }
+        if (!isMounted) return;
+        
+        const items = snapshot.docs.map(doc => {
+          const docData = doc.data();
+          const converted = convertTimestamps<DocumentData>(docData);
+          return { id: doc.id, ...converted } as T;
+        });
+        
+        setData(items);
+        setIsLoading(false);
+        setError(null);
       },
       (err) => {
-        if (isMounted) {
-          console.error(`[useCollection:${path}] Firestore error:`, err);
-          if (err.message.toLowerCase().includes('permissions')) {
-            const permissionError = new FirestorePermissionError({
-              path: path,
-              operation: 'list'
-            });
-            errorEmitter.emit('permission-error', permissionError);
-          }
-          setError(err);
-          setIsLoading(false);
+        if (!isMounted) return;
+        
+        console.error(`[useCollection:${path}] Firestore error:`, err);
+        if (err.message.toLowerCase().includes('permissions')) {
+          const permissionError = new FirestorePermissionError({
+            path: path,
+            operation: 'list'
+          });
+          errorEmitter.emit('permission-error', permissionError);
         }
+        setError(err);
+        setIsLoading(false);
       }
     );
 
