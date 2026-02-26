@@ -3,7 +3,7 @@
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -95,6 +95,7 @@ export async function addApplication(studentId: string, universityName: string, 
           const newTask: Omit<Task, 'id'> = {
               authorId: 'system',
               recipientId: employeeDocId,
+              recipientIds: [employeeDocId],
               content: taskContent,
               createdAt: new Date().toISOString(),
               status: 'new',
@@ -142,6 +143,7 @@ export async function updateApplicationStatus(studentId: string, universityName:
             const newTask: Omit<Task, 'id'> = {
                 authorId: 'system',
                 recipientId: employeeDocId,
+                recipientIds: [employeeDocId],
                 content: taskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
@@ -202,7 +204,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
         if (!requestTypeDoc.exists) {
             return { success: false, message: 'Selected request type not found.' };
         }
-        const requestTypeData = requestTypeDoc.data() as { name: string; defaultRecipientId: string };
+        const requestTypeData = requestTypeDoc.data() as RequestType;
 
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
@@ -211,9 +213,23 @@ export async function createStudentTask(authorId: string, studentId: string, req
         }
         const studentData = studentDoc.data() as Student;
 
+        // Resolve recipients
+        const recipientIds: string[] = [];
+        if (requestTypeData.recipients) {
+          requestTypeData.recipients.forEach(r => {
+            if (r.type === 'user') recipientIds.push(r.id);
+            else if (r.type === 'group') recipientIds.push(r.id);
+            else if (r.type === 'department') recipientIds.push(`dept:${r.id}`);
+          });
+        } else if (requestTypeData.defaultRecipientId) {
+          // Fallback for old request types
+          recipientIds.push(requestTypeData.defaultRecipientId);
+        }
+
         const newTask: Omit<Task, 'id'> = {
             authorId,
-            recipientId: requestTypeData.defaultRecipientId,
+            recipientId: recipientIds[0] || 'all', // Legacy
+            recipientIds: recipientIds.length > 0 ? recipientIds : ['all'],
             content: description,
             createdAt: new Date().toISOString(),
             status: 'new',
@@ -227,7 +243,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
         await adminDb!.collection('tasks').add(newTask);
         
         console.log('✅ Server action finished:', { action: 'createStudentTask', success: true });
-        return { success: true, message: 'Task created successfully and routed to the appropriate user.' };
+        return { success: true, message: 'Task created successfully and routed to the appropriate team.' };
     } catch (error) {
         console.error('❌ Server action failed:', { action: 'createStudentTask', error });
         return { success: false, message: error instanceof Error ? error.message : 'Failed to create task.' };
@@ -249,6 +265,7 @@ export async function sendTask(authorId: string, recipientId: string, content: s
         const newTask: Omit<Task, 'id'> = {
             authorId,
             recipientId,
+            recipientIds: [recipientId],
             content,
             createdAt: new Date().toISOString(),
             status: 'new',
@@ -302,6 +319,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
             const notificationTask: Omit<Task, 'id'> = {
               authorId: 'system',
               recipientId: taskData.authorId,
+              recipientIds: [taskData.authorId],
               content: taskContent,
               createdAt: new Date().toISOString(),
               status: 'new',
@@ -343,6 +361,7 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
                  const notificationTask: Omit<Task, 'id'> = {
                     authorId: 'system',
                     recipientId: author.id,
+                    recipientIds: [author.id],
                     content: taskContent,
                     createdAt: new Date().toISOString(),
                     status: 'new',
@@ -371,6 +390,7 @@ export async function createNewUser(userData: {
   civilId: string;
   phone: string;
   role: 'admin' | 'employee' | 'department';
+  department?: string;
 }) {
   console.log('📤 Server action started:', { action: 'createNewUser', email: userData.email, role: userData.role, timestamp: new Date().toISOString() });
   if (!checkAdminServices()) {
@@ -396,6 +416,7 @@ export async function createNewUser(userData: {
       avatarUrl,
       civilId: userData.civilId,
       employeeId: employeeId,
+      ...(userData.department && { department: userData.department }),
     };
 
     await adminDb!.collection('users').doc(authUser.uid).set(newUserForDb);
@@ -521,6 +542,7 @@ export async function createStudent(
             const newTask: Omit<Task, 'id'> = {
               authorId: creatingUserId,
               recipientId: adminDoc.id,
+              recipientIds: [adminDoc.id],
               content: taskContent,
               status: 'new',
               category: 'system',
@@ -610,6 +632,7 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
             const newTask: Omit<Task, 'id'> = {
                 authorId: adminId,
                 recipientId: newEmployee.id,
+                recipientIds: [newEmployee.id],
                 content: taskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
@@ -665,6 +688,7 @@ export async function requestTransfer(studentId: string, reason: string, request
             const newTask: Omit<Task, 'id'> = {
                 authorId: requestingEmployeeId,
                 recipientId: adminDoc.id,
+                recipientIds: [adminDoc.id],
                 content: taskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
@@ -714,6 +738,7 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
                 const newTask: Omit<Task, 'id'> = {
                     authorId: employeeId,
                     recipientId: adminDoc.id,
+                    recipientIds: [adminDoc.id],
                     content: taskContent,
                     status: 'new',
                     category: 'request',
@@ -1070,6 +1095,7 @@ export async function setStudentFinalChoice(studentId: string, university: strin
                 const newTask: Omit<Task, 'id'> = {
                     authorId: updaterId,
                     recipientId: adminDoc.id,
+                    recipientIds: [adminDoc.id],
                     content: taskContent,
                     createdAt: new Date().toISOString(),
                     status: 'new',
@@ -1197,6 +1223,7 @@ export async function deleteStudent(studentId: string, adminId: string) {
             const newTask: Omit<Task, 'id'> = {
                 authorId: adminId,
                 recipientId: doc.id,
+                recipientIds: [doc.id],
                 content: adminTaskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',
@@ -1214,6 +1241,7 @@ export async function deleteStudent(studentId: string, adminId: string) {
             const employeeTask: Omit<Task, 'id'> = {
                 authorId: adminId,
                 recipientId: employeeId,
+                recipientIds: [employeeId],
                 content: employeeTaskContent,
                 createdAt: new Date().toISOString(),
                 status: 'new',

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -39,24 +40,27 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  // SECURE: Use stricter conditions for the collection path to prevent early unfiltered queries.
   const isEmployee = user?.role === 'employee';
   const isAdminDept = user?.role === 'admin' || user?.role === 'department';
   
-  const tasksPath = (isAdminDept || (isEmployee && user?.id)) ? 'tasks' : '';
+  const tasksPath = user ? 'tasks' : '';
   const studentsPath = (isAdminDept || (isEmployee && user?.civilId)) ? 'students' : '';
   const eventsPath = user ? 'upcoming_events' : '';
 
   const tasksConstraints = useMemoFirebase(() => {
-    if (!tasksPath) return [];
-    if (isAdminDept) {
-        return [orderBy('createdAt', 'desc')];
+    if (!tasksPath || !user) return [];
+    
+    // Admins see all tasks
+    if (user.role === 'admin') return [orderBy('createdAt', 'desc')];
+
+    // Others see tasks directed to them, their department, or 'all'
+    const groups = [user.id, 'all'];
+    if (user.role === 'department' && user.department) {
+        groups.push(`dept:${user.department}`);
     }
-    if (isEmployee && user?.id) {
-        return [where('recipientId', 'in', [user.id, 'all'])];
-    }
-    return [where('id', '==', 'NONE')]; 
-  }, [tasksPath, user?.id, isAdminDept, isEmployee]);
+    
+    return [where('recipientIds', 'array-contains-any', groups)];
+  }, [tasksPath, user]);
 
   const { data: tasks } = useCollection<Task>(tasksPath, ...tasksConstraints);
   const { data: events } = useCollection<UpcomingEvent>(eventsPath);
@@ -69,7 +73,6 @@ export function NotificationListener() {
     }
     
     if (isEmployee && user?.civilId) {
-        // Must filter by employeeId to satisfy security rules for background listening.
         return [where('employeeId', '==', user.civilId)];
     }
     
@@ -107,16 +110,13 @@ export function NotificationListener() {
     }
     const prevTaskIds = new Set(prevTasksRef.current.map(t => t.id));
     tasks.forEach(task => {
-        if (!prevTaskIds.has(task.id)) {
-            const isRelevant = user.role === 'employee' && (task.recipientId === 'all' || task.recipientId === user.id);
-            if (isRelevant) {
-                playNotificationSound();
-                toast({
-                    title: 'New Task Assigned',
-                    description: task.content.substring(0, 50) + '...',
-                    action: <ToastAction altText="View" onClick={() => router.push('/dashboard')}>View</ToastAction>,
-                });
-            }
+        if (!prevTaskIds.has(task.id) && task.authorId !== user.id) {
+            playNotificationSound();
+            toast({
+                title: 'New Task/Update Received',
+                description: task.content.substring(0, 50) + '...',
+                action: <ToastAction altText="View" onClick={() => router.push('/dashboard')}>View</ToastAction>,
+            });
         }
     });
     prevTasksRef.current = tasks;

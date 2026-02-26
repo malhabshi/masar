@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,12 +18,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, FilePenLine } from 'lucide-react';
 import type { User } from '@/lib/types';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+
+const DEPARTMENTS = ['UK', 'Finance', 'Document'];
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -31,6 +35,7 @@ const formSchema = z.object({
     .string()
     .length(12, 'Civil ID must be 12 digits.')
     .regex(/^\d+$/, 'Civil ID must only contain digits.'),
+  department: z.string().optional(),
 });
 
 interface EditUserDialogProps {
@@ -48,6 +53,7 @@ export function EditUserDialog({ user }: EditUserDialogProps) {
       name: user.name,
       phone: user.phone || '',
       civilId: user.civilId || '',
+      department: user.department || '',
     },
   });
 
@@ -57,6 +63,7 @@ export function EditUserDialog({ user }: EditUserDialogProps) {
         name: user.name,
         phone: user.phone || '',
         civilId: user.civilId || '',
+        department: user.department || '',
       });
     }
   }, [isOpen, user, form]);
@@ -144,6 +151,32 @@ export function EditUserDialog({ user }: EditUserDialogProps) {
                 </FormItem>
               )}
             />
+
+            {user.role === 'department' && (
+              <FormField
+                control={form.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select department" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {DEPARTMENTS.map(dept => (
+                          <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <DialogFooter>
               <DialogClose asChild>
                 <Button variant="outline" type="button">Cancel</Button>

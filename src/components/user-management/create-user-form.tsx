@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -13,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createNewUser } from '@/lib/actions';
 
+const DEPARTMENTS = ['UK', 'Finance', 'Document'];
+
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email(),
@@ -23,6 +26,7 @@ const formSchema = z.object({
     .regex(/^\d+$/, 'Civil ID must only contain digits.'),
   phone: z.string().min(10, { message: 'Phone number must be at least 10 digits.' }),
   role: z.enum(['admin', 'employee', 'department']),
+  department: z.string().optional(),
 });
 
 export function CreateUserForm() {
@@ -38,8 +42,11 @@ export function CreateUserForm() {
       civilId: '',
       phone: '',
       role: 'employee',
+      department: '',
     },
   });
+
+  const watchRole = form.watch('role');
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -168,6 +175,31 @@ export function CreateUserForm() {
                 </FormItem>
               )}
             />
+
+            {watchRole === 'department' && (
+              <FormField
+                control={form.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department Assignment</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a department" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {DEPARTMENTS.map(dept => (
+                          <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={isLoading} className="w-full">
@@ -180,4 +212,3 @@ export function CreateUserForm() {
     </Card>
   );
 }
-    

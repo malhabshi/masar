@@ -9,7 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCollection } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { where } from 'firebase/firestore';
 import { sortByDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { TaskItem } from './task-item';
@@ -25,7 +26,25 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   
   const [newItems, setNewItems] = useState(new Set<string>());
 
-  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '');
+  const relevantTasksConstraints = useMemoFirebase(() => {
+    if (!currentUser) return [];
+    
+    // Admins see all tasks. Others see tasks directed to them or their groups.
+    if (currentUser.role === 'admin') return [];
+
+    const groups = [currentUser.id, 'all'];
+    if (currentUser.role === 'department' && currentUser.department) {
+        groups.push(`dept:${currentUser.department}`);
+    }
+    
+    return [where('recipientIds', 'array-contains-any', groups)];
+  }, [currentUser]);
+
+  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(
+    currentUser ? 'tasks' : '',
+    ...relevantTasksConstraints
+  );
+  
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 
   useEffect(() => {
@@ -54,9 +73,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     if (tasks) {
         tasks.forEach(task => {
             userIds.add(task.authorId);
-            if (task.recipientId !== 'all' && task.recipientId !== 'admins' && task.recipientId !== 'departments') {
-                userIds.add(task.recipientId);
-            }
+            (task.recipientIds || []).forEach(rid => {
+                if (!rid.startsWith('dept:') && !['all', 'admins'].includes(rid)) {
+                    userIds.add(rid);
+                }
+            });
             task.replies?.forEach(reply => userIds.add(reply.authorId));
         });
     }
@@ -103,21 +124,14 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     setIsReplying(null);
   }
 
-  const filteredTasks = useMemo(() => {
-    if (currentUser.role === 'admin' || currentUser.role === 'department') {
-      return tasks;
-    }
-    return [];
-  }, [tasks, currentUser]);
-
-  const activeTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new' || t.status === 'in-progress').sort((a,b) => sortByDate(a,b)), [filteredTasks]);
-  const archivedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed' || t.status === 'archived').sort((a,b) => sortByDate(a,b)), [filteredTasks]);
+  const activeTasks = useMemo(() => tasks.filter(t => t.status === 'new' || t.status === 'in-progress').sort((a,b) => sortByDate(a,b)), [tasks]);
+  const archivedTasks = useMemo(() => tasks.filter(t => t.status === 'completed' || t.status === 'archived').sort((a,b) => sortByDate(a,b)), [tasks]);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Task Management</CardTitle>
-        <CardDescription>View and manage all tasks sent to employees.</CardDescription>
+        <CardDescription>View and manage all tasks sent to employees or departments.</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (

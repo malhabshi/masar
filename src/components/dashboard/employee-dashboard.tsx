@@ -26,23 +26,26 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
     );
     const myStudents = useMemo(() => myStudentsData || [], [myStudentsData]);
 
-    const tasksToMeConstraints = useMemoFirebase(() => [where('recipientId', '==', currentUser.id)], [currentUser.id]);
-    const { data: tasksToMeData, isLoading: tasksToMeLoading } = useCollection<Task>(currentUser ? 'tasks' : '', ...tasksToMeConstraints);
+    const relevantTasksConstraints = useMemoFirebase(() => {
+        if (!currentUser) return [];
+        // Query tasks directed to this user specifically, their department, or everyone
+        const groups = [currentUser.id, 'all'];
+        if (currentUser.role === 'admin') groups.push('admins');
+        if (currentUser.department) groups.push(`dept:${currentUser.department}`);
+        
+        return [where('recipientIds', 'array-contains-any', groups)];
+    }, [currentUser]);
 
-    const tasksToAllConstraints = useMemoFirebase(() => [where('recipientId', '==', 'all')], []);
-    const { data: tasksToAllData, isLoading: tasksToAllLoading } = useCollection<Task>(currentUser ? 'tasks' : '', ...tasksToAllConstraints);
+    const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(
+        currentUser ? 'tasks' : '', 
+        ...relevantTasksConstraints
+    );
 
-    const tasksToMe = useMemo(() => tasksToMeData || [], [tasksToMeData]);
-    const tasksToAll = useMemo(() => tasksToAllData || [], [tasksToAllData]);
-    
-    const tasksDataLoading = tasksToMeLoading || tasksToAllLoading;
-    const isLoading = studentsLoading || tasksDataLoading;
+    const isLoading = studentsLoading || tasksLoading;
 
     const relevantTasks = useMemo(() => {
-        const allTasks = [...tasksToMe, ...tasksToAll];
-        const uniqueTasks = Array.from(new Map(allTasks.map(task => [task.id, task])).values());
-        return uniqueTasks.sort((a, b) => sortByDate(a, b));
-    }, [tasksToMe, tasksToAll]);
+        return (tasksData || []).sort((a, b) => sortByDate(a, b));
+    }, [tasksData]);
 
     const stats = useMemo(() => {
         const myTotalStudents = myStudents.length;

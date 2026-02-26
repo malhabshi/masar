@@ -35,15 +35,13 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where, orderBy } from 'firebase/firestore';
-import type { Student } from '@/lib/types';
+import type { Student, Task } from '@/lib/types';
 
 export function AppSidebar() {
     const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-      console.log('✅ Component mounted:', 'AppSidebar');
       setIsClient(true);
-      return () => console.log('❌ Component unmounted:', 'AppSidebar');
     }, []);
 
     const { user } = useUser();
@@ -76,7 +74,23 @@ export function AppSidebar() {
       ...studentQueryConstraints
     );
 
-    // 4. Aggregate notification counts based on user role
+    // 4. Listen to tasks for Task notifications (Admin/Dept)
+    const taskGroups = useMemo(() => {
+        if (!user) return [];
+        const g = [user.id, 'all'];
+        if (user.role === 'admin') g.push('admins');
+        if (user.role === 'department' && user.department) g.push(`dept:${user.department}`);
+        return g;
+    }, [user]);
+
+    const taskConstraints = useMemoFirebase(() => {
+        if (!user || !isAdminDept) return [where('id', '==', 'NONE')];
+        return [where('recipientIds', 'array-contains-any', taskGroups)];
+    }, [user, isAdminDept, taskGroups]);
+
+    const { data: tasks } = useCollection<Task>(isAdminDept ? 'tasks' : '', ...taskConstraints);
+
+    // 5. Aggregate notification counts based on user role
     const totalNotifications = useMemo(() => {
       if (!students || !user) return 0;
       
@@ -92,11 +106,17 @@ export function AppSidebar() {
       }, 0);
     }, [students, user]);
 
-    // 5. Specifically aggregate unread chats for the "Chats" link (Admin/Dept only)
+    // 6. Specifically aggregate unread chats for the "Chats" link (Admin/Dept only)
     const unreadChatCount = useMemo(() => {
       if (!students || !user || !['admin', 'department'].includes(user.role)) return 0;
       return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
     }, [students, user]);
+
+    // 7. Tasks notification count
+    const unreadTaskCount = useMemo(() => {
+        if (!tasks || !isAdminDept) return 0;
+        return tasks.filter(t => t.status === 'new').length;
+    }, [tasks, isAdminDept]);
 
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
     
@@ -162,6 +182,11 @@ export function AppSidebar() {
                     {item.label === 'Chats' && unreadChatCount > 0 && (
                         <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
                             {unreadChatCount}
+                        </SidebarMenuBadge>
+                    )}
+                    {item.label === 'Tasks' && unreadTaskCount > 0 && (
+                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
+                            {unreadTaskCount}
                         </SidebarMenuBadge>
                     )}
                 </SidebarMenuItem>

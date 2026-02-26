@@ -11,6 +11,7 @@ export interface User {
   civilId?: string;
   employeeId?: string;
   studentId?: string; // Links a student user to a student profile
+  department?: string; // UK, Finance, Document, etc.
 }
 
 export type ApplicationStatus = 'Pending' | 'Submitted' | 'In Review' | 'Accepted' | 'Rejected';
@@ -143,7 +144,8 @@ export type TaskStatus = 'new' | 'in-progress' | 'completed' | 'archived';
 export interface Task {
   id: string;
   authorId: string;
-  recipientId: string | 'all';
+  recipientId: string | 'all'; // Legacy field
+  recipientIds?: string[]; // New multi-recipient support
   content: string;
   createdAt: string;
   status: TaskStatus;
@@ -191,20 +193,17 @@ export interface SharedDocument {
   size: number;
 }
 
-export interface ApprovedUniversity {
+export interface RecipientConfig {
+  type: 'user' | 'group' | 'department';
   id: string;
-  country: Country;
-  name: string;
-  major: string;
-  ieltsScore: number;
-  isAvailable: boolean;
 }
 
 export interface RequestType {
   id: string;
   name: string;
   description: string;
-  defaultRecipientId: string;
+  defaultRecipientId: string; // Legacy
+  recipients?: RecipientConfig[]; // New multi-recipient selection
   isActive: boolean;
   requiredFields: string[];
 }
