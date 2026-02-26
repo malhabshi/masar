@@ -46,7 +46,7 @@ function StudentPageContentSkeleton() {
                  <Card>
                     <CardHeader><Skeleton className="h-7 w-24" /></CardHeader>
                     <CardContent><Skeleton className="h-48 w-full" /></CardContent>
-                </div>
+                </Card>
             </div>
       </div>
     )
