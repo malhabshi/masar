@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -14,12 +15,25 @@ import type { AppUser } from '@/hooks/use-user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { updateDocumentNonBlocking, useCollection } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { EditUserDialog } from './edit-user-dialog';
 import { Skeleton } from '../ui/skeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { deleteUser } from '@/lib/actions';
 
 interface UserListProps {
   currentUser: AppUser;
@@ -30,6 +44,7 @@ const userRoles: UserRole[] = ['admin', 'employee', 'department'];
 export function UserList({ currentUser }: UserListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const { data: usersData, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
   const users = useMemo(() => usersData || [], [usersData]);
 
@@ -64,6 +79,25 @@ export function UserList({ currentUser }: UserListProps) {
     } finally {
         setIsUpdating(null);
     }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    setIsDeleting(userId);
+    const result = await deleteUser(userId, currentUser.id);
+
+    if (result.success) {
+      toast({
+        title: 'User Deleted',
+        description: `${userName} has been removed from the system.`,
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Delete Failed',
+        description: result.message,
+      });
+    }
+    setIsDeleting(null);
   };
 
   if (usersLoading) {
@@ -141,6 +175,30 @@ export function UserList({ currentUser }: UserListProps) {
                         </Select>
                     )}
                     <EditUserDialog user={user} />
+                    
+                    {user.id !== currentUser.id && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" disabled={isDeleting === user.id}>
+                            {isDeleting === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete User Account?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete <strong>{user.name}</strong>? This will permanently remove their authentication account and profile. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteUser(user.id, user.name)} className="bg-destructive hover:bg-destructive/90">
+                              Delete Account
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                 </div>
               </TableCell>
             </TableRow>

@@ -32,6 +32,38 @@ async function getUser(userId: string): Promise<User | null> {
     return { id: doc.id, ...doc.data() } as User;
 }
 
+// --- USER ACTIONS ---
+
+export async function deleteUser(userIdToDelete: string, adminId: string) {
+  console.log('📤 Server action started:', { action: 'deleteUser', userIdToDelete, adminId, timestamp: new Date().toISOString() });
+  if (!checkAdminServices()) {
+    return { success: false, message: 'Admin services not available.' };
+  }
+
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') {
+      return { success: false, message: 'Unauthorized. Only admins can delete users.' };
+    }
+
+    if (userIdToDelete === adminId) {
+      return { success: false, message: 'You cannot delete your own account.' };
+    }
+
+    // 1. Delete from Firebase Auth
+    await adminAuth!.deleteUser(userIdToDelete);
+
+    // 2. Delete from Firestore
+    await adminDb!.collection('users').doc(userIdToDelete).delete();
+
+    console.log('✅ Server action finished:', { action: 'deleteUser', success: true });
+    return { success: true, message: 'User deleted successfully.' };
+  } catch (error: any) {
+    console.error('❌ Server action failed:', { action: 'deleteUser', error });
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to delete user.' };
+  }
+}
+
 // --- APPLICATION ACTIONS ---
 
 export async function addApplication(studentId: string, universityName: string, country: string, major: string, studentName: string, employeeId: string | null) {
