@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert } from 'lucide-react';
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar } from 'lucide-react';
 import type { Student, PipelineStatus, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import {
@@ -158,7 +158,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     }
   }
 
-  const numColumns = 7;
+  const numColumns = 8; // Incremented for the new Term column
 
   const currentEmptyStateMessage = displayedStudents.length === 0 && isFiltered 
       ? 'No students match your current filters.' 
@@ -229,6 +229,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Employee</TableHead>
               <TableHead>IELTS Overall</TableHead>
+              <TableHead>Intake Term</TableHead>
               <TableHead>App. Countries</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -337,6 +338,16 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                     <Badge variant={student.ieltsOverall ? 'secondary' : 'outline'}>
                         {(student.ieltsOverall ?? 0).toFixed(1)}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {student.academicIntakeSemester ? (
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
+                        <Calendar className="h-3 w-3 text-primary" />
+                        <span className="text-sm font-medium">{student.academicIntakeSemester} {student.academicIntakeYear}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">None</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {appCountries.length > 0 ? (
