@@ -9,6 +9,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarSeparator,
+  SidebarMenuBadge,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { UserSwitcher } from '@/components/user-switcher';
@@ -31,7 +32,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { where, orderBy } from 'firebase/firestore';
+import type { Student } from '@/lib/types';
 
 export function AppSidebar() {
     const [isClient, setIsClient] = useState(false);
@@ -44,6 +48,49 @@ export function AppSidebar() {
 
     const { user } = useUser();
     const pathname = usePathname();
+
+    const isAdminDept = user?.role === 'admin' || user?.role === 'department';
+    const isEmployee = user?.role === 'employee';
+
+    // 1. Establish the collection path based on user identity/role
+    const studentsPath = (isAdminDept || (isEmployee && user?.civilId)) ? 'students' : '';
+    
+    // 2. Memoize constraints to satisfy security rules and optimize cache reuse
+    const studentQueryConstraints = useMemoFirebase(() => {
+      if (!studentsPath) return [];
+      
+      if (isAdminDept) {
+          return [orderBy('createdAt', 'desc')];
+      }
+      
+      if (isEmployee && user?.civilId) {
+          return [where('employeeId', '==', user.civilId)];
+      }
+      
+      return [where('id', '==', 'NONE')]; 
+    }, [studentsPath, user?.civilId, isAdminDept, isEmployee]);
+
+    // 3. Listen to students in real-time
+    const { data: students } = useCollection<Student>(
+      studentsPath, 
+      ...studentQueryConstraints
+    );
+
+    // 4. Aggregate notification counts based on user role
+    const totalNotifications = useMemo(() => {
+      if (!students || !user) return 0;
+      
+      return students.reduce((acc, student) => {
+        if (user.role === 'admin' || user.role === 'department') {
+          // Admin/Dept: Count unread chat updates + new documents from employees
+          return acc + (student.unreadUpdates || 0) + (student.newDocumentsForAdmin || 0);
+        } else if (user.role === 'employee') {
+          // Employee: Count messages from admins + new documents from admins + new missing items
+          return acc + (student.employeeUnreadMessages || 0) + (student.newDocumentsForEmployee || 0) + (student.newMissingItemsForEmployee || 0);
+        }
+        return acc;
+      }, 0);
+    }, [students, user]);
 
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
     
@@ -89,6 +136,11 @@ export function AppSidebar() {
                             <item.icon /> <span>{item.label}</span>
                         </SidebarMenuButton>
                     </Link>
+                    {item.label === 'Applicants' && totalNotifications > 0 && (
+                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
+                            {totalNotifications}
+                        </SidebarMenuBadge>
+                    )}
                 </SidebarMenuItem>
             ))}
 
