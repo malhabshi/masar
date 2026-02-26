@@ -92,6 +92,12 @@ export function AppSidebar() {
       }, 0);
     }, [students, user]);
 
+    // 5. Specifically aggregate unread chats for the "Chats" link (Admin/Dept only)
+    const unreadChatCount = useMemo(() => {
+      if (!students || !user || !['admin', 'department'].includes(user.role)) return 0;
+      return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
+    }, [students, user]);
+
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
     
     const mainNav = [
@@ -153,6 +159,11 @@ export function AppSidebar() {
                             <item.icon /> <span>{item.label}</span>
                         </Link>
                     </SidebarMenuButton>
+                    {item.label === 'Chats' && unreadChatCount > 0 && (
+                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
+                            {unreadChatCount}
+                        </SidebarMenuBadge>
+                    )}
                 </SidebarMenuItem>
             ))}
 
