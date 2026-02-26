@@ -104,7 +104,7 @@ export interface Student {
   term?: string;
   studentLogins?: StudentLogin[];
   duplicatePhoneWarning?: boolean;
-  duplicateOfStudentId?: string | null;
+  duplicateOfStudentIds?: string[] | null;
 }
 
 export interface ChatMessage {

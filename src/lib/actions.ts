@@ -388,17 +388,16 @@ export async function createStudent(
   }
 
   try {
-    // DUPLICATE CHECK: Check for existing phone number
+    // DUPLICATE CHECK: Check for existing phone number (find all matches)
     const existingSnap = await adminDb!.collection('students')
       .where('phone', '==', phone)
-      .limit(1)
       .get();
     
     let duplicateInfo = {};
     if (!existingSnap.empty) {
       duplicateInfo = {
         duplicatePhoneWarning: true,
-        duplicateOfStudentId: existingSnap.docs[0].id
+        duplicateOfStudentIds: existingSnap.docs.map(doc => doc.id)
       };
     }
 
@@ -491,7 +490,7 @@ export async function resolveDuplicate(studentId: string, adminId: string) {
     
     await adminDb!.collection('students').doc(studentId).update({
       duplicatePhoneWarning: false,
-      duplicateOfStudentId: null
+      duplicateOfStudentIds: null
     });
     
     return { success: true, message: 'Duplicate warning resolved.' };
