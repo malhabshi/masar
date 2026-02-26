@@ -51,6 +51,11 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if false;
+
+      /** @description Fixed: Added rules for personal todos subcollection */
+      match /personal_todos/{todoId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     match /admins/{userId} {
@@ -73,6 +78,7 @@ service cloud.firestore {
       
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == request.auth.uid);
       
+      // REQUIREMENT: Only Admin/Dept can update academicIntake fields.
       allow update: if resource != null && (
         isPrivileged() || 
         (isOwner(resource.data.employeeId) && 
@@ -102,7 +108,6 @@ service cloud.firestore {
      * @description Access rules for Tasks.
      */
     match /tasks/{taskId} {
-      // Fix: Allow reading tasks if signed in to prevent page crashes on student profiles
       allow get, list: if isSignedIn();
       allow create: if isPrivileged();
       allow update: if isPrivileged() || isExistingOwner(resource.data.assignedToUserId);

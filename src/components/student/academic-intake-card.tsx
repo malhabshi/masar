@@ -32,13 +32,13 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Local state for editing, reading directly from the student object passed as props
+  // Local state for editing, reading directly from the student object
   const [tempSemester, setTempSemester] = useState<string>(student.academicIntakeSemester || '');
   const [tempYear, setTempYear] = useState<string>(student.academicIntakeYear?.toString() || '');
 
   const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
 
-  // REQUIREMENT: Visibility only for admin and department users
+  // Visibility restricted to admin and department users
   if (!isAdminOrDept) return null;
 
   const handleSave = async () => {
