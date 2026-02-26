@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1837,9 +1836,9 @@ export async function addAcademicTerm(name: string, adminId: string) {
       createdAt: new Date().toISOString(),
     };
 
-    await adminDb!.collection('academic_terms').add(termData);
+    const docRef = await adminDb!.collection('academic_terms').add(termData);
     
-    console.log('✅ Server action finished:', { action: 'addAcademicTerm', success: true });
+    console.log('✅ Server action finished:', { action: 'addAcademicTerm', success: true, id: docRef.id });
     return { success: true, message: `Term '${name}' added.` };
   } catch (error: any) {
     console.error('❌ Server action failed:', { action: 'addAcademicTerm', error });

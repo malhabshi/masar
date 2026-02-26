@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, QueryConstraint, DocumentData, type Query } from 'firebase/firestore';
-import { firestore, auth } from '@/firebase';
+import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 import { useMemoFirebase } from './memo';
@@ -71,9 +71,6 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     let isMounted = true;
     setIsLoading(true);
 
-    // Establish a direct real-time listener.
-    // Firestore handles auth state changes internally; if permissions are denied
-    // due to lack of auth, the error callback will fire.
     const unsubscribe = onSnapshot(memoizedQuery as Query, 
       (snapshot) => {
         if (isMounted) {
@@ -82,6 +79,8 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
             const converted = convertTimestamps<DocumentData>(docData);
             return { id: doc.id, ...converted } as T;
           });
+          
+          console.log(`[useCollection:${path}] Synchronized ${items.length} items.`);
           setData(items);
           setIsLoading(false);
           setError(null);
@@ -89,6 +88,7 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
       },
       (err) => {
         if (isMounted) {
+          console.error(`[useCollection:${path}] Firestore error:`, err);
           if (err.message.toLowerCase().includes('permissions')) {
             const permissionError = new FirestorePermissionError({
               path: path,

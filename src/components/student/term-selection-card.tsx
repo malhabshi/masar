@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Student, AcademicTerm } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
@@ -44,7 +44,9 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
   // Memoize sorted terms whenever the raw terms array changes from the database.
   const sortedTerms = useMemo(() => {
     if (!terms || terms.length === 0) return [];
-    return [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+    const sorted = [...terms].sort((a, b) => sortByDate(a, b, 'createdAt', 'desc'));
+    console.log('[TermSelectionCard] Updated sorted terms:', sorted.map(t => t.name));
+    return sorted;
   }, [terms]);
 
   const handleTermChange = async (newTerm: string) => {
@@ -89,7 +91,7 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
         toast({ variant: 'destructive', title: 'Error', description: result.message });
       }
     } catch (err) {
-      console.error("Failed to quick-add term:", err);
+      console.error("[TermSelectionCard] Failed to quick-add term:", err);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to create term.' });
     } finally {
       setIsAdding(false);
@@ -107,11 +109,6 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
       <CardContent>
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            {/* 
-              The 'key' ensures the entire Select component is remounted when 
-              the terms list updates or the student's term is changed, 
-              forcing Radix to refresh its internal state.
-            */}
             <Select 
               key={`${sortedTerms.length}-${student.term || 'none'}`} 
               value={student.term || 'none'} 
@@ -123,9 +120,12 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
               </SelectTrigger>
               <SelectContent>
                 {termsLoading ? (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  </div>
+                  <SelectItem value="loading" disabled>
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Loading terms...</span>
+                    </div>
+                  </SelectItem>
                 ) : (
                   <>
                     {sortedTerms.length > 0 ? (
@@ -138,9 +138,9 @@ export function TermSelectionCard({ student, currentUser }: TermSelectionCardPro
                         ))}
                       </>
                     ) : (
-                      <div className="p-2 text-sm text-muted-foreground text-center">
-                        No terms available. Any admin user can create options.
-                      </div>
+                      <SelectItem value="no-terms" disabled className="text-muted-foreground">
+                        No terms available. Ask an admin.
+                      </SelectItem>
                     )}
 
                     {isAdmin && (
