@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -84,7 +83,7 @@ export function TermManagement() {
                 <FormItem className="flex-1">
                   <FormLabel>New Term Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Fall 2025" {...field} />
+                    <Input placeholder="e.g. 7/8 2026, Spring 2026" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
