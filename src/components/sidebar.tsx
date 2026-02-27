@@ -116,13 +116,25 @@ export function AppSidebar() {
     // 7. Tasks notification count (Excluding IELTS Courses)
     const unreadTaskCount = useMemo(() => {
         if (!tasks || !isAdminDept) return 0;
-        return tasks.filter(t => t.status === 'new' && t.taskType !== 'Ielts Course').length;
+        return tasks.filter(t => {
+            if (t.status !== 'new') return false;
+            if (t.category !== 'request') return false;
+            const isIeltsCourse = t.data?.examType === 'ielts_course' || 
+                                 t.taskType?.toLowerCase() === 'ielts course';
+            return !isIeltsCourse;
+        }).length;
     }, [tasks, isAdminDept]);
 
     // 8. IELTS Courses notification count
     const unreadIeltsCourseCount = useMemo(() => {
         if (!tasks || !isAdminDept) return 0;
-        return tasks.filter(t => t.status === 'new' && t.taskType === 'Ielts Course').length;
+        return tasks.filter(t => {
+            if (t.status !== 'new') return false;
+            if (t.category !== 'request') return false;
+            const isIeltsCourse = t.data?.examType === 'ielts_course' || 
+                                 t.taskType?.toLowerCase() === 'ielts course';
+            return isIeltsCourse;
+        }).length;
     }, [tasks, isAdminDept]);
 
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);

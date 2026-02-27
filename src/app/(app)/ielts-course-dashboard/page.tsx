@@ -26,11 +26,10 @@ export default function IeltsCourseDashboard() {
   });
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch only IELTS Course tasks
+  // Fetch only formal requests
   const ieltsCourseConstraints = useMemoFirebase(() => {
     if (!currentUser) return [];
-    // We filter for tasks with the specific type name
-    return [where('taskType', '==', 'Ielts Course'), where('category', '==', 'request')];
+    return [where('category', '==', 'request')];
   }, [currentUser]);
 
   const { data: tasks, isLoading } = useCollection<Task>(
@@ -42,6 +41,12 @@ export default function IeltsCourseDashboard() {
     if (!tasks) return [];
     
     return tasks.filter((task) => {
+      // Robust check for IELTS Course (Programmatic type or Case-insensitive match)
+      const isIeltsCourse = task.data?.examType === 'ielts_course' || 
+                           task.taskType?.toLowerCase() === 'ielts course';
+      
+      if (!isIeltsCourse) return false;
+
       const data = task.data || {};
       const courseDate = toDate(data.courseStartDate);
       
@@ -180,7 +185,7 @@ export default function IeltsCourseDashboard() {
                     <TableHead>Phone Number</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Course Type</TableHead>
-                    <TableHead>Exam Date</TableHead>
+                    <TableHead>Start Date</TableHead>
                     <TableHead>Employee Name</TableHead>
                   </TableRow>
                 </TableHeader>
