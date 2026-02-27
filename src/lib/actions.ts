@@ -1139,7 +1139,7 @@ export async function resetStudentPassword(email: string) {
 export async function updateStudentTargetCountries(studentId: string, countries: string[], updaterId: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ targetCountries: countries, adminNotes: FieldValue.arrayUnion({ id: `note-target-${Date.now()}`, authorId: updaterId, content: `Target countries set to: ${countries.join(', ')}`, createdAt: new Date().toISOString() }) });
+        await adminDb!.collection('students').doc(studentId).update({ targetCountries: countries, adminNotes: FieldValue.arrayUnion({ id: `note-target-${Date.now()}`, authorId, content: `Target countries set to: ${countries.join(', ')}`, createdAt: new Date().toISOString() }) });
         return { success: true, message: 'Target countries updated.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1149,7 +1149,7 @@ export async function updateStudentTargetCountries(studentId: string, countries:
 export async function updateStudentAcademicIntake(studentId: string, semester: string, year: number, updaterId: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ academicIntakeSemester: semester, academicIntakeYear: year, adminNotes: FieldValue.arrayUnion({ id: `note-intake-${Date.now()}`, authorId: updaterId, content: `Academic intake updated to: ${semester} ${year}`, createdAt: new Date().toISOString() }) });
+        await adminDb!.collection('students').doc(studentId).update({ academicIntakeSemester: semester, academicIntakeYear: year, adminNotes: FieldValue.arrayUnion({ id: `note-intake-${Date.now()}`, authorId, content: `Academic intake updated to: ${semester} ${year}`, createdAt: new Date().toISOString() }) });
         return { success: true, message: 'Academic intake updated.' };
     } catch (error: any) {
         return { success: false, message: error.message };
