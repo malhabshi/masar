@@ -2,109 +2,92 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Query,
+  collection,
   onSnapshot,
+  query,
+  QueryConstraint,
   DocumentData,
-  FirestoreError,
-  QuerySnapshot,
   CollectionReference,
+  Query,
+  FirestoreError,
 } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
-/** Utility type to add an 'id' field to a given type T. */
-export type WithId<T> = T & { id: string };
+import { firestore } from '@/firebase';
+import { errorEmitter } from '../error-emitter';
+import { FirestorePermissionError } from '../errors';
 
 /**
- * Interface for the return value of the useCollection hook.
- * @template T Type of the document data.
- */
-export interface UseCollectionResult<T> {
-  data: WithId<T>[] | null; // Document data with ID, or null.
-  isLoading: boolean;       // True if loading.
-  error: FirestoreError | Error | null; // Error object, or null.
-}
-
-/* Internal implementation of Query:
-  https://github.com/firebase/firebase-js-sdk/blob/c5f08a9bc5da0d2b0207802c972d53724ccef055/packages/firestore/src/lite-api/reference.ts#L143
-*/
-export interface InternalQuery extends Query<DocumentData> {
-  _query: {
-    path: {
-      canonicalString(): string;
-      toString(): string;
-    }
-  }
-}
-
-/**
- * React hook to subscribe to a Firestore collection or query in real-time.
- * Handles nullable references/queries.
- * 
- * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery using useMemoFirebase.
- *  
- * @template T Optional type for document data. Defaults to any.
- * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} memoizedTargetRefOrQuery -
- * The Firestore CollectionReference or Query. Waits if null/undefined.
- * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
+ * Robust hook to subscribe to a Firestore collection or query in real-time.
+ * Supports string paths, CollectionReferences, and Queries.
  */
 export function useCollection<T = any>(
-    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
-): UseCollectionResult<T> {
-  type ResultItemType = WithId<T>;
-  type StateDataType = ResultItemType[] | null;
-
-  const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  target: string | CollectionReference<DocumentData> | Query<DocumentData> | null | undefined,
+  ...constraints: QueryConstraint[]
+) {
+  const [data, setData] = useState<T[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
-    // Robust check: prevent calling onSnapshot with strings or invalid objects
-    if (!memoizedTargetRefOrQuery || typeof memoizedTargetRefOrQuery === 'string') {
-      setData(null);
+    if (!target) {
+      setData([]);
       setIsLoading(false);
-      setError(null);
       return;
     }
 
     setIsLoading(true);
-    setError(null);
+    let unsubscribe = () => {};
 
-    const unsubscribe = onSnapshot(
-      memoizedTargetRefOrQuery,
-      (snapshot: QuerySnapshot<DocumentData>) => {
-        const results: ResultItemType[] = [];
-        for (const doc of snapshot.docs) {
-          results.push({ ...(doc.data() as T), id: doc.id });
-        }
-        setData(results);
-        setError(null);
-        setIsLoading(false);
-      },
-      (error: FirestoreError) => {
-        const path: string =
-          memoizedTargetRefOrQuery.type === 'collection'
-            ? (memoizedTargetRefOrQuery as CollectionReference).path
-            : (memoizedTargetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString()
+    try {
+      let q: Query | CollectionReference;
 
-        const contextualError = new FirestorePermissionError({
-          operation: 'list',
-          path,
-        })
-
-        setError(contextualError)
-        setData(null)
-        setIsLoading(false)
-        errorEmitter.emit('permission-error', contextualError);
+      if (typeof target === 'string') {
+        const collectionRef = collection(firestore, target);
+        q = constraints.length > 0 ? query(collectionRef, ...constraints) : collectionRef;
+      } else {
+        q = target;
       }
-    );
+
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const items = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...(doc.data() as T),
+          }));
+          setData(items);
+          setIsLoading(false);
+          setError(null);
+        },
+        (err) => {
+          console.error(`[useCollection] subscription error:`, err);
+          
+          let path = 'unknown';
+          try {
+            if (typeof target === 'string') path = target;
+            else if ((target as any).path) path = (target as any).path;
+            else if ((target as any)._query?.path?.canonicalString) path = (target as any)._query.path.canonicalString();
+          } catch (e) {}
+
+          const contextualError = new FirestorePermissionError({
+            operation: 'list',
+            path: path,
+          });
+
+          setError(contextualError);
+          setData(null);
+          setIsLoading(false);
+          errorEmitter.emit('permission-error', contextualError);
+        }
+      );
+    } catch (e: any) {
+      console.error(`[useCollection] setup error:`, e);
+      setIsLoading(false);
+      setError(e);
+    }
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]);
-
-  if (memoizedTargetRefOrQuery && typeof memoizedTargetRefOrQuery !== 'string' && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error('Firestore reference or query passed to useCollection was not properly memoized using useMemoFirebase. This is required to prevent infinite loops.');
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(typeof target === 'string' ? target : null), constraints.length, (target as any)?.__memo]);
 
   return { data, isLoading, error };
 }

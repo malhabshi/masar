@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -10,8 +9,8 @@ service cloud.firestore {
     }
 
     /** 
-     * @description Robust check for admin status.
-     * Checks DBAC collection first, falls back to the user's role field.
+     * @description Defensive check for admin status.
+     * Checks DBAC collection first, then falls back to profile data.
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
@@ -21,7 +20,7 @@ service cloud.firestore {
              request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1';
     }
 
-    /** @description Checks if user is in a department. */
+    /** @description Defensive check for department status. */
     function isDepartment() {
       if (!isSignedIn()) return false;
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
@@ -35,10 +34,6 @@ service cloud.firestore {
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     // --- Rules ---
@@ -64,30 +59,26 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Admins and Department staff can see all students
-      // Employees see students assigned to them via Civil ID
-      allow read: if isPrivileged() || (isSignedIn() && (resource.data.employeeId == getUserData().civilId || resource.data.createdBy == request.auth.uid));
+      // Admins and Department staff see all. 
+      // Employees see assigned (via civilId) or created.
+      allow read: if isPrivileged() || (isSignedIn() && (
+        resource.data.employeeId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.civilId || 
+        resource.data.createdBy == request.auth.uid
+      ));
       
-      // Employees can create unassigned students or students for themselves
-      allow create: if isPrivileged() || isSignedIn();
-      
-      // Only privileged staff or the assigned employee can update
-      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.employeeId);
-      
-      allow delete: if isAdmin();
-    }
-
-    match /universityApplications/{applicationId} {
-      allow read: if isPrivileged() || (isSignedIn() && resource.data.assignedToEmployeeId == getUserData().civilId);
       allow create: if isSignedIn();
-      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.assignedToEmployeeId);
+      allow update: if isPrivileged() || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.civilId == resource.data.employeeId);
       allow delete: if isAdmin();
     }
 
-    match /documents/{documentId} {
+    match /approved_universities/{uniId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isPrivileged() || isOwner(resource.data.authorId);
+      allow write: if isPrivileged();
+    }
+
+    match /shared_documents/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
     }
 
     match /tasks/{taskId} {
@@ -96,46 +87,20 @@ service cloud.firestore {
         resource.data.authorId == request.auth.uid ||
         request.auth.uid in resource.data.recipientIds ||
         'all' in resource.data.recipientIds ||
-        (isDepartment() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         'dept:' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.department in resource.data.recipientIds)
+        (isDepartment() && 'dept:' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.department in resource.data.recipientIds)
       );
       allow create: if isSignedIn();
       allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
       allow delete: if isAdmin();
     }
 
-    match /chats/{studentId} {
+    match /chats/{studentId}/messages/{messageId} {
       allow read, write: if isSignedIn();
-      match /messages/{messageId} {
-        allow read, write: if isSignedIn();
-      }
-    }
-
-    match /chatThreads/{chatThreadId} {
-      allow read, write: if isSignedIn();
-      match /messages/{messageId} {
-        allow read, write: if isSignedIn();
-      }
-    }
-
-    match /customApplicationFieldDefinitions/{fieldId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
     }
 
     match /upcoming_events/{eventId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
-    }
-    
-    match /shared_documents/{documentId} {
-      allow read: if isSignedIn();
-      allow write: if isPrivileged();
-    }
-    
-    match /request_types/{typeId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
     }
     
     match /resource_links/{linkId} {
@@ -148,10 +113,10 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
     }
-    
-    match /approved_universities/{uniId} {
+
+    match /request_types/{typeId} {
       allow read: if isSignedIn();
-      allow write: if isPrivileged();
+      allow write: if isAdmin();
     }
 
     match /academic_terms/{termId} {

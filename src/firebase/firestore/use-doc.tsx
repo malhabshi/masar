@@ -1,92 +1,87 @@
 'use client';
-    
+
 import { useState, useEffect } from 'react';
 import {
-  DocumentReference,
+  doc,
   onSnapshot,
   DocumentData,
+  DocumentReference,
   FirestoreError,
   DocumentSnapshot,
 } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
-/** Utility type to add an 'id' field to a given type T. */
-type WithId<T> = T & { id: string };
+import { firestore } from '@/firebase';
+import { errorEmitter } from '../error-emitter';
+import { FirestorePermissionError } from '../errors';
 
 /**
- * Interface for the return value of the useDoc hook.
- * @template T Type of the document data.
- */
-export interface UseDocResult<T> {
-  data: WithId<T> | null; // Document data with ID, or null.
-  isLoading: boolean;       // True if loading.
-  error: FirestoreError | Error | null; // Error object, or null.
-}
-
-/**
- * React hook to subscribe to a single Firestore document in real-time.
- * Handles nullable references.
- * 
- * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedDocRef using useMemoFirebase.
- *
- * @template T Optional type for document data. Defaults to any.
- * @param {DocumentReference<DocumentData> | null | undefined} memoizedDocRef -
- * The Firestore DocumentReference. Waits if null/undefined.
- * @returns {UseDocResult<T>} Object with data, isLoading, error.
+ * Robust hook to subscribe to a single Firestore document in real-time.
+ * Supports string paths (with segments) and DocumentReferences.
  */
 export function useDoc<T = any>(
-  memoizedDocRef: (DocumentReference<DocumentData> & {__memo?: boolean}) | null | undefined,
-): UseDocResult<T> {
-  type StateDataType = WithId<T> | null;
-
-  const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  target: string | DocumentReference<DocumentData> | null | undefined,
+  ...pathSegments: string[]
+) {
+  const [data, setData] = useState<T | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
-    // Robust check: prevent calling onSnapshot with strings or invalid objects
-    if (!memoizedDocRef || typeof memoizedDocRef === 'string' || !memoizedDocRef.type || memoizedDocRef.type !== 'document') {
+    if (!target) {
       setData(null);
       setIsLoading(false);
-      setError(null);
       return;
     }
 
     setIsLoading(true);
-    setError(null);
+    let unsubscribe = () => {};
 
-    const unsubscribe = onSnapshot(
-      memoizedDocRef,
-      (snapshot: DocumentSnapshot<DocumentData>) => {
-        if (snapshot.exists()) {
-          setData({ ...(snapshot.data() as T), id: snapshot.id });
-        } else {
-          setData(null);
+    try {
+      let docRef: DocumentReference;
+
+      if (typeof target === 'string') {
+        if (pathSegments.some(s => !s)) {
+          setIsLoading(false);
+          return;
         }
-        setError(null);
-        setIsLoading(false);
-      },
-      (error: FirestoreError) => {
-        const contextualError = new FirestorePermissionError({
-          operation: 'get',
-          path: memoizedDocRef.path,
-        })
-
-        setError(contextualError)
-        setData(null)
-        setIsLoading(false)
-        errorEmitter.emit('permission-error', contextualError);
+        docRef = doc(firestore, target, ...pathSegments);
+      } else {
+        docRef = target;
       }
-    );
+
+      unsubscribe = onSnapshot(
+        docRef,
+        (snapshot: DocumentSnapshot<DocumentData>) => {
+          if (snapshot.exists()) {
+            setData({ id: snapshot.id, ...(snapshot.data() as T) });
+          } else {
+            setData(null);
+          }
+          setIsLoading(false);
+          setError(null);
+        },
+        (err) => {
+          console.error(`[useDoc] subscription error:`, err);
+          
+          const contextualError = new FirestorePermissionError({
+            operation: 'get',
+            path: docRef.path,
+          });
+
+          setError(contextualError);
+          setData(null);
+          setIsLoading(false);
+          errorEmitter.emit('permission-error', contextualError);
+        }
+      );
+    } catch (e: any) {
+      console.error(`[useDoc] setup error:`, e);
+      setIsLoading(false);
+      setError(e);
+    }
 
     return () => unsubscribe();
-  }, [memoizedDocRef]);
-
-  // Enforce memoization requirement
-  if (memoizedDocRef && typeof memoizedDocRef !== 'string' && !memoizedDocRef.__memo) {
-    throw new Error('Firestore reference passed to useDoc was not properly memoized using useMemoFirebase. This is required to prevent infinite loops.');
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(typeof target === 'string' ? [target, ...pathSegments] : null), (target as any)?.__memo]);
 
   return { data, isLoading, error };
 }
