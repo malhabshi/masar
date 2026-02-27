@@ -4,51 +4,53 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * UNIAPPLY HUB SECURITY RULES
+     * UNIAPPLY HUB SECURITY RULES - EMERGENCY RECOVERY VERSION
      */
 
     // --- Helper Functions ---
 
-    /** @description Checks if the user is authenticated. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** @description Validates if the user's UID exists in the admin collection or matches the specific requested UID. */
+    /** 
+     * @description Checks if user is an admin. 
+     * Fallback: Checks both the dedicated DBAC collection AND the user's document role for safety.
+     */
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
         request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62'
       );
     }
 
-    /** @description Validates if the user's UID exists in the department users collection. */
+    /** @description Checks if user is in a department. Fallback included. */
     function isDepartment() {
-      return isSignedIn() && exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid));
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'department'
+      );
     }
 
-    /** @description Helper for users with elevated administrative privileges. */
     function isPrivileged() {
       return isAdmin() || isDepartment();
     }
 
-    /** @description Checks if the authenticated user matches the provided ID. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** @description Retrieves the user's data from their profile document. */
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     // --- Rules ---
 
-    /** @description Access rules for User profiles and personal data. */
     match /users/{userId} {
       allow get, list: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
+      allow create: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
 
       match /personal_todos/{todoId} {
         allow read, write: if isOwner(userId);
@@ -56,70 +58,50 @@ service cloud.firestore {
     }
 
     match /admins/{userId} {
-      allow get, list: if isSignedIn();
-      allow write: if false;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
     match /departmentUsers/{userId} {
-      allow get, list: if isSignedIn();
-      allow write: if false;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    /** @description Access rules for Student profiles. */
     match /students/{studentId} {
-      allow read, list: if isSignedIn();
+      // Restore standard read access for all signed-in staff
+      allow read: if isSignedIn();
       
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().civilId);
       
-      allow update: if resource != null && (
-        isPrivileged() || 
-        (isSignedIn() && getUserData().civilId == resource.data.employeeId)
-      );
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.employeeId);
       
-      allow delete: if isPrivileged();
+      allow delete: if isAdmin();
     }
 
-    /** @description Rules for student university applications. */
     match /universityApplications/{applicationId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().civilId);
       allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.assignedToEmployeeId);
-      allow delete: if isPrivileged();
+      allow delete: if isAdmin();
     }
 
     match /documents/{documentId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isPrivileged() || isOwner(resource.data.authorId);
     }
 
     match /tasks/{taskId} {
-      /** 
-       * @description Enforce role-based privacy for tasks.
-       * Admins see all.
-       * Others only see tasks where they are author, recipient, or part of the targeted department.
-       */
       allow get, list: if isSignedIn() && (
         isAdmin() || 
-        (
-          resource.data.authorId == request.auth.uid ||
-          request.auth.uid in resource.data.recipientIds ||
-          'all' in resource.data.recipientIds ||
-          (isDepartment() && getUserData().department != null && ('dept:' + getUserData().department) in resource.data.recipientIds)
-        )
+        resource.data.authorId == request.auth.uid ||
+        request.auth.uid in resource.data.recipientIds ||
+        'all' in resource.data.recipientIds
       );
-      
       allow create: if isSignedIn();
-      
-      allow update: if isSignedIn() && (
-        isPrivileged() || 
-        request.auth.uid == resource.data.authorId || 
-        request.auth.uid in resource.data.recipientIds
-      );
-      
+      allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
       allow delete: if isAdmin();
     }
 
-    /** @description Rules for internal chats and messages. */
     match /chats/{studentId} {
       allow read, write: if isSignedIn();
       match /messages/{messageId} {
@@ -135,8 +117,8 @@ service cloud.firestore {
     }
 
     match /customApplicationFieldDefinitions/{fieldId} {
-      allow get, list: if isSignedIn();
-      allow create, update, delete: if isPrivileged();
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     match /upcoming_events/{eventId} {
@@ -151,7 +133,7 @@ service cloud.firestore {
     
     match /request_types/{typeId} {
       allow read: if isSignedIn();
-      allow write: if isPrivileged();
+      allow write: if isAdmin();
     }
     
     match /resource_links/{linkId} {
@@ -162,7 +144,7 @@ service cloud.firestore {
     match /time_logs/{logId} {
       allow read: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (isPrivileged() || resource.data.employeeId == request.auth.uid);
+      allow update: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
     }
     
     match /approved_universities/{uniId} {

@@ -15,7 +15,7 @@ import type { AppUser } from '@/hooks/use-user';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, ShieldCheck, RefreshCw } from 'lucide-react';
 import { useCollection } from '@/firebase/client';
 import { EditUserDialog } from './edit-user-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { deleteUser, changeUserRole } from '@/lib/actions';
+import { deleteUser, changeUserRole, repairPermissions } from '@/lib/actions';
 
 interface UserListProps {
   currentUser: AppUser;
@@ -43,6 +43,7 @@ export function UserList({ currentUser }: UserListProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isRepairing, setIsRepairing] = useState(false);
   const { data: usersData, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
   const users = useMemo(() => usersData || [], [usersData]);
 
@@ -101,6 +102,17 @@ export function UserList({ currentUser }: UserListProps) {
     setIsDeleting(null);
   };
 
+  const handleRepairPermissions = async () => {
+    setIsRepairing(true);
+    const result = await repairPermissions(currentUser.id);
+    if (result.success) {
+        toast({ title: 'Permissions Repaired', description: result.message });
+    } else {
+        toast({ variant: 'destructive', title: 'Repair Failed', description: result.message });
+    }
+    setIsRepairing(false);
+  };
+
   if (usersLoading) {
       return (
           <div className="rounded-lg border">
@@ -127,85 +139,101 @@ export function UserList({ currentUser }: UserListProps) {
   }
 
   return (
-    <div className="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>User</TableHead>
-            <TableHead>Contact & Civil ID</TableHead>
-            <TableHead className="text-right">Role & Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarImage src={user.avatarUrl} alt={user.name} data-ai-hint="user avatar" />
-                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div className="font-medium">{user.name}</div>
-                </div>
-              </TableCell>
-              <TableCell>
-                  <div className="text-sm text-muted-foreground">{user.email}</div>
-                  <div className="text-sm text-muted-foreground">{user.phone}</div>
-                  <div className="text-sm font-mono text-muted-foreground">{user.civilId || 'N/A'}</div>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-2">
-                    {isUpdating === user.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                        <Select
-                            defaultValue={user.role}
-                            onValueChange={(newRole) => handleRoleChange(user, newRole as UserRole)}
-                            disabled={user.id === currentUser.id}
-                        >
-                            <SelectTrigger className="w-[120px]">
-                            <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                            {userRoles.map(role => (
-                                <SelectItem key={role} value={role} className="capitalize">
-                                {role}
-                                </SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-                    <EditUserDialog user={user} />
-                    
-                    {user.id !== currentUser.id && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" disabled={isDeleting === user.id}>
-                            {isDeleting === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete User Account?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete <strong>{user.name}</strong>? This will permanently remove their authentication account and profile. This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteUser(user.id, user.name)} className="bg-destructive hover:bg-destructive/90">
-                              Delete Account
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
-                </div>
-              </TableCell>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center px-1">
+        <h2 className="text-lg font-bold">User Accounts</h2>
+        <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs gap-2 border-primary text-primary hover:bg-primary/5"
+            onClick={handleRepairPermissions}
+            disabled={isRepairing}
+        >
+            {isRepairing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+            Repair Permissions
+        </Button>
+      </div>
+      
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Contact & Civil ID</TableHead>
+              <TableHead className="text-right">Role & Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={user.avatarUrl} alt={user.name} data-ai-hint="user avatar" />
+                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="font-medium">{user.name}</div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                    <div className="text-sm text-muted-foreground">{user.email}</div>
+                    <div className="text-sm text-muted-foreground">{user.phone}</div>
+                    <div className="text-sm font-mono text-muted-foreground">{user.civilId || 'N/A'}</div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                      {isUpdating === user.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                          <Select
+                              defaultValue={user.role}
+                              onValueChange={(newRole) => handleRoleChange(user, newRole as UserRole)}
+                              disabled={user.id === currentUser.id}
+                          >
+                              <SelectTrigger className="w-[120px]">
+                              <SelectValue placeholder="Select role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                              {userRoles.map(role => (
+                                  <SelectItem key={role} value={role} className="capitalize">
+                                  {role}
+                                  </SelectItem>
+                              ))}
+                              </SelectContent>
+                          </Select>
+                      )}
+                      <EditUserDialog user={user} />
+                      
+                      {user.id !== currentUser.id && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" disabled={isDeleting === user.id}>
+                              {isDeleting === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete User Account?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete <strong>{user.name}</strong>? This will permanently remove their authentication account and profile. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteUser(user.id, user.name)} className="bg-destructive hover:bg-destructive/90">
+                                Delete Account
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
