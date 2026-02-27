@@ -27,7 +27,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const [selectedTask, setSelectedRequestTask] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Default to Department Tasks for specialized staff, Personal for others/Admins
   const [taskView, setTaskView] = useState<'personal' | 'department'>(
     currentUser?.role === 'department' ? 'department' : 'personal'
   );
@@ -35,19 +34,24 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const { toast } = useToast();
   const [newItems, setNewItems] = useState(new Set<string>());
 
-  // Unified Query: Fetch all tasks relevant to the user's role and identity
   const tasksQuery = useMemoFirebase(() => {
     if (!currentUser) return null;
     
-    // Admins have oversight of the entire task collection
     if (currentUser.role === 'admin') {
       return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
     }
 
-    // Role-based groups for employees and department staff
-    const groups = [currentUser.id, 'all'];
-    
-    // Only include department-specific routing if assigned
+    if (currentUser.role === 'employee') {
+        // PERMISSION FIX: Employees can only list tasks they created
+        return query(
+            collection(firestore, 'tasks'),
+            where('authorId', '==', currentUser.id),
+            orderBy('createdAt', 'desc')
+        );
+    }
+
+    // Role-based groups for department staff
+    const groups = ['all'];
     if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
     }
@@ -62,7 +66,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 
-  // Track new items for visual "pulse" effect
   useEffect(() => {
     if (!tasks || tasks.length === 0 || !currentUser) return;
     const storageKey = `lastViewedTasksManager_${currentUser.id}`;
@@ -149,7 +152,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     }
   };
 
-  // Categorize tasks into Personal (Direct) and Department (Group) queues
   const categorizedTasks = useMemo(() => {
     if (!tasks || !currentUser) return { personal: [], department: [] };
 
@@ -157,33 +159,31 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     const department: Task[] = [];
 
     tasks.forEach(t => {
+      if (currentUser.role === 'employee') {
+          personal.push(t);
+          return;
+      }
+
       const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
-      
-      // Personal: Directed to specific ID or super groups
       const isPersonal = targets.includes(currentUser.id) || 
                         (targets.includes('admins') && currentUser.role === 'admin');
 
-      // Dept: Directed to any specific department identifier
       const isDeptTarget = targets.some(rid => rid.startsWith('dept:'));
 
       if (isPersonal) {
         personal.push(t);
       } else if (isDeptTarget) {
-        // Admins see ALL department tasks in the Dept tab
         if (currentUser.role === 'admin') {
           department.push(t);
         } 
-        // Specialized users only see their own team's tasks
         else if (currentUser.role === 'department' && currentUser.department) {
           if (targets.includes(`dept:${currentUser.department}`)) {
             department.push(t);
           }
         }
       } else if (targets.includes('all') && currentUser.role === 'employee') {
-        // Employees see global broadcasts in their personal tab
         personal.push(t);
       } else if (targets.includes('all') && (currentUser.role === 'admin' || currentUser.role === 'department')) {
-        // Management sees global broadcasts in Dept Tasks for oversight
         department.push(t);
       }
     });
@@ -195,10 +195,8 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     const baseTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;
     
     return baseTasks.filter(t => {
-      // Exclusively show formal requests from student profiles
       if (t.category !== 'request') return false;
 
-      // Ensure IELTS Course registrations are isolated to their own dashboard
       const isIeltsCourse = t.data?.examType === 'ielts_course' || 
                            t.taskType?.toLowerCase() === 'ielts course';
       
@@ -215,7 +213,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     });
   }, [categorizedTasks, taskView, searchQuery]);
 
-  // FIFO Sorting: Oldest tasks appear first within each status group
   const newTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const progressTasks = useMemo(() => filteredTasks.filter(t => t.status === 'in-progress').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const completedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
@@ -226,30 +223,36 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle>Task Management</CardTitle>
-            <CardDescription>Structured FIFO workflow for student requests. Actions must be saved to update status.</CardDescription>
+            <CardTitle>{currentUser.role === 'employee' ? 'My Submissions' : 'Task Management'}</CardTitle>
+            <CardDescription>
+                {currentUser.role === 'employee' 
+                    ? 'Track the status of requests you have submitted to management.'
+                    : 'Structured FIFO workflow for student requests.'}
+            </CardDescription>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4">
-            <div className="bg-muted p-1 rounded-lg flex items-center gap-1">
-                <Button 
-                    variant={taskView === 'personal' ? 'secondary' : 'ghost'} 
-                    size="sm" 
-                    className="h-8 gap-2 text-xs font-bold"
-                    onClick={() => setTaskView('personal')}
-                >
-                    <UserIcon className="h-3.5 w-3.5" />
-                    My Tasks ({categorizedTasks.personal.length})
-                </Button>
-                <Button 
-                    variant={taskView === 'department' ? 'secondary' : 'ghost'} 
-                    size="sm" 
-                    className="h-8 gap-2 text-xs font-bold"
-                    onClick={() => setTaskView('department')}
-                >
-                    <Building2 className="h-3.5 w-3.5" />
-                    Dept Tasks ({categorizedTasks.department.length})
-                </Button>
-            </div>
+            {currentUser.role !== 'employee' && (
+                <div className="bg-muted p-1 rounded-lg flex items-center gap-1">
+                    <Button 
+                        variant={taskView === 'personal' ? 'secondary' : 'ghost'} 
+                        size="sm" 
+                        className="h-8 gap-2 text-xs font-bold"
+                        onClick={() => setTaskView('personal')}
+                    >
+                        <UserIcon className="h-3.5 w-3.5" />
+                        My Tasks ({categorizedTasks.personal.length})
+                    </Button>
+                    <Button 
+                        variant={taskView === 'department' ? 'secondary' : 'ghost'} 
+                        size="sm" 
+                        className="h-8 gap-2 text-xs font-bold"
+                        onClick={() => setTaskView('department')}
+                    >
+                        <Building2 className="h-3.5 w-3.5" />
+                        Dept Tasks ({categorizedTasks.department.length})
+                    </Button>
+                </div>
+            )}
             <div className="relative w-full max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input

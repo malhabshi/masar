@@ -78,10 +78,13 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // To prevent "Missing or insufficient permissions" on list operations,
-      // we allow the list method for all staff. Privacy is maintained 
-      // by the query filters and the document-level 'get' rule below.
-      allow list: if isSignedIn();
+      // Employees can only list tasks they created. 
+      // Management can list all for oversight.
+      allow list: if isSignedIn() && (
+        isPrivileged() || 
+        (request.query.authorId == request.auth.uid) ||
+        (request.query.recipientIds.hasAny([request.auth.uid]))
+      );
 
       allow get: if isSignedIn() && (
         isAdmin() || 

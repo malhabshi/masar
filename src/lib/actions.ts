@@ -298,6 +298,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
         const creator = await getUser(authorId);
         await adminDb!.collection('tasks').add({
             authorId,
+            createdBy: authorId, // Dual-tracking for rule compatibility
             authorName: creator?.name || 'Unknown Employee',
             recipientId: recipientIds[0] || 'all', 
             recipientIds: recipientIds.length > 0 ? recipientIds : ['all'],
@@ -358,6 +359,7 @@ export async function sendTaskNotification(taskId: string, fromId: string, fromN
 
     await adminDb!.collection('tasks').add({
       authorId: fromId,
+      createdBy: fromId,
       recipientId: task.authorId,
       recipientIds: [task.authorId],
       content: `New update from ${fromName} on task "${task.taskType}": ${message}`,
@@ -381,6 +383,7 @@ export async function sendTask(authorId: string, recipientId: string, content: s
         }
         await adminDb!.collection('tasks').add({
             authorId,
+            createdBy: authorId,
             recipientId,
             recipientIds: [recipientId],
             content,
@@ -418,6 +421,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
         if (taskData.authorId !== authorId) {
             await adminDb!.collection('tasks').add({
               authorId: 'system',
+              createdBy: 'system',
               recipientId: taskData.authorId,
               recipientIds: [taskData.authorId],
               content: `${author.name} replied to your task: "${taskData.taskType || taskData.content.substring(0, 30)}..."`,
@@ -448,6 +452,7 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
         if (taskData.authorId !== updaterId) {
             await adminDb!.collection('tasks').add({
                 authorId: 'system',
+                createdBy: 'system',
                 recipientId: taskData.authorId,
                 recipientIds: [taskData.authorId],
                 content: `Task "${taskData.taskType}" status updated to '${status}' by ${updater.name}.`,
@@ -589,6 +594,7 @@ export async function createStudent(
             const taskRef = adminDb!.collection('tasks').doc();
             batch.set(taskRef, {
               authorId: creatingUserId,
+              createdBy: creatingUserId,
               recipientId: adminDoc.id,
               recipientIds: [adminDoc.id],
               content: `New unassigned student '${studentName}' added.`,
@@ -637,7 +643,10 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
         await studentRef.update(updates);
         if (newEmployee.id) {
             await adminDb!.collection('tasks').add({
-                authorId: adminId, recipientId: newEmployee.id, recipientIds: [newEmployee.id],
+                authorId: adminId, 
+                createdBy: adminId,
+                recipientId: newEmployee.id, 
+                recipientIds: [newEmployee.id],
                 content: `The student '${studentName}' has been transferred to you.`,
                 createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: []
             });
@@ -668,7 +677,10 @@ export async function requestTransfer(studentId: string, reason: string, request
         adminsSnapshot.forEach(adminDoc => {
             const taskRef = adminDb!.collection('tasks').doc();
             batch.set(taskRef, {
-                authorId: requestingEmployeeId, recipientId: adminDoc.id, recipientIds: [adminDoc.id],
+                authorId: requestingEmployeeId, 
+                createdBy: requestingEmployeeId,
+                recipientId: adminDoc.id, 
+                recipientIds: [adminDoc.id],
                 content: `Transfer request for ${studentName}: ${reason}`,
                 createdAt: new Date().toISOString(), status: 'new', category: 'request', replies: []
             });
@@ -696,7 +708,14 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
             const batch = adminDb!.batch();
             adminsSnap.forEach(adminDoc => {
                 const taskRef = adminDb!.collection('tasks').doc();
-                batch.set(taskRef, { authorId: employeeId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `Deletion request for ${student.name}: ${reason}`, status: 'new', category: 'request', createdAt: new Date().toISOString(), replies: [] });
+                batch.set(taskRef, { 
+                  authorId: employeeId, 
+                  createdBy: employeeId,
+                  recipientId: adminDoc.id, 
+                  recipientIds: [adminDoc.id], 
+                  content: `Deletion request for ${student.name}: ${reason}`, 
+                  status: 'new', category: 'request', createdAt: new Date().toISOString(), replies: [] 
+                });
             });
             await batch.commit();
         }
@@ -775,12 +794,12 @@ export async function addMissingItemToStudent(studentId: string, item: string) {
 
 export async function removeMissingItemFromStudent(studentId: string, itemToRemove: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
-    try {
-        await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayRemove(itemToRemove) });
-        return { success: true, message: 'Missing item removed.' };
-    } catch (error: any) {
-        return { success: false, message: error.message };
-    }
+  try {
+    await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayRemove(itemToRemove) });
+    return { success: true, message: 'Missing item removed.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
 }
 
 export async function markMissingItemAsReceived(studentId: string, itemReceived: string, userId: string) {
@@ -867,7 +886,14 @@ export async function setStudentFinalChoice(studentId: string, university: strin
         if (!adminsSnapshot.empty) {
             const batch = adminDb!.batch();
             adminsSnapshot.forEach(adminDoc => {
-                batch.set(adminDb!.collection('tasks').doc(), { authorId: updaterId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `Final choice set for ${studentData.name} to ${university}.`, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
+                batch.set(adminDb!.collection('tasks').doc(), { 
+                  authorId: updaterId, 
+                  createdBy: updaterId,
+                  recipientId: adminDoc.id, 
+                  recipientIds: [adminDoc.id], 
+                  content: `Final choice set for ${studentData.name} to ${university}.`, 
+                  createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] 
+                });
             });
             await batch.commit();
         }

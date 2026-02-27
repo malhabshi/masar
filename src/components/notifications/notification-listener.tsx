@@ -45,7 +45,7 @@ export function NotificationListener() {
   
   const taskGroups = useMemo(() => {
     if (!user) return [];
-    const groups = [user.id, 'all'];
+    const groups = ['all'];
     if (user.role === 'department' && user.department) {
         groups.push(`dept:${user.department}`);
     }
@@ -58,6 +58,11 @@ export function NotificationListener() {
     // Admins see all tasks
     if (user.role === 'admin') {
       return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+    }
+
+    if (user.role === 'employee') {
+        // Employees only listen to tasks they authored
+        return query(collection(firestore, 'tasks'), where('authorId', '==', user.id));
     }
 
     return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', taskGroups));
@@ -121,7 +126,7 @@ export function NotificationListener() {
             toast({
                 title: 'New Task/Update Received',
                 description: task.content.substring(0, 50) + '...',
-                action: <ToastAction altText="View" onClick={() => router.push('/dashboard')}>View</ToastAction>,
+                action: <ToastAction altText="View" onClick={() => router.push('/tasks')}>View</ToastAction>,
             });
         }
     });
