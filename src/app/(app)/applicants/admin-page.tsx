@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser } from '@/hooks/use-user';
@@ -38,10 +39,9 @@ export function AdminApplicantsPage() {
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
 
-  // Filter for ONLY assigned students (employeeId is not null)
-  const assignedStudents = useMemo(() => {
-    if (!allStudents) return [];
-    return allStudents.filter(s => s.employeeId !== null);
+  // Requirement: Admins/Dept see ALL students (assigned and unassigned)
+  const displayedStudents = useMemo(() => {
+    return allStudents || [];
   }, [allStudents]);
 
   const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
@@ -72,14 +72,14 @@ export function AdminApplicantsPage() {
           <div>
             <CardTitle>Applicants</CardTitle>
             <CardDescription>
-              A filterable list of all assigned students in the system.
+              A comprehensive list of all student records in the system.
             </CardDescription>
           </div>
           {['admin', 'employee'].includes(currentUser.role) && <AddStudentDialog source="applicants" />}
         </CardHeader>
         <CardContent>
           <StudentTable
-            students={assignedStudents}
+            students={displayedStudents}
             currentUser={currentUser}
             allUsers={allUsers || []}
           />

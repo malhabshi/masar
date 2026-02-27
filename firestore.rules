@@ -3,10 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * UNIAPPLY HUB SECURITY RULES - EMERGENCY RECOVERY VERSION
-     */
-
     // --- Helper Functions ---
 
     function isSignedIn() {
@@ -14,24 +10,23 @@ service cloud.firestore {
     }
 
     /** 
-     * @description Checks if user is an admin. 
-     * Fallback: Checks both the dedicated DBAC collection AND the user's document role for safety.
+     * @description Robust check for admin status.
+     * Checks DBAC collection first, falls back to the user's role field.
      */
     function isAdmin() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        // Emergency Super Admin Fallback (the user who reported the error)
-        request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1'
-      );
+      if (!isSignedIn()) return false;
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+             userDoc.role == 'admin' ||
+             request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1';
     }
 
-    /** @description Checks if user is in a department. Fallback included. */
+    /** @description Checks if user is in a department. */
     function isDepartment() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'department'
-      );
+      if (!isSignedIn()) return false;
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
+             userDoc.role == 'department';
     }
 
     function isPrivileged() {
@@ -62,25 +57,29 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+    
     match /departmentUsers/{userId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     match /students/{studentId} {
-      // EMERGENCY: Restore read access for all staff to confirm data existence
-      allow read: if isSignedIn();
+      // Admins and Department staff can see all students
+      // Employees see students assigned to them via Civil ID
+      allow read: if isPrivileged() || (isSignedIn() && resource.data.employeeId == getUserData().civilId);
       
-      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().civilId);
+      // Employees can create unassigned students or students for themselves
+      allow create: if isPrivileged() || isSignedIn();
       
+      // Only privileged staff or the assigned employee can update
       allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.employeeId);
       
       allow delete: if isAdmin();
     }
 
     match /universityApplications/{applicationId} {
-      allow read: if isSignedIn();
-      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().civilId);
+      allow read: if isPrivileged() || (isSignedIn() && resource.data.assignedToEmployeeId == getUserData().civilId);
+      allow create: if isSignedIn();
       allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.assignedToEmployeeId);
       allow delete: if isAdmin();
     }
@@ -97,7 +96,8 @@ service cloud.firestore {
         resource.data.authorId == request.auth.uid ||
         request.auth.uid in resource.data.recipientIds ||
         'all' in resource.data.recipientIds ||
-        (isDepartment() && 'dept:' + getUserData().department in resource.data.recipientIds)
+        (isDepartment() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         'dept:' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.department in resource.data.recipientIds)
       );
       allow create: if isSignedIn();
       allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;

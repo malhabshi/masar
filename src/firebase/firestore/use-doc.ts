@@ -2,11 +2,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, DocumentData } from 'firebase/firestore';
+import { doc, onSnapshot, DocumentData, DocumentReference } from 'firebase/firestore';
 import { firestore, auth } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
-import { useMemoFirebase } from './memo';
 
 // Recursively convert all Timestamps to Date objects
 function convertTimestamps<T>(data: any): T {
@@ -34,87 +33,85 @@ function convertTimestamps<T>(data: any): T {
   return data as T;
 }
 
-export function useDoc<T>(path: string, ...pathSegments: string[]) {
+/**
+ * Unified hook to subscribe to a single Firestore document.
+ * Supports both string path segments and Reference objects.
+ */
+export function useDoc<T>(target: string | DocumentReference | null | undefined, ...pathSegments: string[]) {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Track auth readiness to prevent early queries
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(() => {
       setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
-  
-  const memoizedDocRef = useMemoFirebase(() => {
-    // Ensure path segments are valid before creating a reference
-    if (!path || pathSegments.some(segment => !segment)) {
-        return null;
-    }
-    try {
-        return doc(firestore, path, ...pathSegments);
-    } catch(e) {
-        console.error("Failed to create document reference:", e);
-        return null;
-    }
-  }, [path, ...pathSegments]);
-
 
   useEffect(() => {
-    // 1. Wait for Firebase Auth to initialize
-    if (!isAuthReady) {
-      return;
-    }
-
-    // 2. Prevent queries if no user is authenticated (since rules require auth for all documents)
-    if (!auth.currentUser) {
+    if (!isAuthReady) return;
+    if (!target) {
       setIsLoading(false);
       setData(null);
       return;
     }
 
-    // 3. Prevent queries if no valid doc reference is provided
-    if (!memoizedDocRef) {
-      setIsLoading(false);
-      return;
-    }
-    
     let isMounted = true;
     setIsLoading(true);
-    const unsubscribe = onSnapshot(memoizedDocRef, 
-      (snapshot) => {
-        if (isMounted) {
+
+    try {
+      let docRef: DocumentReference;
+      if (typeof target === 'string') {
+        if (pathSegments.some(s => !s)) {
+          setIsLoading(false);
+          return;
+        }
+        docRef = doc(firestore, target, ...pathSegments);
+      } else {
+        docRef = target;
+      }
+
+      const unsubscribe = onSnapshot(docRef, 
+        (snapshot) => {
+          if (isMounted) {
             if (snapshot.exists()) {
-            const docData = snapshot.data();
-            const converted = convertTimestamps<DocumentData>(docData);
-            setData({ id: snapshot.id, ...converted } as T);
+              const docData = snapshot.data();
+              const converted = convertTimestamps<DocumentData>(docData);
+              setData({ id: snapshot.id, ...converted } as T);
             } else {
-            setData(null);
+              setData(null);
             }
             setIsLoading(false);
             setError(null);
-        }
-      },
-      (err) => {
-        if (isMounted) {
+          }
+        },
+        (err) => {
+          if (isMounted) {
+            console.error(`[useDoc] error:`, err);
             const permissionError = new FirestorePermissionError({
-                path: memoizedDocRef.path,
+                path: docRef.path,
                 operation: 'get'
             });
             errorEmitter.emit('permission-error', permissionError);
             setError(err);
             setIsLoading(false);
+          }
         }
-      }
-    );
+      );
 
-    return () => {
+      return () => {
         isMounted = false;
         unsubscribe();
-    };
-  }, [memoizedDocRef, isAuthReady]);
+      };
+    } catch (e: any) {
+      console.error(`[useDoc] setup error:`, e);
+      setIsLoading(false);
+      setError(e);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthReady, JSON.stringify(typeof target === 'string' ? [target, ...pathSegments] : null), (target as any)?.__memo]);
 
   return { data, isLoading, error };
 }

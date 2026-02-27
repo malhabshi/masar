@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, QueryConstraint, DocumentData } from 'firebase/firestore';
+import { collection, onSnapshot, query, QueryConstraint, DocumentData, CollectionReference, Query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
@@ -35,15 +35,16 @@ function convertTimestamps<T>(data: any): T {
 }
 
 /**
- * Hook to subscribe to a Firestore collection with real-time updates.
+ * Unified hook to subscribe to a Firestore collection or reference with real-time updates.
+ * Supports both string paths and Reference/Query objects.
  */
-export function useCollection<T>(path: string, ...queryConstraints: QueryConstraint[]) {
+export function useCollection<T>(target: string | CollectionReference | Query | null | undefined, ...queryConstraints: QueryConstraint[]) {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!path) {
+    if (!target) {
       setData([]);
       setIsLoading(false);
       return;
@@ -53,11 +54,16 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
     let unsubscribe = () => {};
 
     try {
-      const collectionRef = collection(firestore, path);
-      // Establishment of immediate real-time listener
-      const q = queryConstraints.length > 0 
-        ? query(collectionRef, ...queryConstraints)
-        : collectionRef;
+      let q: Query | CollectionReference;
+
+      if (typeof target === 'string') {
+        const collectionRef = collection(firestore, target);
+        q = queryConstraints.length > 0 
+          ? query(collectionRef, ...queryConstraints)
+          : collectionRef;
+      } else {
+        q = target;
+      }
 
       unsubscribe = onSnapshot(q, 
         (snapshot) => {
@@ -70,7 +76,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
           setError(null);
         },
         (err) => {
-          console.error(`[useCollection:${path}] error:`, err);
+          console.error(`[useCollection] error:`, err);
+          
+          let path = 'unknown';
+          try {
+            // @ts-ignore - reaching into internal for path string if possible
+            path = typeof target === 'string' ? target : (target as any).path || (target as any)._query?.path?.canonicalString() || 'unknown';
+          } catch(e) {}
+
           if (err.message.toLowerCase().includes('permissions')) {
             errorEmitter.emit('permission-error', new FirestorePermissionError({
               path: path,
@@ -82,14 +95,14 @@ export function useCollection<T>(path: string, ...queryConstraints: QueryConstra
         }
       );
     } catch (e: any) {
-      console.error(`[useCollection:${path}] setup error:`, e);
+      console.error(`[useCollection] setup error:`, e);
       setIsLoading(false);
       setError(e);
     }
 
     return () => unsubscribe();
-    // Simplified dependency to ensure maximum reactivity
-  }, [path, queryConstraints.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(target === 'string' ? target : null), queryConstraints.length, (target as any)?.__memo]);
 
   return { data, isLoading, error };
 }
