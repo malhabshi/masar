@@ -7,7 +7,7 @@ import { where, query, collection, orderBy } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { Task, User } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Bell, Info, AlertTriangle, CheckCircle2, MessageSquare, Loader2, Calendar, User as UserIcon } from 'lucide-react';
+import { Bell, Info, AlertTriangle, CheckCircle2, MessageSquare, Loader2, Calendar, User as UserIcon, GraduationCap } from 'lucide-react';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 import { cn } from '@/lib/utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
