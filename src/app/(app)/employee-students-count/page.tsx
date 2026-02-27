@@ -22,7 +22,7 @@ export default function EmployeeStudentsCountPage() {
     );
   }
 
-  if (!user || !['admin', 'department'].includes(user.role)) {
+  if (!user || user.role !== 'admin') {
     return (
       <Card>
         <CardHeader>

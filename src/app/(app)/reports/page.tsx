@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useUser } from '@/hooks/use-user';
 import {
     ResponsiveContainer,
     BarChart as RechartsBarChart,
@@ -33,6 +34,7 @@ const PIE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 
 export default function ReportsPage() {
+    const { user, isUserLoading } = useUser();
     const [stats, setStats] = useState<ReportStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export default function ReportsPage() {
     });
     
     useEffect(() => {
-        if (!dateRange?.from || !dateRange?.to) return;
+        if (!dateRange?.from || !dateRange?.to || user?.role !== 'admin') return;
         
         setIsLoading(true);
         setError(null);
@@ -57,7 +59,22 @@ export default function ReportsPage() {
             }
             setIsLoading(false);
         });
-    }, [dateRange]);
+    }, [dateRange, user?.role]);
+
+    if (isUserLoading) {
+        return <div className="flex h-full w-full items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    }
+
+    if (user?.role !== 'admin') {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Access Denied</CardTitle>
+                    <CardDescription>You do not have permission to view reports.</CardDescription>
+                </CardHeader>
+            </Card>
+        );
+    }
 
     const renderLoading = () => (
         <div className="flex h-full w-full items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin" /></div>

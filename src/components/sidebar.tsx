@@ -151,11 +151,11 @@ export function AppSidebar() {
     ];
 
     const adminNav = [
-        { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin', 'department'] },
+        { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin'] },
         { href: '/employee-activity', label: 'User Activity', icon: LineChart, roles: ['admin'] },
-        { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin', 'department'] },
+        { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
-        { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin', 'department'] },
+        { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
         { href: '/customize-questions', label: 'Questions', icon: Wrench, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },
     ];
@@ -203,7 +203,7 @@ export function AppSidebar() {
                 </SidebarMenuItem>
             ))}
 
-            {userHasRole(['admin', 'department']) && <SidebarSeparator />}
+            {userHasRole(['admin']) && <SidebarSeparator />}
             
             {adminNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>

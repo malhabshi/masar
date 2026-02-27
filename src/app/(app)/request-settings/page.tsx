@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -56,8 +55,15 @@ export default function RequestSettingsPage() {
         return <div className="flex h-full w-full items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 
-    if (!currentUser || !['admin', 'department'].includes(currentUser.role)) {
-        return <div className="p-8 text-center text-muted-foreground">Access Denied.</div>;
+    if (!currentUser || currentUser.role !== 'admin') {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Access Denied</CardTitle>
+                    <CardDescription>You do not have permission to access request settings.</CardDescription>
+                </CardHeader>
+            </Card>
+        );
     }
 
     return (
