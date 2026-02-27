@@ -37,7 +37,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
   if (requestType.isSpecialTask && config) {
     if (config.examTypes?.includes('ielts') || config.examTypes?.includes('toefl')) {
-      schemaFields.examType = z.enum(['ielts', 'toefl'] as any).optional();
+      schemaFields.examType = z.enum(['ielts', 'toefl', 'ielts_retake'] as any).optional();
       schemaFields.ieltsSubtype = z.string().optional();
       schemaFields.requestedDate = z.date().optional();
       schemaFields.amount = z.coerce.number().optional();
@@ -47,7 +47,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       schemaFields.examType = z.literal('ielts_retake').optional();
       schemaFields.idpUsername = z.string().min(1, 'IDP Username is required');
       schemaFields.idpPassword = z.string().min(1, 'IDP Password is required');
-      schemaFields.sections = z.array(z.string()).min(1, 'Select at least one section');
+      // UPDATED: Single section instead of multiple
+      schemaFields.retakeSection = z.string({ required_error: 'Select a section to retake' });
       schemaFields.preferredDate = z.date({ required_error: 'Preferred date is required' });
       schemaFields.preferredTime = z.enum(['10:00 AM', '1:30 PM', '5:00 PM'], { required_error: 'Preferred time is required' });
       schemaFields.originalExamDate = z.date({ required_error: 'Original exam date is required' });
@@ -78,14 +79,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     defaultValues: {
       notes: '',
       selectedDocuments: [],
-      sections: [],
+      retakeSection: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
     },
   });
 
   const watchExamType = form.watch('examType');
   const watchDocs = form.watch('selectedDocuments') || [];
-  const watchSections = form.watch('sections') || [];
 
   const handleDocToggle = (docId: string) => {
     const current = form.getValues('selectedDocuments') || [];
@@ -93,15 +93,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       form.setValue('selectedDocuments', current.filter(id => id !== docId));
     } else {
       form.setValue('selectedDocuments', [...current, docId]);
-    }
-  };
-
-  const handleSectionToggle = (section: string) => {
-    const current = form.getValues('sections') || [];
-    if (current.includes(section)) {
-      form.setValue('sections', current.filter(s => s !== section));
-    } else {
-      form.setValue('sections', [...current, section]);
     }
   };
 
@@ -298,19 +289,31 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
             <div className="space-y-3">
               <FormLabel>Select Section to Retake *</FormLabel>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {['Listening', 'Reading', 'Writing', 'Speaking'].map((section) => (
-                  <div key={section} className="flex items-center space-x-2 border p-3 rounded-md">
-                    <Checkbox 
-                      id={`section-${section}`} 
-                      checked={watchSections.includes(section)} 
-                      onCheckedChange={() => handleSectionToggle(section)}
-                    />
-                    <label htmlFor={`section-${section}`} className="text-sm font-medium cursor-pointer">{section}</label>
-                  </div>
-                ))}
-              </div>
-              <FormMessage>{form.formState.errors.sections?.message}</FormMessage>
+              <FormField
+                control={form.control}
+                name="retakeSection"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+                      >
+                        {['Listening', 'Reading', 'Writing', 'Speaking'].map((section) => (
+                          <FormItem key={section} className="flex items-center space-x-2 space-y-0 border p-3 rounded-md">
+                            <FormControl>
+                              <RadioGroupItem value={section} />
+                            </FormControl>
+                            <FormLabel className="font-medium cursor-pointer">{section}</FormLabel>
+                          </FormItem>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
