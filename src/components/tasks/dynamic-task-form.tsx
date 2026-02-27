@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Calendar as CalendarIcon, UploadCloud } from 'lucide-react';
-import { addDays, format } from 'date-fns';
+import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -205,13 +205,17 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                               selected={field.value}
                               onSelect={field.onChange}
                               disabled={(date) => {
-                                const minDate = config.ielts.dateRule === '5_days_from_today' ? addDays(new Date(), 5) : new Date();
+                                const today = startOfDay(new Date());
+                                // Default to 5 days if rule is set or just generally for IELTS as per request
+                                const rule = config.ielts?.dateRule || '5_days_from_today';
+                                const minDate = rule === '5_days_from_today' ? addDays(today, 5) : today;
                                 return date < minDate;
                               }}
                               initialFocus
                             />
                           </PopoverContent>
                         </Popover>
+                        <FormDescription>Earliest available date: {format(addDays(new Date(), 5), "PPP")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -224,10 +228,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     name="amount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Amount ({config.ielts.amountCurrency || 'KWD'}) *</FormLabel>
+                        <FormLabel>Exam Price ({config.ielts.amountCurrency || 'KWD'}) *</FormLabel>
                         <FormControl>
                           <Input type="number" step="0.01" placeholder="0.00" {...field} />
                         </FormControl>
+                        <FormDescription>Enter the registration fee for the selected exam.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
