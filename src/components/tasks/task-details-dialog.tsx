@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -32,7 +31,8 @@ import {
   Clock,
   ExternalLink,
   MessageSquare,
-  BellRing
+  BellRing,
+  Save
 } from 'lucide-react';
 import type { Task, TaskStatus, User as UserType, Document as StudentDoc } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
@@ -40,8 +40,6 @@ import { formatDateTime, formatRelativeTime } from '@/lib/timestamp-utils';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
-import { doc } from 'firebase/firestore';
-import { firestore } from '@/firebase';
 import { useDoc } from '@/firebase/client';
 
 interface TaskDetailsDialogProps {
@@ -68,6 +66,13 @@ export function TaskDetailsDialog({
   const [replyContent, setReplyContent] = useState('');
   const [notifContent, setNotifContent] = useState('');
   const [isSendingNotif, setIsSendingNotif] = useState(false);
+  const [localStatus, setLocalStatus] = useState<TaskStatus>(task.status);
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
+
+  // Sync local status if task prop changes (e.g. from real-time snapshot)
+  useEffect(() => {
+    setLocalStatus(task.status);
+  }, [task.status, isOpen]);
 
   const author = userMap.get(task.authorId);
   const data = task.data || {};
@@ -99,6 +104,15 @@ export function TaskDetailsDialog({
     setIsSendingNotif(false);
   };
 
+  const handleSaveStatus = async () => {
+    setIsSavingStatus(true);
+    try {
+      await onStatusChange(task.id, localStatus);
+    } finally {
+      setIsSavingStatus(false);
+    }
+  };
+
   const renderDataField = (label: string, value: any, icon?: any) => {
     if (value === undefined || value === null || value === '') return null;
     const Icon = icon;
@@ -113,41 +127,59 @@ export function TaskDetailsDialog({
     );
   };
 
+  const hasStatusChanged = localStatus !== task.status;
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[95vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-6 border-b bg-muted/10">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1 min-w-0">
               <Badge variant="outline" className="mb-2 uppercase tracking-tighter bg-primary/5">
                 {task.taskType || 'Request'}
               </Badge>
-              <DialogTitle className="text-2xl">{task.studentName}</DialogTitle>
+              <DialogTitle className="text-2xl truncate">{task.studentName}</DialogTitle>
               <DialogDescription className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> {task.studentPhone}</span>
                 <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {data.studentEmail || 'No email'}</span>
               </DialogDescription>
             </div>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-col items-end gap-3 shrink-0">
               <Link href={`/student/${task.studentId}`} className="text-xs text-primary font-bold underline flex items-center gap-1">
                 View Full Student Profile <ExternalLink className="h-3 w-3" />
               </Link>
-              <div className="flex gap-2">
-                {(['new', 'in-progress', 'completed', 'denied'] as TaskStatus[]).map(s => (
-                  <Button
-                    key={s}
-                    size="sm"
-                    variant={task.status === s ? 'default' : 'outline'}
-                    className={cn(
-                      "h-7 text-[10px] font-bold uppercase",
-                      task.status === s && s === 'completed' && "bg-green-600 hover:bg-green-700",
-                      task.status === s && s === 'denied' && "bg-red-600 hover:bg-red-700"
-                    )}
-                    onClick={() => onStatusChange(task.id, s)}
-                  >
-                    {s.replace('-', ' ')}
-                  </Button>
-                ))}
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-1 p-1 bg-muted rounded-md border">
+                  {(['new', 'in-progress', 'completed', 'denied'] as TaskStatus[]).map(s => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      variant={localStatus === s ? 'secondary' : 'ghost'}
+                      className={cn(
+                        "h-7 text-[10px] font-bold uppercase px-2",
+                        localStatus === s && s === 'completed' && "bg-green-100 text-green-700 hover:bg-green-200",
+                        localStatus === s && s === 'denied' && "bg-red-100 text-red-700 hover:bg-red-200",
+                        localStatus === s && s === 'new' && "bg-blue-100 text-blue-700 hover:bg-blue-200",
+                        localStatus === s && s === 'in-progress' && "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                      )}
+                      onClick={() => setLocalStatus(s)}
+                    >
+                      {s.replace('-', ' ')}
+                    </Button>
+                  ))}
+                </div>
+                <Button 
+                  size="sm" 
+                  className={cn(
+                    "h-8 font-bold gap-2 transition-all",
+                    !hasStatusChanged ? "opacity-0 pointer-events-none" : "opacity-100"
+                  )}
+                  onClick={handleSaveStatus}
+                  disabled={isSavingStatus}
+                >
+                  {isSavingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  Save Status
+                </Button>
               </div>
             </div>
           </div>
@@ -191,7 +223,7 @@ export function TaskDetailsDialog({
 
             <section className="space-y-4">
               <h3 className="text-lg font-bold">Employee Notes</h3>
-              <p className="text-sm text-muted-foreground p-4 bg-muted/10 rounded border">
+              <p className="text-sm text-muted-foreground p-4 bg-muted/10 rounded border whitespace-pre-wrap">
                 {task.content || "No additional notes provided."}
               </p>
             </section>
