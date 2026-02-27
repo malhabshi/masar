@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -102,8 +101,9 @@ export default function IeltsCourseDashboard() {
     document.body.removeChild(link);
   };
 
-  if (!currentUser || !['admin', 'department'].includes(currentUser.role)) {
-    return <div className="p-8 text-center text-muted-foreground">Access Denied.</div>;
+  // Restricted to ADMIN ONLY
+  if (!currentUser || currentUser.role !== 'admin') {
+    return <div className="p-8 text-center text-muted-foreground">Access Denied. This dashboard is for administrators only.</div>;
   }
 
   return (
