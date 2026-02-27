@@ -29,6 +29,7 @@ import {
   Settings2,
   LineChart,
   BookOpenCheck,
+  Bell,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -81,9 +82,10 @@ export function AppSidebar() {
     }, [user]);
 
     const taskQuery = useMemoFirebase(() => {
-        if (!user || !isAdminDept) return null;
+        if (!user) return null;
+        // All users listen to tasks targeted at them or 'all'
         return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', taskGroups));
-    }, [user, isAdminDept, taskGroups]);
+    }, [user, taskGroups]);
 
     const { data: tasks } = useCollection<Task>(taskQuery);
 
@@ -133,10 +135,24 @@ export function AppSidebar() {
         }).length;
     }, [tasks, isAdminDept]);
 
+    // 8. General Notifications count (System/Updates)
+    const notificationBadgeCount = useMemo(() => {
+        if (!tasks) return 0;
+        const storageKey = `lastViewedNotifications_${user?.id}`;
+        const lastViewed = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+        
+        return tasks.filter(t => {
+            if (t.category === 'request') return false;
+            if (!lastViewed) return true;
+            return new Date(t.createdAt) > new Date(lastViewed);
+        }).length;
+    }, [tasks, user?.id]);
+
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
     
     const mainNav = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
+        { href: '/notifications', label: 'Notifications', icon: Bell, roles: ['admin', 'employee', 'department'], badge: notificationBadgeCount },
         { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
         { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'employee', 'department'] },
         { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'employee', 'department'] },
@@ -180,6 +196,11 @@ export function AppSidebar() {
                     {item.label === 'Applicants' && totalNotifications > 0 && (
                         <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
                             {totalNotifications}
+                        </SidebarMenuBadge>
+                    )}
+                    {item.label === 'Notifications' && item.badge !== undefined && item.badge > 0 && (
+                        <SidebarMenuBadge className="bg-primary text-primary-foreground">
+                            {item.badge}
                         </SidebarMenuBadge>
                     )}
                 </SidebarMenuItem>
