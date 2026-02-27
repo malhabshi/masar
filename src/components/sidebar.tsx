@@ -113,11 +113,16 @@ export function AppSidebar() {
       return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
     }, [students, user]);
 
-    // 7. Tasks notification count
+    // 7. Tasks notification count (Excluding IELTS Courses)
     const unreadTaskCount = useMemo(() => {
         if (!tasks || !isAdminDept) return 0;
-        // Only count standard requests, excluding IELTS Courses
         return tasks.filter(t => t.status === 'new' && t.taskType !== 'Ielts Course').length;
+    }, [tasks, isAdminDept]);
+
+    // 8. IELTS Courses notification count
+    const unreadIeltsCourseCount = useMemo(() => {
+        if (!tasks || !isAdminDept) return 0;
+        return tasks.filter(t => t.status === 'new' && t.taskType === 'Ielts Course').length;
     }, [tasks, isAdminDept]);
 
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
@@ -132,9 +137,9 @@ export function AppSidebar() {
     ];
     
     const managementNav = [
-        { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'] },
-        { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin', 'department'] },
-        { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'] },
+        { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
+        { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin', 'department'], badge: unreadIeltsCourseCount },
+        { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'], badge: unreadChatCount },
     ];
 
     const adminNav = [
@@ -182,14 +187,9 @@ export function AppSidebar() {
                             <item.icon /> <span>{item.label}</span>
                         </Link>
                     </SidebarMenuButton>
-                    {item.label === 'Chats' && unreadChatCount > 0 && (
+                    {item.badge !== undefined && item.badge > 0 && (
                         <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
-                            {unreadChatCount}
-                        </SidebarMenuBadge>
-                    )}
-                    {item.label === 'Tasks' && unreadTaskCount > 0 && (
-                        <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
-                            {unreadTaskCount}
+                            {item.badge}
                         </SidebarMenuBadge>
                     )}
                 </SidebarMenuItem>
