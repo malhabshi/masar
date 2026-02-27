@@ -10,23 +10,19 @@ service cloud.firestore {
 
     /** 
      * @description Defensive check for admin status.
-     * Uses multiple fallback checks to ensure resilient access.
+     * Checks DBAC collection or the user document role.
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-             (userDoc != null && userDoc.data.role == 'admin') ||
-             request.auth.token.email == 'malhabshi@masarkw.com' ||
-             request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1';
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     /** @description Defensive check for department status. */
     function isDepartment() {
       if (!isSignedIn()) return false;
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
-             (userDoc != null && userDoc.data.role == 'department');
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'department';
     }
 
     function isPrivileged() {
@@ -83,14 +79,24 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Robust FIFO-compatible read rules
-      allow read: if isSignedIn() && (
+      // For list operations, the rule must allow the query result set.
+      // For employees, the query MUST be filtered by recipientIds or authorId.
+      allow list: if isSignedIn() && (
         isAdmin() || 
+        isDepartment() ||
         resource.data.authorId == request.auth.uid ||
         request.auth.uid in resource.data.recipientIds ||
-        'all' in resource.data.recipientIds ||
-        (isDepartment() && 'dept:' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.department in resource.data.recipientIds)
+        'all' in resource.data.recipientIds
       );
+
+      allow get: if isSignedIn() && (
+        isAdmin() || 
+        isDepartment() ||
+        resource.data.authorId == request.auth.uid ||
+        request.auth.uid in resource.data.recipientIds ||
+        'all' in resource.data.recipientIds
+      );
+
       allow create: if isSignedIn();
       allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
       allow delete: if isAdmin();
@@ -124,6 +130,11 @@ service cloud.firestore {
     match /academic_terms/{termId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
+    }
+    
+    match /application_questions/{qId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }
