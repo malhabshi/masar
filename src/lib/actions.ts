@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -539,8 +538,7 @@ export async function createStudent(
   assignedEmployeeId?: string | null
 ) {
   if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
-  if (!creatingUserCivilId) return { success: false, message: 'Missing Civil ID.' };
-
+  
   const { studentName, studentEmail, phone, targetCountries, otherCountry, notes } = values;
   let finalTargetCountries = targetCountries;
   if (otherCountry && otherCountry.trim()) finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
@@ -552,7 +550,10 @@ export async function createStudent(
       duplicateInfo = { duplicatePhoneWarning: true, duplicateOfStudentIds: existingSnap.docs.map(doc => doc.id) };
     }
 
-    const studentId = `U-${creatingUserCivilId}-${Date.now()}`;
+    // Restore robust ID generation
+    const fallbackId = Math.random().toString(36).substring(2, 9);
+    const idPrefix = creatingUserCivilId ? `U-${creatingUserCivilId}` : `S-${fallbackId}`;
+    const studentId = `${idPrefix}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
 
     await studentRef.set({
