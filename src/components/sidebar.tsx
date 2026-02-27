@@ -29,6 +29,7 @@ import {
   Wrench,
   Settings2,
   LineChart,
+  BookOpenCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -115,7 +116,8 @@ export function AppSidebar() {
     // 7. Tasks notification count
     const unreadTaskCount = useMemo(() => {
         if (!tasks || !isAdminDept) return 0;
-        return tasks.filter(t => t.status === 'new').length;
+        // Only count standard requests, excluding IELTS Courses
+        return tasks.filter(t => t.status === 'new' && t.taskType !== 'Ielts Course').length;
     }, [tasks, isAdminDept]);
 
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
@@ -131,6 +133,7 @@ export function AppSidebar() {
     
     const managementNav = [
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'] },
+        { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin', 'department'] },
         { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'] },
     ];
 
