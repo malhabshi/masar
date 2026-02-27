@@ -25,11 +25,9 @@ import {
   BarChart,
   Users2,
   Settings,
-  Wrench,
   Settings2,
   LineChart,
   BookOpenCheck,
-  Bell,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -54,15 +52,15 @@ export function AppSidebar() {
 
     // 1. Memoize constraints to satisfy security rules and optimize cache reuse
     const studentQuery = useMemoFirebase(() => {
-      const isAdminDept = user?.role === 'admin' || user?.role === 'department';
-      const isEmployee = user?.role === 'employee';
+      const isAdminDeptRole = user?.role === 'admin' || user?.role === 'department';
+      const isEmployeeRole = user?.role === 'employee';
       const hasCivilId = !!user?.civilId;
 
-      if (isAdminDept) {
+      if (isAdminDeptRole) {
           return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
       }
       
-      if (isEmployee && hasCivilId) {
+      if (isEmployeeRole && hasCivilId) {
           return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
       }
       
@@ -72,7 +70,7 @@ export function AppSidebar() {
     // 2. Listen to students in real-time
     const { data: students } = useCollection<Student>(studentQuery);
 
-    // 3. Listen to tasks for Task notifications (Admin/Dept)
+    // 3. Listen to tasks for Management counts (Tasks / IELTS / Chats)
     const taskGroups = useMemo(() => {
         if (!user) return [];
         const g = [user.id, 'all'];
@@ -82,15 +80,15 @@ export function AppSidebar() {
     }, [user]);
 
     const taskQuery = useMemoFirebase(() => {
-        if (!user) return null;
-        // All users listen to tasks targeted at them or 'all'
+        if (!user || !isAdminDept) return null;
+        // Management staff listen to tasks targeted at them or 'all' for badge counts
         return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', taskGroups));
-    }, [user, taskGroups]);
+    }, [user, taskGroups, isAdminDept]);
 
     const { data: tasks } = useCollection<Task>(taskQuery);
 
-    // 4. Aggregate notification counts based on user role
-    const totalNotifications = useMemo(() => {
+    // 4. Aggregate notification counts based on user role (for Student updates)
+    const studentNotificationCount = useMemo(() => {
       if (!students || !user) return 0;
       
       return students.reduce((acc, student) => {
@@ -125,7 +123,7 @@ export function AppSidebar() {
 
     // 7. IELTS Courses notification count
     const unreadIeltsCourseCount = useMemo(() => {
-        if (!tasks || !isAdminDept) return 0;
+        if (!tasks || !user || user.role !== 'admin') return 0;
         return tasks.filter(t => {
             if (t.status !== 'new') return false;
             if (t.category !== 'request') return false;
@@ -133,26 +131,12 @@ export function AppSidebar() {
                                  t.taskType?.toLowerCase() === 'ielts course';
             return isIeltsCourse;
         }).length;
-    }, [tasks, isAdminDept]);
-
-    // 8. General Notifications count (System/Updates)
-    const notificationBadgeCount = useMemo(() => {
-        if (!tasks) return 0;
-        const storageKey = `lastViewedNotifications_${user?.id}`;
-        const lastViewed = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
-        
-        return tasks.filter(t => {
-            if (t.category === 'request') return false;
-            if (!lastViewed) return true;
-            return new Date(t.createdAt) > new Date(lastViewed);
-        }).length;
-    }, [tasks, user?.id]);
+    }, [tasks, user]);
 
     const userHasRole = (roles: string[]) => user && roles.includes(user.role);
     
     const mainNav = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
-        { href: '/notifications', label: 'Notifications', icon: Bell, roles: ['admin', 'employee', 'department'], badge: notificationBadgeCount },
         { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
         { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'employee', 'department'] },
         { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'employee', 'department'] },
@@ -193,14 +177,9 @@ export function AppSidebar() {
                             <item.icon /> <span>{item.label}</span>
                         </Link>
                     </SidebarMenuButton>
-                    {item.label === 'Applicants' && totalNotifications > 0 && (
+                    {item.label === 'Applicants' && studentNotificationCount > 0 && (
                         <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
-                            {totalNotifications}
-                        </SidebarMenuBadge>
-                    )}
-                    {item.label === 'Notifications' && item.badge !== undefined && item.badge > 0 && (
-                        <SidebarMenuBadge className="bg-primary text-primary-foreground">
-                            {item.badge}
+                            {studentNotificationCount}
                         </SidebarMenuBadge>
                     )}
                 </SidebarMenuItem>
