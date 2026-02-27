@@ -46,9 +46,16 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     }
 
     // Role-based groups for employees and department staff
-    const groups = [currentUser.id, 'all', 'admins'];
+    const groups = [currentUser.id, 'all'];
+    
+    // Only include department-specific routing if assigned
     if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
+    }
+    
+    // Non-admins with department role should NOT see 'admins' group tasks
+    if (currentUser.role === 'admin') {
+        groups.push('admins');
     }
     
     return query(
@@ -158,10 +165,9 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     tasks.forEach(t => {
       const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
       
-      // Personal: Directed to specific ID or primary role groups
+      // Personal: Directed to specific ID or Super Admin group
       const isPersonal = targets.includes(currentUser.id) || 
-                        (targets.includes('admins') && currentUser.role === 'admin') ||
-                        (targets.includes('all') && currentUser.role === 'employee');
+                        (targets.includes('admins') && currentUser.role === 'admin');
 
       // Dept: Directed to any specific department identifier
       const isDeptTarget = targets.some(rid => rid.startsWith('dept:'));
@@ -173,15 +179,24 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
         if (currentUser.role === 'admin') {
           department.push(t);
         } 
-        // Specialized users only see their team's tasks
+        // Specialized users only see their own team's tasks
         else if (currentUser.role === 'department' && currentUser.department) {
           if (targets.includes(`dept:${currentUser.department}`)) {
             department.push(t);
           }
         }
+      } else if (targets.includes('all') && currentUser.role === 'employee') {
+        // Employees see global broadcasts in their personal tab
+        personal.push(t);
       } else if (targets.includes('all') && (currentUser.role === 'admin' || currentUser.role === 'department')) {
-        // Global broadcasts show in Dept Tasks for management oversight
-        department.push(t);
+        // Management sees global broadcasts in Dept Tasks for oversight
+        if (currentUser.role === 'admin') {
+            department.push(t);
+        } else if (currentUser.role === 'department' && currentUser.department) {
+            // Department users only see broadcasts if relevant (usually they don't want global employee clutter)
+            // But we'll include it for visibility of management announcements
+            department.push(t);
+        }
       }
     });
 
