@@ -33,10 +33,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const relevantTasksConstraints = useMemoFirebase(() => {
     if (!currentUser) return [];
     
+    // Admins see all tasks
     if (currentUser.role === 'admin') return [];
 
-    const groups = [currentUser.id, 'all'];
-    if (currentUser.role === 'department' && currentUser.department) {
+    const groups = [currentUser.id, 'all', 'admins'];
+    if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
     }
     
@@ -140,10 +141,25 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   };
 
   const categorizedTasks = useMemo(() => {
-    const personal = tasks.filter(t => t.recipientIds?.includes(currentUser.id));
-    const department = tasks.filter(t => t.recipientIds?.some(rid => rid.startsWith('dept:')));
+    // Tasks directed to ME specifically or my general role group
+    const personal = tasks.filter(t => 
+      t.recipientIds?.includes(currentUser.id) || 
+      (t.recipientIds?.includes('all') && currentUser.role === 'employee') ||
+      (t.recipientIds?.includes('admins') && currentUser.role === 'admin')
+    );
+
+    // Tasks directed to DEPARTMENTS
+    const department = tasks.filter(t => {
+      if (currentUser.role === 'admin') {
+        // Admins see all department-routed tasks in the "Dept" tab
+        return t.recipientIds?.some(rid => rid.startsWith('dept:'));
+      }
+      // Department users see tasks routed to their specific department
+      return currentUser.department && t.recipientIds?.includes(`dept:${currentUser.department}`);
+    });
+
     return { personal, department };
-  }, [tasks, currentUser.id]);
+  }, [tasks, currentUser.id, currentUser.role, currentUser.department]);
 
   const filteredTasks = useMemo(() => {
     const baseTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;

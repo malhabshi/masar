@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User as AuthUser } from 'firebase/auth';
-import { auth } from '@/firebase'; // Import from the new client barrel file
+import { auth } from '@/firebase'; 
 import { useDoc } from '@/firebase/client';
 
 export interface AppUser {
@@ -14,6 +14,7 @@ export interface AppUser {
   phone?: string;
   civilId?: string;
   employeeId?: string;
+  department?: string;
 }
 
 interface UserContextType {
