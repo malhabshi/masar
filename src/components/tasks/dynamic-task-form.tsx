@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -284,13 +283,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           )}
         />
 
-        <DialogFooter className="sticky bottom-0 bg-background pt-4 border-t">
+        <div className="sticky bottom-0 bg-background pt-4 border-t flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Submit Request
           </Button>
-        </DialogFooter>
+        </div>
       </form>
     </Form>
   );
