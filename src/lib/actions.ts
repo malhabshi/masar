@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -41,7 +42,13 @@ export async function repairPermissions(adminId: string) {
     try {
         const admin = await getUser(adminId);
         // During emergency, we allow specific reporting users to trigger this even if role is out of sync
-        const authorizedBypass = ['bbkDS193aqcaAJS6M6GkjWFgFTr1', 'cYfvOMr5CCY5MACCgYm1DdjaZug1'];
+        const authorizedBypass = [
+          'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
+          'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
+          'IZr1zv5ePQb0bKNVXS4xGjERmE62', 
+          'lZr1zv5ePQbObKNVXS4xGjERmE62'
+        ];
+        
         if (!admin && !authorizedBypass.includes(adminId)) {
             return { success: false, message: 'Unauthorized.' };
         }

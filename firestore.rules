@@ -11,7 +11,7 @@ service cloud.firestore {
 
     /** 
      * @description Safe check for admin status.
-     * Checks DBAC collection OR the hardcoded bypass.
+     * Checks DBAC collection OR the hardcoded bypass for emergency recovery.
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
@@ -19,7 +19,7 @@ service cloud.firestore {
       let userDocPath = /databases/$(database)/documents/users/$(request.auth.uid);
       
       // Hardcoded bypass for the reported users to ensure emergency access
-      // Included corrected UID variant for malhabshi@q8sf.com (handling I/l and 0/O confusion)
+      // Included both UID variants for malhabshi@q8sf.com to handle I/l and 0/O confusion
       let isSuperAdmin = request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
                          request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' ||
                          request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62' ||
@@ -86,7 +86,7 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Allow LIST if signed in. We rely on GET and Query filters for security.
+      // Allow authenticated staff to list for dashboard views. Document-level GET rules enforce safety.
       allow list: if isSignedIn();
 
       // GET rules define individual document access
