@@ -31,7 +31,7 @@ const IELTS_COURSE_OPTIONS = [
   'One week "ielts" In-Person',
   'One week "ielts" Online',
   'One month "ielts" In-Person',
-  'One month "ielts" Online'
+  'One on One class Inperson'
 ];
 
 export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSubmitting }: DynamicTaskFormProps) {
