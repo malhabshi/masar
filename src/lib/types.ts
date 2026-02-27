@@ -139,22 +139,39 @@ export interface TaskReply {
   createdAt: string;
 }
 
-export type TaskStatus = 'new' | 'in-progress' | 'completed' | 'archived';
+export type TaskStatus = 'new' | 'in-progress' | 'completed' | 'denied';
+
+export interface TaskViewRecord {
+  userId: string;
+  userName: string;
+  timestamp: string;
+}
+
+export interface TaskNotification {
+  fromId: string;
+  fromName: string;
+  message: string;
+  timestamp: string;
+}
 
 export interface Task {
   id: string;
   authorId: string;
-  recipientId: string | 'all'; // Legacy field
-  recipientIds?: string[]; // New multi-recipient support
+  authorName?: string;
+  recipientId: string | 'all'; 
+  recipientIds?: string[];
   content: string;
   createdAt: string;
   status: TaskStatus;
   replies?: TaskReply[];
   studentId?: string;
   studentName?: string;
+  studentPhone?: string;
   taskType?: string;
   category?: 'update' | 'system' | 'request';
   data?: any;
+  viewedBy?: TaskViewRecord[];
+  notifications?: TaskNotification[];
 }
 
 export interface ResourceLink {

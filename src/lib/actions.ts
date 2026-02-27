@@ -2,7 +2,7 @@
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
-import { FieldPath } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType } from './types';
 import {
   isWithinInterval,
@@ -275,7 +275,8 @@ export async function createStudentTask(authorId: string, studentId: string, req
 
         const newTask: Omit<Task, 'id'> = {
             authorId,
-            recipientId: recipientIds[0] || 'all', // Legacy
+            authorName: creator?.name || 'Unknown Employee',
+            recipientId: recipientIds[0] || 'all', 
             recipientIds: recipientIds.length > 0 ? recipientIds : ['all'],
             content: description,
             createdAt: new Date().toISOString(),
@@ -284,14 +285,16 @@ export async function createStudentTask(authorId: string, studentId: string, req
             replies: [],
             studentId: studentId,
             studentName: studentData.name,
+            studentPhone: studentData.phone,
             taskType: requestTypeData.name,
-            ...(dynamicData && { data: {
-              ...dynamicData,
+            data: {
+              ...(dynamicData || {}),
+              studentName: studentData.name,
               studentEmail: studentData.email,
               studentPhone: studentData.phone,
               requestedBy: creator?.email,
               requestedByName: creator?.name
-            }})
+            }
         };
 
         await adminDb!.collection('tasks').add(newTask);
@@ -302,6 +305,58 @@ export async function createStudentTask(authorId: string, studentId: string, req
         console.error('❌ Server action failed:', { action: 'createStudentTask', error });
         return { success: false, message: error instanceof Error ? error.message : 'Failed to create task.' };
     }
+}
+
+export async function markTaskAsSeen(taskId: string, userId: string, userName: string) {
+  if (!checkAdminServices()) return { success: false };
+  try {
+    const taskRef = adminDb!.collection('tasks').doc(taskId);
+    const doc = await taskRef.get();
+    if (!doc.exists) return { success: false };
+    
+    const task = doc.data() as Task;
+    const seenBy = task.viewedBy || [];
+    
+    if (seenBy.some(v => v.userId === userId)) return { success: true };
+    
+    await taskRef.update({
+      viewedBy: [...seenBy, { userId, userName, timestamp: new Date().toISOString() }]
+    });
+    return { success: true };
+  } catch (e) {
+    return { success: false };
+  }
+}
+
+export async function sendTaskNotification(taskId: string, fromId: string, fromName: string, message: string) {
+  if (!checkAdminServices()) return { success: false };
+  try {
+    const taskRef = adminDb!.collection('tasks').doc(taskId);
+    const taskDoc = await taskRef.get();
+    if (!taskDoc.exists) return { success: false, message: 'Task not found' };
+    const task = taskDoc.data() as Task;
+
+    const notification = { fromId, fromName, message, timestamp: new Date().toISOString() };
+    await taskRef.update({
+      notifications: FieldValue.arrayUnion(notification)
+    });
+
+    // Create a system task for the employee to trigger their sidebar/toast
+    await adminDb!.collection('tasks').add({
+      authorId: fromId,
+      recipientId: task.authorId,
+      recipientIds: [task.authorId],
+      content: `New update from ${fromName} on task "${task.taskType}": ${message}`,
+      status: 'new',
+      category: 'system',
+      createdAt: new Date().toISOString(),
+      replies: []
+    });
+
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
 }
 
 export async function sendTask(authorId: string, recipientId: string, content: string, category: 'update' | 'system' = 'update') {
@@ -369,7 +424,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
         if (taskData.authorId !== authorId) {
           const originalAuthor = await getUser(taskData.authorId);
           if (originalAuthor && originalAuthor.role === 'employee') {
-            const taskContent = `${author.name} replied to your task: "${taskData.content.substring(0, 30)}..."`;
+            const taskContent = `${author.name} replied to your task: "${taskData.taskType || taskData.content.substring(0, 30)}..."`;
             const notificationTask: Omit<Task, 'id'> = {
               authorId: 'system',
               recipientId: taskData.authorId,
@@ -411,7 +466,7 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
         if (taskData.authorId !== updaterId) {
             const author = await getUser(taskData.authorId);
             if (author) {
-                 const taskContent = `The status of your task "${taskData.content.substring(0, 30)}..." was updated to '${status}' by ${updater.name}.`;
+                 const taskContent = `The status of your task "${taskData.taskType || taskData.content.substring(0, 30)}..." was updated to '${status}' by ${updater.name}.`;
                  const notificationTask: Omit<Task, 'id'> = {
                     authorId: 'system',
                     recipientId: author.id,

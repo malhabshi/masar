@@ -1,0 +1,308 @@
+
+'use client';
+
+import { useState, useMemo, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { 
+  Loader2, 
+  Send, 
+  User, 
+  Phone, 
+  Mail, 
+  FileText, 
+  Calendar, 
+  DollarSign, 
+  ShieldCheck, 
+  CheckCircle2,
+  XCircle,
+  Clock,
+  ExternalLink,
+  MessageSquare,
+  BellRing
+} from 'lucide-react';
+import type { Task, TaskStatus, User as UserType, Document as StudentDoc } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
+import { formatDateTime, formatRelativeTime } from '@/lib/timestamp-utils';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
+import { UploadDocumentDialog } from '../student/upload-document-dialog';
+import { doc } from 'firebase/firestore';
+import { firestore } from '@/firebase';
+import { useDoc } from '@/firebase/client';
+
+interface TaskDetailsDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  task: Task;
+  currentUser: AppUser;
+  userMap: Map<string, UserType>;
+  onStatusChange: (taskId: string, status: TaskStatus) => void;
+  onReply: (taskId: string, reply: string) => void;
+  onSendNotification: (taskId: string, message: string) => void;
+}
+
+export function TaskDetailsDialog({
+  isOpen,
+  onOpenChange,
+  task,
+  currentUser,
+  userMap,
+  onStatusChange,
+  onReply,
+  onSendNotification,
+}: TaskDetailsDialogProps) {
+  const [replyContent, setReplyContent] = useState('');
+  const [notifContent, setNotifContent] = useState('');
+  const [isSendingNotif, setIsSendingNotif] = useState(false);
+
+  const author = userMap.get(task.authorId);
+  const data = task.data || {};
+  
+  // Real-time student lookup for existing documents
+  const { data: student } = useDoc<any>('students', task.studentId || '');
+
+  const taskThread = useMemo(() => {
+    const thread = [];
+    
+    // Status changes (if we had them logged, but for now we'll use replies and notifications)
+    (task.replies || []).forEach(r => thread.push({ ...r, type: 'reply' }));
+    (task.notifications || []).forEach(n => thread.push({ ...n, id: `notif-${n.timestamp}`, createdAt: n.timestamp, type: 'notif', content: n.message, authorId: n.fromId }));
+    
+    return thread.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [task.replies, task.notifications]);
+
+  const handleReplyClick = () => {
+    if (!replyContent.trim()) return;
+    onReply(task.id, replyContent);
+    setReplyContent('');
+  };
+
+  const handleNotifClick = async () => {
+    if (!notifContent.trim()) return;
+    setIsSendingNotif(true);
+    await onSendNotification(task.id, notifContent);
+    setNotifContent('');
+    setIsSendingNotif(false);
+  };
+
+  const renderDataField = (label: string, value: any, icon?: any) => {
+    if (value === undefined || value === null || value === '') return null;
+    const Icon = icon;
+    return (
+      <div className="space-y-1">
+        <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">{label}</p>
+        <div className="flex items-center gap-2 font-medium">
+          {Icon && <Icon className="h-4 w-4 text-primary" />}
+          {Array.isArray(value) ? value.join(', ') : String(value)}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[95vh] p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 border-b bg-muted/10">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Badge variant="outline" className="mb-2 uppercase tracking-tighter bg-primary/5">
+                {task.taskType || 'Request'}
+              </Badge>
+              <DialogTitle className="text-2xl">{task.studentName}</DialogTitle>
+              <DialogDescription className="flex items-center gap-4">
+                <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> {task.studentPhone}</span>
+                <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {data.studentEmail || 'No email'}</span>
+              </DialogDescription>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <Link href={`/student/${task.studentId}`} className="text-xs text-primary font-bold underline flex items-center gap-1">
+                View Full Student Profile <ExternalLink className="h-3 w-3" />
+              </Link>
+              <div className="flex gap-2">
+                {(['new', 'in-progress', 'completed', 'denied'] as TaskStatus[]).map(s => (
+                  <Button
+                    key={s}
+                    size="sm"
+                    variant={task.status === s ? 'default' : 'outline'}
+                    className={cn(
+                      "h-7 text-[10px] font-bold uppercase",
+                      task.status === s && s === 'completed' && "bg-green-600 hover:bg-green-700",
+                      task.status === s && s === 'denied' && "bg-red-600 hover:bg-red-700"
+                    )}
+                    onClick={() => onStatusChange(task.id, s)}
+                  >
+                    {s.replace('-', ' ')}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-5">
+          {/* Main Info Section */}
+          <div className="lg:col-span-3 border-r overflow-y-auto p-6 space-y-8">
+            <section className="space-y-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" /> 
+                Request Details
+              </h3>
+              <div className="grid grid-cols-2 gap-y-6 bg-muted/20 p-4 rounded-lg border border-dashed">
+                {renderDataField('Requested By', task.authorName || author?.name, User)}
+                {renderDataField('Passport Name', data.passportName, ShieldCheck)}
+                {renderDataField('Exam Category', data.examType, Clock)}
+                {renderDataField('IELTS Type', data.ieltsSubtype)}
+                {renderDataField('Requested Date', data.requestedDate, Calendar)}
+                {renderDataField('Course Start', data.courseStartDate, Calendar)}
+                {renderDataField('Course Option', data.courseOption)}
+                {renderDataField('Retake Section', data.retakeSection)}
+                {renderDataField('Preferred Time', data.preferredTime)}
+                {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign)}
+                {renderDataField('Original Exam', data.originalExamDate, Calendar)}
+              </div>
+            </section>
+
+            {data.idpUsername && (
+              <section className="space-y-4">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-blue-600" /> 
+                  IDP Credentials
+                </h3>
+                <div className="grid grid-cols-2 gap-4 bg-blue-50/30 p-4 rounded-lg border border-blue-100">
+                  {renderDataField('Username', data.idpUsername)}
+                  {renderDataField('Password', data.idpPassword)}
+                </div>
+              </section>
+            )}
+
+            <section className="space-y-4">
+              <h3 className="text-lg font-bold">Employee Notes</h3>
+              <p className="text-sm text-muted-foreground p-4 bg-muted/10 rounded border">
+                {task.content || "No additional notes provided."}
+              </p>
+            </section>
+
+            {data.selectedDocuments && data.selectedDocuments.length > 0 && (
+              <section className="space-y-4">
+                <h3 className="text-lg font-bold">Attached Student Documents</h3>
+                <div className="space-y-2">
+                  {data.selectedDocuments.map((docId: string) => {
+                    const doc = student?.documents?.find(d => d.id === docId);
+                    return doc ? (
+                      <div key={docId} className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{doc.name}</span>
+                        </div>
+                        <Button size="sm" variant="ghost" asChild>
+                          <a href={doc.url} target="_blank" rel="noopener noreferrer">Download</a>
+                        </Button>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* Workflow & Thread Section */}
+          <div className="lg:col-span-2 bg-muted/5 flex flex-col">
+            <div className="p-4 border-b space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Status / Seen</h3>
+                {task.viewedBy && task.viewedBy.length > 0 && (
+                  <div className="text-[10px] text-muted-foreground">
+                    Seen by {task.viewedBy[0].userName} - {formatRelativeTime(task.viewedBy[0].timestamp)}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <UploadDocumentDialog student={student || { id: task.studentId }} />
+              </div>
+            </div>
+
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-6">
+                {taskThread.map((item: any) => {
+                  const author = userMap.get(item.authorId);
+                  const isNotif = item.type === 'notif';
+                  return (
+                    <div key={item.id} className={cn(
+                      "flex items-start gap-3",
+                      isNotif && "bg-blue-50/50 p-3 rounded-lg border border-blue-100"
+                    )}>
+                      <Avatar className="h-7 w-7 mt-1">
+                        <AvatarImage src={author?.avatarUrl} />
+                        <AvatarFallback>{author?.name?.charAt(0) || '?'}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold">{author?.name}</span>
+                          <span className="text-[10px] text-muted-foreground">{formatRelativeTime(item.createdAt)}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground whitespace-pre-wrap">
+                          {isNotif && <Badge variant="secondary" className="mr-1 h-4 text-[8px] bg-blue-500 text-white">NOTIF</Badge>}
+                          {item.content}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {taskThread.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-xs font-medium">No updates in thread.</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+
+            <div className="p-4 border-t space-y-4 bg-background">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold flex items-center gap-1.5"><BellRing className="h-3 w-3" /> NOTIFY EMPLOYEE</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Send a quick notification note..." 
+                    className="text-xs h-8"
+                    value={notifContent}
+                    onChange={(e) => setNotifContent(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleNotifClick()}
+                  />
+                  <Button size="sm" className="h-8" onClick={handleNotifClick} disabled={!notifContent.trim() || isSendingNotif}>
+                    {isSendingNotif ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold flex items-center gap-1.5"><MessageSquare className="h-3 w-3" /> ADD COMMENT</Label>
+                <Textarea 
+                  placeholder="Type a internal reply..." 
+                  className="text-xs min-h-[60px]"
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                />
+                <Button size="sm" className="w-full h-8" onClick={handleReplyClick} disabled={!replyContent.trim()}>
+                  Post Comment
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
