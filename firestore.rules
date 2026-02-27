@@ -93,10 +93,30 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow get, list: if isSignedIn();
-      allow create: if isPrivileged() || isSignedIn();
-      allow update: if isPrivileged() || isOwner(resource.data.recipientId) || isOwner(resource.data.authorId);
-      allow delete: if isPrivileged();
+      /** 
+       * @description Enforce role-based privacy for tasks.
+       * Admins see all.
+       * Others only see tasks where they are author, recipient, or part of the targeted department.
+       */
+      allow get, list: if isSignedIn() && (
+        isAdmin() || 
+        (
+          resource.data.authorId == request.auth.uid ||
+          request.auth.uid in resource.data.recipientIds ||
+          'all' in resource.data.recipientIds ||
+          (isDepartment() && getUserData().department != null && ('dept:' + getUserData().department) in resource.data.recipientIds)
+        )
+      );
+      
+      allow create: if isSignedIn();
+      
+      allow update: if isSignedIn() && (
+        isPrivileged() || 
+        request.auth.uid == resource.data.authorId || 
+        request.auth.uid in resource.data.recipientIds
+      );
+      
+      allow delete: if isAdmin();
     }
 
     /** @description Rules for internal chats and messages. */

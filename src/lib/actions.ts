@@ -101,8 +101,12 @@ export async function deleteUser(userIdToDelete: string, adminId: string) {
     // 1. Delete from Firebase Auth
     await adminAuth!.deleteUser(userIdToDelete);
 
-    // 2. Delete from Firestore
-    await adminDb!.collection('users').doc(userIdToDelete).delete();
+    // 2. Delete from Firestore Main collection and DBAC collections
+    const batch = adminDb!.batch();
+    batch.delete(adminDb!.collection('users').doc(userIdToDelete));
+    batch.delete(adminDb!.collection('admins').doc(userIdToDelete));
+    batch.delete(adminDb!.collection('departmentUsers').doc(userIdToDelete));
+    await batch.commit();
 
     console.log('✅ Server action finished:', { action: 'deleteUser', success: true });
     return { success: true, message: 'User deleted successfully.' };
@@ -110,6 +114,46 @@ export async function deleteUser(userIdToDelete: string, adminId: string) {
     console.error('❌ Server action failed:', { action: 'deleteUser', error });
     return { success: false, message: error instanceof Error ? error.message : 'Failed to delete user.' };
   }
+}
+
+export async function changeUserRole(userId: string, newRole: UserRole, adminId: string) {
+    console.log('📤 Server action started:', { action: 'changeUserRole', userId, newRole, adminId, timestamp: new Date().toISOString() });
+    if (!checkAdminServices()) return { success: false, message: 'Admin services not available.' };
+
+    try {
+        const admin = await getUser(adminId);
+        if (!admin || admin.role !== 'admin') {
+            return { success: false, message: 'Unauthorized. Only admins can change roles.' };
+        }
+
+        const batch = adminDb!.batch();
+        const userRef = adminDb!.collection('users').doc(userId);
+        
+        // 1. Update user document
+        batch.update(userRef, { role: newRole });
+
+        // 2. Sync DBAC collections
+        const adminDBACRef = adminDb!.collection('admins').doc(userId);
+        const deptDBACRef = adminDb!.collection('departmentUsers').doc(userId);
+
+        // Remove from both first to clean up any existing specific role
+        batch.delete(adminDBACRef);
+        batch.delete(deptDBACRef);
+
+        // Add to appropriate one if role is privileged
+        if (newRole === 'admin') {
+            batch.set(adminDBACRef, { syncAt: new Date().toISOString() });
+        } else if (newRole === 'department') {
+            batch.set(deptDBACRef, { syncAt: new Date().toISOString() });
+        }
+
+        await batch.commit();
+        console.log('✅ Server action finished:', { action: 'changeUserRole', success: true });
+        return { success: true, message: `User role updated to ${newRole} and permissions synced.` };
+    } catch (error: any) {
+        console.error('❌ Server action failed:', { action: 'changeUserRole', error });
+        return { success: false, message: error instanceof Error ? error.message : 'Failed to update role.' };
+    }
 }
 
 // --- APPLICATION ACTIONS ---
@@ -538,7 +582,17 @@ export async function createNewUser(userData: {
       ...(userData.department && { department: userData.department }),
     };
 
-    await adminDb!.collection('users').doc(authUser.uid).set(newUserForDb);
+    const batch = adminDb!.batch();
+    batch.set(adminDb!.collection('users').doc(authUser.uid), newUserForDb);
+
+    // Populate DBAC collections for security rules
+    if (userData.role === 'admin') {
+      batch.set(adminDb!.collection('admins').doc(authUser.uid), { createdAt: new Date().toISOString() });
+    } else if (userData.role === 'department') {
+      batch.set(adminDb!.collection('departmentUsers').doc(authUser.uid), { createdAt: new Date().toISOString() });
+    }
+
+    await batch.commit();
     
     console.log('✅ Server action finished:', { action: 'createNewUser', success: true, uid: authUser.uid });
     return { success: true, message: `${userData.name} has been added.` };

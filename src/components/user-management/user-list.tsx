@@ -16,9 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
-import { updateDocumentNonBlocking, useCollection } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useCollection } from '@/firebase/client';
 import { EditUserDialog } from './edit-user-dialog';
 import { Skeleton } from '../ui/skeleton';
 import {
@@ -33,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { deleteUser } from '@/lib/actions';
+import { deleteUser, changeUserRole } from '@/lib/actions';
 
 interface UserListProps {
   currentUser: AppUser;
@@ -62,13 +60,16 @@ export function UserList({ currentUser }: UserListProps) {
     setIsUpdating(userToUpdate.id);
     
     try {
-        const userDocRef = doc(firestore, 'users', userToUpdate.id);
-        await updateDocumentNonBlocking(userDocRef, { role: newRole });
-
-        toast({
-            title: 'Role Updated',
-            description: `${userToUpdate.name}'s role has been updated to ${newRole}.`,
-        });
+        const result = await changeUserRole(userToUpdate.id, newRole, currentUser.id);
+        
+        if (result.success) {
+            toast({
+                title: 'Role Updated',
+                description: `${userToUpdate.name}'s role has been updated to ${newRole}.`,
+            });
+        } else {
+            throw new Error(result.message);
+        }
 
     } catch (error: any) {
         toast({
