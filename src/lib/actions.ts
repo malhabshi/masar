@@ -1032,7 +1032,7 @@ export async function getReportStats(dateRange: {
   from: string;
   to: string;
 }): Promise<{ success: boolean; data?: ReportStats; message?: string }> {
-  if (!checkAdminServices()) return { success: false, message: 'Admin services not available.' };
+  if (!checkAdminServices()) return { success: false, message: "Admin services not available" };
   try {
     const interval = { start: parseISO(dateRange.from), end: parseISO(dateRange.to) };
     const [studentsSnap, usersSnap, timeLogsSnap] = await Promise.all([

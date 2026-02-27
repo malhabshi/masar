@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useDoc, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc, where } from 'firebase/firestore';
+import { doc, where, query, collection } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { addAdminNote, addEmployeeNote } from '@/lib/actions';
@@ -68,11 +68,20 @@ export default function StudentDetailPage() {
   const { data: student, isLoading: studentIsLoading, error: studentError } = useDoc<Student>('students', studentId);
   
   const studentTasksQuery = useMemoFirebase(() => {
-    if (!currentUser) return [];
-    return [where('studentId', '==', studentId)];
+    if (!currentUser || !studentId) return null;
+    
+    // Construct the base constraints for this student's tasks
+    const constraints = [where('studentId', '==', studentId)];
+    
+    // CRITICAL: Filter tasks by author for employees to satisfy security rules
+    if (currentUser.role === 'employee') {
+      constraints.push(where('authorId', '==', currentUser.id));
+    }
+    
+    return query(collection(firestore, 'tasks'), ...constraints);
   }, [studentId, currentUser]);
 
-  const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(currentUser ? 'tasks' : '', ...studentTasksQuery);
+  const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(studentTasksQuery);
   
   const isLoading = isUserLoading || studentIsLoading || tasksLoading;
 
@@ -117,11 +126,11 @@ export default function StudentDetailPage() {
       toast({ title: 'Access Denied', description: 'You no longer have access to this student.' });
       return null;
     }
-    return <div className="text-destructive">Error: {studentError.message}</div>
+    return <div className="text-destructive p-8 text-center bg-card rounded-lg border">Error: {studentError.message}</div>
   }
   
   if (!student) {
-    return <div>Student not found or you do not have permission to view this page.</div>;
+    return <div className="p-8 text-center bg-card rounded-lg border">Student not found or you do not have permission to view this page.</div>;
   }
   
   const canRenderContent = !isLoading && student && currentUser;

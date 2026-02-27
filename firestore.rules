@@ -9,8 +9,8 @@ service cloud.firestore {
     }
 
     /** 
-     * @description Defensive check for admin status.
-     * Checks DBAC collection or the user document role.
+     * @description Safe check for admin status.
+     * Checks DBAC collection OR the hardcoded bypass.
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
@@ -21,7 +21,7 @@ service cloud.firestore {
       return isSuperAdmin || exists(adminDocPath) || (exists(userDocPath) && get(userDocPath).data.role == 'admin');
     }
 
-    /** @description Defensive check for department status. */
+    /** @description Safe check for department status. */
     function isDepartment() {
       if (!isSignedIn()) return false;
       let deptDocPath = /databases/$(database)/documents/departmentUsers/$(request.auth.uid);
@@ -78,17 +78,16 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Employees can only list tasks they created. 
-      // Management can list all for oversight.
+      // LIST rules MUST align with query filters to avoid permission errors
       allow list: if isSignedIn() && (
         isPrivileged() || 
         (request.query.authorId == request.auth.uid) ||
         (request.query.recipientIds.hasAny([request.auth.uid]))
       );
 
+      // GET rules define individual document access
       allow get: if isSignedIn() && (
-        isAdmin() || 
-        isDepartment() ||
+        isPrivileged() ||
         (resource.data.authorId == request.auth.uid) ||
         (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
         (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || resource.data.recipientId == 'all'))
