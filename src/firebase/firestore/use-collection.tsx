@@ -15,6 +15,33 @@ import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 
+/**
+ * Recursively convert all Timestamps to Date objects within a data structure.
+ */
+function convertTimestamps<T>(data: any): T {
+  if (!data) return data as T;
+  
+  if (data && typeof data.toDate === 'function' && !(data instanceof Date)) {
+    return data.toDate() as T;
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(item => convertTimestamps(item)) as T;
+  }
+  
+  if (typeof data === 'object' && data !== null) {
+    const converted: any = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        converted[key] = convertTimestamps(data[key]);
+      }
+    }
+    return converted as T;
+  }
+  
+  return data as T;
+}
+
 function isValidQueryOrRef(obj: any): obj is CollectionReference | Query {
   return obj && typeof obj === 'object' && (obj.type === 'collection' || obj.type === 'query');
 }
@@ -58,10 +85,13 @@ export function useCollection<T = any>(
       unsubscribe = onSnapshot(
         q,
         (snapshot) => {
-          const items = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...(doc.data() as T),
-          }));
+          const items = snapshot.docs.map((doc) => {
+            const converted = convertTimestamps<DocumentData>(doc.data());
+            return {
+              id: doc.id,
+              ...(converted as T),
+            };
+          });
           setData(items);
           setIsLoading(false);
           setError(null);

@@ -13,6 +13,33 @@ import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 
+/**
+ * Recursively convert all Timestamps to Date objects within a data structure.
+ */
+function convertTimestamps<T>(data: any): T {
+  if (!data) return data as T;
+  
+  if (data && typeof data.toDate === 'function' && !(data instanceof Date)) {
+    return data.toDate() as T;
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(item => convertTimestamps(item)) as T;
+  }
+  
+  if (typeof data === 'object' && data !== null) {
+    const converted: any = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        converted[key] = convertTimestamps(data[key]);
+      }
+    }
+    return converted as T;
+  }
+  
+  return data as T;
+}
+
 function isDocumentReference(obj: any): obj is DocumentReference {
   return obj && typeof obj === 'object' && obj.type === 'document';
 }
@@ -60,7 +87,9 @@ export function useDoc<T = any>(
         docRef,
         (snapshot: DocumentSnapshot<DocumentData>) => {
           if (snapshot.exists()) {
-            setData({ id: snapshot.id, ...(snapshot.data() as T) });
+            const rawData = snapshot.data();
+            const converted = convertTimestamps<DocumentData>(rawData);
+            setData({ id: snapshot.id, ...(converted as T) });
           } else {
             setData(null);
           }

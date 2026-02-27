@@ -84,16 +84,20 @@ export default function StudentDetailPage() {
   }, [student, currentUser]);
   
   useEffect(() => {
+    // Only perform the assignment check once both student and user profiles are fully loaded
     if (isLoading || studentError) return;
     if (!currentUser || !student) return;
 
-    if (currentUser.role === 'employee' && student.employeeId !== currentUser.civilId) {
-        toast({
-            title: 'Student Transferred',
-            description: `This student is no longer assigned to you.`,
-            variant: 'destructive',
-        });
-        router.push('/applicants');
+    if (currentUser.role === 'employee') {
+        // Double check assigned status. If student has no employeeId or it's different from the current employee's civilId
+        if (student.employeeId !== currentUser.civilId) {
+            toast({
+                title: 'Access Restricted',
+                description: `This student is not assigned to your portfolio.`,
+                variant: 'destructive',
+            });
+            router.push('/applicants');
+        }
     }
   }, [student, currentUser, isLoading, router, toast, studentError]);
 
@@ -108,7 +112,7 @@ export default function StudentDetailPage() {
   }
 
   if (studentError) {
-    if (studentError.message.includes('permission') && currentUser?.role === 'employee') {
+    if (studentError.message.toLowerCase().includes('permission') && currentUser?.role === 'employee') {
       router.push('/applicants');
       toast({ title: 'Access Denied', description: 'You no longer have access to this student.' });
       return null;
