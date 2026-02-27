@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -58,7 +57,8 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
     const newlyAdded = new Set<string>();
     tasks.forEach(task => {
-        if (!lastViewed || new Date(task.createdAt) > new Date(lastViewed)) {
+        // Only track "request" tasks for notifications here
+        if (task.category === 'request' && (!lastViewed || new Date(task.createdAt) > new Date(lastViewed))) {
             newlyAdded.add(task.id);
         }
     });
@@ -143,6 +143,9 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
+      // CRITICAL: Only show formal requests created in student profiles
+      if (t.category !== 'request') return false;
+
       const query = searchQuery.toLowerCase();
       return (
         t.studentName?.toLowerCase().includes(query) ||
