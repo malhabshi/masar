@@ -21,7 +21,8 @@ service cloud.firestore {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62'
+        // Emergency Super Admin Fallback (the user who reported the error)
+        request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1'
       );
     }
 
@@ -67,7 +68,7 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Restore standard read access for all signed-in staff
+      // EMERGENCY: Restore read access for all staff to confirm data existence
       allow read: if isSignedIn();
       
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().civilId);
@@ -91,11 +92,12 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow get, list: if isSignedIn() && (
+      allow read: if isSignedIn() && (
         isAdmin() || 
         resource.data.authorId == request.auth.uid ||
         request.auth.uid in resource.data.recipientIds ||
-        'all' in resource.data.recipientIds
+        'all' in resource.data.recipientIds ||
+        (isDepartment() && 'dept:' + getUserData().department in resource.data.recipientIds)
       );
       allow create: if isSignedIn();
       allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
