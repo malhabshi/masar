@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, Phone, User, Eye, Save } from 'lucide-react';
+import { Loader2, Send, Phone, User, Eye, Save, Bell } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,6 +13,8 @@ import { cn } from '@/lib/utils';
 import type { Task, TaskStatus, User as UserType } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import Link from 'next/link';
+import { toggleTaskPriority } from '@/lib/actions';
+import { useToast } from '@/hooks/use-toast';
 
 const statusVariants: Record<TaskStatus, string> = {
   new: 'bg-blue-500 hover:bg-blue-600',
@@ -39,12 +42,13 @@ export function TaskItem({
 }) {
     const [isClient, setIsClient] = useState(false);
     const [localStatus, setLocalStatus] = useState<TaskStatus>(task.status);
+    const [isPrioritizing, setIsPrioritizing] = useState(false);
+    const { toast } = useToast();
 
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    // Keep local status in sync with incoming props
     useEffect(() => {
         setLocalStatus(task.status);
     }, [task.status]);
@@ -52,21 +56,46 @@ export function TaskItem({
     const author = userMap.get(task.authorId);
     const hasStatusChanged = localStatus !== task.status;
     const canManage = ['admin', 'department'].includes(currentUser.role);
+
+    const handleTogglePriority = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (isPrioritizing) return;
+        setIsPrioritizing(true);
+        const result = await toggleTaskPriority(task.id, !task.isPrioritized);
+        if (result.success) {
+            toast({ title: task.isPrioritized ? 'Priority Removed' : 'Task Prioritized' });
+        }
+        setIsPrioritizing(false);
+    };
     
     return (
         <Card className={cn(
           "flex flex-col h-full border transition-all duration-300 hover:shadow-md",
           isNew && "border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]",
-          task.status === 'new' && "border-l-4 border-l-blue-500",
-          task.status === 'in-progress' && "border-l-4 border-l-orange-500",
-          task.status === 'completed' && "border-l-4 border-l-green-500",
-          task.status === 'denied' && "border-l-4 border-l-red-500"
+          task.isPrioritized && "border-red-500 border-2 shadow-[0_0_15px_rgba(239,68,68,0.15)]",
+          !task.isPrioritized && task.status === 'new' && "border-l-4 border-l-blue-500",
+          !task.isPrioritized && task.status === 'in-progress' && "border-l-4 border-l-orange-500",
+          !task.isPrioritized && task.status === 'completed' && "border-l-4 border-l-green-500",
+          !task.isPrioritized && task.status === 'denied' && "border-l-4 border-l-red-500"
         )}>
             <CardHeader className="p-4 pb-2">
                 <div className="flex items-center justify-between mb-2">
-                  <Badge className={cn("capitalize text-[10px] px-2 h-5", statusVariants[task.status])}>
-                    {task.status.replace('-', ' ')}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={cn("capitalize text-[10px] px-2 h-5", statusVariants[task.status])}>
+                        {task.status.replace('-', ' ')}
+                    </Badge>
+                    {canManage && (
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className={cn("h-6 w-6", task.isPrioritized ? "text-red-600" : "text-muted-foreground")}
+                            onClick={handleTogglePriority}
+                            disabled={isPrioritizing}
+                        >
+                            {isPrioritizing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bell className={cn("h-3.5 w-3.5", task.isPrioritized && "fill-current")} />}
+                        </Button>
+                    )}
+                  </div>
                   <span className="text-[10px] text-muted-foreground font-mono">
                     {isClient ? formatDate(task.createdAt) : '...'}
                   </span>

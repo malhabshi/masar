@@ -7,7 +7,7 @@ import type { AppUser } from '@/hooks/use-user';
 import { addReplyToTask, updateTaskStatus, markTaskAsSeen, sendTaskNotification } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, User as UserIcon, Building2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
@@ -25,6 +25,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const [selectedTask, setSelectedRequestTask] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [taskView, setTaskView] = useState<'personal' | 'department'>('personal');
   const { toast } = useToast();
   
   const [newItems, setNewItems] = useState(new Set<string>());
@@ -32,7 +33,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const relevantTasksConstraints = useMemoFirebase(() => {
     if (!currentUser) return [];
     
-    // Admins see all tasks. Others see tasks directed to them or their groups.
     if (currentUser.role === 'admin') return [];
 
     const groups = [currentUser.id, 'all'];
@@ -57,11 +57,9 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
     const newlyAdded = new Set<string>();
     tasks.forEach(task => {
-        // Robust check for IELTS Course (Programmatic type or Case-insensitive match)
         const isIeltsCourse = task.data?.examType === 'ielts_course' || 
                              task.taskType?.toLowerCase() === 'ielts course';
 
-        // Only track "request" tasks for notifications here (excluding IELTS Courses which have their own dashboard)
         if (task.category === 'request' && !isIeltsCourse && (!lastViewed || new Date(task.createdAt) > new Date(lastViewed))) {
             newlyAdded.add(task.id);
         }
@@ -127,7 +125,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
   const handleViewDetails = async (task: Task) => {
     setSelectedRequestTask(task);
-    // Automatically mark as seen if management
     if (['admin', 'department'].includes(currentUser.role)) {
       await markTaskAsSeen(task.id, currentUser.id, currentUser.name);
     }
@@ -142,12 +139,18 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     }
   };
 
+  const categorizedTasks = useMemo(() => {
+    const personal = tasks.filter(t => t.recipientIds?.includes(currentUser.id));
+    const department = tasks.filter(t => t.recipientIds?.some(rid => rid.startsWith('dept:')));
+    return { personal, department };
+  }, [tasks, currentUser.id]);
+
   const filteredTasks = useMemo(() => {
-    return tasks.filter(t => {
-      // CRITICAL: Only show formal requests created in student profiles
+    const baseTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;
+    
+    return baseTasks.filter(t => {
       if (t.category !== 'request') return false;
 
-      // EXCLUDE "IELTS Course" tasks from this manager as they have their own dashboard
       const isIeltsCourse = t.data?.examType === 'ielts_course' || 
                            t.taskType?.toLowerCase() === 'ielts course';
       
@@ -162,9 +165,8 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
         t.studentPhone?.includes(query)
       );
     });
-  }, [tasks, searchQuery]);
+  }, [categorizedTasks, taskView, searchQuery]);
 
-  // FIFO Sorting: Oldest first
   const newTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const progressTasks = useMemo(() => filteredTasks.filter(t => t.status === 'in-progress').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const completedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
@@ -174,18 +176,40 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
+          <div className="space-y-1">
             <CardTitle>Task Management</CardTitle>
             <CardDescription>Structured FIFO workflow for student requests. Changes must be saved to update status.</CardDescription>
           </div>
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by student, type, or employee..."
-              className="pl-8"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="bg-muted p-1 rounded-lg flex items-center gap-1">
+                <Button 
+                    variant={taskView === 'personal' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    className="h-8 gap-2 text-xs font-bold"
+                    onClick={() => setTaskView('personal')}
+                >
+                    <UserIcon className="h-3.5 w-3.5" />
+                    My Tasks ({categorizedTasks.personal.length})
+                </Button>
+                <Button 
+                    variant={taskView === 'department' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    className="h-8 gap-2 text-xs font-bold"
+                    onClick={() => setTaskView('department')}
+                >
+                    <Building2 className="h-3.5 w-3.5" />
+                    Dept Tasks ({categorizedTasks.department.length})
+                </Button>
+            </div>
+            <div className="relative w-full max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                placeholder="Search requests..."
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                />
+            </div>
           </div>
         </CardHeader>
         <CardContent>

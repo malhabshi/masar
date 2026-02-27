@@ -489,6 +489,16 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
     }
 }
 
+export async function toggleTaskPriority(taskId: string, isPrioritized: boolean) {
+    if (!checkAdminServices()) return { success: false };
+    try {
+        await adminDb!.collection('tasks').doc(taskId).update({ isPrioritized });
+        return { success: true };
+    } catch (e) {
+        return { success: false };
+    }
+}
+
 
 // --- STUDENT & USER MANAGEMENT ACTIONS ---
 
@@ -1477,7 +1487,7 @@ export async function handleEmployeeLogin(userId: string) {
     console.log('✅ Server action finished:', { action: 'handleEmployeeLogin', success: true });
     return { success: true, message: 'Login session started.' };
   } catch (error) {
-    console.error('❌ Server action failed:', { action: 'handleEmployeeLogin', error });
+    console.error('❌ Server action failed:', { action: handleEmployeeLogin, error });
     return { success: false, message: error instanceof Error ? error.message : 'Failed to start login session.' };
   }
 }

@@ -92,6 +92,8 @@ export interface Student {
   employeeUnreadMessages?: number;
   newDocumentsForEmployee?: number;
   newDocumentsForAdmin?: number;
+  newDocumentsForAdminCount?: number; // legacy
+  newDocumentsForEmployeeCount?: number; // legacy
   newMissingItemsForEmployee?: number;
   finalChoiceUniversity?: string;
   ieltsOverall?: number;
@@ -172,6 +174,7 @@ export interface Task {
   data?: any;
   viewedBy?: TaskViewRecord[];
   notifications?: TaskNotification[];
+  isPrioritized?: boolean;
 }
 
 export interface ResourceLink {
