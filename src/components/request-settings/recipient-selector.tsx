@@ -9,9 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ChevronsUpDown, Search, X } from 'lucide-react';
-
-const DEPARTMENTS = ['UK', 'Finance', 'Document'];
+import { ChevronsUpDown, Search, X, Users as UsersIcon } from 'lucide-react';
 
 export function RecipientSelector({ 
   value, 
@@ -25,17 +23,29 @@ export function RecipientSelector({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Admins group
-  const admins = useMemo(() => 
-    users.filter(u => u.role === 'admin' && u.name.toLowerCase().includes(search.toLowerCase())), 
-    [users, search]
-  );
+  // Grouping logic: Group users by their department field
+  const groups = useMemo(() => {
+    const map = new Map<string, User[]>();
+    
+    users.forEach(user => {
+      const matchSearch = !search || 
+        user.name.toLowerCase().includes(search.toLowerCase()) || 
+        user.email.toLowerCase().includes(search.toLowerCase());
+      
+      if (!matchSearch) return;
 
-  // Any user with a department (regardless of role, usually department users or employees)
-  const usersByDept = useMemo(() => 
-    users.filter(u => u.department && u.name.toLowerCase().includes(search.toLowerCase())), 
-    [users, search]
-  );
+      const dept = user.department || 'Unassigned';
+      if (!map.has(dept)) map.set(dept, []);
+      map.get(dept)!.push(user);
+    });
+
+    // Sort groups: Departments alphabetically, then Unassigned at the end
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    });
+  }, [users, search]);
 
   const isSelected = (type: 'user' | 'group' | 'department', id: string) => {
     return value.some(v => v.type === type && v.id === id);
@@ -58,24 +68,12 @@ export function RecipientSelector({
     }
   };
 
-  const toggleDepartment = (dept: string) => {
-    const isDeptSelected = isSelected('department', dept);
-    if (isDeptSelected) {
-      // Remove department. We don't remove individual users because they might have been 
-      // selected manually before the department was selected.
-      onChange(value.filter(v => !(v.type === 'department' && v.id === dept)));
-    } else {
-      // Add department
-      toggleSelection('department', dept, `${dept} Dept`);
-    }
-  };
-
   return (
     <div className="space-y-3">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="w-full justify-between h-auto min-h-[40px] py-2">
-            <div className="flex flex-wrap gap-1 items-center text-left">
+          <Button variant="outline" className="w-full justify-between h-auto min-h-[40px] py-2 text-left">
+            <div className="flex flex-wrap gap-1 items-center">
                 {value.length > 0 ? (
                     <span className="font-medium text-sm">{value.length} recipients selected</span>
                 ) : (
@@ -99,46 +97,64 @@ export function RecipientSelector({
           </div>
           <ScrollArea className="h-80">
             <div className="p-4 space-y-6">
-              {/* ADMINS GROUP */}
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 hover:bg-muted p-1.5 rounded cursor-pointer transition-colors" onClick={() => toggleSelection('group', 'admins', 'All Admins')}>
-                  <Checkbox checked={isSelected('group', 'admins')} onCheckedChange={() => {}} />
-                  <span className="text-sm font-bold">All Admins (Group)</span>
+              {/* Shortcut: All Admins */}
+              {!search && (
+                <div className="space-y-2 pb-2 border-b">
+                  <div 
+                    className="flex items-center space-x-2 hover:bg-muted p-1.5 rounded cursor-pointer transition-colors"
+                    onClick={() => toggleSelection('group', 'admins', 'All Admins')}
+                  >
+                    <Checkbox checked={isSelected('group', 'admins')} onCheckedChange={() => {}} />
+                    <span className="text-sm font-bold text-primary flex items-center gap-2">
+                      <UsersIcon className="h-3.5 w-3.5" />
+                      All Admins (Group)
+                    </span>
+                  </div>
                 </div>
-                <div className="pl-6 space-y-1">
-                  {admins.map(user => (
-                    <div key={user.id} className="flex items-center space-x-2 hover:bg-muted p-1 rounded cursor-pointer transition-colors" onClick={() => toggleSelection('user', user.id, user.name)}>
-                      <Checkbox checked={isUserSelected(user)} onCheckedChange={() => {}} />
-                      <span className="text-sm">{user.name}</span>
-                    </div>
-                  ))}
-                  {admins.length === 0 && !search && <div className="text-xs text-muted-foreground italic pl-1">No admins found</div>}
-                </div>
-              </div>
+              )}
 
-              {/* DEPARTMENTS */}
-              {DEPARTMENTS.map(dept => {
-                const members = usersByDept.filter(u => u.department === dept);
-                if (members.length === 0 && search) return null;
-                
-                return (
-                  <div key={dept} className="space-y-2">
-                    <div className="flex items-center space-x-2 hover:bg-muted p-1.5 rounded cursor-pointer transition-colors" onClick={() => toggleDepartment(dept)}>
-                      <Checkbox checked={isSelected('department', dept)} onCheckedChange={() => {}} />
-                      <span className="text-sm font-bold">{dept} Department</span>
-                    </div>
-                    <div className="pl-6 space-y-1">
-                      {members.map(user => (
-                        <div key={user.id} className="flex items-center space-x-2 hover:bg-muted p-1 rounded cursor-pointer transition-colors" onClick={() => toggleSelection('user', user.id, user.name)}>
-                          <Checkbox checked={isUserSelected(user)} onCheckedChange={() => {}} />
-                          <span className="text-sm">{user.name}</span>
-                        </div>
-                      ))}
-                      {members.length === 0 && <div className="text-xs text-muted-foreground italic pl-1">No members in this department</div>}
+              {/* Dynamic Groupings by Department */}
+              {groups.map(([dept, members]) => (
+                <div key={dept} className="space-y-2">
+                  <div 
+                    className={`flex items-center justify-between p-1.5 rounded transition-colors ${dept !== 'Unassigned' ? 'hover:bg-muted cursor-pointer' : ''}`}
+                    onClick={() => {
+                      if (dept === 'Unassigned') return;
+                      toggleSelection('department', dept, `${dept} Department`);
+                    }}
+                  >
+                    <div className="flex items-center space-x-2">
+                      {dept !== 'Unassigned' && (
+                        <Checkbox checked={isSelected('department', dept)} onCheckedChange={() => {}} />
+                      )}
+                      <span className="text-sm font-bold">
+                        {dept === 'Unassigned' ? 'Unassigned' : `${dept} Department`}
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">({members.length} {members.length === 1 ? 'user' : 'users'})</span>
+                      </span>
                     </div>
                   </div>
-                );
-              })}
+                  <div className="pl-6 space-y-1">
+                    {members.map(user => (
+                      <div 
+                        key={user.id} 
+                        className="flex items-center space-x-2 hover:bg-muted p-1 rounded cursor-pointer transition-colors" 
+                        onClick={() => toggleSelection('user', user.id, user.name)}
+                      >
+                        <Checkbox checked={isUserSelected(user)} onCheckedChange={() => {}} />
+                        <span className="text-sm">
+                          {user.name} <span className="text-xs text-muted-foreground">({user.role})</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {groups.length === 0 && (
+                <div className="text-center py-10 text-muted-foreground text-sm">
+                  No staff members found matching "{search}"
+                </div>
+              )}
             </div>
           </ScrollArea>
         </PopoverContent>
