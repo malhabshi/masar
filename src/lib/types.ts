@@ -111,6 +111,8 @@ export interface Student {
   duplicateOfStudentIds?: string[] | null;
   academicIntakeSemester?: string;
   academicIntakeYear?: number;
+  source?: 'manual' | 'jotform';
+  jotformSubmissionId?: string;
 }
 
 export interface ChatMessage {
@@ -314,4 +316,19 @@ export interface EmployeeStats {
   totalStudents: number;
   dailyCounts: EmployeeDailyCount[];
   monthlyTotals: EmployeeMonthlyTotal[];
+}
+
+export interface JotformSubmission {
+  id: string;
+  submissionId: string;
+  formId: string;
+  studentId: string;
+  source: 'jotform';
+  rawData: any;
+  documents: {
+    name: string;
+    url: string;
+    type?: string;
+  }[];
+  submittedAt: string;
 }

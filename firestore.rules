@@ -19,7 +19,6 @@ service cloud.firestore {
       let userDocPath = /databases/$(database)/documents/users/$(request.auth.uid);
       
       // Hardcoded bypass for the reported users to ensure emergency access
-      // Included both UID variants for malhabshi@q8sf.com to handle I/l and 0/O confusion
       let isSuperAdmin = request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
                          request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' ||
                          request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62' ||
@@ -68,11 +67,39 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // All staff can read student records. UI filters handle portfolio views.
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn();
       allow delete: if isAdmin();
+    }
+
+    match /jotform_submissions/{submissionId} {
+      allow read: if isPrivileged();
+      allow write: if false; // System only (via admin SDK)
+    }
+
+    match /tasks/{taskId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && (
+        isAdmin() ||
+        isDepartment() ||
+        (resource.data.authorId == request.auth.uid) ||
+        (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
+        (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || request.auth.uid == 'all'))
+      );
+      allow create: if isSignedIn();
+      allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
+      allow delete: if isAdmin();
+    }
+
+    match /application_questions/{qId} {
+      allow read, list: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /customApplicationFieldDefinitions/{fieldId} {
+      allow read, list: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     match /approved_universities/{uniId} {
@@ -85,27 +112,8 @@ service cloud.firestore {
       allow write: if isPrivileged();
     }
 
-    match /tasks/{taskId} {
-      // Allow authenticated staff to list for dashboard views. Document-level GET rules enforce safety.
-      allow list: if isSignedIn();
-
-      // GET rules define individual document access
-      allow get: if isSignedIn() && (
-        isAdmin() ||
-        isDepartment() ||
-        (resource.data.authorId == request.auth.uid) ||
-        (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
-        (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || request.auth.uid == 'all'))
-      );
-
-      allow create: if isSignedIn();
-      allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
-      allow delete: if isAdmin();
-    }
-
     match /chatThreads/{chatThreadId} {
       allow read, write: if isSignedIn();
-      
       match /messages/{messageId} {
         allow read, write: if isSignedIn();
       }
@@ -139,14 +147,6 @@ service cloud.firestore {
     match /academic_terms/{termId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
-    }
-    
-    match /application_questions/{qId} {
-      allow read, write, list: if isAdmin();
-    }
-    
-    match /customApplicationFieldDefinitions/{fieldId} {
-      allow read, write, list: if isAdmin();
     }
   }
 }
