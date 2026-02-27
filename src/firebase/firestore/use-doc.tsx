@@ -13,6 +13,10 @@ import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 
+function isDocumentReference(obj: any): obj is DocumentReference {
+  return obj && typeof obj === 'object' && obj.type === 'document';
+}
+
 /**
  * Robust hook to subscribe to a single Firestore document in real-time.
  * Supports string paths (with segments) and DocumentReferences.
@@ -44,8 +48,12 @@ export function useDoc<T = any>(
           return;
         }
         docRef = doc(firestore, target, ...pathSegments);
-      } else {
+      } else if (isDocumentReference(target)) {
         docRef = target;
+      } else {
+        console.warn('[useDoc] Target is not a string or valid DocumentReference:', target);
+        setIsLoading(false);
+        return;
       }
 
       unsubscribe = onSnapshot(

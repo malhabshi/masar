@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -51,11 +50,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     // Only include department-specific routing if assigned
     if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
-    }
-    
-    // Non-admins with department role should NOT see 'admins' group tasks
-    if (currentUser.role === 'admin') {
-        groups.push('admins');
     }
     
     return query(
@@ -165,7 +159,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     tasks.forEach(t => {
       const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
       
-      // Personal: Directed to specific ID or Super Admin group
+      // Personal: Directed to specific ID or super groups
       const isPersonal = targets.includes(currentUser.id) || 
                         (targets.includes('admins') && currentUser.role === 'admin');
 
@@ -190,13 +184,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
         personal.push(t);
       } else if (targets.includes('all') && (currentUser.role === 'admin' || currentUser.role === 'department')) {
         // Management sees global broadcasts in Dept Tasks for oversight
-        if (currentUser.role === 'admin') {
-            department.push(t);
-        } else if (currentUser.role === 'department' && currentUser.department) {
-            // Department users only see broadcasts if relevant (usually they don't want global employee clutter)
-            // But we'll include it for visibility of management announcements
-            department.push(t);
-        }
+        department.push(t);
       }
     });
 

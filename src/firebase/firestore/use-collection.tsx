@@ -15,6 +15,10 @@ import { firestore } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 
+function isValidQueryOrRef(obj: any): obj is CollectionReference | Query {
+  return obj && typeof obj === 'object' && (obj.type === 'collection' || obj.type === 'query');
+}
+
 /**
  * Robust hook to subscribe to a Firestore collection or query in real-time.
  * Supports string paths, CollectionReferences, and Queries.
@@ -43,8 +47,12 @@ export function useCollection<T = any>(
       if (typeof target === 'string') {
         const collectionRef = collection(firestore, target);
         q = constraints.length > 0 ? query(collectionRef, ...constraints) : collectionRef;
-      } else {
+      } else if (isValidQueryOrRef(target)) {
         q = target;
+      } else {
+        console.warn('[useCollection] Target is not a string or valid Firestore Reference/Query:', target);
+        setIsLoading(false);
+        return;
       }
 
       unsubscribe = onSnapshot(

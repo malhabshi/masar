@@ -10,25 +10,23 @@ service cloud.firestore {
 
     /** 
      * @description Defensive check for admin status.
-     * Checks DBAC collection first, then falls back to profile data and hardcoded super-admins.
+     * Uses multiple fallback checks to ensure resilient access.
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-             userDoc.role == 'admin' ||
-             request.auth.token.email == 'bo7amany98@gmail.com' ||
+             (userDoc != null && userDoc.data.role == 'admin') ||
              request.auth.token.email == 'malhabshi@masarkw.com' ||
-             request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1' ||
-             request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1';
+             request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1';
     }
 
     /** @description Defensive check for department status. */
     function isDepartment() {
       if (!isSignedIn()) return false;
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
-             userDoc.role == 'department';
+             (userDoc != null && userDoc.data.role == 'department');
     }
 
     function isPrivileged() {
@@ -85,7 +83,7 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Allow read based on role and assignment
+      // Robust FIFO-compatible read rules
       allow read: if isSignedIn() && (
         isAdmin() || 
         resource.data.authorId == request.auth.uid ||
