@@ -41,7 +41,9 @@ import { formatDateTime, formatRelativeTime } from '@/lib/timestamp-utils';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
-import { useDoc } from '@/firebase/client';
+import { useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 
 interface TaskDetailsDialogProps {
   isOpen: boolean;
@@ -79,7 +81,12 @@ export function TaskDetailsDialog({
   const data = task.data || {};
   
   // Real-time student lookup for existing documents
-  const { data: student } = useDoc<any>('students', task.studentId || '');
+  const studentRef = useMemoFirebase(() => {
+    if (!task.studentId) return null;
+    return doc(firestore, 'students', task.studentId);
+  }, [task.studentId]);
+
+  const { data: student } = useDoc<any>(studentRef);
 
   const taskThread = useMemo(() => {
     const thread: any[] = [];
@@ -142,6 +149,9 @@ export function TaskDetailsDialog({
                 {task.taskType || 'Request'}
               </Badge>
               <DialogTitle className="text-2xl truncate">{task.studentName}</DialogTitle>
+              <DialogTitle className="text-xs text-muted-foreground font-mono mt-1">
+                By: {task.authorName || author?.name || 'Employee'}
+              </DialogTitle>
               <DialogDescription className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> {task.studentPhone}</span>
                 <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {data.studentEmail || 'No email'}</span>

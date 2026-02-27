@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Loader2, Search, User as UserIcon, Building2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where } from 'firebase/firestore';
+import { useCollection, useMemoFirebase } from '@/firebase';
+import { where, query, collection } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 import { sortByDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { TaskItem } from './task-item';
@@ -30,24 +31,23 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   
   const [newItems, setNewItems] = useState(new Set<string>());
 
-  const relevantTasksConstraints = useMemoFirebase(() => {
-    if (!currentUser) return [];
+  const tasksQuery = useMemoFirebase(() => {
+    if (!currentUser) return null;
     
     // Admins see all tasks
-    if (currentUser.role === 'admin') return [];
+    if (currentUser.role === 'admin') {
+      return query(collection(firestore, 'tasks'));
+    }
 
     const groups = [currentUser.id, 'all', 'admins'];
     if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
     }
     
-    return [where('recipientIds', 'array-contains-any', groups)];
+    return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', groups));
   }, [currentUser]);
 
-  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(
-    currentUser ? 'tasks' : '',
-    ...relevantTasksConstraints
-  );
+  const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
   
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 

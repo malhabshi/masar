@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User as AuthUser } from 'firebase/auth';
-import { auth } from '@/firebase'; 
-import { useDoc } from '@/firebase/client';
+import { auth, firestore } from '@/firebase'; 
+import { useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 export interface AppUser {
   id: string;
@@ -45,10 +46,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const { data: appUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(
-    authUser ? 'users' : '', 
-    authUser ? authUser.uid : ''
-  );
+  const userDocRef = useMemoFirebase(() => {
+    if (!authUser) return null;
+    return doc(firestore, 'users', authUser.uid);
+  }, [authUser]);
+
+  const { data: appUser, isLoading: isFirestoreLoading } = useDoc<AppUser>(userDocRef);
   
   const value = {
     user: appUser,

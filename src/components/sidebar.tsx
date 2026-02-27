@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sidebar,
@@ -34,8 +33,9 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where, orderBy } from 'firebase/firestore';
+import { useCollection, useMemoFirebase } from '@/firebase';
+import { where, orderBy, collection, query } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 import type { Student, Task } from '@/lib/types';
 
 export function AppSidebar() {
@@ -51,31 +51,27 @@ export function AppSidebar() {
     const isAdminDept = user?.role === 'admin' || user?.role === 'department';
     const isEmployee = user?.role === 'employee';
 
-    // 1. Establish the collection path based on user identity/role
-    const studentsPath = (isAdminDept || (isEmployee && user?.civilId)) ? 'students' : '';
-    
-    // 2. Memoize constraints to satisfy security rules and optimize cache reuse
-    const studentQueryConstraints = useMemoFirebase(() => {
-      if (!studentsPath) return [];
-      
+    // 1. Memoize constraints to satisfy security rules and optimize cache reuse
+    const studentQuery = useMemoFirebase(() => {
+      const isAdminDept = user?.role === 'admin' || user?.role === 'department';
+      const isEmployee = user?.role === 'employee';
+      const hasCivilId = !!user?.civilId;
+
       if (isAdminDept) {
-          return [orderBy('createdAt', 'desc')];
+          return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
       }
       
-      if (isEmployee && user?.civilId) {
-          return [where('employeeId', '==', user.civilId)];
+      if (isEmployee && hasCivilId) {
+          return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
       }
       
-      return [where('id', '==', 'NONE')]; 
-    }, [studentsPath, user?.civilId, isAdminDept, isEmployee]);
+      return null;
+    }, [user?.civilId, user?.role]);
 
-    // 3. Listen to students in real-time
-    const { data: students } = useCollection<Student>(
-      studentsPath, 
-      ...studentQueryConstraints
-    );
+    // 2. Listen to students in real-time
+    const { data: students } = useCollection<Student>(studentQuery);
 
-    // 4. Listen to tasks for Task notifications (Admin/Dept)
+    // 3. Listen to tasks for Task notifications (Admin/Dept)
     const taskGroups = useMemo(() => {
         if (!user) return [];
         const g = [user.id, 'all'];
@@ -84,14 +80,14 @@ export function AppSidebar() {
         return g;
     }, [user]);
 
-    const taskConstraints = useMemoFirebase(() => {
-        if (!user || !isAdminDept) return [where('id', '==', 'NONE')];
-        return [where('recipientIds', 'array-contains-any', taskGroups)];
+    const taskQuery = useMemoFirebase(() => {
+        if (!user || !isAdminDept) return null;
+        return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', taskGroups));
     }, [user, isAdminDept, taskGroups]);
 
-    const { data: tasks } = useCollection<Task>(isAdminDept ? 'tasks' : '', ...taskConstraints);
+    const { data: tasks } = useCollection<Task>(taskQuery);
 
-    // 5. Aggregate notification counts based on user role
+    // 4. Aggregate notification counts based on user role
     const totalNotifications = useMemo(() => {
       if (!students || !user) return 0;
       
@@ -107,13 +103,13 @@ export function AppSidebar() {
       }, 0);
     }, [students, user]);
 
-    // 6. Specifically aggregate unread chats for the "Chats" link (Admin/Dept only)
+    // 5. Specifically aggregate unread chats for the "Chats" link (Admin/Dept only)
     const unreadChatCount = useMemo(() => {
       if (!students || !user || !['admin', 'department'].includes(user.role)) return 0;
       return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
     }, [students, user]);
 
-    // 7. Tasks notification count (Excluding IELTS Courses)
+    // 6. Tasks notification count (Excluding IELTS Courses)
     const unreadTaskCount = useMemo(() => {
         if (!tasks || !isAdminDept) return 0;
         return tasks.filter(t => {
@@ -125,7 +121,7 @@ export function AppSidebar() {
         }).length;
     }, [tasks, isAdminDept]);
 
-    // 8. IELTS Courses notification count
+    // 7. IELTS Courses notification count
     const unreadIeltsCourseCount = useMemo(() => {
         if (!tasks || !isAdminDept) return 0;
         return tasks.filter(t => {

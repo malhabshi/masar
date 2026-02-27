@@ -1,15 +1,15 @@
-
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { useCollection, useMemoFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import type { Task, UpcomingEvent, Student } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { ToastAction } from '@/components/ui/toast';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { where, orderBy } from 'firebase/firestore';
+import { where, orderBy, collection, query } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 
 function playNotificationSound(frequency = 800) {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -43,46 +43,52 @@ export function NotificationListener() {
   const isEmployee = user?.role === 'employee';
   const isAdminDept = user?.role === 'admin' || user?.role === 'department';
   
-  const tasksPath = user ? 'tasks' : '';
-  const studentsPath = (isAdminDept || (isEmployee && user?.civilId)) ? 'students' : '';
-  const eventsPath = user ? 'upcoming_events' : '';
-
-  const tasksConstraints = useMemoFirebase(() => {
-    if (!tasksPath || !user) return [];
-    
-    // Admins see all tasks
-    if (user.role === 'admin') return [orderBy('createdAt', 'desc')];
-
-    // Others see tasks directed to them, their department, or 'all'
+  const taskGroups = useMemo(() => {
+    if (!user) return [];
     const groups = [user.id, 'all'];
     if (user.role === 'department' && user.department) {
         groups.push(`dept:${user.department}`);
     }
-    
-    return [where('recipientIds', 'array-contains-any', groups)];
-  }, [tasksPath, user]);
+    return groups;
+  }, [user]);
 
-  const { data: tasks } = useCollection<Task>(tasksPath, ...tasksConstraints);
-  const { data: events } = useCollection<UpcomingEvent>(eventsPath);
-
-  const studentQueryConstraints = useMemoFirebase(() => {
-    if (!studentsPath) return [];
+  const tasksQuery = useMemoFirebase(() => {
+    if (!user) return null;
     
+    // Admins see all tasks
+    if (user.role === 'admin') {
+      return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+    }
+
+    return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', taskGroups));
+  }, [user, taskGroups]);
+
+  const { data: tasks } = useCollection<Task>(tasksQuery);
+
+  const eventsQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return query(collection(firestore, 'upcoming_events'));
+  }, [user]);
+
+  const { data: events } = useCollection<UpcomingEvent>(eventsQuery);
+
+  const studentQuery = useMemoFirebase(() => {
+    const isAdminDept = user?.role === 'admin' || user?.role === 'department';
+    const isEmployee = user?.role === 'employee';
+    const hasCivilId = !!user?.civilId;
+
     if (isAdminDept) {
-        return [orderBy('createdAt', 'desc')];
+        return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
     }
     
-    if (isEmployee && user?.civilId) {
-        return [where('employeeId', '==', user.civilId)];
+    if (isEmployee && hasCivilId) {
+        return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
     }
     
-    return [where('id', '==', 'NONE')]; 
-  }, [studentsPath, user?.civilId, isAdminDept, isEmployee]);
+    return null; 
+  }, [user?.civilId, user?.role]);
 
-  const { data: students } = useCollection<Student>(
-    studentsPath, 
-    ...studentQueryConstraints
-  );
+  const { data: students } = useCollection<Student>(studentQuery);
 
   const allUserIds = useMemo(() => {
     const ids = new Set<string>();
@@ -105,7 +111,7 @@ export function NotificationListener() {
 
   useEffect(() => {
     if (!tasks || !user || !prevTasksRef.current) {
-        prevTasksRef.current = tasks;
+        prevTasksRef.current = tasks || [];
         return;
     }
     const prevTaskIds = new Set(prevTasksRef.current.map(t => t.id));
@@ -124,7 +130,7 @@ export function NotificationListener() {
 
   useEffect(() => {
     if (!events || !user || !prevEventsRef.current) {
-        prevEventsRef.current = events;
+        prevEventsRef.current = events || [];
         return;
     }
     const prevEventIds = new Set(prevEventsRef.current.map(e => e.id));
