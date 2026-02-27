@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -27,6 +26,7 @@ import { StudentUsersCard } from '@/components/student/student-users-card';
 import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-banner';
 import { AcademicIntakeCard } from '@/components/student/academic-intake-card';
 import { TargetCountriesCard } from '@/components/student/target-countries-card';
+import { TaskStatsCard } from '@/components/student/task-stats-card';
 
 
 function StudentPageContentSkeleton() {
@@ -157,6 +157,7 @@ export default function StudentDetailPage() {
                 </div>
 
                 <div className="space-y-6">
+                    <TaskStatsCard tasks={tasks || []} />
                     <ReadinessChecklist student={student} currentUser={currentUser} />
                     <MissingItemsSection student={student} currentUser={currentUser} />
                     <AcademicIntakeCard student={student} currentUser={currentUser} />
