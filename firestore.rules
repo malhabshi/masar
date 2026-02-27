@@ -14,15 +14,17 @@ service cloud.firestore {
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
-      return exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      let adminDoc = /databases/$(database)/documents/admins/$(request.auth.uid);
+      let userDoc = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(adminDoc) || (exists(userDoc) && get(userDoc).data.role == 'admin');
     }
 
     /** @description Defensive check for department status. */
     function isDepartment() {
       if (!isSignedIn()) return false;
-      return exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'department';
+      let deptDoc = /databases/$(database)/documents/departmentUsers/$(request.auth.uid);
+      let userDoc = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(deptDoc) || (exists(userDoc) && get(userDoc).data.role == 'department');
     }
 
     function isPrivileged() {
@@ -56,15 +58,11 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Admins and Department staff see all. 
-      // Employees see assigned (via civilId) or created.
-      allow read: if isPrivileged() || (isSignedIn() && (
-        resource.data.employeeId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.civilId || 
-        resource.data.createdBy == request.auth.uid
-      ));
+      // Staff can see all students.
+      allow read: if isSignedIn();
       
       allow create: if isSignedIn();
-      allow update: if isPrivileged() || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.civilId == resource.data.employeeId);
+      allow update: if isSignedIn();
       allow delete: if isAdmin();
     }
 
@@ -80,21 +78,21 @@ service cloud.firestore {
 
     match /tasks/{taskId} {
       // For list operations, the rule must allow the query result set.
-      // For employees, the query MUST be filtered by recipientIds or authorId.
+      // This logic must exactly match the filters used in the client query.
       allow list: if isSignedIn() && (
         isAdmin() || 
         isDepartment() ||
-        resource.data.authorId == request.auth.uid ||
-        request.auth.uid in resource.data.recipientIds ||
-        'all' in resource.data.recipientIds
+        (resource.data.authorId == request.auth.uid) ||
+        (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
+        (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || resource.data.recipientId == 'all'))
       );
 
       allow get: if isSignedIn() && (
         isAdmin() || 
         isDepartment() ||
-        resource.data.authorId == request.auth.uid ||
-        request.auth.uid in resource.data.recipientIds ||
-        'all' in resource.data.recipientIds
+        (resource.data.authorId == request.auth.uid) ||
+        (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
+        (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || resource.data.recipientId == 'all'))
       );
 
       allow create: if isSignedIn();
