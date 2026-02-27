@@ -40,8 +40,9 @@ export async function repairPermissions(adminId: string) {
     
     try {
         const admin = await getUser(adminId);
-        // During emergency, we allow the specific reporting user to trigger this even if role is out of sync
-        if (!admin && adminId !== 'bbkDS193aqcaAJS6M6GkjWFgFTr1') {
+        // During emergency, we allow specific reporting users to trigger this even if role is out of sync
+        const authorizedBypass = ['bbkDS193aqcaAJS6M6GkjWFgFTr1', 'cYfvOMr5CCY5MACCgYm1DdjaZug1'];
+        if (!admin && !authorizedBypass.includes(adminId)) {
             return { success: false, message: 'Unauthorized.' };
         }
 
@@ -69,7 +70,7 @@ export async function repairPermissions(adminId: string) {
         });
 
         await batch.commit();
-        return { success: true, message: `Successfully repaired permissions for ${usersSnap.size} users. Student data should now be visible.` };
+        return { success: true, message: `Successfully repaired permissions for ${usersSnap.size} users. Data access should now be stable.` };
     } catch (e: any) {
         return { success: false, message: e.message };
     }

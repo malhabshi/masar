@@ -10,14 +10,17 @@ service cloud.firestore {
 
     /** 
      * @description Defensive check for admin status.
-     * Checks DBAC collection first, then falls back to profile data.
+     * Checks DBAC collection first, then falls back to profile data and hardcoded super-admins.
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
              userDoc.role == 'admin' ||
-             request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1';
+             request.auth.token.email == 'bo7amany98@gmail.com' ||
+             request.auth.token.email == 'malhabshi@masarkw.com' ||
+             request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1' ||
+             request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1';
     }
 
     /** @description Defensive check for department status. */
@@ -82,6 +85,7 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
+      // Allow read based on role and assignment
       allow read: if isSignedIn() && (
         isAdmin() || 
         resource.data.authorId == request.auth.uid ||
