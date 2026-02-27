@@ -156,7 +156,6 @@ export function AppSidebar() {
         { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
-        { href: '/customize-questions', label: 'Questions', icon: Wrench, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },
     ];
     
