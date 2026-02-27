@@ -22,7 +22,6 @@ interface TaskManagerProps {
 
 export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
-  const [isReplying, setIsReplying] = useState<string | null>(null);
   const [selectedTask, setSelectedRequestTask] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
@@ -108,11 +107,9 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
   const handleReply = async (taskId: string, content: string) => {
     if (!currentUser) return;
-    setIsReplying(taskId);
     const task = tasks.find(t => t.id === taskId);
     if (!task) {
       toast({ variant: 'destructive', title: 'Error', description: 'Task not found.' });
-      setIsReplying(null);
       return;
     }
     const result = await addReplyToTask(taskId, currentUser.id, content, task.authorId);
@@ -121,7 +118,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     } else {
         toast({ variant: 'destructive', title: "Error", description: result.message });
     }
-    setIsReplying(null);
   }
 
   const handleViewDetails = async (task: Task) => {
@@ -166,10 +162,10 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <CardTitle>Task Management</CardTitle>
-            <CardDescription>Structured FIFO workflow for student requests.</CardDescription>
+            <CardDescription>Structured FIFO workflow for student requests. Changes must be saved to update status.</CardDescription>
           </div>
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -208,8 +204,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
                                     task={task} 
                                     onStatusChange={handleStatusChange} 
                                     isUpdatingStatus={isUpdatingStatus === task.id} 
-                                    onReply={handleReply} 
-                                    isReplying={isReplying === task.id} 
                                     userMap={userMap} 
                                     isNew={newItems.has(task.id)} 
                                     currentUser={currentUser}

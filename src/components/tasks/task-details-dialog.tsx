@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,9 +49,9 @@ interface TaskDetailsDialogProps {
   task: Task;
   currentUser: AppUser;
   userMap: Map<string, UserType>;
-  onStatusChange: (taskId: string, status: TaskStatus) => void;
-  onReply: (taskId: string, reply: string) => void;
-  onSendNotification: (taskId: string, message: string) => void;
+  onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
+  onReply: (taskId: string, reply: string) => Promise<void>;
+  onSendNotification: (taskId: string, message: string) => Promise<void>;
 }
 
 export function TaskDetailsDialog({
@@ -81,18 +82,17 @@ export function TaskDetailsDialog({
   const { data: student } = useDoc<any>('students', task.studentId || '');
 
   const taskThread = useMemo(() => {
-    const thread = [];
+    const thread: any[] = [];
     
-    // Status changes (if we had them logged, but for now we'll use replies and notifications)
     (task.replies || []).forEach(r => thread.push({ ...r, type: 'reply' }));
     (task.notifications || []).forEach(n => thread.push({ ...n, id: `notif-${n.timestamp}`, createdAt: n.timestamp, type: 'notif', content: n.message, authorId: n.fromId }));
     
     return thread.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [task.replies, task.notifications]);
 
-  const handleReplyClick = () => {
+  const handleReplyClick = async () => {
     if (!replyContent.trim()) return;
-    onReply(task.id, replyContent);
+    await onReply(task.id, replyContent);
     setReplyContent('');
   };
 
@@ -121,7 +121,10 @@ export function TaskDetailsDialog({
         <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">{label}</p>
         <div className="flex items-center gap-2 font-medium">
           {Icon && <Icon className="h-4 w-4 text-primary" />}
-          {Array.isArray(value) ? value.join(', ') : String(value)}
+          <span className="text-sm">
+            {Array.isArray(value) ? value.join(', ') : 
+             (value instanceof Date || (typeof value === 'string' && value.includes('T')) ? formatDateTime(value) : String(value))}
+          </span>
         </div>
       </div>
     );
@@ -146,7 +149,7 @@ export function TaskDetailsDialog({
             </div>
             <div className="flex flex-col items-end gap-3 shrink-0">
               <Link href={`/student/${task.studentId}`} className="text-xs text-primary font-bold underline flex items-center gap-1">
-                View Full Student Profile <ExternalLink className="h-3 w-3" />
+                View Full Profile <ExternalLink className="h-3 w-3" />
               </Link>
               <div className="flex flex-col gap-2">
                 <div className="flex gap-1 p-1 bg-muted rounded-md border">
@@ -168,18 +171,17 @@ export function TaskDetailsDialog({
                     </Button>
                   ))}
                 </div>
-                <Button 
-                  size="sm" 
-                  className={cn(
-                    "h-8 font-bold gap-2 transition-all",
-                    !hasStatusChanged ? "opacity-0 pointer-events-none" : "opacity-100"
-                  )}
-                  onClick={handleSaveStatus}
-                  disabled={isSavingStatus}
-                >
-                  {isSavingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                  Save Status
-                </Button>
+                {hasStatusChanged && (
+                  <Button 
+                    size="sm" 
+                    className="h-8 font-bold gap-2 animate-in fade-in slide-in-from-top-1 w-full"
+                    onClick={handleSaveStatus}
+                    disabled={isSavingStatus}
+                  >
+                    {isSavingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    Save Status
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -233,7 +235,7 @@ export function TaskDetailsDialog({
                 <h3 className="text-lg font-bold">Attached Student Documents</h3>
                 <div className="space-y-2">
                   {data.selectedDocuments.map((docId: string) => {
-                    const doc = student?.documents?.find(d => d.id === docId);
+                    const doc = student?.documents?.find((d: any) => d.id === docId);
                     return doc ? (
                       <div key={docId} className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-3">
@@ -258,7 +260,7 @@ export function TaskDetailsDialog({
                 <h3 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Status / Seen</h3>
                 {task.viewedBy && task.viewedBy.length > 0 && (
                   <div className="text-[10px] text-muted-foreground">
-                    Seen by {task.viewedBy[0].userName} - {formatRelativeTime(task.viewedBy[0].timestamp)}
+                    Seen by {task.viewedBy[0].userName} - {formatDateTime(task.viewedBy[0].timestamp)}
                   </div>
                 )}
               </div>
@@ -283,11 +285,11 @@ export function TaskDetailsDialog({
                       </Avatar>
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold">{author?.name}</span>
+                          <span className="text-xs font-bold">{author?.name || 'System'}</span>
                           <span className="text-[10px] text-muted-foreground">{formatRelativeTime(item.createdAt)}</span>
                         </div>
                         <div className="text-xs text-muted-foreground whitespace-pre-wrap">
-                          {isNotif && <Badge variant="secondary" className="mr-1 h-4 text-[8px] bg-blue-500 text-white">NOTIF</Badge>}
+                          {isNotif && <BadgeComponent variant="secondary" className="mr-1 h-4 text-[8px] bg-blue-500 text-white">NOTIF</BadgeComponent>}
                           {item.content}
                         </div>
                       </div>

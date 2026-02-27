@@ -1,13 +1,12 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, Phone, User, Eye } from 'lucide-react';
+import { Loader2, Send, Phone, User, Eye, Save } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDate, formatRelativeTime } from '@/lib/timestamp-utils';
 import { cn } from '@/lib/utils';
 import type { Task, TaskStatus, User as UserType } from '@/lib/types';
@@ -25,30 +24,34 @@ export function TaskItem({
     task, 
     onStatusChange, 
     isUpdatingStatus, 
-    onReply, 
-    isReplying,
     userMap,
     currentUser,
     isNew,
     onViewDetails,
 }: { 
     task: Task, 
-    onStatusChange: (taskId: string, status: TaskStatus) => void, 
+    onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>, 
     isUpdatingStatus: boolean,
-    onReply: (taskId: string, reply: string) => void,
-    isReplying: boolean,
     userMap: Map<string, UserType>,
     currentUser: AppUser,
     isNew?: boolean,
     onViewDetails?: () => void,
 }) {
     const [isClient, setIsClient] = useState(false);
+    const [localStatus, setLocalStatus] = useState<TaskStatus>(task.status);
 
     useEffect(() => {
         setIsClient(true);
     }, []);
+
+    // Keep local status in sync with incoming props
+    useEffect(() => {
+        setLocalStatus(task.status);
+    }, [task.status]);
     
     const author = userMap.get(task.authorId);
+    const hasStatusChanged = localStatus !== task.status;
+    const canManage = ['admin', 'department'].includes(currentUser.role);
     
     return (
         <Card className={cn(
@@ -85,7 +88,7 @@ export function TaskItem({
                 </div>
             </CardHeader>
             <CardContent className="p-4 pt-2 flex-1">
-                <p className="text-sm text-muted-foreground line-clamp-3 italic mb-4">
+                <p className="text-sm text-muted-foreground line-clamp-2 italic mb-4">
                   "{task.content}"
                 </p>
                 <div className="flex items-center gap-2 pt-2 border-t">
@@ -94,20 +97,51 @@ export function TaskItem({
                     <AvatarFallback>{author?.name?.charAt(0) || 'E'}</AvatarFallback>
                   </Avatar>
                   <span className="text-[11px] text-muted-foreground font-medium">
-                    Requested by: <span className="text-foreground">{task.authorName || author?.name || 'Employee'}</span>
+                    By: <span className="text-foreground">{task.authorName || author?.name || 'Employee'}</span>
                   </span>
                 </div>
             </CardContent>
-            <CardFooter className="p-4 pt-0">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full text-xs font-bold gap-2"
-                onClick={onViewDetails}
-              >
-                <Eye className="h-3 w-3" />
-                View Details
-              </Button>
+            <CardFooter className="p-4 pt-0 gap-2 flex-col items-stretch">
+              <div className="flex items-center gap-2">
+                {canManage && (
+                  <Select 
+                    value={localStatus} 
+                    onValueChange={(v) => setLocalStatus(v as TaskStatus)}
+                    disabled={isUpdatingStatus}
+                  >
+                    <SelectTrigger className="h-8 text-[10px] font-bold uppercase flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">NEW</SelectItem>
+                      <SelectItem value="in-progress">IN PROGRESS</SelectItem>
+                      <SelectItem value="completed">COMPLETED</SelectItem>
+                      <SelectItem value="denied">DENIED</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className={cn("text-xs font-bold gap-2", !canManage && "w-full")}
+                  onClick={onViewDetails}
+                >
+                  <Eye className="h-3 w-3" />
+                  Details
+                </Button>
+              </div>
+              
+              {hasStatusChanged && (
+                <Button 
+                  size="sm" 
+                  className="w-full text-xs font-bold gap-2 h-8 animate-in fade-in slide-in-from-top-1"
+                  onClick={() => onStatusChange(task.id, localStatus)}
+                  disabled={isUpdatingStatus}
+                >
+                  {isUpdatingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                  Save Status
+                </Button>
+              )}
             </CardFooter>
         </Card>
     );
