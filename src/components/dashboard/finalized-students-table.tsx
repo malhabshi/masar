@@ -10,7 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { Student } from '@/lib/types';
-import { Plane } from 'lucide-react';
+import { Plane, Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 
@@ -50,6 +50,7 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
             <TableHead>Student</TableHead>
             <TableHead>Final Choice University</TableHead>
             <TableHead>Country</TableHead>
+            {showEmployee && <TableHead>Intake Term</TableHead>}
             {showEmployee && <TableHead>Assigned Employee</TableHead>}
           </TableRow>
         </TableHeader>
@@ -73,12 +74,24 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
                 </TableCell>
                 <TableCell className="font-medium">{student.finalChoiceUniversity}</TableCell>
                 <TableCell>{getUniversityCountry(student)}</TableCell>
+                {showEmployee && (
+                  <TableCell>
+                    {student.academicIntakeSemester ? (
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
+                        <Calendar className="h-3 w-3 text-primary" />
+                        <span className="text-sm font-medium">{student.academicIntakeSemester} {student.academicIntakeYear}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Not set</span>
+                    )}
+                  </TableCell>
+                )}
                 {showEmployee && <TableCell>{getEmployeeName(student.employeeId)}</TableCell>}
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={showEmployee ? 4 : 3} className="h-24 text-center">
+              <TableCell colSpan={showEmployee ? 5 : 3} className="h-24 text-center">
                 No students match your filters.
               </TableCell>
             </TableRow>
