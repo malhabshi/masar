@@ -73,7 +73,13 @@ export function useCollection<T = any>(
           try {
             if (typeof target === 'string') path = target;
             else if ((target as any).path) path = (target as any).path;
-            else if ((target as any)._query?.path?.canonicalString) path = (target as any)._query.path.canonicalString();
+            else {
+              // Safely attempt to get the query path if it's a query object
+              const internalQuery = (target as any)._query || (target as any).query;
+              if (internalQuery?.path?.canonicalString) {
+                path = internalQuery.path.canonicalString();
+              }
+            }
           } catch (e) {}
 
           const contextualError = new FirestorePermissionError({
