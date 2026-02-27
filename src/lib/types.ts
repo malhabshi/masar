@@ -154,6 +154,7 @@ export interface Task {
   studentName?: string;
   taskType?: string;
   category?: 'update' | 'system' | 'request';
+  data?: any;
 }
 
 export interface ResourceLink {
@@ -200,7 +201,7 @@ export interface RecipientConfig {
 }
 
 export interface SpecialTaskConfig {
-  examTypes: ('ielts' | 'toefl')[];
+  examTypes: ('ielts' | 'toefl' | 'ielts_retake')[];
   ielts: {
     showSubtypes: boolean;
     subtypes: ('academic' | 'ukvi')[];
@@ -213,6 +214,12 @@ export interface SpecialTaskConfig {
     showSubtypes: boolean;
     showDates: boolean;
     showAmount: boolean;
+  };
+  ielts_retake?: {
+    showIdpCredentials: boolean;
+    showSections: boolean;
+    showPreferredTime: boolean;
+    showOriginalDate: boolean;
   };
   studentInfo: {
     pullName: boolean;

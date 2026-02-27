@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useFormContext } from 'react-hook-form';
@@ -19,7 +20,7 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-sm">Exam Type Options</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {['ielts', 'toefl'].map((exam) => (
+              {['ielts', 'toefl', 'ielts_retake'].map((exam) => (
                 <FormField key={exam} control={form.control} name="specialConfig.examTypes" render={({ field }) => (
                   <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                     <FormControl>
@@ -31,7 +32,7 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
                         }} 
                       />
                     </FormControl>
-                    <FormLabel className="uppercase font-mono">{exam}</FormLabel>
+                    <FormLabel className="uppercase font-mono">{exam.replace('_', ' ')}</FormLabel>
                   </FormItem>
                 )} />
               ))}
@@ -100,6 +101,34 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
                     </Select>
                   </FormItem>
                 )} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {watchExamTypes.includes('ielts_retake') && (
+          <Card className="border-orange-200 bg-orange-50/10">
+            <CardHeader><CardTitle className="text-sm text-orange-700">IELTS Retake Logic</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                {['showIdpCredentials', 'showSections'].map((f) => (
+                  <FormField key={f} control={form.control} name={`specialConfig.ielts_retake.${f}`} render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                      <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <FormLabel className="text-xs">{f.replace(/([A-Z])/g, ' $1').trim()}</FormLabel>
+                    </FormItem>
+                  )} />
+                ))}
+              </div>
+              <div className="space-y-3">
+                {['showPreferredTime', 'showOriginalDate'].map((f) => (
+                  <FormField key={f} control={form.control} name={`specialConfig.ielts_retake.${f}`} render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                      <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <FormLabel className="text-xs">{f.replace(/([A-Z])/g, ' $1').trim()}</FormLabel>
+                    </FormItem>
+                  )} />
+                ))}
               </div>
             </CardContent>
           </Card>

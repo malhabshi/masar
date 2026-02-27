@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -11,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Calendar as CalendarIcon, UploadCloud } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -35,12 +36,23 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   };
 
   if (requestType.isSpecialTask && config) {
-    if (config.examTypes?.length > 0) {
-      schemaFields.examType = z.enum(['ielts', 'toefl'] as any);
+    if (config.examTypes?.includes('ielts') || config.examTypes?.includes('toefl')) {
+      schemaFields.examType = z.enum(['ielts', 'toefl'] as any).optional();
       schemaFields.ieltsSubtype = z.string().optional();
       schemaFields.requestedDate = z.date().optional();
       schemaFields.amount = z.coerce.number().optional();
     }
+
+    if (config.examTypes?.includes('ielts_retake')) {
+      schemaFields.examType = z.literal('ielts_retake').optional();
+      schemaFields.idpUsername = z.string().min(1, 'IDP Username is required');
+      schemaFields.idpPassword = z.string().min(1, 'IDP Password is required');
+      schemaFields.sections = z.array(z.string()).min(1, 'Select at least one section');
+      schemaFields.preferredDate = z.date({ required_error: 'Preferred date is required' });
+      schemaFields.preferredTime = z.enum(['10:00 AM', '1:30 PM', '5:00 PM'], { required_error: 'Preferred time is required' });
+      schemaFields.originalExamDate = z.date({ required_error: 'Original exam date is required' });
+    }
+
     if (config.studentInfo?.passportNameField) {
       schemaFields.passportName = z.string().optional();
     }
@@ -66,11 +78,14 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     defaultValues: {
       notes: '',
       selectedDocuments: [],
+      sections: [],
+      examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
     },
   });
 
   const watchExamType = form.watch('examType');
   const watchDocs = form.watch('selectedDocuments') || [];
+  const watchSections = form.watch('sections') || [];
 
   const handleDocToggle = (docId: string) => {
     const current = form.getValues('selectedDocuments') || [];
@@ -78,6 +93,15 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       form.setValue('selectedDocuments', current.filter(id => id !== docId));
     } else {
       form.setValue('selectedDocuments', [...current, docId]);
+    }
+  };
+
+  const handleSectionToggle = (section: string) => {
+    const current = form.getValues('sections') || [];
+    if (current.includes(section)) {
+      form.setValue('sections', current.filter(s => s !== section));
+    } else {
+      form.setValue('sections', [...current, section]);
     }
   };
 
@@ -119,40 +143,43 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           )}
         </div>
 
-        {/* Special Config Exam Section */}
-        {requestType.isSpecialTask && config?.examTypes?.length > 0 && (
-          <div className="space-y-4 border-t pt-4">
-            <FormField
-              control={form.control}
-              name="examType"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormLabel>Select Exam Type *</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="flex flex-col space-y-1"
-                    >
-                      {config.examTypes.map((type: string) => (
-                        <FormItem key={type} className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value={type} />
-                          </FormControl>
-                          <FormLabel className="font-normal uppercase">
-                            {type}
-                          </FormLabel>
-                        </FormItem>
-                      ))}
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        {/* Exam Type Selection (If multiple) */}
+        {requestType.isSpecialTask && config?.examTypes?.length > 1 && (
+          <FormField
+            control={form.control}
+            name="examType"
+            render={({ field }) => (
+              <FormItem className="space-y-3">
+                <FormLabel>Select Exam Category *</FormLabel>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    className="flex flex-col space-y-1"
+                  >
+                    {config.examTypes.map((type: string) => (
+                      <FormItem key={type} className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value={type} />
+                        </FormControl>
+                        <FormLabel className="font-normal uppercase">
+                          {type.replace('_', ' ')}
+                        </FormLabel>
+                      </FormItem>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
+        {/* IELTS / TOEFL Logic */}
+        {(watchExamType === 'ielts' || watchExamType === 'toefl') && (
+          <div className="space-y-4 border-t pt-4 animate-in fade-in">
             {watchExamType === 'ielts' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {config.ielts?.showSubtypes && (
                   <FormField
                     control={form.control}
@@ -206,7 +233,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                               onSelect={field.onChange}
                               disabled={(date) => {
                                 const today = startOfDay(new Date());
-                                // Default to 5 days if rule is set or just generally for IELTS as per request
                                 const rule = config.ielts?.dateRule || '5_days_from_today';
                                 const minDate = rule === '5_days_from_today' ? addDays(today, 5) : today;
                                 return date < minDate;
@@ -215,7 +241,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                             />
                           </PopoverContent>
                         </Popover>
-                        <FormDescription>Earliest available date: {format(addDays(new Date(), 5), "PPP")}</FormDescription>
+                        <FormDescription>Min 5 days from today.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -232,7 +258,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                         <FormControl>
                           <Input type="number" step="0.01" placeholder="0.00" {...field} />
                         </FormControl>
-                        <FormDescription>Enter the registration fee for the selected exam.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -240,6 +265,138 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* IELTS RETAKE LOGIC */}
+        {watchExamType === 'ielts_retake' && (
+          <div className="space-y-6 border-t pt-4 animate-in fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="idpUsername"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>IDP Username *</FormLabel>
+                    <FormControl><Input placeholder="Enter username" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="idpPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>IDP Password *</FormLabel>
+                    <FormControl><Input type="text" placeholder="Enter password" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <FormLabel>Select Section to Retake *</FormLabel>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {['Listening', 'Reading', 'Writing', 'Speaking'].map((section) => (
+                  <div key={section} className="flex items-center space-x-2 border p-3 rounded-md">
+                    <Checkbox 
+                      id={`section-${section}`} 
+                      checked={watchSections.includes(section)} 
+                      onCheckedChange={() => handleSectionToggle(section)}
+                    />
+                    <label htmlFor={`section-${section}`} className="text-sm font-medium cursor-pointer">{section}</label>
+                  </div>
+                ))}
+              </div>
+              <FormMessage>{form.formState.errors.sections?.message}</FormMessage>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="preferredDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Preferred Exam Date *</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < addDays(startOfDay(new Date()), 3)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormDescription>Min 3 days from today.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="preferredTime"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Preferred Time *</FormLabel>
+                    <FormControl>
+                      <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4">
+                        {['10:00 AM', '1:30 PM', '5:00 PM'].map((time) => (
+                          <FormItem key={time} className="flex items-center space-x-2 space-y-0">
+                            <FormControl><RadioGroupItem value={time} /></FormControl>
+                            <FormLabel className="font-normal">{time}</FormLabel>
+                          </FormItem>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="originalExamDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Original Exam Date *</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                          {field.value ? format(field.value, "PPP") : <span>Pick original date</span>}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) => date > startOfDay(new Date())}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>Must be in the past.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
         )}
 
