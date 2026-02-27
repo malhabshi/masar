@@ -201,7 +201,7 @@ export interface RecipientConfig {
 }
 
 export interface SpecialTaskConfig {
-  examTypes: ('ielts' | 'toefl' | 'ielts_retake')[];
+  examTypes: ('ielts' | 'toefl' | 'ielts_retake' | 'ielts_course')[];
   ielts: {
     showSubtypes: boolean;
     subtypes: ('academic' | 'ukvi')[];
@@ -220,6 +220,10 @@ export interface SpecialTaskConfig {
     showSections: boolean;
     showPreferredTime: boolean;
     showOriginalDate: boolean;
+  };
+  ielts_course?: {
+    showOptions: boolean;
+    showSundaysOnly: boolean;
   };
   studentInfo: {
     pullName: boolean;

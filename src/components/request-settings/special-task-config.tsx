@@ -20,7 +20,7 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-sm">Exam Type Options</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {['ielts', 'toefl', 'ielts_retake'].map((exam) => (
+              {['ielts', 'toefl', 'ielts_retake', 'ielts_course'].map((exam) => (
                 <FormField key={exam} control={form.control} name="specialConfig.examTypes" render={({ field }) => (
                   <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                     <FormControl>
@@ -129,6 +129,28 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
                     </FormItem>
                   )} />
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {watchExamTypes.includes('ielts_course') && (
+          <Card className="border-green-200 bg-green-50/10">
+            <CardHeader><CardTitle className="text-sm text-green-700">IELTS Course Logic</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <FormField control={form.control} name="specialConfig.ielts_course.showOptions" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                    <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormLabel className="text-xs">Show Course Duration/Mode Options</FormLabel>
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="specialConfig.ielts_course.showSundaysOnly" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                    <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormLabel className="text-xs">Restrict Dates to Sundays Only</FormLabel>
+                  </FormItem>
+                )} />
               </div>
             </CardContent>
           </Card>

@@ -27,6 +27,13 @@ interface DynamicTaskFormProps {
   isSubmitting: boolean;
 }
 
+const IELTS_COURSE_OPTIONS = [
+  'One week "ielts" In-Person',
+  'One week "ielts" Online',
+  'One month "ielts" In-Person',
+  'One month "ielts" Online'
+];
+
 export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSubmitting }: DynamicTaskFormProps) {
   const config = requestType.specialConfig;
   
@@ -37,7 +44,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
   if (requestType.isSpecialTask && config) {
     if (config.examTypes?.includes('ielts') || config.examTypes?.includes('toefl')) {
-      schemaFields.examType = z.enum(['ielts', 'toefl', 'ielts_retake'] as any).optional();
+      schemaFields.examType = z.enum(['ielts', 'toefl', 'ielts_retake', 'ielts_course'] as any).optional();
       schemaFields.ieltsSubtype = z.string().optional();
       schemaFields.requestedDate = z.date().optional();
       schemaFields.amount = z.coerce.number().optional();
@@ -47,11 +54,16 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       schemaFields.examType = z.literal('ielts_retake').optional();
       schemaFields.idpUsername = z.string().min(1, 'IDP Username is required');
       schemaFields.idpPassword = z.string().min(1, 'IDP Password is required');
-      // UPDATED: Single section instead of multiple
       schemaFields.retakeSection = z.string({ required_error: 'Select a section to retake' });
       schemaFields.preferredDate = z.date({ required_error: 'Preferred date is required' });
       schemaFields.preferredTime = z.enum(['10:00 AM', '1:30 PM', '5:00 PM'], { required_error: 'Preferred time is required' });
       schemaFields.originalExamDate = z.date({ required_error: 'Original exam date is required' });
+    }
+
+    if (config.examTypes?.includes('ielts_course')) {
+      schemaFields.examType = z.literal('ielts_course').optional();
+      schemaFields.courseOption = z.string({ required_error: 'Please select a course option' });
+      schemaFields.courseStartDate = z.date({ required_error: 'Course start date is required' });
     }
 
     if (config.studentInfo?.passportNameField) {
@@ -80,6 +92,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       notes: '',
       selectedDocuments: [],
       retakeSection: undefined,
+      courseOption: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
     },
   });
@@ -141,7 +154,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             name="examType"
             render={({ field }) => (
               <FormItem className="space-y-3">
-                <FormLabel>Select Exam Category *</FormLabel>
+                <FormLabel>Select Exam/Course Category *</FormLabel>
                 <FormControl>
                   <RadioGroup
                     onValueChange={field.onChange}
@@ -396,6 +409,73 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     </PopoverContent>
                   </Popover>
                   <FormDescription>Must be in the past.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
+        {/* IELTS COURSE LOGIC */}
+        {watchExamType === 'ielts_course' && (
+          <div className="space-y-6 border-t pt-4 animate-in fade-in">
+            <FormField
+              control={form.control}
+              name="courseOption"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormLabel>Select Course Option *</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                    >
+                      {IELTS_COURSE_OPTIONS.map((option) => (
+                        <FormItem key={option} className="flex items-center space-x-3 space-y-0 border p-4 rounded-lg bg-muted/20">
+                          <FormControl>
+                            <RadioGroupItem value={option} />
+                          </FormControl>
+                          <FormLabel className="font-medium cursor-pointer">{option}</FormLabel>
+                        </FormItem>
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="courseStartDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Course Start Date (Sundays Only) *</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                          {field.value ? format(field.value, "PPP") : <span>Select a Sunday</span>}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) => {
+                          const today = startOfDay(new Date());
+                          // Disable if not Sunday (0) OR if in the past
+                          return date.getDay() !== 0 || date < today;
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>Courses start every Sunday. Please select a future Sunday.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
