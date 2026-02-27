@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -42,7 +43,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     }
 
     if (currentUser.role === 'employee') {
-        // PERMISSION FIX: Employees can only list tasks they created
         return query(
             collection(firestore, 'tasks'),
             where('authorId', '==', currentUser.id),
@@ -55,6 +55,9 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
     }
+    
+    // Add user's own ID to groups so they can see tasks directly assigned to them
+    groups.push(currentUser.id);
     
     return query(
       collection(firestore, 'tasks'), 
@@ -152,66 +155,61 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     }
   };
 
+  // Calculate Categorized Tasks with full filtering so counts match display
   const categorizedTasks = useMemo(() => {
     if (!tasks || !currentUser) return { personal: [], department: [] };
 
     const personal: Task[] = [];
     const department: Task[] = [];
 
-    tasks.forEach(t => {
+    // Filter tasks first
+    const validTasks = tasks.filter(t => {
+      // Must be a request
+      if (t.category !== 'request') return false;
+      
+      // Filter out IELTS courses
+      const isIeltsCourse = t.data?.examType === 'ielts_course' || 
+                           t.taskType?.toLowerCase() === 'ielts course';
+      if (isIeltsCourse) return false;
+
+      // Search query filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          t.studentName?.toLowerCase().includes(query) ||
+          t.taskType?.toLowerCase().includes(query) ||
+          t.content?.toLowerCase().includes(query) ||
+          t.authorName?.toLowerCase().includes(query) ||
+          t.studentPhone?.includes(query)
+        );
+      }
+
+      return true;
+    });
+
+    validTasks.forEach(t => {
       if (currentUser.role === 'employee') {
           personal.push(t);
           return;
       }
 
       const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
-      const isPersonal = targets.includes(currentUser.id) || 
-                        (targets.includes('admins') && currentUser.role === 'admin');
+      
+      // Personal: targeted to me specifically OR targeted to 'admins' if I am admin
+      const isDirectlyForMe = targets.includes(currentUser.id) || (targets.includes('admins') && currentUser.role === 'admin');
 
-      const isDeptTarget = targets.some(rid => rid.startsWith('dept:'));
-
-      if (isPersonal) {
+      if (isDirectlyForMe) {
         personal.push(t);
-      } else if (isDeptTarget) {
-        if (currentUser.role === 'admin') {
-          department.push(t);
-        } 
-        else if (currentUser.role === 'department' && currentUser.department) {
-          if (targets.includes(`dept:${currentUser.department}`)) {
-            department.push(t);
-          }
-        }
-      } else if (targets.includes('all') && currentUser.role === 'employee') {
-        personal.push(t);
-      } else if (targets.includes('all') && (currentUser.role === 'admin' || currentUser.role === 'department')) {
+      } else {
+        // Everything else (Dept targeted or 'all') goes to department view
         department.push(t);
       }
     });
 
     return { personal, department };
-  }, [tasks, currentUser]);
+  }, [tasks, currentUser, searchQuery]);
 
-  const filteredTasks = useMemo(() => {
-    const baseTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;
-    
-    return baseTasks.filter(t => {
-      if (t.category !== 'request') return false;
-
-      const isIeltsCourse = t.data?.examType === 'ielts_course' || 
-                           t.taskType?.toLowerCase() === 'ielts course';
-      
-      if (isIeltsCourse) return false;
-
-      const query = searchQuery.toLowerCase();
-      return (
-        t.studentName?.toLowerCase().includes(query) ||
-        t.taskType?.toLowerCase().includes(query) ||
-        t.content?.toLowerCase().includes(query) ||
-        t.authorName?.toLowerCase().includes(query) ||
-        t.studentPhone?.includes(query)
-      );
-    });
-  }, [categorizedTasks, taskView, searchQuery]);
+  const filteredTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;
 
   const newTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const progressTasks = useMemo(() => filteredTasks.filter(t => t.status === 'in-progress').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
