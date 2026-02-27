@@ -17,11 +17,15 @@ service cloud.firestore {
       if (!isSignedIn()) return false;
       let adminDocPath = /databases/$(database)/documents/admins/$(request.auth.uid);
       let userDocPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      
       // Hardcoded bypass for the reported users to ensure emergency access
+      // Included corrected UID variant for malhabshi@q8sf.com (handling I/l and 0/O confusion)
       let isSuperAdmin = request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
                          request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' ||
+                         request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62' ||
                          request.auth.token.email == 'bo7amany98@gmail.com' ||
                          request.auth.token.email == 'malhabshi@q8sf.com';
+                         
       return isSuperAdmin || exists(adminDocPath) || (exists(userDocPath) && get(userDocPath).data.role == 'admin');
     }
 
@@ -87,7 +91,8 @@ service cloud.firestore {
 
       // GET rules define individual document access
       allow get: if isSignedIn() && (
-        isPrivileged() ||
+        isAdmin() ||
+        isDepartment() ||
         (resource.data.authorId == request.auth.uid) ||
         (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
         (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || request.auth.uid == 'all'))
@@ -137,11 +142,11 @@ service cloud.firestore {
     }
     
     match /application_questions/{qId} {
-      allow read, write: if isAdmin();
+      allow read, write, list: if isAdmin();
     }
     
     match /customApplicationFieldDefinitions/{fieldId} {
-      allow read, write: if isAdmin();
+      allow read, write, list: if isAdmin();
     }
   }
 }
