@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -10,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Search, User as UserIcon, Building2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCollection, useMemoFirebase } from '@/firebase';
-import { where, query, collection } from 'firebase/firestore';
+import { where, query, collection, orderBy } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { sortByDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
@@ -26,31 +27,41 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const [selectedTask, setSelectedRequestTask] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [taskView, setTaskView] = useState<'personal' | 'department'>('personal');
-  const { toast } = useToast();
   
+  // Default to Department Tasks for specialized staff, Personal for others/Admins
+  const [taskView, setTaskView] = useState<'personal' | 'department'>(
+    currentUser?.role === 'department' ? 'department' : 'personal'
+  );
+  
+  const { toast } = useToast();
   const [newItems, setNewItems] = useState(new Set<string>());
 
+  // Unified Query: Fetch all tasks relevant to the user's role and identity
   const tasksQuery = useMemoFirebase(() => {
     if (!currentUser) return null;
     
-    // Admins see all tasks
+    // Admins have oversight of the entire task collection
     if (currentUser.role === 'admin') {
-      return query(collection(firestore, 'tasks'));
+      return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
     }
 
+    // Role-based groups for employees and department staff
     const groups = [currentUser.id, 'all', 'admins'];
     if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
     }
     
-    return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', groups));
+    return query(
+      collection(firestore, 'tasks'), 
+      where('recipientIds', 'array-contains-any', groups),
+      orderBy('createdAt', 'desc')
+    );
   }, [currentUser]);
 
   const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
-  
   const tasks = useMemo(() => tasksData || [], [tasksData]);
 
+  // Track new items for visual "pulse" effect
   useEffect(() => {
     if (!tasks || tasks.length === 0 || !currentUser) return;
     const storageKey = `lastViewedTasksManager_${currentUser.id}`;
@@ -77,22 +88,19 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
   const allUserIdsInTasks = useMemo(() => {
     const userIds = new Set<string>();
-    if (tasks) {
-        tasks.forEach(task => {
-            userIds.add(task.authorId);
-            (task.recipientIds || []).forEach(rid => {
-                if (!rid.startsWith('dept:') && !['all', 'admins'].includes(rid)) {
-                    userIds.add(rid);
-                }
-            });
-            task.replies?.forEach(reply => userIds.add(reply.authorId));
+    tasks.forEach(task => {
+        userIds.add(task.authorId);
+        (task.recipientIds || []).forEach(rid => {
+            if (!rid.startsWith('dept:') && !['all', 'admins'].includes(rid)) {
+                userIds.add(rid);
+            }
         });
-    }
+        task.replies?.forEach(reply => userIds.add(reply.authorId));
+    });
     return Array.from(userIds);
   }, [tasks]);
 
   const { userMap, isLoading: areUsersLoading } = useUserCacheById(allUserIdsInTasks);
-  
   const isLoading = areTasksLoading || areUsersLoading;
 
   const handleStatusChange = async (taskId: string, status: TaskStatus) => {
@@ -140,33 +148,54 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     }
   };
 
+  // Categorize tasks into Personal (Direct) and Department (Group) queues
   const categorizedTasks = useMemo(() => {
-    // Tasks directed to ME specifically or my general role group
-    const personal = tasks.filter(t => 
-      t.recipientIds?.includes(currentUser.id) || 
-      (t.recipientIds?.includes('all') && currentUser.role === 'employee') ||
-      (t.recipientIds?.includes('admins') && currentUser.role === 'admin')
-    );
+    if (!tasks || !currentUser) return { personal: [], department: [] };
 
-    // Tasks directed to DEPARTMENTS
-    const department = tasks.filter(t => {
-      if (currentUser.role === 'admin') {
-        // Admins see all department-routed tasks in the "Dept" tab
-        return t.recipientIds?.some(rid => rid.startsWith('dept:'));
+    const personal: Task[] = [];
+    const department: Task[] = [];
+
+    tasks.forEach(t => {
+      const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
+      
+      // Personal: Directed to specific ID or primary role groups
+      const isPersonal = targets.includes(currentUser.id) || 
+                        (targets.includes('admins') && currentUser.role === 'admin') ||
+                        (targets.includes('all') && currentUser.role === 'employee');
+
+      // Dept: Directed to any specific department identifier
+      const isDeptTarget = targets.some(rid => rid.startsWith('dept:'));
+
+      if (isPersonal) {
+        personal.push(t);
+      } else if (isDeptTarget) {
+        // Admins see ALL department tasks in the Dept tab
+        if (currentUser.role === 'admin') {
+          department.push(t);
+        } 
+        // Specialized users only see their team's tasks
+        else if (currentUser.role === 'department' && currentUser.department) {
+          if (targets.includes(`dept:${currentUser.department}`)) {
+            department.push(t);
+          }
+        }
+      } else if (targets.includes('all') && (currentUser.role === 'admin' || currentUser.role === 'department')) {
+        // Global broadcasts show in Dept Tasks for management oversight
+        department.push(t);
       }
-      // Department users see tasks routed to their specific department
-      return currentUser.department && t.recipientIds?.includes(`dept:${currentUser.department}`);
     });
 
     return { personal, department };
-  }, [tasks, currentUser.id, currentUser.role, currentUser.department]);
+  }, [tasks, currentUser]);
 
   const filteredTasks = useMemo(() => {
     const baseTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;
     
     return baseTasks.filter(t => {
+      // Exclusively show formal requests from student profiles
       if (t.category !== 'request') return false;
 
+      // Ensure IELTS Course registrations are isolated to their own dashboard
       const isIeltsCourse = t.data?.examType === 'ielts_course' || 
                            t.taskType?.toLowerCase() === 'ielts course';
       
@@ -183,6 +212,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     });
   }, [categorizedTasks, taskView, searchQuery]);
 
+  // FIFO Sorting: Oldest tasks appear first within each status group
   const newTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const progressTasks = useMemo(() => filteredTasks.filter(t => t.status === 'in-progress').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const completedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
@@ -194,7 +224,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
         <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <CardTitle>Task Management</CardTitle>
-            <CardDescription>Structured FIFO workflow for student requests. Changes must be saved to update status.</CardDescription>
+            <CardDescription>Structured FIFO workflow for student requests. Actions must be saved to update status.</CardDescription>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="bg-muted p-1 rounded-lg flex items-center gap-1">
