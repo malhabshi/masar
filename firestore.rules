@@ -3,6 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /**
+     * UNIAPPLY HUB SECURITY RULES - EMERGENCY RECOVERY VERSION
+     */
+
     // --- Helper Functions ---
 
     function isSignedIn() {
@@ -10,42 +14,28 @@ service cloud.firestore {
     }
 
     /** 
-     * @description Checks if the user is the main super administrator via email.
+     * @description Checks if user is an admin. 
+     * Fallback: Checks both the dedicated DBAC collection AND the user's document role for safety.
      */
-    function isMainAdmin() {
+    function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'malhabshi@q8sf.com' || 
-        request.auth.token.email == 'bo7amany98@gmail.com'
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        // Emergency Super Admin Fallback
+        request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1' ||
+        // Main Admin UID
+        request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' ||
+        request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' ||
+        request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62'
       );
     }
 
-    /** 
-     * @description Safe check for admin status.
-     * Checks DBAC collection OR hardcoded bypass for emergency recovery.
-     */
-    function isAdmin() {
-      if (!isSignedIn()) return false;
-      if (isMainAdmin()) return true;
-      
-      // Hardcoded bypass for UID variants
-      let isSuperAdmin = request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
-                         request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' ||
-                         request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62';
-      
-      if (isSuperAdmin) return true;
-      
-      let adminDocPath = /databases/$(database)/documents/admins/$(request.auth.uid);
-      let userDocPath = /databases/$(database)/documents/users/$(request.auth.uid);
-                         
-      return exists(adminDocPath) || (exists(userDocPath) && get(userDocPath).data.role == 'admin');
-    }
-
-    /** @description Safe check for department status. */
+    /** @description Checks if user is in a department. Fallback included. */
     function isDepartment() {
-      if (!isSignedIn()) return false;
-      let deptDocPath = /databases/$(database)/documents/departmentUsers/$(request.auth.uid);
-      let userDocPath = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(deptDocPath) || (exists(userDocPath) && get(userDocPath).data.role == 'department');
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'department')
+      );
     }
 
     function isPrivileged() {
@@ -54,6 +44,10 @@ service cloud.firestore {
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     // --- Rules ---
@@ -72,55 +66,53 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
-    
     match /departmentUsers/{userId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     match /students/{studentId} {
+      // EMERGENCY: Restore read access for all staff to confirm data existence
+      allow read: if isSignedIn();
+      
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().civilId);
+      
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.employeeId);
+      
+      allow delete: if isAdmin();
+    }
+
+    match /universityApplications/{applicationId} {
+      allow read: if isSignedIn();
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().civilId);
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.assignedToEmployeeId);
+      allow delete: if isAdmin();
+    }
+
+    match /documents/{documentId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isAdmin();
+      allow update, delete: if isPrivileged() || isOwner(resource.data.authorId);
     }
 
     match /tasks/{taskId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn() && (
-        isPrivileged() ||
-        (resource.data.authorId == request.auth.uid) ||
+        isAdmin() || 
+        resource.data.authorId == request.auth.uid ||
         (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
-        (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || request.auth.uid == 'all'))
+        (isDepartment() && 'dept:' + getUserData().department in resource.data.recipientIds)
       );
       allow create: if isSignedIn();
       allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
       allow delete: if isAdmin();
     }
 
-    match /notification_templates/{templateId} {
-      allow get, list: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /application_questions/{qId} {
-      allow read, list: if isSignedIn();
-      allow write: if isAdmin();
-    }
-    
-    match /customApplicationFieldDefinitions/{fieldId} {
-      allow read, list: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /approved_universities/{uniId} {
-      allow read: if isSignedIn();
-      allow write: if isPrivileged();
-    }
-
-    match /shared_documents/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isPrivileged();
+    match /chats/{studentId} {
+      allow read, write: if isSignedIn();
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
     }
 
     match /chatThreads/{chatThreadId} {
@@ -130,13 +122,24 @@ service cloud.firestore {
       }
     }
 
-    match /chats/{studentId}/messages/{messageId} {
-      allow read, write: if isSignedIn();
+    match /customApplicationFieldDefinitions/{fieldId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     match /upcoming_events/{eventId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
+    }
+    
+    match /shared_documents/{documentId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /request_types/{typeId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
     
     match /resource_links/{linkId} {
@@ -149,15 +152,22 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
     }
-
-    match /request_types/{typeId} {
+    
+    match /approved_universities/{uniId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isPrivileged();
     }
 
     match /academic_terms/{termId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
+    }
+    
+    // NOTIFICATION TEMPLATES RULES
+    match /notification_templates/{templateId} {
+      allow read, list: if isSignedIn();
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
     }
   }
 }
