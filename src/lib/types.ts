@@ -316,3 +316,33 @@ export interface EmployeeStats {
   dailyCounts: EmployeeDailyCount[];
   monthlyTotals: EmployeeMonthlyTotal[];
 }
+
+export type NotificationType = 
+  | 'new_task_assigned'
+  | 'task_reply_received'
+  | 'new_student_added'
+  | 'student_assigned'
+  | 'task_reminder'
+  | 'admin_update'
+  | 'document_uploaded_admin'
+  | 'document_uploaded_student'
+  | 'task_status_in_progress'
+  | 'task_status_completed'
+  | 'task_status_denied'
+  | 'ielts_course_registration'
+  | 'ielts_retake_request'
+  | 'payment_received'
+  | 'scholarship_approved'
+  | 'visa_update';
+
+export interface NotificationTemplate {
+  id: string;
+  notificationType: NotificationType;
+  templateName: string;
+  message: string;
+  variables: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+}

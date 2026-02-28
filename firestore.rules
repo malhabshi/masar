@@ -87,6 +87,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /notification_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /application_questions/{qId} {
       allow read, list: if isSignedIn();
       allow write: if isAdmin();

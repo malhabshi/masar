@@ -63,6 +63,21 @@
         "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." }
       },
       "required": ["id", "name", "phone", "createdAt", "createdBy"]
+    },
+    "NotificationTemplate": {
+      "title": "Notification Template",
+      "type": "object",
+      "description": "Configuration for automated WhatsApp messages.",
+      "properties": {
+        "notificationType": { "type": "string" },
+        "templateName": { "type": "string" },
+        "message": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "variables": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["notificationType", "templateName", "message", "isActive"]
     }
   },
   "firestore": {
@@ -77,6 +92,10 @@
     "/tasks/{taskId}": {
       "schema": { "$ref": "#/entities/Task" },
       "description": "Stores tasks and their replies."
+    },
+    "/notification_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/NotificationTemplate" },
+      "description": "Stores WhatsApp message templates."
     }
   }
 }

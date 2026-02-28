@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sidebar,
@@ -28,6 +29,7 @@ import {
   Settings2,
   LineChart,
   BookOpenCheck,
+  BellRing,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -156,6 +158,7 @@ export function AppSidebar() {
         { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
+        { href: '/settings/notifications', label: 'WA Templates', icon: BellRing, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },
     ];
     
