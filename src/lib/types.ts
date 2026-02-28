@@ -81,6 +81,7 @@ export interface Student {
   createdAt: string;
   createdBy: string;
   lastActivityAt?: string; // Timestamp of the last significant action
+  lastInactivityReminderSentAt?: string; // Track recurring 3hr reminders
   targetCountries?: Country[];
   missingItems?: string[];
   pipelineStatus?: PipelineStatus;
@@ -335,7 +336,8 @@ export type NotificationType =
   | 'ielts_retake_request'
   | 'payment_received'
   | 'scholarship_approved'
-  | 'visa_update';
+  | 'visa_update'
+  | 'document_uploaded_student';
 
 export interface NotificationTemplate {
   id: string;

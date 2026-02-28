@@ -1283,6 +1283,10 @@ export async function handleEmployeeLogin(userId: string) {
       await batch.commit();
     }
     await timeLogsRef.add({ employeeId: userId, date: new Date().toISOString().split('T')[0], clockIn: new Date().toISOString(), clockOut: null, lastSeen: new Date().toISOString() });
+    
+    // Trigger inactivity check when employee logs in
+    await processInactivityReminders();
+
     return { success: true, message: 'Login session started.' };
   } catch (error: any) {
     return { success: false, message: error.message };
@@ -1306,6 +1310,10 @@ export async function keepAlive(userId: string) {
     try {
         const activeLogQuery = await adminDb!.collection('time_logs').where('employeeId', '==', userId).where('clockOut', '==', null).orderBy('clockIn', 'desc').limit(1).get();
         if (!activeLogQuery.empty) await activeLogQuery.docs[0].ref.update({ lastSeen: new Date().toISOString() });
+        
+        // Use heartbeat to trigger background inactivity reminder checks
+        await processInactivityReminders();
+
         return { success: true };
     } catch (error) {
         return { success: false, message: 'Failed to update session.' };
@@ -1352,8 +1360,8 @@ export async function getReportStats(dateRange: {
     const allStudents = studentsSnap.docs.map(doc => doc.data() as Student);
     const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
     const allTimeLogs = timeLogsSnap.docs.map(doc => doc.data() as TimeLog);
-    const studentsInRange = allStudents.filter(s => isWithinInterval(parseISO(s.createdAt), interval));
-    const appsInRange = allStudents.flatMap(s => s.applications || []).filter(app => isWithinInterval(parseISO(app.updatedAt), interval));
+    const studentsInRange = allStudents.filter(s => s.createdAt && isWithinInterval(parseISO(s.createdAt), interval));
+    const appsInRange = allStudents.flatMap(s => s.applications || []).filter(app => app.updatedAt && isWithinInterval(parseISO(app.updatedAt), interval));
     const stats: ReportStats = {
       totalStudents: allStudents.length, 
       totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), 
@@ -1755,6 +1763,62 @@ export async function submitInactivityReport(studentId: string, employeeId: stri
 }
 
 /**
+ * BACKGROUND TASK: Scans students for inactivity (>10 days) and sends recurring 3-hour chat reminders to employees.
+ */
+export async function processInactivityReminders() {
+  if (!checkAdminServices()) return { success: false };
+  
+  try {
+    const tenDaysAgo = subDays(new Date(), 10).toISOString();
+    const threeHoursAgo = subMinutes(new Date(), 180).toISOString();
+    
+    // Find students with no activity for 10 days
+    const snapshot = await adminDb!.collection('students')
+      .where('lastActivityAt', '<', tenDaysAgo)
+      .get();
+      
+    if (snapshot.empty) return { success: true };
+
+    for (const doc of snapshot.docs) {
+      const student = doc.data() as Student;
+      
+      // Exclude high-priority or finalized students
+      if (student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel) continue;
+      
+      // Only send if assigned to an employee
+      if (!student.employeeId) continue;
+
+      // Check if we already sent a reminder recently (within last 3 hours)
+      if (student.lastInactivityReminderSentAt && student.lastInactivityReminderSentAt > threeHoursAgo) continue;
+      
+      // Construct the alert message
+      const reminderContent = "Please contact the student , and give me a report why there is no activities \n\nتواصل مع الطالب و عطني تقرير عن الطالب ليش ماكو اي شي يديد عنه ؟";
+      
+      // Add chat message from 'Management'
+      await adminDb!.collection('chats').doc(doc.id).collection('messages').add({
+        authorId: 'system',
+        content: reminderContent,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Update student metadata to track reminder and alert employee
+      await doc.ref.update({
+        lastInactivityReminderSentAt: new Date().toISOString(),
+        employeeUnreadMessages: (student.employeeUnreadMessages || 0) + 1
+      });
+
+      // Optional: Log to server console for monitoring
+      console.log(`[Reminder] Sent 3-hour inactivity nudge for ${student.name} assigned to ${student.employeeId}`);
+    }
+
+    return { success: true };
+  } catch (e: any) {
+    console.error('Inactivity reminder process failed:', e);
+    return { success: false, message: e.message };
+  }
+}
+
+/**
  * DEBUG UTILITY: Forces a student into an "Inactive" state for testing.
  * Sets the lastActivityAt to 11 days ago.
  */
@@ -1767,6 +1831,7 @@ export async function forceInactivity(studentId: string) {
       createdAt: elevenDaysAgo,
       changeAgentRequired: false,
       pipelineStatus: 'none',
+      lastInactivityReminderSentAt: null, // Clear reminder history
       'profileCompletionStatus.readyToTravel': false
     });
     return { success: true, message: 'Student status backdated to 11 days ago.' };

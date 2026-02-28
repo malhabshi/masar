@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,6 +9,7 @@ import { AppSidebar } from '@/components/sidebar';
 import { Loader2 } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { NotificationListener } from '@/components/notifications/notification-listener';
+import { processInactivityReminders } from '@/lib/actions';
 
 export default function AuthenticatedLayout({
   children,
@@ -25,8 +27,14 @@ export default function AuthenticatedLayout({
   useEffect(() => {
     console.log('✅ Component mounted:', 'AuthenticatedLayout');
     setIsMounted(true);
+    
+    // Trigger an initial background check for student inactivity reminders
+    if (user && ['admin', 'employee'].includes(user.role)) {
+      processInactivityReminders();
+    }
+
     return () => console.log('❌ Component unmounted:', 'AuthenticatedLayout');
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     // Only run this effect on the client after mount
