@@ -1650,7 +1650,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
       // Notify assigned employee
       if (studentData.employeeId) {
         const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
-        if (!empQuery.empty) {
+        if (!employeeQuery.empty) {
           const emp = employeeQuery.docs[0].data() as User;
           await triggerWhatsAppNotification('document_uploaded_admin', {
             employeeName: emp.name,
@@ -1764,6 +1764,7 @@ export async function submitInactivityReport(studentId: string, employeeId: stri
 
 /**
  * BACKGROUND TASK: Scans students for inactivity (>10 days) and sends recurring 3-hour chat reminders to employees.
+ * Also notifies Admins so they can track the status.
  */
 export async function processInactivityReminders() {
   if (!checkAdminServices()) return { success: false };
@@ -1794,20 +1795,44 @@ export async function processInactivityReminders() {
       // Construct the alert message
       const reminderContent = "Please contact the student , and give me a report why there is no activities \n\nتواصل مع الطالب و عطني تقرير عن الطالب ليش ماكو اي شي يديد عنه ؟";
       
-      // Add chat message from 'Management'
+      // 1. Add chat message from 'Management'
       await adminDb!.collection('chats').doc(doc.id).collection('messages').add({
         authorId: 'system',
         content: reminderContent,
         timestamp: new Date().toISOString()
       });
       
-      // Update student metadata to track reminder and alert employee
+      // 2. Update student metadata to track reminder and alert BOTH employee and admin
       await doc.ref.update({
         lastInactivityReminderSentAt: new Date().toISOString(),
-        employeeUnreadMessages: (student.employeeUnreadMessages || 0) + 1
+        employeeUnreadMessages: (student.employeeUnreadMessages || 0) + 1,
+        unreadUpdates: (student.unreadUpdates || 0) + 1 // Increment for admin tracking
       });
 
-      // Optional: Log to server console for monitoring
+      // 3. Notify all admins via system update task so they can keep track
+      const employeeQuery = await adminDb!.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
+      const employeeData = !employeeQuery.empty ? employeeQuery.docs[0].data() as User : null;
+      
+      const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
+      if (!adminsSnap.empty) {
+          const batch = adminDb!.batch();
+          for (const adminDoc of adminsSnap.docs) {
+              const adminUpdateRef = adminDb!.collection('tasks').doc();
+              batch.set(adminUpdateRef, {
+                  authorId: 'system',
+                  createdBy: 'system',
+                  recipientId: adminDoc.id,
+                  recipientIds: [adminDoc.id],
+                  content: `[Auto-Reminder] Inactivity nudge sent to ${employeeData?.name || 'employee'} for student ${student.name}.`,
+                  createdAt: new Date().toISOString(),
+                  status: 'new',
+                  category: 'system',
+                  replies: []
+              });
+          }
+          await batch.commit();
+      }
+      
       console.log(`[Reminder] Sent 3-hour inactivity nudge for ${student.name} assigned to ${student.employeeId}`);
     }
 
