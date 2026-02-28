@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -478,22 +479,32 @@ export async function createStudentTask(authorId: string, studentId: string, req
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
         const studentData = studentDoc.data() as Student;
 
-        const recipientIds: string[] = [];
+        // Collect groups and specific users from the Request Type config
+        const recipientGroups: string[] = [];
+        const specificUserIds: string[] = [];
+        
         if (requestTypeData.recipients) {
           requestTypeData.recipients.forEach(r => {
-            if (r.type === 'user') recipientIds.push(r.id);
-            else if (r.type === 'group') recipientIds.push(r.id);
-            else if (r.type === 'department') recipientIds.push(`dept:${r.id}`);
+            if (r.type === 'user') specificUserIds.push(r.id);
+            else if (r.type === 'group') recipientGroups.push(r.id);
+            else if (r.type === 'department') recipientGroups.push(`dept:${r.id}`);
           });
         }
 
         const creator = await getUser(authorId);
+        
+        // Final list of strings for Firestore query targeting
+        const recipientIdsForTask = [
+          ...specificUserIds,
+          ...recipientGroups
+        ];
+
         const taskRef = await adminDb!.collection('tasks').add({
             authorId,
             createdBy: authorId, 
             authorName: creator?.name || 'Unknown Employee',
-            recipientId: recipientIds[0] || 'all', 
-            recipientIds: recipientIds.length > 0 ? recipientIds : ['all'],
+            recipientId: recipientIdsForTask[0] || 'all', 
+            recipientIds: recipientIdsForTask.length > 0 ? recipientIdsForTask : ['all'],
             content: description,
             createdAt: new Date().toISOString(),
             status: 'new',
@@ -513,27 +524,56 @@ export async function createStudentTask(authorId: string, studentId: string, req
             }
         });
 
-        // Also refresh student activity
+        // Refresh student activity timestamp
         await refreshStudentActivity(studentId);
 
-        // WhatsApp for recipients
-        for (const rid of recipientIds) {
-          if (!rid.startsWith('dept:') && rid !== 'all' && rid !== 'admins') {
-            const recipient = await getUser(rid);
-            if (recipient?.phone) {
-              await triggerWhatsAppNotification('new_task_assigned', {
-                employeeName: recipient.name,
-                taskTitle: requestTypeData.name,
-                taskDescription: description,
-                studentName: studentData.name,
-                assignedBy: creator?.name || 'UniApply System',
-                taskUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/tasks`
-              }, recipient.phone);
-            }
-          }
+        // Resolve all recipients into actual unique users for WhatsApp delivery
+        const usersToNotify = new Map<string, User>();
+
+        // 1. Add specific users
+        for (const uid of specificUserIds) {
+          const u = await getUser(uid);
+          if (u) usersToNotify.set(u.id, u);
         }
 
-        return { success: true, message: 'Task created successfully.' };
+        // 2. Add group members (Admins / All)
+        if (recipientGroups.includes('admins') || recipientGroups.includes('all')) {
+          const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
+          adminsSnap.forEach(doc => {
+            const u = { id: doc.id, ...doc.data() } as User;
+            usersToNotify.set(u.id, u);
+          });
+        }
+
+        // 3. Add department members
+        const deptGroups = recipientGroups.filter(g => g.startsWith('dept:'));
+        for (const dg of deptGroups) {
+          const deptName = dg.replace('dept:', '');
+          const deptSnap = await adminDb!.collection('users').where('department', '==', deptName).get();
+          deptSnap.forEach(doc => {
+            const u = { id: doc.id, ...doc.data() } as User;
+            usersToNotify.set(u.id, u);
+          });
+        }
+
+        // Send WhatsApp to every unique resolved management user
+        const notificationPromises = Array.from(usersToNotify.values()).map(recipient => {
+          if (recipient.id === authorId) return Promise.resolve(); // Don't notify self
+          if (!recipient.phone) return Promise.resolve();
+
+          return triggerWhatsAppNotification('new_task_assigned', {
+            employeeName: recipient.name,
+            taskTitle: requestTypeData.name,
+            taskDescription: description,
+            studentName: studentData.name,
+            assignedBy: creator?.name || 'UniApply Hub Staff',
+            taskUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/tasks`
+          }, recipient.phone);
+        });
+
+        await Promise.all(notificationPromises);
+
+        return { success: true, message: 'Task created and management notified via WhatsApp.' };
     } catch (error: any) {
         return { success: false, message: error.message };
     }
@@ -557,7 +597,8 @@ export async function markTaskAsSeen(taskId: string, userId: string, userName: s
 }
 
 export async function markMultipleTasksAsSeen(taskIds: string[], userId: string, userName: string) {
-  if (!checkAdminServices() || taskIds.length === 0) return { success: false };
+  if (!checkAdminServices()) return { success: false };
+  if (!taskIds || taskIds.length === 0) return { success: true };
   try {
     const batch = adminDb!.batch();
     const timestamp = new Date().toISOString();
