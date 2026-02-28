@@ -50,21 +50,11 @@ A specialized role, often for internal review or management, with broader read a
 - **Unassigned Students:** A dedicated view for admins to see newly created students and assign them to an employee.
 - **Finalized Students:** A view to see all students who have made their final university choice, with filtering options.
 
-### b. Communication & Tasking
-- **Internal Chat:** A real-time chat feature embedded within each student's profile, allowing an Employee and an Admin/Department to discuss that specific student's case.
-- **Task Management:** Admins can send tasks and updates to all employees or specific users. These appear on the recipient's dashboard. Employees can reply to tasks.
-- **Request System:** Employees can submit predefined requests for a student (e.g., "Request Transfer") which create tasks for the admin.
-
-### c. Document & Resource Management
-- **Student Documents:** Documents can be uploaded to a student's profile, with separate sections for employee-uploaded and admin-uploaded files. New uploads trigger notifications.
-- **Shared Resources:** Admins can maintain a global list of shared documents (e.g., company policies) and helpful links (e.g., official admissions websites) accessible to all users.
-
-### d. Admin-Specific Features
-- **User Management:** A dedicated page to create new user accounts and change the roles of existing users.
-- **Bulk Transfer:** A tool to transfer all students from one employee to another, useful for off-boarding.
-- **Activity Reports:** A reporting dashboard showing daily and monthly employee activity (e.g., time logged, tasks sent, profiles visited) and department-wide performance metrics.
-- **Application Questions:** A page where admins can manage the questions for the new student application form.
-- **System Settings:** A page to customize the application's theme colors and upload a custom logo.
+### b. Jotform Integration (New Lead Capture)
+The system is integrated with Jotform to automatically capture new leads.
+- **Webhook Endpoint:** `/api/jotform/webhook`
+- **Data Flow:** When a student submits the Jotform, a record is created in the `students` collection with `source: "jotform"`. These students appear in the **Unassigned Students** list.
+- **Admin Alerts:** New submissions trigger an automatic task notification for all Administrators.
 
 ---
 
@@ -80,7 +70,7 @@ A specialized role, often for internal review or management, with broader read a
 The database is structured around several key collections:
 - `/users/{userId}`: Stores public profiles for all users, including their role.
 - `/students/{studentId}`: Stores all information for each student.
-- `/employees/{employeeId}/students/{studentId}`: A mapping collection that grants an employee permission to access a specific student. This is the foundation of the security model.
+- `/jotform_submissions/{submissionId}`: Stores raw data from Jotform leads.
 - `/tasks/{taskId}`: Stores all tasks and their replies.
 - `/chats/{studentId}/messages/{messageId}`: Stores chat messages, nested under the relevant student.
 - Other global collections include `/approved_universities`, `/upcoming_events`, `/shared_documents`, etc.
