@@ -108,7 +108,14 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
       <div className="flex flex-col items-start gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-3xl font-bold">{student.name || 'Unknown Student'}</h1>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              {student.internalNumber && (
+                <span className="text-primary opacity-50 font-mono tracking-tighter">
+                  #{student.internalNumber}
+                </span>
+              )}
+              {student.name || 'Unknown Student'}
+            </h1>
             
             {/* Academic Intake Badge next to name (Visible to all if set) */}
             {student.academicIntakeSemester && (

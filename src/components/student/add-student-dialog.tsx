@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -34,6 +35,7 @@ const formSchema = z.object({
   phone: z.string().min(8, {
     message: 'Please enter a valid phone number.',
   }),
+  internalNumber: z.string().optional(),
   targetCountries: z.array(z.string()).default([]),
   otherCountry: z.string().optional(),
   notes: z.string().optional(),
@@ -63,6 +65,7 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
             studentName: '',
             studentEmail: '',
             phone: '',
+            internalNumber: '',
             notes: '',
             targetCountries: [],
             otherCountry: '',
@@ -147,19 +150,35 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)}>
                         <div className="space-y-6 py-4">
-                            <FormField
-                            control={form.control}
-                            name="studentName"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Student Full Name</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="e.g., Jane Doe" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                control={form.control}
+                                name="studentName"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Student Full Name</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="e.g., Jane Doe" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                                <FormField
+                                control={form.control}
+                                name="internalNumber"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Internal Number (Optional)</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="e.g., 1024" {...field} />
+                                    </FormControl>
+                                    <FormDescription>For internal tracking use.</FormDescription>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                            </div>
                             
                             <FormField
                                 control={form.control}

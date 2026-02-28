@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -61,6 +62,11 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
                 <TableCell>
                   <div>
                     <div className="flex items-center gap-2">
+                      {student.internalNumber && (
+                        <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          #{student.internalNumber}
+                        </span>
+                      )}
                       <span className="font-medium">{student.name}</span>
                       {student.profileCompletionStatus?.readyToTravel && (
                           <Badge variant="outline" className="border-success text-success font-normal">

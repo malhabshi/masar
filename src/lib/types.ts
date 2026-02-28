@@ -72,6 +72,7 @@ export interface Student {
   name: string;
   email: string;
   phone: string;
+  internalNumber?: string; // Internal use number
   employeeId: string | null;
   applications: Application[];
   employeeNotes?: Note[];

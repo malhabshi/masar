@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -25,6 +26,7 @@
         "name": { "type": "string", "description": "The full name of the student." },
         "email": { "type": "string", "description": "The email address of the student.", "format": "email" },
         "phone": { "type": "string", "description": "The phone number of the student." },
+        "internalNumber": { "type": "string", "description": "An internal use number assigned to the student." },
         "employeeId": { "type": ["string", "null"], "description": "Reference to the User's Civil ID for the assigned employee." },
         "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the student's profile picture." },
         "applications": { "type": "array", "description": "A list of university applications for the student.", "items": { "$ref": "#/entities/Application" } },

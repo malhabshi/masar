@@ -541,6 +541,7 @@ export async function createStudent(
     studentName: string;
     studentEmail?: string;
     phone: string;
+    internalNumber?: string;
     targetCountries: string[];
     otherCountry?: string;
     notes?: string;
@@ -552,7 +553,7 @@ export async function createStudent(
 ) {
   if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   
-  const { studentName, studentEmail, phone, targetCountries, otherCountry, notes } = values;
+  const { studentName, studentEmail, phone, internalNumber, targetCountries, otherCountry, notes } = values;
   let finalTargetCountries = targetCountries;
   if (otherCountry && otherCountry.trim()) finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
 
@@ -574,6 +575,7 @@ export async function createStudent(
       name: studentName,
       email: studentEmail || '',
       phone: phone,
+      internalNumber: internalNumber || '',
       employeeId: assignedEmployeeId || null, 
       applications: [],
       employeeNotes: [],

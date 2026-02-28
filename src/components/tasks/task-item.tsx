@@ -105,6 +105,9 @@ export function TaskItem({
                   <div className="flex items-center gap-2 text-sm text-primary font-bold">
                     <User className="h-3 w-3" />
                     <Link href={`/student/${task.studentId}`} className="hover:underline">
+                      {task.data?.internalNumber && (
+                        <span className="mr-1 opacity-60">#{task.data.internalNumber}</span>
+                      )}
                       {task.studentName || 'Student Profile'}
                     </Link>
                   </div>

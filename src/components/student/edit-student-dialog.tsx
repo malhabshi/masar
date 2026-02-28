@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,7 +15,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, FilePenLine } from 'lucide-react';
@@ -27,6 +28,7 @@ const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email().or(z.literal('')),
   phone: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }),
+  internalNumber: z.string().optional(),
 });
 
 interface EditStudentDialogProps {
@@ -44,6 +46,7 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
       name: student.name,
       email: student.email,
       phone: student.phone,
+      internalNumber: student.internalNumber || '',
     },
   });
 
@@ -53,6 +56,7 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
             name: student.name,
             email: student.email,
             phone: student.phone,
+            internalNumber: student.internalNumber || '',
         });
     }
   }, [isOpen, student, form]);
@@ -100,6 +104,20 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="internalNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Internal Number</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormDescription>Internal tracking number.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

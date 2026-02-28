@@ -104,7 +104,8 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
         const matchesSearch = !debouncedSearchQuery || 
             student.name.toLowerCase().includes(searchLower) ||
             (student.email && student.email.toLowerCase().includes(searchLower)) ||
-            (student.phone && student.phone.includes(debouncedSearchQuery));
+            (student.phone && student.phone.includes(debouncedSearchQuery)) ||
+            (student.internalNumber && student.internalNumber.toLowerCase().includes(searchLower));
         
         const matchesPipeline = pipelineFilter === 'all' || student.pipelineStatus === pipelineFilter || (pipelineFilter === 'none' && !student.pipelineStatus);
         
@@ -204,7 +205,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
             <div className="relative w-full">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                    placeholder="Search by name, email, or phone..."
+                    placeholder="Search by name, email, internal number or phone..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-8 w-full"
@@ -284,6 +285,11 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                     <div>
                       <Link href={`/student/${student.id}`} className="hover:underline">
                         <div className="font-medium flex items-center gap-2 flex-wrap">
+                          {student.internalNumber && (
+                            <Badge variant="secondary" className="font-bold text-[10px] h-5 px-1 bg-muted text-muted-foreground border-dashed">
+                              #{student.internalNumber}
+                            </Badge>
+                          )}
                           <span>{student.name || 'Unknown Student'}</span>
                           {isCurrentUserAssigned && student.isNewForEmployee && (
                               <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>

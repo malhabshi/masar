@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -148,7 +149,10 @@ export function TaskDetailsDialog({
               <Badge variant="outline" className="mb-2 uppercase tracking-tighter bg-primary/5">
                 {task.taskType || 'Request'}
               </Badge>
-              <DialogTitle className="text-2xl truncate">{task.studentName}</DialogTitle>
+              <DialogTitle className="text-2xl truncate flex items-center gap-2">
+                {data.internalNumber && <span className="opacity-50">#{data.internalNumber}</span>}
+                {task.studentName}
+              </DialogTitle>
               <DialogTitle className="text-xs text-muted-foreground font-mono mt-1">
                 By: {task.authorName || author?.name || 'Employee'}
               </DialogTitle>
@@ -207,6 +211,7 @@ export function TaskDetailsDialog({
               </h3>
               <div className="grid grid-cols-2 gap-y-6 bg-muted/20 p-4 rounded-lg border border-dashed">
                 {renderDataField('Requested By', task.authorName || author?.name, User)}
+                {renderDataField('Internal Number', data.internalNumber)}
                 {renderDataField('Passport Name', data.passportName, ShieldCheck)}
                 {renderDataField('Exam Category', data.examType, Clock)}
                 {renderDataField('IELTS Type', data.ieltsSubtype)}
