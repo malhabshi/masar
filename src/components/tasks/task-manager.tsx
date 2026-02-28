@@ -1,10 +1,9 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import type { Task, TaskStatus, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { addReplyToTask, updateTaskStatus, markTaskAsSeen, sendTaskNotification } from '@/lib/actions';
+import { addReplyToTask, updateTaskStatus, markTaskAsSeen, sendTaskNotification, markMultipleTasksAsSeen } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -110,51 +109,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const { userMap, isLoading: areUsersLoading } = useUserCacheById(allUserIdsInTasks);
   const isLoading = areTasksLoading || areUsersLoading;
 
-  const handleStatusChange = async (taskId: string, status: TaskStatus) => {
-      setIsUpdatingStatus(taskId);
-      const result = await updateTaskStatus(taskId, status, currentUser.id);
-      if (result.success) {
-          toast({
-              title: "Task Status Updated",
-              description: "The task status has been changed."
-          });
-      } else {
-          toast({ variant: 'destructive', title: "Error", description: result.message });
-      }
-      setIsUpdatingStatus(null);
-  }
-
-  const handleReply = async (taskId: string, content: string) => {
-    if (!currentUser) return;
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Task not found.' });
-      return;
-    }
-    const result = await addReplyToTask(taskId, currentUser.id, content, task.authorId);
-    if (result.success) {
-        toast({ title: "Reply Sent" });
-    } else {
-        toast({ variant: 'destructive', title: "Error", description: result.message });
-    }
-  }
-
-  const handleViewDetails = async (task: Task) => {
-    setSelectedRequestTask(task);
-    if (['admin', 'department'].includes(currentUser.role)) {
-      await markTaskAsSeen(task.id, currentUser.id, currentUser.name);
-    }
-  };
-
-  const handleSendNotification = async (taskId: string, message: string) => {
-    const result = await sendTaskNotification(taskId, currentUser.id, currentUser.name, message);
-    if (result.success) {
-      toast({ title: "Notification Sent", description: "The employee has been notified." });
-    } else {
-      toast({ variant: 'destructive', title: "Failed", description: result.message });
-    }
-  };
-
   // Calculate Categorized Tasks with full filtering so counts match display
   const categorizedTasks = useMemo(() => {
     if (!tasks || !currentUser) return { personal: [], department: [] };
@@ -210,6 +164,64 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   }, [tasks, currentUser, searchQuery]);
 
   const filteredTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;
+
+  // Mark visible "new" tasks as seen automatically when viewing the manager tabs
+  useEffect(() => {
+    if (currentUser && filteredTasks.length > 0) {
+      const unseenIds = filteredTasks
+        .filter(t => t.status === 'new' && !t.viewedBy?.some(v => v.userId === currentUser.id))
+        .map(t => t.id);
+      
+      if (unseenIds.length > 0) {
+        markMultipleTasksAsSeen(unseenIds, currentUser.id, currentUser.name);
+      }
+    }
+  }, [filteredTasks, currentUser]);
+
+  const handleStatusChange = async (taskId: string, status: TaskStatus) => {
+      setIsUpdatingStatus(taskId);
+      const result = await updateTaskStatus(taskId, status, currentUser.id);
+      if (result.success) {
+          toast({
+              title: "Task Status Updated",
+              description: "The task status has been changed."
+          });
+      } else {
+          toast({ variant: 'destructive', title: "Error", description: result.message });
+      }
+      setIsUpdatingStatus(null);
+  }
+
+  const handleReply = async (taskId: string, content: string) => {
+    if (!currentUser) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Task not found.' });
+      return;
+    }
+    const result = await addReplyToTask(taskId, currentUser.id, content, task.authorId);
+    if (result.success) {
+        toast({ title: "Reply Sent" });
+    } else {
+        toast({ variant: 'destructive', title: "Error", description: result.message });
+    }
+  }
+
+  const handleViewDetails = async (task: Task) => {
+    setSelectedRequestTask(task);
+    if (['admin', 'department'].includes(currentUser.role)) {
+      await markTaskAsSeen(task.id, currentUser.id, currentUser.name);
+    }
+  };
+
+  const handleSendNotification = async (taskId: string, message: string) => {
+    const result = await sendTaskNotification(taskId, currentUser.id, currentUser.name, message);
+    if (result.success) {
+      toast({ title: "Notification Sent", description: "The employee has been notified." });
+    } else {
+      toast({ variant: 'destructive', title: "Failed", description: result.message });
+    }
+  };
 
   const newTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
   const progressTasks = useMemo(() => filteredTasks.filter(t => t.status === 'in-progress').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);

@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sidebar,
@@ -113,15 +112,20 @@ export function AppSidebar() {
 
     // 6. Tasks notification count (Excluding IELTS Courses)
     const unreadTaskCount = useMemo(() => {
-        if (!tasks || !isAdminDept) return 0;
+        if (!tasks || !isAdminDept || !user) return 0;
         return tasks.filter(t => {
             if (t.status !== 'new') return false;
             if (t.category !== 'request') return false;
+            
+            // Check if current user has already seen this task
+            const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
+            if (hasSeen) return false;
+
             const isIeltsCourse = t.data?.examType === 'ielts_course' || 
                                  t.taskType?.toLowerCase() === 'ielts course';
             return !isIeltsCourse;
         }).length;
-    }, [tasks, isAdminDept]);
+    }, [tasks, isAdminDept, user]);
 
     // 7. IELTS Courses notification count
     const unreadIeltsCourseCount = useMemo(() => {
@@ -129,6 +133,11 @@ export function AppSidebar() {
         return tasks.filter(t => {
             if (t.status !== 'new') return false;
             if (t.category !== 'request') return false;
+
+            // Check if current user has already seen this task
+            const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
+            if (hasSeen) return false;
+
             const isIeltsCourse = t.data?.examType === 'ielts_course' || 
                                  t.taskType?.toLowerCase() === 'ielts course';
             return isIeltsCourse;

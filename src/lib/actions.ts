@@ -543,17 +543,35 @@ export async function markTaskAsSeen(taskId: string, userId: string, userName: s
   if (!checkAdminServices()) return { success: false };
   try {
     const taskRef = adminDb!.collection('tasks').doc(taskId);
-    const doc = await taskRef.get();
-    if (!doc.exists) return { success: false };
-    const task = doc.data() as Task;
-    const seenBy = task.viewedBy || [];
-    if (seenBy.some(v => v.userId === userId)) return { success: true };
     await taskRef.update({
-      viewedBy: [...seenBy, { userId, userName, timestamp: new Date().toISOString() }]
+      viewedBy: FieldValue.arrayUnion({ 
+        userId, 
+        userName, 
+        timestamp: new Date().toISOString() 
+      })
     });
     return { success: true };
   } catch (e) {
     return { success: false };
+  }
+}
+
+export async function markMultipleTasksAsSeen(taskIds: string[], userId: string, userName: string) {
+  if (!checkAdminServices() || taskIds.length === 0) return { success: false };
+  try {
+    const batch = adminDb!.batch();
+    const timestamp = new Date().toISOString();
+    
+    for (const id of taskIds) {
+      batch.update(adminDb!.collection('tasks').doc(id), {
+        viewedBy: FieldValue.arrayUnion({ userId, userName, timestamp })
+      });
+    }
+    
+    await batch.commit();
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, message: e.message };
   }
 }
 

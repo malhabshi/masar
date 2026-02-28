@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
@@ -16,6 +16,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toDate, formatDate } from '@/lib/timestamp-utils';
+import { markMultipleTasksAsSeen } from '@/lib/actions';
 
 export default function IeltsCourseDashboard() {
   const { user: currentUser } = useUser();
@@ -68,6 +69,19 @@ export default function IeltsCourseDashboard() {
       );
     });
   }, [tasks, dateRange, searchQuery]);
+
+  // Mark all visible "new" tasks as seen automatically when they appear in the table
+  useEffect(() => {
+    if (currentUser && filteredTasks.length > 0) {
+      const unseenIds = filteredTasks
+        .filter(t => t.status === 'new' && !t.viewedBy?.some(v => v.userId === currentUser.id))
+        .map(t => t.id);
+      
+      if (unseenIds.length > 0) {
+        markMultipleTasksAsSeen(unseenIds, currentUser.id, currentUser.name);
+      }
+    }
+  }, [filteredTasks, currentUser]);
 
   const handleDownloadExcel = () => {
     if (filteredTasks.length === 0) return;
