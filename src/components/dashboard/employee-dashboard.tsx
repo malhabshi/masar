@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -77,9 +76,14 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {changeAgentRequiredStudents.map(student => (
                       <Link key={student.id} href={`/student/${student.id}`}>
-                        <div className="bg-black p-4 rounded-lg flex items-center justify-between border-2 border-red-500 transition-transform hover:scale-[1.02]">
-                          <span className="text-red-500 font-bold truncate">{student.name}</span>
-                          <ArrowRight className="h-4 w-4 text-red-500" />
+                        <div className="bg-black p-4 rounded-lg flex items-center justify-between border-2 border-red-500 transition-transform hover:scale-[1.02] shadow-lg shadow-red-500/20 group">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-red-500 font-black truncate block uppercase tracking-tighter text-sm group-hover:animate-pulse">
+                              {student.name}
+                            </span>
+                            <span className="text-[10px] text-red-400/70 font-bold uppercase">Immediate Attention Required</span>
+                          </div>
+                          <ArrowRight className="h-5 w-5 text-red-500 ml-2 shrink-0" />
                         </div>
                       </Link>
                     ))}

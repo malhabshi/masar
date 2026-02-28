@@ -284,7 +284,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
                 return (
-                <TableRow key={student.id}>
+                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20")}>
                   <TableCell>
                     <div>
                       <Link href={`/student/${student.id}`} className="hover:underline">
@@ -296,9 +296,9 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                           )}
                           <span>{student.name || 'Unknown Student'}</span>
                           
-                          {/* CHANGE AGENT BADGE */}
+                          {/* CHANGE AGENT BADGE - BLACK AND RED PULSING */}
                           {student.changeAgentRequired && (
-                            <Badge className="bg-black text-red-500 border-red-500 border font-black text-[10px] h-5 px-1.5 animate-pulse">
+                            <Badge className="bg-black text-red-500 border-red-500 border font-black text-[10px] h-5 px-1.5 animate-pulse uppercase tracking-wider">
                               CHANGE AGENT
                             </Badge>
                           )}

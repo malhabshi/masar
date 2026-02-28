@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -67,12 +66,15 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
               <CardDescription>Active "Change Agent" flags across all students.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {changeAgentStudents.map(student => (
                   <Link key={student.id} href={`/student/${student.id}`}>
-                    <Badge className="bg-black text-red-500 border-red-500 border-2 hover:bg-black/90 px-3 py-1 flex items-center gap-2">
-                      {student.name}
-                      <ArrowRight className="h-3 w-3" />
+                    <Badge className="bg-black text-red-500 border-red-500 border-2 hover:bg-black/90 px-4 py-2 flex items-center gap-3 transition-transform hover:scale-105 group">
+                      <div className="flex flex-col items-start leading-none">
+                        <span className="font-black text-xs uppercase animate-pulse">{student.name}</span>
+                        <span className="text-[8px] text-red-400 font-bold opacity-70">FLAGGED FOR URGENCY</span>
+                      </div>
+                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                     </Badge>
                   </Link>
                 ))}
