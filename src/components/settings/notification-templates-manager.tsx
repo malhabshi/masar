@@ -120,42 +120,68 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
   const [editingTemplate, setEditingTemplate] = useState<NotificationTemplate | undefined>(undefined);
 
   const handleSave = async (values: any) => {
-    const result = await saveNotificationTemplate({
-      ...values,
-      updatedBy: currentUser.email,
-    }, editingTemplate?.id);
+    try {
+      const result = await saveNotificationTemplate({
+        ...values,
+        updatedBy: currentUser.email,
+      }, editingTemplate?.id);
 
-    if (result.success) {
-      toast({ title: 'Template Saved', description: result.message });
-      setIsDialogOpen(false);
-    } else {
-      toast({ variant: 'destructive', title: 'Error', description: result.message });
+      if (result && result.success) {
+        toast({ title: 'Template Saved', description: result.message || 'Success' });
+        setIsDialogOpen(false);
+      } else {
+        toast({ 
+          variant: 'destructive', 
+          title: 'Error', 
+          description: result?.message || 'Failed to save template. Please try again.' 
+        });
+      }
+    } catch (error: any) {
+      console.error('Error saving template:', error);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Save Failed', 
+        description: error.message || 'An unexpected error occurred while saving.' 
+      });
     }
   };
 
   const handleTest = async (templateId: string, phone: string) => {
-    const dummyVars = {
-      employeeName: 'Test Employee',
-      taskTitle: 'Urgent Documentation',
-      studentName: 'Ahmad Example',
-      taskUrl: 'https://uniapplyhub.com/tasks',
-      adminName: 'Super Admin',
-      messageContent: 'This is a test notification.',
-      replyAuthor: 'Admin User',
-      replyMessage: 'Please upload the transcript.',
-      documentName: 'Passport.pdf',
-      uploadedBy: 'Admin Sarah',
-      courseOption: 'One Month In-Person',
-      courseStartDate: 'Sunday, Oct 12',
-      assignedBy: 'Manager Ahmad',
-      dashboardUrl: 'https://uniapplyhub.com/dashboard'
-    };
+    try {
+      const dummyVars = {
+        employeeName: 'Test Employee',
+        taskTitle: 'Urgent Documentation',
+        studentName: 'Ahmad Example',
+        taskUrl: 'https://uniapplyhub.com/tasks',
+        adminName: 'Super Admin',
+        messageContent: 'This is a test notification.',
+        replyAuthor: 'Admin User',
+        replyMessage: 'Please upload the transcript.',
+        documentName: 'Passport.pdf',
+        uploadedBy: 'Admin Sarah',
+        courseOption: 'One Month In-Person',
+        courseStartDate: 'Sunday, Oct 12',
+        assignedBy: 'Manager Ahmad',
+        dashboardUrl: 'https://uniapplyhub.com/dashboard'
+      };
 
-    const result = await sendTestWhatsApp(templateId, phone, dummyVars);
-    if (result.success) {
-      toast({ title: 'Test Sent', description: 'WhatsApp message sent successfully.' });
-    } else {
-      toast({ variant: 'destructive', title: 'Test Failed', description: result.message });
+      const result = await sendTestWhatsApp(templateId, phone, dummyVars);
+      if (result && result.success) {
+        toast({ title: 'Test Sent', description: 'WhatsApp message sent successfully.' });
+      } else {
+        toast({ 
+          variant: 'destructive', 
+          title: 'Test Failed', 
+          description: result?.message || 'Failed to send WhatsApp test message.' 
+        });
+      }
+    } catch (error: any) {
+      console.error('Error testing template:', error);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Test Error', 
+        description: error.message || 'An error occurred while sending the test message.' 
+      });
     }
   };
 

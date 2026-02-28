@@ -143,18 +143,28 @@ export function TemplateDialog({
     if (!watchWebhook) return;
     setIsSendingSample(true);
     
-    const mapping: Record<string, string> = {};
-    form.getValues('mapping').forEach(m => {
-      mapping[m.placeholder] = m.systemVar;
-    });
+    try {
+      const mapping: Record<string, string> = {};
+      form.getValues('mapping').forEach(m => {
+        mapping[m.placeholder] = m.systemVar;
+      });
 
-    const result = await sendSampleWebhookRequest(watchWebhook, mapping);
-    if (result.success) {
-      toast({ title: 'Sample Sent', description: 'Sample POST request sent to webhook successfully.' });
-    } else {
-      toast({ variant: 'destructive', title: 'Sample Failed', description: result.message });
+      const result = await sendSampleWebhookRequest(watchWebhook, mapping);
+      if (result && result.success) {
+        toast({ title: 'Sample Sent', description: 'Sample POST request sent to webhook successfully.' });
+      } else {
+        toast({ 
+          variant: 'destructive', 
+          title: 'Sample Failed', 
+          description: result?.message || 'Failed to send sample POST request.' 
+        });
+      }
+    } catch (error: any) {
+      console.error('Error sending sample:', error);
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } finally {
+      setIsSendingSample(false);
     }
-    setIsSendingSample(false);
   };
 
   const onSubmit = async (values: z.infer<typeof templateSchema>) => {
@@ -166,18 +176,34 @@ export function TemplateDialog({
       variableMapping[m.placeholder] = m.systemVar;
     });
 
-    await onSave({
-      ...values,
-      variableMapping,
-    });
-    setIsSubmitting(false);
+    try {
+      await onSave({
+        ...values,
+        variableMapping,
+      });
+    } catch (error: any) {
+      console.error('Error in onSubmit:', error);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Save Failed', 
+        description: error.message || 'An error occurred while saving the template.' 
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleTestClick = async () => {
     if (!template?.id || !testPhone) return;
     setIsTesting(true);
-    await onTest(template.id, testPhone);
-    setIsTesting(false);
+    try {
+      await onTest(template.id, testPhone);
+    } catch (error: any) {
+      console.error('Error in handleTestClick:', error);
+      toast({ variant: 'destructive', title: 'Test Failed', description: error.message });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   return (
