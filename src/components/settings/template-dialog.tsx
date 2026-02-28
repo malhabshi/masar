@@ -1,8 +1,7 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useState, useMemo } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { NotificationTemplate, NotificationType } from '@/lib/types';
@@ -36,7 +35,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, SendHorizontal, Phone, Sparkles, Link as LinkIcon } from 'lucide-react';
+import { Loader2, SendHorizontal, Phone, Sparkles, Link as LinkIcon, Plus, Trash2 } from 'lucide-react';
 import type { NotificationTypeMeta } from './notification-templates-manager';
 
 const templateSchema = z.object({
@@ -46,6 +45,10 @@ const templateSchema = z.object({
   webhookUrl: z.string().url('Please enter a valid WANotifier webhook URL.').optional().or(z.literal('')),
   isActive: z.boolean().default(true),
   variables: z.array(z.string()).default([]),
+  mapping: z.array(z.object({
+    placeholder: z.string().min(1),
+    systemVar: z.string().min(1),
+  })).default([]),
 });
 
 export function TemplateDialog({
@@ -76,11 +79,21 @@ export function TemplateDialog({
       webhookUrl: '',
       isActive: true,
       variables: [],
+      mapping: [],
     },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "mapping",
   });
 
   useEffect(() => {
     if (isOpen) {
+      const mappingArray = template?.variableMapping 
+        ? Object.entries(template.variableMapping).map(([k, v]) => ({ placeholder: k, systemVar: v }))
+        : [];
+
       form.reset({
         notificationType: template?.notificationType || '',
         templateName: template?.templateName || '',
@@ -88,6 +101,7 @@ export function TemplateDialog({
         webhookUrl: template?.webhookUrl || '',
         isActive: template?.isActive ?? true,
         variables: template?.variables || [],
+        mapping: mappingArray,
       });
     }
   }, [isOpen, template, form]);
@@ -105,6 +119,11 @@ export function TemplateDialog({
     }
   };
 
+  const handleAddPlaceholder = (placeholderNum: string) => {
+    const current = form.getValues('message');
+    form.setValue('message', current + ` {{${placeholderNum}}}`);
+  };
+
   const handleUseDefault = () => {
     if (!activeTypeMeta) return;
     form.setValue('message', activeTypeMeta.exampleMessage);
@@ -116,7 +135,17 @@ export function TemplateDialog({
 
   const onSubmit = async (values: z.infer<typeof templateSchema>) => {
     setIsSubmitting(true);
-    await onSave(values);
+    
+    // Convert mapping array back to object for storage
+    const variableMapping: Record<string, string> = {};
+    values.mapping.forEach(m => {
+      variableMapping[m.placeholder] = m.systemVar;
+    });
+
+    await onSave({
+      ...values,
+      variableMapping,
+    });
     setIsSubmitting(false);
   };
 
@@ -129,10 +158,12 @@ export function TemplateDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{template ? 'Edit' : 'Add'} WhatsApp Template</DialogTitle>
-          <DialogDescription>Configure how WhatsApp messages look for specific system events.</DialogDescription>
+          <DialogDescription>
+            Configure your WhatsApp message and map numbered placeholders ({"{{1}}"}), ({"{{2}}"}) to system variables.
+          </DialogDescription>
         </DialogHeader>
         
         <Form {...form}>
@@ -173,29 +204,65 @@ export function TemplateDialog({
                   </FormItem>
                 )} />
 
+                <div className="p-4 rounded-lg border bg-muted/10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="text-primary font-bold">Placeholder Mapping</FormLabel>
+                    <Button type="button" variant="outline" size="sm" onClick={() => append({ placeholder: (fields.length + 1).toString(), systemVar: '' })}>
+                      <Plus className="h-3 w-3 mr-1" /> Add Placeholder
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
+                    Map numbering ({"{{1}}"}), ({"{{2}}"}) to system fields
+                  </p>
+                  
+                  {fields.length > 0 ? (
+                    <div className="space-y-3">
+                      {fields.map((field, index) => (
+                        <div key={field.id} className="flex items-center gap-2 animate-in fade-in slide-in-from-left-1">
+                          <div className="flex-1 flex items-center gap-2 bg-background border p-1 rounded-md">
+                            <span className="text-xs font-mono font-bold px-2 text-primary border-r">
+                              {"{{"}{fields[index].placeholder}{"}}"}
+                            </span>
+                            <FormField
+                              control={form.control}
+                              name={`mapping.${index}.systemVar`}
+                              render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <SelectTrigger className="border-0 focus:ring-0 h-7 text-xs">
+                                    <SelectValue placeholder="Select field" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableVars.map(v => (
+                                      <SelectItem key={v} value={v}>{v}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive" 
+                            onClick={() => remove(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs italic text-muted-foreground text-center py-2">No numbered placeholders defined yet.</p>
+                  )}
+                </div>
+
                 <FormField control={form.control} name="isActive" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-muted/10">
                     <div className="space-y-0.5"><FormLabel>Active Status</FormLabel></div>
                     <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                   </FormItem>
                 )} />
-
-                {activeTypeMeta && (
-                    <div className="p-4 rounded-lg border border-primary/20 bg-primary/5 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-bold text-primary flex items-center gap-2">
-                                <Sparkles className="h-4 w-4" />
-                                System Recommendation
-                            </h4>
-                            <Button type="button" variant="link" size="sm" className="h-auto p-0 font-bold" onClick={handleUseDefault}>
-                                Use default text
-                            </Button>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground italic leading-relaxed whitespace-pre-wrap font-mono bg-background/50 p-2 rounded">
-                            {activeTypeMeta.exampleMessage}
-                        </p>
-                    </div>
-                )}
               </div>
 
               <div className="space-y-6">
@@ -216,21 +283,58 @@ export function TemplateDialog({
                   </FormItem>
                 )} />
 
-                <div className="space-y-2">
-                  <p className="text-xs font-bold uppercase text-muted-foreground tracking-widest">Available Variables</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {availableVars.length > 0 ? availableVars.map(v => (
-                      <Badge 
-                        key={v} 
-                        variant="outline" 
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all text-[10px] font-mono py-1 px-2"
-                        onClick={() => handleAddVar(v)}
-                      >
-                        {`{{${v}}}`}
-                      </Badge>
-                    )) : <p className="text-xs italic text-muted-foreground">Select a notification type to see available variables.</p>}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase text-muted-foreground tracking-widest">Available System Fields</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {availableVars.length > 0 ? availableVars.map(v => (
+                        <Badge 
+                          key={v} 
+                          variant="secondary" 
+                          className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-all text-[10px] font-mono py-1 px-2"
+                          onClick={() => handleAddVar(v)}
+                        >
+                          {"{{"}{v}{"}}"}
+                        </Badge>
+                      )) : <p className="text-xs italic text-muted-foreground">Select a notification type to see available variables.</p>}
+                    </div>
                   </div>
+
+                  {fields.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold uppercase text-primary tracking-widest">Active Mapped Placeholders</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {fields.map((f, i) => (
+                          <Badge 
+                            key={i} 
+                            variant="outline" 
+                            className="cursor-pointer border-primary text-primary hover:bg-primary hover:text-white transition-all text-[10px] font-mono py-1 px-2"
+                            onClick={() => handleAddPlaceholder(fields[i].placeholder)}
+                          >
+                            {"{{"}{fields[i].placeholder}{"}}"}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {activeTypeMeta && (
+                    <div className="p-4 rounded-lg border border-primary/20 bg-primary/5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                System Recommendation
+                            </h4>
+                            <Button type="button" variant="link" size="sm" className="h-auto p-0 font-bold" onClick={handleUseDefault}>
+                                Use default text
+                            </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground italic leading-relaxed whitespace-pre-wrap font-mono bg-background/50 p-2 rounded">
+                            {activeTypeMeta.exampleMessage}
+                        </p>
+                    </div>
+                )}
               </div>
             </div>
 
@@ -264,7 +368,7 @@ export function TemplateDialog({
                 {!form.getValues('webhookUrl') && (
                   <p className="text-[10px] text-destructive mt-2 italic font-bold">Please configure a Webhook URL to send test messages.</p>
                 )}
-                <p className="text-[10px] text-muted-foreground mt-3 italic">Note: Test messages will use placeholder data for variables.</p>
+                <p className="text-[10px] text-muted-foreground mt-3 italic">Note: Test messages will use your custom Placeholder Mapping.</p>
               </div>
             )}
 

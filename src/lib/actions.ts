@@ -86,12 +86,22 @@ export async function repairPermissions(adminId: string) {
 
 // --- WHATSAPP NOTIFICATION ENGINE ---
 
-async function sendWhatsAppViaWebhook(webhookUrl: string, phone: string, variables: Record<string, string>) {
+async function sendWhatsAppViaWebhook(webhookUrl: string, phone: string, variables: Record<string, string>, mapping?: Record<string, string>) {
   if (!webhookUrl || !phone) return { success: false, message: 'Missing webhook URL or phone' };
   
   // Basic normalization for Kuwait numbers (remove + or prefix)
   const normalizedPhone = phone.replace(/\D/g, '');
   const fullPhone = normalizedPhone.startsWith('965') ? normalizedPhone : `965${normalizedPhone}`;
+
+  // If a numbered mapping is provided, transform the descriptive variables into the numbered ones WANotifier expects
+  let payloadVariables = variables;
+  if (mapping && Object.keys(mapping).length > 0) {
+    const transformed: Record<string, string> = {};
+    Object.entries(mapping).forEach(([placeholderNum, systemVarName]) => {
+      transformed[placeholderNum] = variables[systemVarName] || '';
+    });
+    payloadVariables = transformed;
+  }
 
   try {
     const response = await fetch(webhookUrl, {
@@ -101,7 +111,7 @@ async function sendWhatsAppViaWebhook(webhookUrl: string, phone: string, variabl
       },
       body: JSON.stringify({
         to: fullPhone,
-        ...variables,
+        ...payloadVariables,
       }),
     });
 
@@ -138,7 +148,7 @@ export async function triggerWhatsAppNotification(
     const template = templateQuery.docs[0].data() as NotificationTemplate;
     
     if (template.webhookUrl) {
-      await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables);
+      await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables, template.variableMapping);
     }
   } catch (e) {
     console.error('WhatsApp trigger failed:', e);
@@ -157,7 +167,7 @@ export async function sendTestWhatsApp(templateId: string, phone: string, variab
       return { success: false, message: 'No Webhook URL configured for this template.' };
     }
 
-    return await sendWhatsAppViaWebhook(template.webhookUrl, phone, variables);
+    return await sendWhatsAppViaWebhook(template.webhookUrl, phone, variables, template.variableMapping);
   } catch (e: any) {
     return { success: false, message: e.message };
   }

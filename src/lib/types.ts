@@ -342,6 +342,7 @@ export interface NotificationTemplate {
   message: string;
   webhookUrl?: string;
   variables: string[];
+  variableMapping?: Record<string, string>; // Maps "1", "2", "3" to descriptive system variable names
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
