@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2 } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -19,7 +19,7 @@ import { useUserCacheById } from '@/hooks/use-user-cache';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import { CreateStudentTaskDialog } from '../tasks/create-student-task-dialog';
 import { Button } from '@/components/ui/button';
-import { toggleChangeAgentStatus } from '@/lib/actions';
+import { toggleChangeAgentStatus, forceInactivity } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -64,6 +64,7 @@ function StudentHeaderSkeleton() {
 export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
   const { toast } = useToast();
   const [isTogglingAgent, setIsTogglingAgent] = useState(false);
+  const [isForcingInactivity, setIsForcingInactivity] = useState(false);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
   const requesterId = student?.deletionRequested?.requestedBy;
@@ -105,6 +106,20 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
       toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
     }
     setIsTogglingAgent(false);
+  };
+
+  const handleForceInactivity = async () => {
+    if (!isAdmin) return;
+    setIsForcingInactivity(true);
+    const result = await forceInactivity(student.id);
+    if (result.success) {
+      toast({ title: 'Simulating 11 days of inactivity...' });
+      // Reload to trigger logic checks
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
+    }
+    setIsForcingInactivity(false);
   };
 
   // Only use countries from active applications for the header flags
@@ -186,6 +201,20 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               >
                 {isTogglingAgent ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundX className="mr-2 h-4 w-4" />}
                 {student.changeAgentRequired ? 'Remove Change Agent' : 'Change Agent'}
+              </Button>
+            )}
+
+            {/* DEBUG TOOLS */}
+            {isAdmin && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleForceInactivity} 
+                disabled={isForcingInactivity}
+                className="opacity-20 hover:opacity-100 hover:bg-orange-100 hover:text-orange-700 h-8 gap-1 text-[10px] font-bold"
+              >
+                {isForcingInactivity ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
+                DEBUG: Force 10d Inactivity
               </Button>
             )}
 

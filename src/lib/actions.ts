@@ -1753,3 +1753,24 @@ export async function submitInactivityReport(studentId: string, employeeId: stri
     return { success: false, message: e.message };
   }
 }
+
+/**
+ * DEBUG UTILITY: Forces a student into an "Inactive" state for testing.
+ * Sets the lastActivityAt to 11 days ago.
+ */
+export async function forceInactivity(studentId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const elevenDaysAgo = subDays(new Date(), 11).toISOString();
+    await adminDb!.collection('students').doc(studentId).update({
+      lastActivityAt: elevenDaysAgo,
+      createdAt: elevenDaysAgo,
+      changeAgentRequired: false,
+      pipelineStatus: 'none',
+      'profileCompletionStatus.readyToTravel': false
+    });
+    return { success: true, message: 'Student status backdated to 11 days ago.' };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
