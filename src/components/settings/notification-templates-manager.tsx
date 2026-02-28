@@ -44,9 +44,9 @@ export interface NotificationTypeMeta {
 const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
   { 
     type: 'new_task_assigned', 
-    label: 'New Task Assigned', 
+    label: 'New Task Created (Notify Staff)', 
     variables: ['employeeName', 'taskTitle', 'taskDescription', 'studentName', 'dueDate', 'assignedBy', 'taskUrl'],
-    exampleMessage: "📋 *New Task Assigned*\n\nHello {{employeeName}},\n\nYou have been assigned a new task: *{{taskTitle}}*\n\nStudent: {{studentName}}\nAssigned By: {{assignedBy}}\n\nView details: {{taskUrl}}"
+    exampleMessage: "📋 *New Task Assigned*\n\nHello {{employeeName}},\n\nA new task has been submitted: *{{taskTitle}}*\n\nStudent: {{studentName}}\nSubmitted By: {{assignedBy}}\n\nView details: {{taskUrl}}"
   },
   { 
     type: 'task_reply_received', 
@@ -91,10 +91,22 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     exampleMessage: "📄 *Employee Upload Notification*\n\nHello {{adminName}},\n\nEmployee {{employeeName}} uploaded a new document \"{{documentName}}\" for student: *{{studentName}}*.\n\nReview here: {{studentUrl}}"
   },
   { 
+    type: 'task_status_in_progress', 
+    label: 'Task Status: In Progress', 
+    variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
+    exampleMessage: "⏳ *Task In Progress*\n\nHello {{employeeName}},\n\nYour task \"{{taskTitle}}\" for {{studentName}} is now being processed.\n\nTrack progress: {{taskUrl}}"
+  },
+  { 
     type: 'task_status_completed', 
     label: 'Task Status: Completed', 
     variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
     exampleMessage: "✅ *Task Completed*\n\nHello {{employeeName}},\n\nYour task \"{{taskTitle}}\" for {{studentName}} has been marked as *COMPLETED*.\n\nTask details: {{taskUrl}}"
+  },
+  { 
+    type: 'task_status_denied', 
+    label: 'Task Status: Denied/Cancelled', 
+    variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
+    exampleMessage: "❌ *Task Denied*\n\nHello {{employeeName}},\n\nYour task \"{{taskTitle}}\" for {{studentName}} could not be completed at this time.\n\nView reason: {{taskUrl}}"
   },
   { 
     type: 'ielts_course_registration', 
@@ -113,6 +125,18 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     label: 'Change Agent Status Enabled',
     variables: ['userName', 'studentName', 'employeeName', 'messageContent', 'studentUrl'],
     exampleMessage: "🚨 *URGENT: Change Agent Required*\n\nHello {{userName}},\n\nChange Agent status has been enabled for student: *{{studentName}}*.\nAssigned Employee: {{employeeName}}\n\nReview immediately: {{studentUrl}}"
+  },
+  {
+    type: 'scholarship_approved',
+    label: 'Scholarship Approved',
+    variables: ['employeeName', 'studentName', 'messageContent', 'studentUrl'],
+    exampleMessage: "💰 *Scholarship Approved*\n\nHello {{employeeName}},\n\nThe scholarship for {{studentName}} has been approved.\n\nDetails: {{studentUrl}}"
+  },
+  {
+    type: 'visa_update',
+    label: 'Visa Status Update',
+    variables: ['employeeName', 'studentName', 'messageContent', 'studentUrl'],
+    exampleMessage: "🛂 *Visa Update*\n\nHello {{employeeName}},\n\nThere is an update on the visa status for {{studentName}}.\n\nCheck status: {{studentUrl}}"
   }
 ];
 
@@ -155,6 +179,7 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
       const dummyVars = {
         employeeName: 'Test Employee',
         taskTitle: 'Urgent Documentation',
+        taskDescription: 'Please verify the passport scan.',
         studentName: 'Ahmad Example',
         taskUrl: 'https://uniapplyhub.com/tasks',
         adminName: 'Super Admin',
