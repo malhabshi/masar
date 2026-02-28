@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -31,6 +32,7 @@ import {
   CheckCircle, 
   XCircle, 
   MessageSquare,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { TemplateDialog } from './template-dialog';
 
@@ -164,7 +166,7 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
               <TableRow>
                 <TableHead>Notification Type</TableHead>
                 <TableHead>Template Name</TableHead>
-                <TableHead>Variables</TableHead>
+                <TableHead>Webhook</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -185,13 +187,14 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
                     </TableCell>
                     <TableCell>{t.templateName}</TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {t.variables?.map(v => (
-                          <Badge key={v} variant="secondary" className="text-[10px] font-mono">
-                            {v}
-                          </Badge>
-                        ))}
-                      </div>
+                      {t.webhookUrl ? (
+                        <div className="flex items-center gap-1.5 text-success font-medium text-xs">
+                          <LinkIcon className="h-3 w-3" />
+                          <span className="truncate max-w-[150px]" title={t.webhookUrl}>Configured</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground italic text-xs">Missing URL</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {t.isActive ? (

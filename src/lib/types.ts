@@ -340,6 +340,7 @@ export interface NotificationTemplate {
   notificationType: NotificationType;
   templateName: string;
   message: string;
+  webhookUrl?: string;
   variables: string[];
   isActive: boolean;
   createdAt: string;

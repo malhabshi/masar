@@ -67,11 +67,12 @@
     "NotificationTemplate": {
       "title": "Notification Template",
       "type": "object",
-      "description": "Configuration for automated WhatsApp messages.",
+      "description": "Configuration for automated WhatsApp messages via specific WANotifier webhook URLs.",
       "properties": {
         "notificationType": { "type": "string" },
         "templateName": { "type": "string" },
         "message": { "type": "string" },
+        "webhookUrl": { "type": "string", "format": "uri" },
         "isActive": { "type": "boolean" },
         "variables": { "type": "array", "items": { "type": "string" } },
         "updatedAt": { "type": "string", "format": "date-time" },
@@ -95,7 +96,7 @@
     },
     "/notification_templates/{templateId}": {
       "schema": { "$ref": "#/entities/NotificationTemplate" },
-      "description": "Stores WhatsApp message templates."
+      "description": "Stores WhatsApp message templates with their unique webhook URLs."
     }
   }
 }

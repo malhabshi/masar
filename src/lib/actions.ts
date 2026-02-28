@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -85,35 +86,34 @@ export async function repairPermissions(adminId: string) {
 
 // --- WHATSAPP NOTIFICATION ENGINE ---
 
-async function sendWhatsAppMessage(phone: string, message: string) {
-  if (!phone || !message) return { success: false, message: 'Missing phone or message' };
+async function sendWhatsAppViaWebhook(webhookUrl: string, phone: string, variables: Record<string, string>) {
+  if (!webhookUrl || !phone) return { success: false, message: 'Missing webhook URL or phone' };
   
   // Basic normalization for Kuwait numbers (remove + or prefix)
   const normalizedPhone = phone.replace(/\D/g, '');
   const fullPhone = normalizedPhone.startsWith('965') ? normalizedPhone : `965${normalizedPhone}`;
 
   try {
-    const response = await fetch('https://api.wanotifier.com/v1/send-message', {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${WANOTIFIER_API_KEY}`
       },
       body: JSON.stringify({
         to: fullPhone,
-        message: message,
+        ...variables,
       }),
     });
 
     if (!response.ok) {
       const errData = await response.json();
-      console.error('WANotifier Error:', errData);
-      return { success: false, message: errData.message || 'Failed to send WhatsApp' };
+      console.error('WANotifier Webhook Error:', errData);
+      return { success: false, message: errData.message || 'Failed to trigger WANotifier webhook' };
     }
 
     return { success: true };
   } catch (e: any) {
-    console.error('WhatsApp fetch error:', e);
+    console.error('WhatsApp Webhook fetch error:', e);
     return { success: false, message: e.message };
   }
 }
@@ -136,13 +136,10 @@ export async function triggerWhatsAppNotification(
     if (templateQuery.empty) return;
 
     const template = templateQuery.docs[0].data() as NotificationTemplate;
-    let finalMessage = template.message;
-
-    Object.entries(variables).forEach(([key, val]) => {
-      finalMessage = finalMessage.replace(new RegExp(`{{${key}}}`, 'g'), val || '');
-    });
-
-    await sendWhatsAppMessage(recipientPhone, finalMessage);
+    
+    if (template.webhookUrl) {
+      await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables);
+    }
   } catch (e) {
     console.error('WhatsApp trigger failed:', e);
   }
@@ -155,13 +152,12 @@ export async function sendTestWhatsApp(templateId: string, phone: string, variab
     if (!templateDoc.exists) return { success: false, message: 'Template not found' };
     
     const template = templateDoc.data() as NotificationTemplate;
-    let finalMessage = template.message;
+    
+    if (!template.webhookUrl) {
+      return { success: false, message: 'No Webhook URL configured for this template.' };
+    }
 
-    Object.entries(variables).forEach(([key, val]) => {
-      finalMessage = finalMessage.replace(new RegExp(`{{${key}}}`, 'g'), val || '');
-    });
-
-    return await sendWhatsAppMessage(phone, finalMessage);
+    return await sendWhatsAppViaWebhook(template.webhookUrl, phone, variables);
   } catch (e: any) {
     return { success: false, message: e.message };
   }

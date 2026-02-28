@@ -36,13 +36,14 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, SendHorizontal, Phone, Sparkles } from 'lucide-react';
+import { Loader2, SendHorizontal, Phone, Sparkles, Link as LinkIcon } from 'lucide-react';
 import type { NotificationTypeMeta } from './notification-templates-manager';
 
 const templateSchema = z.object({
   notificationType: z.string().min(1, 'Type is required.'),
   templateName: z.string().min(3, 'Name is required.'),
   message: z.string().min(10, 'Message body is required.'),
+  webhookUrl: z.string().url('Please enter a valid WANotifier webhook URL.').optional().or(z.literal('')),
   isActive: z.boolean().default(true),
   variables: z.array(z.string()).default([]),
 });
@@ -72,6 +73,7 @@ export function TemplateDialog({
       notificationType: '',
       templateName: '',
       message: '',
+      webhookUrl: '',
       isActive: true,
       variables: [],
     },
@@ -83,6 +85,7 @@ export function TemplateDialog({
         notificationType: template?.notificationType || '',
         templateName: template?.templateName || '',
         message: template?.message || '',
+        webhookUrl: template?.webhookUrl || '',
         isActive: template?.isActive ?? true,
         variables: template?.variables || [],
       });
@@ -158,6 +161,18 @@ export function TemplateDialog({
                   </FormItem>
                 )} />
 
+                <FormField control={form.control} name="webhookUrl" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <LinkIcon className="h-3 w-3 text-primary" />
+                      WANotifier Webhook URL
+                    </FormLabel>
+                    <FormControl><Input placeholder="https://app.wanotifier.com/api/v1/notifications/..." {...field} /></FormControl>
+                    <FormDescription>The specific URL provided by WANotifier for this template.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
                 <FormField control={form.control} name="isActive" render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-muted/10">
                     <div className="space-y-0.5"><FormLabel>Active Status</FormLabel></div>
@@ -187,8 +202,8 @@ export function TemplateDialog({
                 <FormField control={form.control} name="message" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center justify-between">
-                        <span>WhatsApp Message</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">Supports WhatsApp Markdown (*bold*, _italic_)</span>
+                        <span>WhatsApp Message (Reference)</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">Used for local preview only</span>
                     </FormLabel>
                     <FormControl>
                       <Textarea 
@@ -239,13 +254,16 @@ export function TemplateDialog({
                     type="button" 
                     variant="secondary" 
                     className="font-bold gap-2"
-                    disabled={!testPhone || isTesting}
+                    disabled={!testPhone || isTesting || !form.getValues('webhookUrl')}
                     onClick={handleTestClick}
                   >
                     {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                     Send Test WhatsApp
                   </Button>
                 </div>
+                {!form.getValues('webhookUrl') && (
+                  <p className="text-[10px] text-destructive mt-2 italic font-bold">Please configure a Webhook URL to send test messages.</p>
+                )}
                 <p className="text-[10px] text-muted-foreground mt-3 italic">Note: Test messages will use placeholder data for variables.</p>
               </div>
             )}
