@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { NotificationTemplate, NotificationType } from '@/lib/types';
@@ -32,8 +31,9 @@ import {
   CheckCircle, 
   XCircle, 
   MessageSquare,
-  SendHorizontal,
-  Info
+  Copy,
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import { TemplateDialog } from './template-dialog';
 
@@ -61,7 +61,7 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     type: 'new_student_added', 
     label: 'New Student Added (Lead)', 
     variables: ['adminName', 'studentName', 'studentEmail', 'studentPhone', 'submissionDate', 'studentUrl'],
-    exampleMessage: "🆕 *New Student Lead*\n\nHello {{adminName}},\n\nA new unassigned student has been added: *{{studentName}}*\nPhone: {{studentPhone}}\nEmail: {{studentEmail}}\n\nReview here: {{studentUrl}}"
+    exampleMessage: "🆕 *New Student Lead*\n\nHello {{adminName}},\n\nA new student has been added to the system: *{{studentName}}*\nPhone: {{studentPhone}}\nEmail: {{studentEmail}}\n\nReview here: {{studentUrl}}"
   },
   { 
     type: 'student_assigned', 
@@ -73,7 +73,7 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     type: 'task_reminder', 
     label: 'Task Reminder', 
     variables: ['employeeName', 'pendingTasksCount', 'oldestTaskDate', 'dashboardUrl'],
-    exampleMessage: "⏰ *Task Reminder*\n\nHello {{employeeName}},\n\nYou have {{pendingTasksCount}} pending tasks waiting for your attention. The oldest one dates back to {{oldestTaskDate}}.\n\nDashboard: {{dashboardUrl}}"
+    exampleMessage: "⏰ *Task Reminder*\n\nHello {{employeeName}},\n\nYou have {{pendingTasksCount}} pending tasks waiting for your attention.\n\nDashboard: {{dashboardUrl}}"
   },
   { 
     type: 'admin_update', 
@@ -98,25 +98,7 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     label: 'IELTS Course Registration', 
     variables: ['adminName', 'studentName', 'courseOption', 'courseStartDate', 'employeeName'],
     exampleMessage: "🎓 *IELTS Course Registration*\n\nHello {{adminName}},\n\nA new student has registered for an IELTS course:\n\nStudent: {{studentName}}\nCourse: {{courseOption}}\nStart Date: {{courseStartDate}}\nRegistered by: {{employeeName}}"
-  },
-  { 
-    type: 'task_status_in_progress', 
-    label: 'Task Status: In Progress', 
-    variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
-    exampleMessage: "🏗️ *Task In Progress*\n\nHello {{employeeName}},\n\nManagement has started working on your task \"{{taskTitle}}\" for {{studentName}}.\n\nTrack progress: {{taskUrl}}"
-  },
-  { 
-    type: 'task_status_denied', 
-    label: 'Task Status: Denied', 
-    variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
-    exampleMessage: "❌ *Task Denied*\n\nHello {{employeeName}},\n\nYour task \"{{taskTitle}}\" for {{studentName}} was not approved. Please check the comments for more info.\n\nView task: {{taskUrl}}"
-  },
-  { 
-    type: 'scholarship_approved', 
-    label: 'Scholarship Approved', 
-    variables: ['employeeName', 'studentName', 'messageContent', 'studentUrl'],
-    exampleMessage: "🌟 *Scholarship Approved!*\n\nHello {{employeeName}},\n\nGreat news! The scholarship for *{{studentName}}* has been approved.\n\nDetails: {{messageContent}}\n\nOpen student: {{studentUrl}}"
-  },
+  }
 ];
 
 export function NotificationTemplatesManager({ currentUser }: { currentUser: AppUser }) {
@@ -125,6 +107,18 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<NotificationTemplate | undefined>(undefined);
+  const [webhookUrl, setWebhookUrl] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setWebhookUrl(`${window.location.origin}/api/whatsapp/webhook`);
+    }
+  }, []);
+
+  const handleCopyWebhook = () => {
+    navigator.clipboard.writeText(webhookUrl);
+    toast({ title: 'URL Copied', description: 'Webhook URL copied to clipboard.' });
+  };
 
   const handleSave = async (values: any) => {
     const result = await saveNotificationTemplate({
@@ -169,14 +163,37 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Notification Templates</h1>
-          <p className="text-muted-foreground mt-1">Configure automated WhatsApp messages for system events.</p>
+          <h1 className="text-3xl font-bold">WhatsApp Notifications</h1>
+          <p className="text-muted-foreground mt-1">Configure automated messages and gateway settings.</p>
         </div>
         <Button onClick={() => { setEditingTemplate(undefined); setIsDialogOpen(true); }}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Template
         </Button>
       </div>
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Zap className="h-4 w-4 text-primary" />
+            Webhook Configuration
+          </CardTitle>
+          <CardDescription>
+            Provide this URL to your WhatsApp provider (WANotifier) to receive delivery status updates.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-background border p-2 rounded text-xs font-mono break-all">
+              {webhookUrl || 'Loading URL...'}
+            </code>
+            <Button variant="outline" size="sm" onClick={handleCopyWebhook}>
+              <Copy className="h-3.5 w-3.5 mr-2" />
+              Copy
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-0">

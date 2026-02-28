@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -784,7 +783,7 @@ export async function createStudent(
               createdBy: creatingUserId,
               recipientId: adminDoc.id,
               recipientIds: [adminDoc.id],
-              content: `New unassigned student '${studentName}' added.`,
+              content: `New student '${studentName}' added.`,
               status: 'new', category: 'system', studentId: studentRef.id, studentName: studentName,
               createdAt: new Date().toISOString(), replies: [],
             });
@@ -1387,4 +1386,54 @@ export async function updateStudentAcademicIntake(studentId: string, semester: s
     } catch (error: any) {
         return { success: false, message: error.message };
     }
+}
+
+export async function seedAcademicTerms(authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const terms = [
+      'FALL (8/9) 2025', 'SPRING (1/2) 2026', 'MARCH (3) 2026', 'SUMMER (6/7) 2026',
+      'FALL (8/9) 2026', 'SPRING (1/2) 2027', 'MARCH (3) 2027', 'SUMMER (6/7) 2027'
+    ];
+    const batch = adminDb!.batch();
+    for (const name of terms) {
+      const docRef = adminDb!.collection('academic_terms').doc();
+      batch.set(docRef, { name, authorId, createdAt: new Date().toISOString() });
+    }
+    await batch.commit();
+    return { success: true, message: 'Default terms restored.' };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
+
+export async function addAcademicTerm(name: string, authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    await adminDb!.collection('academic_terms').add({ name, authorId, createdAt: new Date().toISOString() });
+    return { success: true, message: 'Term added.' };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
+
+export async function deleteAcademicTerm(termId: string, userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    await adminDb!.collection('academic_terms').doc(termId).delete();
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
+
+export async function updateStudentTerm(studentId: string, term: string, authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    await adminDb!.collection('students').doc(studentId).update({ term });
+    await addAdminNote(studentId, authorId, `Academic intake updated to: ${term}`);
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
 }
