@@ -10,18 +10,27 @@ service cloud.firestore {
     }
 
     /** 
+     * @description Checks if the user is the main super administrator via email.
+     */
+    function isMainAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'malhabshi@q8sf.com' || 
+        request.auth.token.email == 'bo7amany98@gmail.com'
+      );
+    }
+
+    /** 
      * @description Safe check for admin status.
-     * Checks DBAC collection OR the hardcoded bypass for emergency recovery.
+     * Checks DBAC collection OR hardcoded bypass for emergency recovery.
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
+      if (isMainAdmin()) return true;
       
-      // Hardcoded bypass for the reported users to ensure emergency access
+      // Hardcoded bypass for UID variants
       let isSuperAdmin = request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
                          request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' ||
-                         request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62' ||
-                         request.auth.token.email == 'bo7amany98@gmail.com' ||
-                         request.auth.token.email == 'malhabshi@q8sf.com';
+                         request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62';
       
       if (isSuperAdmin) return true;
       
@@ -79,8 +88,7 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn() && (
-        isAdmin() ||
-        isDepartment() ||
+        isPrivileged() ||
         (resource.data.authorId == request.auth.uid) ||
         (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
         (resource.data.recipientId != null && (resource.data.recipientId == request.auth.uid || request.auth.uid == 'all'))
