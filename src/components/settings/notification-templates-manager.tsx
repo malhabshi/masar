@@ -32,7 +32,6 @@ import {
   XCircle, 
   MessageSquare,
   Copy,
-  ExternalLink,
   Zap
 } from 'lucide-react';
 import { TemplateDialog } from './template-dialog';
@@ -176,10 +175,10 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-bold flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />
-            Webhook Configuration
+            Webhook Configuration (WANotifier)
           </CardTitle>
           <CardDescription>
-            Provide this URL to your WhatsApp provider (WANotifier) to receive delivery status updates.
+            Provide this URL to your WhatsApp provider to receive delivery status updates.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -189,7 +188,7 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
             </code>
             <Button variant="outline" size="sm" onClick={handleCopyWebhook}>
               <Copy className="h-3.5 w-3.5 mr-2" />
-              Copy
+              Copy URL
             </Button>
           </div>
         </CardContent>
