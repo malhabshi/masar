@@ -36,7 +36,8 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, SendHorizontal, Phone } from 'lucide-react';
+import { Loader2, SendHorizontal, Phone, Sparkles } from 'lucide-react';
+import type { NotificationTypeMeta } from './notification-templates-manager';
 
 const templateSchema = z.object({
   notificationType: z.string().min(1, 'Type is required.'),
@@ -59,7 +60,7 @@ export function TemplateDialog({
   template?: NotificationTemplate;
   onSave: (values: any) => Promise<void>;
   onTest: (id: string, phone: string) => Promise<void>;
-  types: { type: NotificationType; label: string; variables: string[] }[];
+  types: NotificationTypeMeta[];
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [testPhone, setTestPhone] = useState('');
@@ -89,7 +90,8 @@ export function TemplateDialog({
   }, [isOpen, template, form]);
 
   const watchType = form.watch('notificationType');
-  const availableVars = types.find(t => t.type === watchType)?.variables || [];
+  const activeTypeMeta = types.find(t => t.type === watchType);
+  const availableVars = activeTypeMeta?.variables || [];
 
   const handleAddVar = (v: string) => {
     const current = form.getValues('message');
@@ -97,6 +99,15 @@ export function TemplateDialog({
     const currentVars = form.getValues('variables');
     if (!currentVars.includes(v)) {
       form.setValue('variables', [...currentVars, v]);
+    }
+  };
+
+  const handleUseDefault = () => {
+    if (!activeTypeMeta) return;
+    form.setValue('message', activeTypeMeta.exampleMessage);
+    form.setValue('variables', activeTypeMeta.variables);
+    if (!form.getValues('templateName')) {
+        form.setValue('templateName', activeTypeMeta.label);
     }
   };
 
@@ -109,17 +120,13 @@ export function TemplateDialog({
   const handleTestClick = async () => {
     if (!template?.id || !testPhone) return;
     setIsTesting(true);
-    // Use currently entered variables from form or template
-    const dummyVars: Record<string, string> = {};
-    availableVars.forEach(v => dummyVars[v] = `[${v}]`);
-    
     await onTest(template.id, testPhone);
     setIsTesting(false);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{template ? 'Edit' : 'Add'} WhatsApp Template</DialogTitle>
           <DialogDescription>Configure how WhatsApp messages look for specific system events.</DialogDescription>
@@ -127,8 +134,8 @@ export function TemplateDialog({
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
                 <FormField control={form.control} name="notificationType" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Notification Type</FormLabel>
@@ -138,6 +145,7 @@ export function TemplateDialog({
                         {types.map(t => <SelectItem key={t.type} value={t.type}>{t.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    <FormDescription>Choose which system event triggers this message.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -151,21 +159,41 @@ export function TemplateDialog({
                 )} />
 
                 <FormField control={form.control} name="isActive" render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-muted/10">
                     <div className="space-y-0.5"><FormLabel>Active Status</FormLabel></div>
                     <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                   </FormItem>
                 )} />
+
+                {activeTypeMeta && (
+                    <div className="p-4 rounded-lg border border-primary/20 bg-primary/5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                System Recommendation
+                            </h4>
+                            <Button type="button" variant="link" size="sm" className="h-auto p-0 font-bold" onClick={handleUseDefault}>
+                                Use default text
+                            </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground italic leading-relaxed whitespace-pre-wrap font-mono bg-background/50 p-2 rounded">
+                            {activeTypeMeta.exampleMessage}
+                        </p>
+                    </div>
+                )}
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <FormField control={form.control} name="message" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>WhatsApp Message</FormLabel>
+                    <FormLabel className="flex items-center justify-between">
+                        <span>WhatsApp Message</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">Supports WhatsApp Markdown (*bold*, _italic_)</span>
+                    </FormLabel>
                     <FormControl>
                       <Textarea 
                         placeholder="Type your WhatsApp message here..." 
-                        className="min-h-[150px] font-mono text-xs" 
+                        className="min-h-[250px] font-mono text-sm leading-relaxed" 
                         {...field} 
                       />
                     </FormControl>
@@ -174,35 +202,35 @@ export function TemplateDialog({
                 )} />
 
                 <div className="space-y-2">
-                  <p className="text-xs font-bold uppercase text-muted-foreground">Available Variables</p>
-                  <div className="flex flex-wrap gap-1">
+                  <p className="text-xs font-bold uppercase text-muted-foreground tracking-widest">Available Variables</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {availableVars.length > 0 ? availableVars.map(v => (
                       <Badge 
                         key={v} 
-                        variant="secondary" 
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                        variant="outline" 
+                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all text-[10px] font-mono py-1 px-2"
                         onClick={() => handleAddVar(v)}
                       >
                         {`{{${v}}}`}
                       </Badge>
-                    )) : <p className="text-xs italic text-muted-foreground">Select a type first...</p>}
+                    )) : <p className="text-xs italic text-muted-foreground">Select a notification type to see available variables.</p>}
                   </div>
                 </div>
               </div>
             </div>
 
             {template && (
-              <div className="border-t pt-6 bg-muted/20 p-4 rounded-lg">
+              <div className="border-t pt-6 bg-muted/20 p-6 rounded-xl border-dashed">
                 <h4 className="text-sm font-bold flex items-center gap-2 mb-4">
                   <SendHorizontal className="h-4 w-4 text-primary" />
                   Test Delivery
                 </h4>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <div className="relative flex-1">
-                    <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      placeholder="Enter phone number (e.g. 55123456)" 
-                      className="pl-8" 
+                      placeholder="Recieving Phone (e.g. 55123456)" 
+                      className="pl-9" 
                       value={testPhone}
                       onChange={(e) => setTestPhone(e.target.value)}
                     />
@@ -210,19 +238,21 @@ export function TemplateDialog({
                   <Button 
                     type="button" 
                     variant="secondary" 
+                    className="font-bold gap-2"
                     disabled={!testPhone || isTesting}
                     onClick={handleTestClick}
                   >
-                    {isTesting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Send Test
+                    {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                    Send Test WhatsApp
                   </Button>
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-3 italic">Note: Test messages will use placeholder data for variables.</p>
               </div>
             )}
 
-            <DialogFooter>
-              <DialogClose asChild><Button variant="outline" type="button">Cancel</Button></DialogClose>
-              <Button type="submit" disabled={isSubmitting}>
+            <DialogFooter className="border-t pt-6">
+              <DialogClose asChild><Button variant="outline" type="button" className="px-8">Cancel</Button></DialogClose>
+              <Button type="submit" disabled={isSubmitting} className="px-8 font-bold">
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Save Template
               </Button>

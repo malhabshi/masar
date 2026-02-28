@@ -32,20 +32,91 @@ import {
   CheckCircle, 
   XCircle, 
   MessageSquare,
-  SendHorizontal
+  SendHorizontal,
+  Info
 } from 'lucide-react';
 import { TemplateDialog } from './template-dialog';
 
-const NOTIFICATION_TYPES: { type: NotificationType; label: string; variables: string[] }[] = [
-  { type: 'new_task_assigned', label: 'New Task Assigned', variables: ['employeeName', 'taskTitle', 'taskDescription', 'studentName', 'dueDate', 'assignedBy', 'taskUrl'] },
-  { type: 'task_reply_received', label: 'Task Reply Received', variables: ['employeeName', 'taskTitle', 'replyAuthor', 'replyMessage', 'taskUrl'] },
-  { type: 'new_student_added', label: 'New Student Added (Lead)', variables: ['adminName', 'studentName', 'studentEmail', 'studentPhone', 'submissionDate', 'studentUrl'] },
-  { type: 'student_assigned', label: 'Student Assigned to Employee', variables: ['employeeName', 'studentName', 'assignedBy', 'studentUrl'] },
-  { type: 'task_reminder', label: 'Task Reminder', variables: ['employeeName', 'pendingTasksCount', 'oldestTaskDate', 'dashboardUrl'] },
-  { type: 'admin_update', label: 'Admin Update/Announcement', variables: ['userName', 'messageContent', 'dashboardUrl'] },
-  { type: 'document_uploaded_admin', label: 'Document Uploaded (by Admin)', variables: ['employeeName', 'studentName', 'documentName', 'uploadedBy', 'studentUrl'] },
-  { type: 'task_status_completed', label: 'Task Status: Completed', variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'] },
-  { type: 'ielts_course_registration', label: 'IELTS Course Registration', variables: ['adminName', 'studentName', 'courseOption', 'courseStartDate', 'employeeName'] },
+export interface NotificationTypeMeta {
+  type: NotificationType;
+  label: string;
+  variables: string[];
+  exampleMessage: string;
+}
+
+const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
+  { 
+    type: 'new_task_assigned', 
+    label: 'New Task Assigned', 
+    variables: ['employeeName', 'taskTitle', 'taskDescription', 'studentName', 'dueDate', 'assignedBy', 'taskUrl'],
+    exampleMessage: "📋 *New Task Assigned*\n\nHello {{employeeName}},\n\nYou have been assigned a new task: *{{taskTitle}}*\n\nStudent: {{studentName}}\nAssigned By: {{assignedBy}}\n\nView details: {{taskUrl}}"
+  },
+  { 
+    type: 'task_reply_received', 
+    label: 'Task Reply Received', 
+    variables: ['employeeName', 'taskTitle', 'replyAuthor', 'replyMessage', 'taskUrl'],
+    exampleMessage: "💬 *New Task Reply*\n\nHello {{employeeName}},\n\n{{replyAuthor}} replied to your task \"{{taskTitle}}\":\n\n_\"{{replyMessage}}\"_\n\nView here: {{taskUrl}}"
+  },
+  { 
+    type: 'new_student_added', 
+    label: 'New Student Added (Lead)', 
+    variables: ['adminName', 'studentName', 'studentEmail', 'studentPhone', 'submissionDate', 'studentUrl'],
+    exampleMessage: "🆕 *New Student Lead*\n\nHello {{adminName}},\n\nA new unassigned student has been added: *{{studentName}}*\nPhone: {{studentPhone}}\nEmail: {{studentEmail}}\n\nReview here: {{studentUrl}}"
+  },
+  { 
+    type: 'student_assigned', 
+    label: 'Student Assigned to Employee', 
+    variables: ['employeeName', 'studentName', 'assignedBy', 'studentUrl'],
+    exampleMessage: "👤 *Student Assigned*\n\nHello {{employeeName}},\n\nThe student *{{studentName}}* has been assigned to your portfolio by {{assignedBy}}.\n\nOpen profile: {{studentUrl}}"
+  },
+  { 
+    type: 'task_reminder', 
+    label: 'Task Reminder', 
+    variables: ['employeeName', 'pendingTasksCount', 'oldestTaskDate', 'dashboardUrl'],
+    exampleMessage: "⏰ *Task Reminder*\n\nHello {{employeeName}},\n\nYou have {{pendingTasksCount}} pending tasks waiting for your attention. The oldest one dates back to {{oldestTaskDate}}.\n\nDashboard: {{dashboardUrl}}"
+  },
+  { 
+    type: 'admin_update', 
+    label: 'Admin Update/Announcement', 
+    variables: ['userName', 'messageContent', 'dashboardUrl'],
+    exampleMessage: "📣 *Management Update*\n\nHello {{userName}},\n\n{{messageContent}}\n\nMore info: {{dashboardUrl}}"
+  },
+  { 
+    type: 'document_uploaded_admin', 
+    label: 'Document Uploaded (by Admin)', 
+    variables: ['employeeName', 'studentName', 'documentName', 'uploadedBy', 'studentUrl'],
+    exampleMessage: "📄 *New Document Uploaded*\n\nHello {{employeeName}},\n\n{{uploadedBy}} uploaded a new document \"{{documentName}}\" for your student: *{{studentName}}*.\n\nView document: {{studentUrl}}"
+  },
+  { 
+    type: 'task_status_completed', 
+    label: 'Task Status: Completed', 
+    variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
+    exampleMessage: "✅ *Task Completed*\n\nHello {{employeeName}},\n\nYour task \"{{taskTitle}}\" for {{studentName}} has been marked as *COMPLETED*.\n\nTask details: {{taskUrl}}"
+  },
+  { 
+    type: 'ielts_course_registration', 
+    label: 'IELTS Course Registration', 
+    variables: ['adminName', 'studentName', 'courseOption', 'courseStartDate', 'employeeName'],
+    exampleMessage: "🎓 *IELTS Course Registration*\n\nHello {{adminName}},\n\nA new student has registered for an IELTS course:\n\nStudent: {{studentName}}\nCourse: {{courseOption}}\nStart Date: {{courseStartDate}}\nRegistered by: {{employeeName}}"
+  },
+  { 
+    type: 'task_status_in_progress', 
+    label: 'Task Status: In Progress', 
+    variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
+    exampleMessage: "🏗️ *Task In Progress*\n\nHello {{employeeName}},\n\nManagement has started working on your task \"{{taskTitle}}\" for {{studentName}}.\n\nTrack progress: {{taskUrl}}"
+  },
+  { 
+    type: 'task_status_denied', 
+    label: 'Task Status: Denied', 
+    variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
+    exampleMessage: "❌ *Task Denied*\n\nHello {{employeeName}},\n\nYour task \"{{taskTitle}}\" for {{studentName}} was not approved. Please check the comments for more info.\n\nView task: {{taskUrl}}"
+  },
+  { 
+    type: 'scholarship_approved', 
+    label: 'Scholarship Approved', 
+    variables: ['employeeName', 'studentName', 'messageContent', 'studentUrl'],
+    exampleMessage: "🌟 *Scholarship Approved!*\n\nHello {{employeeName}},\n\nGreat news! The scholarship for *{{studentName}}* has been approved.\n\nDetails: {{messageContent}}\n\nOpen student: {{studentUrl}}"
+  },
 ];
 
 export function NotificationTemplatesManager({ currentUser }: { currentUser: AppUser }) {
@@ -70,14 +141,20 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
   };
 
   const handleTest = async (templateId: string, phone: string) => {
-    // Generate dummy vars for test
     const dummyVars = {
       employeeName: 'Test Employee',
       taskTitle: 'Urgent Documentation',
       studentName: 'Ahmad Example',
       taskUrl: 'https://uniapplyhub.com/tasks',
       adminName: 'Super Admin',
-      messageContent: 'This is a test notification.'
+      messageContent: 'This is a test notification.',
+      replyAuthor: 'Admin User',
+      replyMessage: 'Please upload the transcript.',
+      documentName: 'Passport.pdf',
+      uploadedBy: 'Admin Sarah',
+      courseOption: 'One Month In-Person',
+      courseStartDate: 'Sunday, Oct 12',
+      assignedBy: 'Manager Ahmad'
     };
 
     const result = await sendTestWhatsApp(templateId, phone, dummyVars);
