@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -128,8 +127,13 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
         return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts;
     });
 
-    // Sort: Students with notifications first
+    // Sort: CHANGE AGENT first, then notifications, then date
     return [...filtered].sort((a, b) => {
+        // Priority 1: Change Agent Required
+        if (!!a.changeAgentRequired !== !!b.changeAgentRequired) {
+            return a.changeAgentRequired ? -1 : 1;
+        }
+
         const getNotificationScore = (s: Student) => {
             let score = 0;
             if (currentUser.role === 'admin' || currentUser.role === 'department') {
@@ -291,6 +295,14 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                             </Badge>
                           )}
                           <span>{student.name || 'Unknown Student'}</span>
+                          
+                          {/* CHANGE AGENT BADGE */}
+                          {student.changeAgentRequired && (
+                            <Badge className="bg-black text-red-500 border-red-500 border font-black text-[10px] h-5 px-1.5 animate-pulse">
+                              CHANGE AGENT
+                            </Badge>
+                          )}
+
                           {isCurrentUserAssigned && student.isNewForEmployee && (
                               <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>
                           )}
