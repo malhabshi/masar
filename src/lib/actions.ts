@@ -1666,7 +1666,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
       const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
       for (const adminDoc of adminsSnap.docs) {
         const adminData = adminDoc.data() as User;
-        await triggerWhatsAppNotification('document_uploaded_student', {
+        await triggerWhatsAppNotification('document_uploaded_employee', {
           adminName: adminData.name,
           studentName: studentData.name,
           documentName: documentName,

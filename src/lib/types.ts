@@ -328,6 +328,7 @@ export type NotificationType =
   | 'task_reminder'
   | 'admin_update'
   | 'document_uploaded_admin'
+  | 'document_uploaded_employee'
   | 'document_uploaded_student'
   | 'task_status_in_progress'
   | 'task_status_completed'

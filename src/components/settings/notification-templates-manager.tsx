@@ -87,6 +87,12 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     exampleMessage: "📄 *New Document Uploaded*\n\nHello {{employeeName}},\n\n{{uploadedBy}} uploaded a new document \"{{documentName}}\" for your student: *{{studentName}}*.\n\nView document: {{studentUrl}}"
   },
   { 
+    type: 'document_uploaded_employee', 
+    label: 'Document Uploaded (by Employee)', 
+    variables: ['adminName', 'studentName', 'documentName', 'uploadedBy', 'studentUrl'],
+    exampleMessage: "📄 *Employee Upload Notification*\n\nHello {{adminName}},\n\n{{uploadedBy}} uploaded a new document \"{{documentName}}\" for student: *{{studentName}}*.\n\nReview here: {{studentUrl}}"
+  },
+  { 
     type: 'task_status_completed', 
     label: 'Task Status: Completed', 
     variables: ['employeeName', 'taskTitle', 'studentName', 'taskUrl'],
