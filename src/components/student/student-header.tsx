@@ -1,10 +1,10 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2 } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -18,6 +18,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import { CreateStudentTaskDialog } from '../tasks/create-student-task-dialog';
+import { Button } from '@/components/ui/button';
+import { toggleChangeAgentStatus } from '@/lib/actions';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface StudentHeaderProps {
@@ -59,6 +62,8 @@ function StudentHeaderSkeleton() {
 }
 
 export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
+  const { toast } = useToast();
+  const [isTogglingAgent, setIsTogglingAgent] = useState(false);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
   const requesterId = student?.deletionRequested?.requestedBy;
@@ -89,6 +94,19 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     'New Zealand': '🇳🇿',
   };
 
+  const handleToggleChangeAgent = async () => {
+    if (!canManage) return;
+    setIsTogglingAgent(true);
+    const newVal = !student.changeAgentRequired;
+    const result = await toggleChangeAgentStatus(student.id, newVal, currentUser.id);
+    if (result.success) {
+      toast({ title: result.message });
+    } else {
+      toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
+    }
+    setIsTogglingAgent(false);
+  };
+
   // Only use countries from active applications for the header flags
   const allCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
@@ -117,6 +135,13 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               {student.name || 'Unknown Student'}
             </h1>
             
+            {/* Change Agent Badge */}
+            {student.changeAgentRequired && (
+              <BadgeComponent className="bg-black text-red-500 border-red-500 border-2 font-black animate-pulse text-sm px-3 py-1">
+                CHANGE AGENT
+              </BadgeComponent>
+            )}
+
             {/* Academic Intake Badge next to name (Visible to all if set) */}
             {student.academicIntakeSemester && (
               <BadgeComponent variant="default" className="bg-primary text-primary-foreground flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold shadow-sm rounded-full">
@@ -150,6 +175,20 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             {isAssignedEmployee && <CreateStudentTaskDialog student={student} currentUser={currentUser} />}
             {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
             {canRequestDeletion && <RequestDeletionDialog student={student} currentUser={currentUser} />}
+            
+            {canManage && (
+              <Button 
+                variant={student.changeAgentRequired ? "destructive" : "outline"}
+                size="sm"
+                onClick={handleToggleChangeAgent}
+                disabled={isTogglingAgent}
+                className={student.changeAgentRequired ? "bg-black text-red-500 hover:bg-black/90" : ""}
+              >
+                {isTogglingAgent ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundX className="mr-2 h-4 w-4" />}
+                {student.changeAgentRequired ? 'Remove Change Agent' : 'Change Agent'}
+              </Button>
+            )}
+
             {/* Explicitly separate Assign from Transfer Approve */}
             {canAssign && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="assign" />}
             {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="transfer" />}

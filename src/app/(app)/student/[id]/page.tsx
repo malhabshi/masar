@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -28,6 +29,30 @@ import { AcademicIntakeCard } from '@/components/student/academic-intake-card';
 import { TargetCountriesCard } from '@/components/student/target-countries-card';
 import { TaskStatsCard } from '@/components/student/task-stats-card';
 
+function playLoudAlert() {
+  if (typeof window === 'undefined' || !window.AudioContext) return;
+  try {
+    const ctx = new window.AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    // Very loud sawtooth sound
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(440, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.5);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 1.0);
+    
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 2.0);
+    
+    osc.start();
+    osc.stop(ctx.currentTime + 2.0);
+  } catch (e) {
+    console.error("Audio playback failed:", e);
+  }
+}
 
 function StudentPageContentSkeleton() {
     return (
@@ -91,6 +116,12 @@ export default function StudentDetailPage() {
         updateDocumentNonBlocking(studentDocRef, { isNewForEmployee: false });
     }
   }, [student, currentUser]);
+
+  useEffect(() => {
+    if (student?.changeAgentRequired) {
+      playLoudAlert();
+    }
+  }, [student?.id, student?.changeAgentRequired]);
   
   useEffect(() => {
     // Only perform the assignment check once both student and user profiles are fully loaded

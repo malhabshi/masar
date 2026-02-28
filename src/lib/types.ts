@@ -112,6 +112,7 @@ export interface Student {
   duplicateOfStudentIds?: string[] | null;
   academicIntakeSemester?: string;
   academicIntakeYear?: number;
+  changeAgentRequired?: boolean;
 }
 
 export interface ChatMessage {

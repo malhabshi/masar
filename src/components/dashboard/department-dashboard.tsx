@@ -1,19 +1,22 @@
+
 'use client';
 
 import { useMemo } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { orderBy } from 'firebase/firestore';
+import { orderBy, where } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
-import { Users, FileText } from 'lucide-react';
+import { Users, FileText, AlertCircle, ArrowRight } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 import type { AppUser } from '@/hooks/use-user';
+import Link from 'next/link';
 
 // Components
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { SendTaskForm } from './send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
+import { Badge } from '@/components/ui/badge';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
      const isDept = currentUser?.role === 'department' || currentUser?.role === 'admin';
@@ -33,6 +36,10 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
 
      const isLoading = studentsLoading || tasksLoading;
 
+     const changeAgentStudents = useMemo(() => {
+        return students.filter(s => s.changeAgentRequired);
+     }, [students]);
+
      const sortedTasks = useMemo(() => {
         if (!tasks) return [];
         return [...tasks].sort((a,b) => sortByDate(a,b));
@@ -49,6 +56,30 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
 
     return (
         <div className="space-y-6">
+            {changeAgentStudents.length > 0 && (
+              <Card className="border-red-500 bg-red-50/10">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2 text-red-600">
+                    <AlertCircle className="h-5 w-5" />
+                    <CardTitle className="text-lg">Change Agent Monitoring</CardTitle>
+                  </div>
+                  <CardDescription>Active flags requiring management oversight.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {changeAgentStudents.map(student => (
+                      <Link key={student.id} href={`/student/${student.id}`}>
+                        <Badge className="bg-black text-red-500 border-red-500 border-2 hover:bg-black/90 px-3 py-1 flex items-center gap-2">
+                          {student.name}
+                          <ArrowRight className="h-3 w-3" />
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

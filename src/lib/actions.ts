@@ -1558,7 +1558,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
       if (studentData.employeeId) {
         const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
         if (!empQuery.empty) {
-          const emp = empQuery.docs[0].data() as User;
+          const emp = employeeQuery.docs[0].data() as User;
           await triggerWhatsAppNotification('document_uploaded_admin', {
             employeeName: emp.name,
             studentName: studentData.name,
@@ -1585,4 +1585,53 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
   } catch (e) {
     console.error('Document upload notification trigger failed:', e);
   }
+}
+
+export async function toggleChangeAgentStatus(studentId: string, status: boolean, adminId: string) {
+    if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+    try {
+        const admin = await getUser(adminId);
+        if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+        const studentData = studentDoc.data() as Student;
+
+        await studentRef.update({ changeAgentRequired: status });
+
+        // If turned ON, notify the employee
+        if (status && studentData.employeeId) {
+            const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+            if (!employeeQuery.empty) {
+                const employeeDoc = employeeQuery.docs[0];
+                const employeeData = employeeDoc.data() as User;
+                const taskContent = `🚨 URGENT: Change Agent status enabled for ${studentData.name}. Please review this profile immediately.`;
+                await adminDb!.collection('tasks').add({
+                    authorId: adminId,
+                    createdBy: adminId,
+                    recipientId: employeeDoc.id,
+                    recipientIds: [employeeDoc.id],
+                    content: taskContent,
+                    createdAt: new Date().toISOString(),
+                    status: 'new',
+                    category: 'system',
+                    replies: []
+                });
+
+                // WhatsApp alert
+                if (employeeData.phone) {
+                  await triggerWhatsAppNotification('admin_update', {
+                    employeeName: employeeData.name,
+                    messageContent: taskContent,
+                    dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
+                  }, employeeData.phone);
+                }
+            }
+        }
+
+        return { success: true, message: status ? 'Change Agent status enabled.' : 'Change Agent status removed.' };
+    } catch (error: any) {
+        return { success: false, message: error.message };
+    }
 }

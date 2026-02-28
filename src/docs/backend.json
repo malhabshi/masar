@@ -22,10 +22,11 @@
       "type": "object",
       "description": "Represents a student whose university applications are being managed through the UniApply Hub.",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the Student entity. Can be prefixed with 'U-' for unassigned or 'JF-' for Jotform." },
+        "id": { "type": "string", "description": "Unique identifier for the Student entity." },
         "name": { "type": "string", "description": "The full name of the student." },
         "email": { "type": "string", "description": "The email address of the student.", "format": "email" },
         "phone": { "type": "string", "description": "The phone number of the student." },
+        "internalNumber": { "type": "string", "description": "An internal use number assigned to the student." },
         "employeeId": { "type": ["string", "null"], "description": "Reference to the User's Civil ID for the assigned employee." },
         "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the student's profile picture." },
         "applications": { "type": "array", "description": "A list of university applications for the student.", "items": { "$ref": "#/entities/Application" } },
@@ -34,8 +35,6 @@
         "documents": { "type": "array", "description": "A list of documents uploaded for the student.", "items": { "$ref": "#/entities/StudentDocument" } },
         "createdAt": { "type": "string", "description": "Timestamp indicating when the student record was created.", "format": "date-time" },
         "createdBy": { "type": "string", "description": "The ID of the user who created the student record." },
-        "source": { "type": "string", "enum": ["manual", "jotform"], "description": "The origin of the student profile." },
-        "jotformSubmissionId": { "type": "string", "description": "If imported from Jotform, the submission ID." },
         "targetCountries": { "type": "array", "description": "List of countries the student is interested in.", "items": { "type": "string" } },
         "missingItems": { "type": "array", "description": "A list of missing documents or information required from the student.", "items": { "type": "string" } },
         "pipelineStatus": { "type": "string", "description": "The student's status in the application pipeline.", "enum": ["green", "orange", "red", "none"] },
@@ -61,24 +60,26 @@
         },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
         "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." },
-        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." }
+        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." },
+        "changeAgentRequired": { "type": "boolean", "description": "Flag indicating if this student requires an urgent agent change or high-priority oversight." }
       },
       "required": ["id", "name", "phone", "createdAt", "createdBy"]
     },
-    "JotformSubmission": {
-      "title": "Jotform Submission",
+    "NotificationTemplate": {
+      "title": "Notification Template",
       "type": "object",
-      "description": "Detailed log of a Jotform submission.",
+      "description": "Configuration for automated WhatsApp messages via specific WANotifier webhook URLs.",
       "properties": {
-        "id": { "type": "string" },
-        "submissionId": { "type": "string" },
-        "formId": { "type": "string" },
-        "studentId": { "type": "string" },
-        "source": { "type": "string", "const": "jotform" },
-        "rawData": { "type": "object" },
-        "submittedAt": { "type": "string", "format": "date-time" }
+        "notificationType": { "type": "string" },
+        "templateName": { "type": "string" },
+        "message": { "type": "string" },
+        "webhookUrl": { "type": "string", "format": "uri" },
+        "isActive": { "type": "boolean" },
+        "variables": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
       },
-      "required": ["id", "submissionId", "studentId", "source", "submittedAt"]
+      "required": ["notificationType", "templateName", "message", "isActive"]
     }
   },
   "firestore": {
@@ -90,13 +91,13 @@
       "schema": { "$ref": "#/entities/Student" },
       "description": "Stores all data for a single student."
     },
-    "/jotform_submissions/{submissionId}": {
-      "schema": { "$ref": "#/entities/JotformSubmission" },
-      "description": "Logs of full Jotform submission data."
-    },
     "/tasks/{taskId}": {
       "schema": { "$ref": "#/entities/Task" },
       "description": "Stores tasks and their replies."
+    },
+    "/notification_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/NotificationTemplate" },
+      "description": "Stores WhatsApp message templates with their unique webhook URLs."
     }
   }
 }
