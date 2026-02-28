@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
         const studentData = studentDoc.data() as Student;
         
         const fileName = customName || file.name;
+        const now = new Date().toISOString();
         const newDocument: StudentDocument = {
             id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: fileName,
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
             size: file.size,
             url: url,
             authorId: decodedToken.uid,
-            uploadedAt: new Date().toISOString(),
+            uploadedAt: now,
             isNew: true,
         };
         
@@ -84,13 +85,13 @@ export async function POST(req: NextRequest) {
         const uploaderDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
         const uploaderRole = uploaderDoc.data()?.role;
 
-        let counterUpdate = {};
+        let counterUpdate: any = { lastActivityAt: now };
         if (uploaderRole === 'employee') {
           // Employee uploaded, notify admins
-          counterUpdate = { newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 };
+          counterUpdate = { ...counterUpdate, newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 };
         } else if (uploaderRole === 'admin' || uploaderRole === 'department') {
           // Admin/Dept uploaded, notify employee
-          counterUpdate = { newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 };
+          counterUpdate = { ...counterUpdate, newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 };
         }
    
         await studentRef.update({

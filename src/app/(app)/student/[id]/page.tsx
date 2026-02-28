@@ -28,6 +28,7 @@ import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-b
 import { AcademicIntakeCard } from '@/components/student/academic-intake-card';
 import { TargetCountriesCard } from '@/components/student/target-countries-card';
 import { TaskStatsCard } from '@/components/student/task-stats-card';
+import { InactivityReportSection } from '@/components/student/inactivity-report-section';
 
 function playLoudAlert() {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -181,6 +182,9 @@ export default function StudentDetailPage() {
             {student.duplicatePhoneWarning && (
               <DuplicateWarningBanner student={student} currentUser={currentUser} />
             )}
+            
+            <InactivityReportSection student={student} currentUser={currentUser} />
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
                     <TargetCountriesCard student={student} currentUser={currentUser} />

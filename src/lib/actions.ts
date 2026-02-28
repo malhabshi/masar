@@ -33,6 +33,17 @@ async function getUser(userId: string): Promise<User | null> {
     return { id: doc.id, ...doc.data() } as User;
 }
 
+async function refreshStudentActivity(studentId: string) {
+  if (!checkAdminServices()) return;
+  try {
+    await adminDb!.collection('students').doc(studentId).update({
+      lastActivityAt: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('Failed to refresh activity timestamp:', e);
+  }
+}
+
 /**
  * REPAIR UTILITY: Rebuilds the DBAC collections (/admins and /departmentUsers)
  * based on the current state of the main /users collection.
@@ -338,7 +349,10 @@ export async function addApplication(studentId: string, universityName: string, 
     };
 
     const updatedApplications = [...(studentData.applications || []), newApplication];
-    await studentRef.update({ applications: updatedApplications });
+    await studentRef.update({ 
+      applications: updatedApplications,
+      lastActivityAt: new Date().toISOString() 
+    });
 
     if (employeeId) {
       const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
@@ -386,7 +400,10 @@ export async function updateApplicationStatus(studentId: string, universityName:
     updatedApplications[appIndex].status = newStatus;
     updatedApplications[appIndex].updatedAt = new Date().toISOString();
 
-    await studentRef.update({ applications: updatedApplications });
+    await studentRef.update({ 
+      applications: updatedApplications,
+      lastActivityAt: new Date().toISOString()
+    });
 
     if (employeeId) {
         const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
@@ -430,7 +447,10 @@ export async function updateStudentPipelineStatus(studentId: string, status: str
         const studentDoc = await studentRef.get();
         if (!studentDoc.exists) return { success: false, message: "Student not found."};
         
-        await studentRef.update({ pipelineStatus: status });
+        await studentRef.update({ 
+          pipelineStatus: status,
+          lastActivityAt: new Date().toISOString()
+        });
         const studentData = studentDoc.data() as Student;
         const newNote: Note = {
             id: `note-pipeline-${Date.now()}`,
@@ -492,6 +512,9 @@ export async function createStudentTask(authorId: string, studentId: string, req
               requestedByName: creator?.name
             }
         });
+
+        // Also refresh student activity
+        await refreshStudentActivity(studentId);
 
         // WhatsApp for recipients
         for (const rid of recipientIds) {
@@ -792,6 +815,8 @@ export async function createStudent(
     const studentId = `${idPrefix}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
 
+    const now = new Date().toISOString();
+
     await studentRef.set({
       id: studentId,
       name: studentName,
@@ -801,9 +826,10 @@ export async function createStudent(
       employeeId: assignedEmployeeId || null, 
       applications: [],
       employeeNotes: [],
-      adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: new Date().toISOString() }] : [],
+      adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [],
       documents: [],
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      lastActivityAt: now,
       createdBy: creatingUserId,
       targetCountries: finalTargetCountries as Country[],
       missingItems: [],
@@ -878,6 +904,7 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
         const updates = {
             employeeId: newEmployee.civilId,
             transferRequested: false, isNewForEmployee: true,
+            lastActivityAt: new Date().toISOString(),
             transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId, toEmployeeId: newEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }],
             adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-${Date.now()}`, authorId: adminId, content: `Transferred from ${fromEmployeeName || 'Unassigned'} to ${newEmployee.name}.`, createdAt: new Date().toISOString() }]
         };
@@ -918,7 +945,10 @@ export async function requestTransfer(studentId: string, reason: string, request
     const employee = await getUser(requestingEmployeeId);
     if (!employee) return { success: false, message: 'Employee not found.' };
 
-    await studentRef.update({ transferRequested: true });
+    await studentRef.update({ 
+      transferRequested: true,
+      lastActivityAt: new Date().toISOString()
+    });
     const studentData = studentDoc.data() as Student;
     await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-req-${Date.now()}`, authorId: requestingEmployeeId, content: `Transfer requested: ${reason}`, createdAt: new Date().toISOString() }] });
 
@@ -951,7 +981,10 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
         const employee = await getUser(employeeId);
         if (!employee) return { success: false, message: "Invalid employee." };
 
-        await studentRef.update({ deletionRequested: { requestedBy: employeeId, reason: reason, requestedAt: new Date().toISOString(), status: 'pending' } });
+        await studentRef.update({ 
+          deletionRequested: { requestedBy: employeeId, reason: reason, requestedAt: new Date().toISOString(), status: 'pending' },
+          lastActivityAt: new Date().toISOString()
+        });
 
         const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
         if (!adminsSnap.empty) {
@@ -992,6 +1025,7 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
             const docData = doc.data();
             batch.update(doc.ref, { 
                 employeeId: toEmployee.civilId, isNewForEmployee: true,
+                lastActivityAt: new Date().toISOString(),
                 transferHistory: [...(docData.transferHistory || []), { fromEmployeeId: fromEmployee.civilId, toEmployeeId: toEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }]
             });
         });
@@ -1012,7 +1046,10 @@ export async function addEmployeeNote(studentId: string, authorId: string, conte
         if (!author) return { success: false, message: 'Author not found.'};
         const studentData = studentDoc.data() as Student;
         if (author.role === 'employee' && author.civilId !== studentData.employeeId) return { success: false, message: 'Unauthorized.' };
-        await studentRef.update({ employeeNotes: FieldValue.arrayUnion({ id: `note-${Date.now()}`, authorId, content, createdAt: new Date().toISOString() }) });
+        await studentRef.update({ 
+          employeeNotes: FieldValue.arrayUnion({ id: `note-${Date.now()}`, authorId, content, createdAt: new Date().toISOString() }),
+          lastActivityAt: new Date().toISOString()
+        });
         return { success: true, message: 'Note added.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1027,7 +1064,10 @@ export async function addAdminNote(studentId: string, authorId: string, content:
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
         const author = await getUser(authorId);
         if (!author || !['admin', 'department'].includes(author.role)) return { success: false, message: 'Unauthorized.' };
-        await studentRef.update({ adminNotes: FieldValue.arrayUnion({ id: `note-admin-${Date.now()}`, authorId, content, createdAt: new Date().toISOString() }) });
+        await studentRef.update({ 
+          adminNotes: FieldValue.arrayUnion({ id: `note-admin-${Date.now()}`, authorId, content, createdAt: new Date().toISOString() }),
+          lastActivityAt: new Date().toISOString()
+        });
         return { success: true, message: 'Admin note added.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1037,7 +1077,11 @@ export async function addAdminNote(studentId: string, authorId: string, content:
 export async function addMissingItemToStudent(studentId: string, item: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayUnion(item), newMissingItemsForEmployee: FieldValue.increment(1) });
+        await adminDb!.collection('students').doc(studentId).update({ 
+          missingItems: FieldValue.arrayUnion(item), 
+          newMissingItemsForEmployee: FieldValue.increment(1),
+          lastActivityAt: new Date().toISOString()
+        });
         return { success: true, message: 'Missing item added.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1047,7 +1091,10 @@ export async function addMissingItemToStudent(studentId: string, item: string) {
 export async function removeMissingItemFromStudent(studentId: string, itemToRemove: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   try {
-    await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayRemove(itemToRemove) });
+    await adminDb!.collection('students').doc(studentId).update({ 
+      missingItems: FieldValue.arrayRemove(itemToRemove),
+      lastActivityAt: new Date().toISOString()
+    });
     return { success: true, message: 'Missing item removed.' };
   } catch (error: any) {
     return { success: false, message: error.message };
@@ -1061,7 +1108,8 @@ export async function markMissingItemAsReceived(studentId: string, itemReceived:
         await studentRef.update({ 
             missingItems: FieldValue.arrayRemove(itemReceived), 
             adminNotes: FieldValue.arrayUnion({ id: `note-item-received-${Date.now()}`, authorId: userId, content: `Marked as received: "${itemReceived}"`, createdAt: new Date().toISOString() }),
-            unreadUpdates: FieldValue.increment(1)
+            unreadUpdates: FieldValue.increment(1),
+            lastActivityAt: new Date().toISOString()
         });
         return { success: true, message: 'Item marked as received.' };
     } catch (error: any) {
@@ -1108,10 +1156,13 @@ export async function updateChecklistItem(studentId: string, itemKey: keyof Prof
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
         const studentDoc = await adminDb!.collection('students').doc(studentId).get();
-        if (!studentDoc.exists) return { success: false, message: "Student not found." };
+        if (!studentDoc.exists) return { success: false, message: "Student found." };
         const author = await getUser(authorId);
         if (!author || author.civilId !== studentDoc.data()!.employeeId) return { success: false, message: 'Unauthorized.' };
-        await adminDb!.collection('students').doc(studentId).update({ [`profileCompletionStatus.${itemKey}`]: value });
+        await adminDb!.collection('students').doc(studentId).update({ 
+          [`profileCompletionStatus.${itemKey}`]: value,
+          lastActivityAt: new Date().toISOString()
+        });
         return { success: true, message: 'Checklist updated.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1130,7 +1181,11 @@ export async function setStudentFinalChoice(studentId: string, university: strin
     
     if (updater.role === 'employee' && updater.civilId !== studentData.employeeId && updater.role !== 'admin' && updater.role !== 'department') return { success: false, message: 'Unauthorized.' };
 
-    await studentRef.update({ finalChoiceUniversity: university, adminNotes: FieldValue.arrayUnion({ id: `note-finalize-${Date.now()}`, authorId: updaterId, content: `${updater.name} set final choice to ${university}.`, createdAt: new Date().toISOString() }) });
+    await studentRef.update({ 
+      finalChoiceUniversity: university, 
+      lastActivityAt: new Date().toISOString(),
+      adminNotes: FieldValue.arrayUnion({ id: `note-finalize-${Date.now()}`, authorId: updaterId, content: `${updater.name} set final choice to ${university}.`, createdAt: new Date().toISOString() }) 
+    });
 
     if (updater.role === 'employee') {
         const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
@@ -1203,7 +1258,10 @@ export async function deleteStudentDocument(studentId: string, documentId: strin
         if (filePath) await bucket.file(filePath).delete();
 
         const updatedDocs = (studentData.documents || []).filter(d => d.id !== documentId);
-        await studentRef.update({ documents: updatedDocs });
+        await studentRef.update({ 
+          documents: updatedDocs,
+          lastActivityAt: new Date().toISOString()
+        });
         return { success: true, message: 'Document deleted.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1368,7 +1426,11 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
   if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
-    await studentRef.update({ ieltsOverall: overallScore, adminNotes: FieldValue.arrayUnion({ id: `note-ielts-${Date.now()}`, authorId, content: `IELTS updated to ${overallScore.toFixed(1)}.`, createdAt: new Date().toISOString() }) });
+    await studentRef.update({ 
+      ieltsOverall: overallScore, 
+      lastActivityAt: new Date().toISOString(),
+      adminNotes: FieldValue.arrayUnion({ id: `note-ielts-${Date.now()}`, authorId, content: `IELTS updated to ${overallScore.toFixed(1)}.`, createdAt: new Date().toISOString() }) 
+    });
     return { success: true, message: 'IELTS score updated.' };
   } catch (error: any) {
     return { success: false, message: error.message };
@@ -1381,7 +1443,10 @@ export async function createStudentLogin(studentId: string, description: string,
         const studentRef = adminDb!.collection('students').doc(studentId);
         const creator = await getUser(createdByUserId);
         if (!creator) return { success: false, message: "User not found." };
-        await studentRef.update({ studentLogins: FieldValue.arrayUnion({ id: `login-${Date.now()}`, username, password, description, notes, createdAt: new Date().toISOString() }) });
+        await studentRef.update({ 
+          studentLogins: FieldValue.arrayUnion({ id: `login-${Date.now()}`, username, password, description, notes, createdAt: new Date().toISOString() }),
+          lastActivityAt: new Date().toISOString()
+        });
         return { success: true, message: 'Student login record created.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1395,7 +1460,10 @@ export async function deleteStudentLogin(studentId: string, idToDelete: string, 
         const studentRef = adminDb!.collection('students').doc(studentId);
         const studentDoc = await studentRef.get();
         const updatedLogins = (studentDoc.data()?.studentLogins || []).filter((l: any) => l.id !== idToDelete);
-        await studentRef.update({ studentLogins: updatedLogins });
+        await studentRef.update({ 
+          studentLogins: updatedLogins,
+          lastActivityAt: new Date().toISOString()
+        });
         return { success: true, message: 'Record deleted.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1416,7 +1484,11 @@ export async function resetStudentPassword(email: string) {
 export async function updateStudentTargetCountries(studentId: string, countries: string[], updaterId: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ targetCountries: countries, adminNotes: FieldValue.arrayUnion({ id: `note-target-${Date.now()}`, authorId, content: `Target countries set to: ${countries.join(', ')}`, createdAt: new Date().toISOString() }) });
+        await adminDb!.collection('students').doc(studentId).update({ 
+          targetCountries: countries, 
+          lastActivityAt: new Date().toISOString(),
+          adminNotes: FieldValue.arrayUnion({ id: `note-target-${Date.now()}`, authorId, content: `Target countries set to: ${countries.join(', ')}`, createdAt: new Date().toISOString() }) 
+        });
         return { success: true, message: 'Target countries updated.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1426,7 +1498,12 @@ export async function updateStudentTargetCountries(studentId: string, countries:
 export async function updateStudentAcademicIntake(studentId: string, semester: string, year: number, updaterId: string) {
     if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ academicIntakeSemester: semester, academicIntakeYear: year, adminNotes: FieldValue.arrayUnion({ id: `note-intake-${Date.now()}`, authorId, content: `Academic intake updated to: ${semester} ${year}`, createdAt: new Date().toISOString() }) });
+        await adminDb!.collection('students').doc(studentId).update({ 
+          academicIntakeSemester: semester, 
+          academicIntakeYear: year, 
+          lastActivityAt: new Date().toISOString(),
+          adminNotes: FieldValue.arrayUnion({ id: `note-intake-${Date.now()}`, authorId, content: `Academic intake updated to: ${semester} ${year}`, createdAt: new Date().toISOString() }) 
+        });
         return { success: true, message: 'Academic intake updated.' };
     } catch (error: any) {
         return { success: false, message: error.message };
@@ -1475,7 +1552,10 @@ export async function deleteAcademicTerm(termId: string, userId: string) {
 export async function updateStudentTerm(studentId: string, term: string, authorId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    await adminDb!.collection('students').doc(studentId).update({ term });
+    await adminDb!.collection('students').doc(studentId).update({ 
+      term,
+      lastActivityAt: new Date().toISOString()
+    });
     await addAdminNote(studentId, authorId, `Academic intake updated to: ${term}`);
     return { success: true };
   } catch (e: any) {
@@ -1495,18 +1575,22 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     const studentData = studentDoc.data() as Student;
 
     // 1. Create message record
+    const now = new Date().toISOString();
     const messageData = {
       authorId,
       content,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       ...(documentPayload && { document: documentPayload }),
     };
     await adminDb!.collection('chats').doc(studentId).collection('messages').add(messageData);
 
-    // 2. Update notification counters
+    // 2. Update notification counters and activity timestamp
     const isAdminDept = ['admin', 'department'].includes(author.role);
+    const updates: any = { lastActivityAt: now };
+
     if (isAdminDept) {
-      await studentRef.update({ employeeUnreadMessages: (studentData.employeeUnreadMessages || 0) + 1 });
+      updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
+      await studentRef.update(updates);
       
       // WhatsApp notify employee
       if (studentData.employeeId) {
@@ -1521,7 +1605,8 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
         }
       }
     } else {
-      await studentRef.update({ unreadUpdates: (studentData.unreadUpdates || 0) + 1 });
+      updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
+      await studentRef.update(updates);
       
       // WhatsApp notify admins if @Admins or @Department mention is used, or just general update
       const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
@@ -1598,7 +1683,10 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
         const studentData = studentDoc.data() as Student;
 
-        await studentRef.update({ changeAgentRequired: status });
+        await studentRef.update({ 
+          changeAgentRequired: status,
+          lastActivityAt: new Date().toISOString()
+        });
 
         // If turned ON, notify the employee
         if (status && studentData.employeeId) {
@@ -1634,4 +1722,34 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
     } catch (error: any) {
         return { success: false, message: error.message };
     }
+}
+
+export async function submitInactivityReport(studentId: string, employeeId: string, reportContent: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const employee = await getUser(employeeId);
+    if (!employee) return { success: false, message: 'Employee not found' };
+
+    const now = new Date().toISOString();
+    const fullReportMessage = `Inactivity Report for student: ${reportContent}`;
+
+    // 1. Send chat message to admins
+    await sendChatMessage(studentId, employeeId, `@Admins: ${fullReportMessage}`);
+
+    // 2. Add to internal notes for record
+    await studentRef.update({
+      lastActivityAt: now,
+      employeeNotes: FieldValue.arrayUnion({
+        id: `note-inactivity-${Date.now()}`,
+        authorId: employeeId,
+        content: `Contacted student and submitted inactivity report: ${reportContent}`,
+        createdAt: now,
+      })
+    });
+
+    return { success: true, message: 'Report submitted and sent to management.' };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
 }

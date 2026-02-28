@@ -80,6 +80,7 @@ export interface Student {
   documents: Document[];
   createdAt: string;
   createdBy: string;
+  lastActivityAt?: string; // Timestamp of the last significant action
   targetCountries?: Country[];
   missingItems?: string[];
   pipelineStatus?: PipelineStatus;

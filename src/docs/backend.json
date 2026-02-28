@@ -35,6 +35,7 @@
         "documents": { "type": "array", "description": "A list of documents uploaded for the student.", "items": { "$ref": "#/entities/StudentDocument" } },
         "createdAt": { "type": "string", "description": "Timestamp indicating when the student record was created.", "format": "date-time" },
         "createdBy": { "type": "string", "description": "The ID of the user who created the student record." },
+        "lastActivityAt": { "type": "string", "description": "Timestamp of the last meaningful interaction with the student profile.", "format": "date-time" },
         "targetCountries": { "type": "array", "description": "List of countries the student is interested in.", "items": { "type": "string" } },
         "missingItems": { "type": "array", "description": "A list of missing documents or information required from the student.", "items": { "type": "string" } },
         "pipelineStatus": { "type": "string", "description": "The student's status in the application pipeline.", "enum": ["green", "orange", "red", "none"] },
