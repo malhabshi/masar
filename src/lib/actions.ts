@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -195,6 +194,9 @@ export async function sendSampleWebhookRequest(webhookUrl: string, mapping: Reco
   if (!webhookUrl) return { success: false, message: 'No URL provided' };
 
   const dummyVars: Record<string, string> = {
+    recipientName: 'Sample Admin',
+    staffName: 'Sample Employee',
+    taskName: 'Visa Application Request',
     employeeName: 'Sample Employee',
     taskTitle: 'Sample Task',
     taskDescription: 'This is a test description for the task.',
@@ -562,7 +564,9 @@ export async function createStudentTask(authorId: string, studentId: string, req
           if (!recipient.phone) return Promise.resolve();
 
           return triggerWhatsAppNotification('new_task_assigned', {
-            employeeName: recipient.name,
+            recipientName: recipient.name,
+            staffName: creator?.name || 'UniApply Hub Staff',
+            taskName: requestTypeData.name,
             taskTitle: requestTypeData.name,
             taskDescription: description,
             studentName: studentData.name,

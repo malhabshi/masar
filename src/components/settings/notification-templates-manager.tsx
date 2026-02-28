@@ -44,9 +44,9 @@ export interface NotificationTypeMeta {
 const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
   { 
     type: 'new_task_assigned', 
-    label: 'New Task Created (Notify Staff)', 
-    variables: ['employeeName', 'taskTitle', 'taskDescription', 'studentName', 'dueDate', 'assignedBy', 'taskUrl'],
-    exampleMessage: "📋 *New Task Assigned*\n\nHello {{employeeName}},\n\nA new task has been submitted: *{{taskTitle}}*\n\nStudent: {{studentName}}\nSubmitted By: {{assignedBy}}\n\nView details: {{taskUrl}}"
+    label: 'New Task Submitted by Employee', 
+    variables: ['recipientName', 'staffName', 'taskName', 'studentName', 'taskUrl'],
+    exampleMessage: "📋 *New Task Submitted*\n\nHello {{recipientName}},\n\n*{{staffName}}* has submitted a new task: *{{taskName}}*.\n\nStudent: {{studentName}}\n\nView details: {{taskUrl}}"
   },
   { 
     type: 'task_reply_received', 
@@ -177,7 +177,9 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
   const handleTest = async (templateId: string, phone: string) => {
     try {
       const dummyVars = {
-        employeeName: 'Test Employee',
+        recipientName: 'Ahmad Manager',
+        staffName: 'Test Employee',
+        taskName: 'UK University Application',
         taskTitle: 'Urgent Documentation',
         taskDescription: 'Please verify the passport scan.',
         studentName: 'Ahmad Example',
@@ -189,6 +191,7 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
         replyMessage: 'Please upload the transcript.',
         documentName: 'Passport.pdf',
         uploadedBy: 'Admin Sarah',
+        employeeName: 'John Employee',
         courseOption: 'One Month In-Person',
         courseStartDate: 'Sunday, Oct 12',
         assignedBy: 'Manager Ahmad',
