@@ -1670,6 +1670,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
           adminName: adminData.name,
           studentName: studentData.name,
           documentName: documentName,
+          employeeName: author.name,
           uploadedBy: author.name,
           studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
         }, adminData.phone);

@@ -22,8 +22,7 @@ import {
   TableCell, 
   TableHead, 
   TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
+  TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { 
   Loader2, 
@@ -89,8 +88,8 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
   { 
     type: 'document_uploaded_employee', 
     label: 'Document Uploaded (by Employee)', 
-    variables: ['adminName', 'studentName', 'documentName', 'uploadedBy', 'studentUrl'],
-    exampleMessage: "📄 *Employee Upload Notification*\n\nHello {{adminName}},\n\n{{uploadedBy}} uploaded a new document \"{{documentName}}\" for student: *{{studentName}}*.\n\nReview here: {{studentUrl}}"
+    variables: ['adminName', 'studentName', 'documentName', 'employeeName', 'uploadedBy', 'studentUrl'],
+    exampleMessage: "📄 *Employee Upload Notification*\n\nHello {{adminName}},\n\nEmployee {{employeeName}} uploaded a new document \"{{documentName}}\" for student: *{{studentName}}*.\n\nReview here: {{studentUrl}}"
   },
   { 
     type: 'task_status_completed', 
