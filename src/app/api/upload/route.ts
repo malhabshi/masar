@@ -5,14 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import type { User, Student, SharedDocument, Country } from '@/lib/types';
 import type { Document as StudentDocument } from '@/lib/types';
-
-// Re-using the getUser helper from actions.ts, but defined locally for the route
-async function getUser(userId: string): Promise<User | null> {
-    if (!adminDb) return null;
-    const doc = await adminDb.collection('users').doc(userId).get();
-    if (!doc.exists) return null;
-    return { id: doc.id, ...doc.data() } as User;
-}
+import { triggerDocumentUploadNotification } from '@/lib/actions';
 
 export async function POST(req: NextRequest) {
   try {
@@ -73,9 +66,10 @@ export async function POST(req: NextRequest) {
         }
         const studentData = studentDoc.data() as Student;
         
+        const fileName = customName || file.name;
         const newDocument: StudentDocument = {
             id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            name: customName || file.name,
+            name: fileName,
             originalName: file.name,
             size: file.size,
             url: url,
@@ -104,7 +98,10 @@ export async function POST(req: NextRequest) {
             ...counterUpdate,
         });
 
-        // 3. RETURN SUCCESS
+        // 3. Trigger WhatsApp Notification (Awaited)
+        await triggerDocumentUploadNotification(studentId, fileName, decodedToken.uid);
+
+        // 4. RETURN SUCCESS
         return NextResponse.json({ success: true, document: newDocument });
 
     } else if (destination === 'user_avatar') {

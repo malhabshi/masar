@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -17,12 +18,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
+import { useCollection, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { sendChatMessage } from '@/lib/actions';
 
 interface StudentChatProps {
   student: Student;
@@ -61,19 +63,16 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Effect to clear document notification counters upon viewing.
+  // Management clears employee-sent updates (unreadUpdates) or employee clears management updates
   useEffect(() => {
     if (!student || !currentUser) return;
     const studentDocRef = doc(firestore, 'students', student.id);
     const isAdminDept = ['admin', 'department'].includes(currentUser.role);
     const isEmployee = currentUser.role === 'employee';
 
-    // Management clears employee-sent updates (unreadUpdates)
     if (isAdminDept && student.unreadUpdates && student.unreadUpdates > 0) {
       updateDocumentNonBlocking(studentDocRef, { unreadUpdates: 0 });
-    } 
-    // Employee clears management-sent messages (employeeUnreadMessages)
-    else if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0) {
+    } else if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0) {
       updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: 0 });
     }
   }, [student.id, student.unreadUpdates, student.employeeUnreadMessages, currentUser.role]);
@@ -139,29 +138,16 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
             }
         }
 
-        const message: Omit<ChatMessage, 'id'> = {
-            authorId: currentUser.id,
-            content: finalMessageContent || (documentPayload ? `Shared a file: ${documentPayload.name}` : ''),
-            timestamp: new Date().toISOString(),
-            ...(documentPayload && { document: documentPayload }),
-        };
+        // Migrate to server action for trigger support
+        const result = await sendChatMessage(
+          student.id,
+          currentUser.id,
+          finalMessageContent || (documentPayload ? `Shared a file: ${documentPayload.name}` : ''),
+          recipientId,
+          documentPayload
+        );
 
-        const messagesCollection = collection(firestore, 'chats', studentId, 'messages');
-        addDocumentNonBlocking(messagesCollection, message);
-
-        // Update counters
-        const studentDocRef = doc(firestore, 'students', student.id);
-        const isAdminDept = ['admin', 'department'].includes(currentUser.role);
-        
-        if (isAdminDept) {
-            // Admin sending -> notify Employee
-            const current = student.employeeUnreadMessages || 0;
-            updateDocumentNonBlocking(studentDocRef, { employeeUnreadMessages: current + 1 });
-        } else {
-            // Employee sending -> notify Admin
-            const current = student.unreadUpdates || 0;
-            updateDocumentNonBlocking(studentDocRef, { unreadUpdates: current + 1 });
-        }
+        if (!result.success) throw new Error(result.message);
 
         setNewMessage('');
         setFile(null);
@@ -178,11 +164,8 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
 
   const renderMessageContent = (content: string) => {
     if (!content) return null;
-    
-    // Highlight mentions (@Admins, @Departments, @Name)
     const mentionRegex = /^(@[A-Za-z\s]+:)/;
     const match = content.match(mentionRegex);
-    
     if (match) {
       const mention = match[1];
       const rest = content.slice(mention.length);
@@ -193,7 +176,6 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         </p>
       );
     }
-    
     return <p className="whitespace-pre-wrap">{content}</p>;
   };
 

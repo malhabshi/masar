@@ -143,11 +143,15 @@ export async function triggerWhatsAppNotification(
       .limit(1)
       .get();
 
-    if (templateQuery.empty) return;
+    if (templateQuery.empty) {
+      console.log(`No active WhatsApp template found for notification type: ${type}`);
+      return;
+    }
 
     const template = templateQuery.docs[0].data() as NotificationTemplate;
     
     if (template.webhookUrl) {
+      console.log(`Triggering WhatsApp Webhook for ${type} to ${recipientPhone}`);
       await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables, template.variableMapping);
     }
   } catch (e) {
@@ -817,7 +821,7 @@ export async function createStudent(
         const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
         if (!adminsSnapshot.empty) {
           const batch = adminDb!.batch();
-          adminsSnapshot.forEach(adminDoc => {
+          for (const adminDoc of adminsSnapshot.docs) {
             const taskRef = adminDb!.collection('tasks').doc();
             batch.set(taskRef, {
               authorId: creatingUserId,
@@ -831,7 +835,7 @@ export async function createStudent(
 
             // WhatsApp alert to admins
             const adminData = adminDoc.data() as User;
-            triggerWhatsAppNotification('new_student_added', {
+            await triggerWhatsAppNotification('new_student_added', {
               adminName: adminData.name,
               studentName: studentName,
               studentEmail: studentEmail || 'N/A',
@@ -839,7 +843,7 @@ export async function createStudent(
               submissionDate: new Date().toLocaleDateString(),
               studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/unassigned-students`
             }, adminData.phone);
-          });
+          }
           await batch.commit();
         }
     }
@@ -951,7 +955,7 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
 
         const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
         if (!adminsSnap.empty) {
-            const student = (await studentRef.get()).data() as Student;
+            const studentData = (await studentRef.get()).data() as Student;
             const batch = adminDb!.batch();
             adminsSnap.forEach(adminDoc => {
                 const taskRef = adminDb!.collection('tasks').doc();
@@ -960,7 +964,7 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
                   createdBy: employeeId,
                   recipientId: adminDoc.id, 
                   recipientIds: [adminDoc.id], 
-                  content: `Deletion request for ${student.name}: ${reason}`, 
+                  content: `Deletion request for ${studentData.name}: ${reason}`, 
                   status: 'new', category: 'request', createdAt: new Date().toISOString(), replies: [] 
                 });
             });
@@ -985,9 +989,10 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 
         const batch = adminDb!.batch();
         snapshot.docs.forEach(doc => {
+            const docData = doc.data();
             batch.update(doc.ref, { 
                 employeeId: toEmployee.civilId, isNewForEmployee: true,
-                transferHistory: [...(doc.data().transferHistory || []), { fromEmployeeId: fromEmployee.civilId, toEmployeeId: toEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }]
+                transferHistory: [...(docData.transferHistory || []), { fromEmployeeId: fromEmployee.civilId, toEmployeeId: toEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }]
             });
         });
         await batch.commit();
@@ -1125,14 +1130,13 @@ export async function setStudentFinalChoice(studentId: string, university: strin
     
     if (updater.role === 'employee' && updater.civilId !== studentData.employeeId && updater.role !== 'admin' && updater.role !== 'department') return { success: false, message: 'Unauthorized.' };
 
-    const oldChoice = studentData.finalChoiceUniversity;
     await studentRef.update({ finalChoiceUniversity: university, adminNotes: FieldValue.arrayUnion({ id: `note-finalize-${Date.now()}`, authorId: updaterId, content: `${updater.name} set final choice to ${university}.`, createdAt: new Date().toISOString() }) });
 
     if (updater.role === 'employee') {
         const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
         if (!adminsSnapshot.empty) {
             const batch = adminDb!.batch();
-            adminsSnapshot.forEach(adminDoc => {
+            for (const adminDoc of adminsSnapshot.docs) {
                 batch.set(adminDb!.collection('tasks').doc(), { 
                   authorId: updaterId, 
                   createdBy: updaterId,
@@ -1141,7 +1145,7 @@ export async function setStudentFinalChoice(studentId: string, university: strin
                   content: `Final choice set for ${studentData.name} to ${university}.`, 
                   createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] 
                 });
-            });
+            }
             await batch.commit();
         }
     }
@@ -1297,7 +1301,7 @@ export async function getReportStats(dateRange: {
       totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), 
       totalEmployees: allUsers.filter(u => u.role === 'employee').length,
       applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })),
-      studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })),
+      studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + (s.applications?.length || 0); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })),
       studentGrowthData: Object.entries(studentsInRange.reduce((acc, s) => { const d = format(parseISO(s.createdAt), 'yyyy-MM-dd'); acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
       applicationCountryData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.country] = (acc[app.country] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })),
       employeeHoursData: Object.entries(allTimeLogs.filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval)).reduce((acc, log) => { const user = allUsers.find(u => u.id === log.employeeId); if (user) acc[user.name] = (acc[user.name] || 0) + (differenceInMinutes(parseISO(log.clockOut!), parseISO(log.clockIn)) / 60); return acc; }, {} as Record<string, number>)).map(([name, hours]) => ({ name, hours: parseFloat(hours.toFixed(1))}))
@@ -1476,5 +1480,109 @@ export async function updateStudentTerm(studentId: string, term: string, authorI
     return { success: true };
   } catch (e: any) {
     return { success: false, message: e.message };
+  }
+}
+
+export async function sendChatMessage(studentId: string, authorId: string, content: string, recipientId?: string, documentPayload?: { name: string; url: string }) {
+  if (!checkAdminServices()) return { success: false, message: 'Server database connection not available.' };
+  try {
+    const author = await getUser(authorId);
+    if (!author) return { success: false, message: 'Author not found.' };
+
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+
+    // 1. Create message record
+    const messageData = {
+      authorId,
+      content,
+      timestamp: new Date().toISOString(),
+      ...(documentPayload && { document: documentPayload }),
+    };
+    await adminDb!.collection('chats').doc(studentId).collection('messages').add(messageData);
+
+    // 2. Update notification counters
+    const isAdminDept = ['admin', 'department'].includes(author.role);
+    if (isAdminDept) {
+      await studentRef.update({ employeeUnreadMessages: (studentData.employeeUnreadMessages || 0) + 1 });
+      
+      // WhatsApp notify employee
+      if (studentData.employeeId) {
+        const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+        if (!employeeQuery.empty) {
+          const emp = employeeQuery.docs[0].data() as User;
+          await triggerWhatsAppNotification('admin_update', {
+            employeeName: emp.name,
+            messageContent: `Management sent a message for ${studentData.name}: ${content.substring(0, 50)}...`,
+            dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
+          }, emp.phone);
+        }
+      }
+    } else {
+      await studentRef.update({ unreadUpdates: (studentData.unreadUpdates || 0) + 1 });
+      
+      // WhatsApp notify admins if @Admins or @Department mention is used, or just general update
+      const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
+      for (const adminDoc of adminsSnap.docs) {
+        const adminData = adminDoc.data() as User;
+        await triggerWhatsAppNotification('admin_update', {
+          employeeName: adminData.name,
+          messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`,
+          dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/internal-chat`
+        }, adminData.phone);
+      }
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function triggerDocumentUploadNotification(studentId: string, documentName: string, authorId: string) {
+  if (!checkAdminServices()) return;
+  try {
+    const author = await getUser(authorId);
+    if (!author) return;
+
+    const studentDoc = await adminDb!.collection('students').doc(studentId).get();
+    if (!studentDoc.exists) return;
+    const studentData = studentDoc.data() as Student;
+
+    const isAdminDept = ['admin', 'department'].includes(author.role);
+    
+    if (isAdminDept) {
+      // Notify assigned employee
+      if (studentData.employeeId) {
+        const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+        if (!empQuery.empty) {
+          const emp = empQuery.docs[0].data() as User;
+          await triggerWhatsAppNotification('document_uploaded_admin', {
+            employeeName: emp.name,
+            studentName: studentData.name,
+            documentName: documentName,
+            uploadedBy: author.name,
+            studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
+          }, emp.phone);
+        }
+      }
+    } else {
+      // Notify admins
+      const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
+      for (const adminDoc of adminsSnap.docs) {
+        const adminData = adminDoc.data() as User;
+        await triggerWhatsAppNotification('document_uploaded_student', {
+          adminName: adminData.name,
+          studentName: studentData.name,
+          documentName: documentName,
+          uploadedBy: author.name,
+          studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
+        }, adminData.phone);
+      }
+    }
+  } catch (e) {
+    console.error('Document upload notification trigger failed:', e);
   }
 }
