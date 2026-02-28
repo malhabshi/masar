@@ -15,8 +15,6 @@ service cloud.firestore {
      */
     function isAdmin() {
       if (!isSignedIn()) return false;
-      let adminDocPath = /databases/$(database)/documents/admins/$(request.auth.uid);
-      let userDocPath = /databases/$(database)/documents/users/$(request.auth.uid);
       
       // Hardcoded bypass for the reported users to ensure emergency access
       let isSuperAdmin = request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
@@ -24,8 +22,13 @@ service cloud.firestore {
                          request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62' ||
                          request.auth.token.email == 'bo7amany98@gmail.com' ||
                          request.auth.token.email == 'malhabshi@q8sf.com';
+      
+      if (isSuperAdmin) return true;
+      
+      let adminDocPath = /databases/$(database)/documents/admins/$(request.auth.uid);
+      let userDocPath = /databases/$(database)/documents/users/$(request.auth.uid);
                          
-      return isSuperAdmin || exists(adminDocPath) || (exists(userDocPath) && get(userDocPath).data.role == 'admin');
+      return exists(adminDocPath) || (exists(userDocPath) && get(userDocPath).data.role == 'admin');
     }
 
     /** @description Safe check for department status. */
@@ -88,7 +91,7 @@ service cloud.firestore {
     }
 
     match /notification_templates/{templateId} {
-      allow read: if isSignedIn();
+      allow get, list: if isSignedIn();
       allow write: if isAdmin();
     }
 
