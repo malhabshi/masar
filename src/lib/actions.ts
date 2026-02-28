@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -203,6 +202,7 @@ export async function sendSampleWebhookRequest(webhookUrl: string, mapping: Reco
     studentPhone: '55123456',
     dueDate: '2025-12-31',
     assignedBy: 'System Admin',
+    userName: 'Sample User',
     taskUrl: 'https://uniapplyhub.com/tasks',
     createdAt: new Date().toISOString(),
     adminName: 'Super Admin',
@@ -1697,33 +1697,65 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
           lastActivityAt: new Date().toISOString()
         });
 
-        // If turned ON, notify the employee
-        if (status && studentData.employeeId) {
-            const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
-            if (!employeeQuery.empty) {
-                const employeeDoc = employeeQuery.docs[0];
-                const employeeData = employeeDoc.data() as User;
-                const taskContent = `🚨 URGENT: Change Agent status enabled for ${studentData.name}. Please review this profile immediately.`;
-                await adminDb!.collection('tasks').add({
-                    authorId: adminId,
-                    createdBy: adminId,
-                    recipientId: employeeDoc.id,
-                    recipientIds: [employeeDoc.id],
-                    content: taskContent,
-                    createdAt: new Date().toISOString(),
-                    status: 'new',
-                    category: 'system',
-                    replies: []
-                });
+        // If turned ON, notify the employee and management
+        if (status) {
+            const taskContent = `🚨 URGENT: Change Agent status enabled for ${studentData.name}. Please review this profile immediately.`;
+            const studentUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`;
 
-                // WhatsApp alert
-                if (employeeData.phone) {
-                  await triggerWhatsAppNotification('admin_update', {
-                    employeeName: employeeData.name,
-                    messageContent: taskContent,
-                    dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
-                  }, employeeData.phone);
+            // 1. Notify Assigned Employee
+            if (studentData.employeeId) {
+                const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+                if (!employeeQuery.empty) {
+                    const employeeDoc = employeeQuery.docs[0];
+                    const employeeData = employeeDoc.data() as User;
+                    
+                    await adminDb!.collection('tasks').add({
+                        authorId: adminId,
+                        createdBy: adminId,
+                        recipientId: employeeDoc.id,
+                        recipientIds: [employeeDoc.id],
+                        content: taskContent,
+                        createdAt: new Date().toISOString(),
+                        status: 'new',
+                        category: 'system',
+                        replies: []
+                    });
+
+                    // WhatsApp to Employee
+                    if (employeeData.phone) {
+                      await triggerWhatsAppNotification('change_agent_enabled', {
+                        userName: employeeData.name,
+                        studentName: studentData.name,
+                        employeeName: employeeData.name,
+                        messageContent: taskContent,
+                        studentUrl: studentUrl
+                      }, employeeData.phone);
+                    }
                 }
+            }
+
+            // 2. Notify all Admins and Department Users
+            const managementSnap = await adminDb!.collection('users')
+              .where('role', 'in', ['admin', 'department'])
+              .get();
+
+            const assignedEmployeeName = studentData.employeeId 
+              ? (await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get()).docs[0]?.data()?.name || 'Unassigned'
+              : 'Unassigned';
+
+            for (const mDoc of managementSnap.docs) {
+              const mData = mDoc.data() as User;
+              if (mData.id === adminId) continue; // Don't notify the one who triggered it
+
+              if (mData.phone) {
+                await triggerWhatsAppNotification('change_agent_enabled', {
+                  userName: mData.name,
+                  studentName: studentData.name,
+                  employeeName: assignedEmployeeName,
+                  messageContent: taskContent,
+                  studentUrl: studentUrl
+                }, mData.phone);
+              }
             }
         }
 

@@ -1,4 +1,3 @@
-
 export type UserRole = 'admin' | 'employee' | 'department' | 'student';
 
 export interface User {
@@ -338,7 +337,8 @@ export type NotificationType =
   | 'payment_received'
   | 'scholarship_approved'
   | 'visa_update'
-  | 'inactivity_reminder';
+  | 'inactivity_reminder'
+  | 'change_agent_enabled';
 
 export interface NotificationTemplate {
   id: string;

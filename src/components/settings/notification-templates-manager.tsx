@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -108,6 +107,12 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     label: 'Inactivity Reminder (Auto)',
     variables: ['employeeName', 'studentName', 'dashboardUrl'],
     exampleMessage: "⚠️ *Inactivity Alert*\n\nHello {{employeeName}},\n\nThere has been no activity for *{{studentName}}* for 10 days.\n\nPlease contact the student and provide a report.\nتواصل مع الطالب و عطني تقرير عنه.\n\nProfile: {{dashboardUrl}}"
+  },
+  {
+    type: 'change_agent_enabled',
+    label: 'Change Agent Status Enabled',
+    variables: ['userName', 'studentName', 'employeeName', 'messageContent', 'studentUrl'],
+    exampleMessage: "🚨 *URGENT: Change Agent Required*\n\nHello {{userName}},\n\nChange Agent status has been enabled for student: *{{studentName}}*.\nAssigned Employee: {{employeeName}}\n\nReview immediately: {{studentUrl}}"
   }
 ];
 
@@ -153,6 +158,7 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
         studentName: 'Ahmad Example',
         taskUrl: 'https://uniapplyhub.com/tasks',
         adminName: 'Super Admin',
+        userName: 'Test User',
         messageContent: 'This is a test notification.',
         replyAuthor: 'Admin User',
         replyMessage: 'Please upload the transcript.',
@@ -161,7 +167,8 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
         courseOption: 'One Month In-Person',
         courseStartDate: 'Sunday, Oct 12',
         assignedBy: 'Manager Ahmad',
-        dashboardUrl: 'https://uniapplyhub.com/dashboard'
+        dashboardUrl: 'https://uniapplyhub.com/dashboard',
+        studentUrl: 'https://uniapplyhub.com/student/test'
       };
 
       const result = await sendTestWhatsApp(templateId, phone, dummyVars);
