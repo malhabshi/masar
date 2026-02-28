@@ -31,8 +31,6 @@ import {
   CheckCircle, 
   XCircle, 
   MessageSquare,
-  Copy,
-  Zap
 } from 'lucide-react';
 import { TemplateDialog } from './template-dialog';
 
@@ -106,18 +104,6 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<NotificationTemplate | undefined>(undefined);
-  const [webhookUrl, setWebhookUrl] = useState('');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setWebhookUrl(`${window.location.origin}/api/whatsapp/webhook`);
-    }
-  }, []);
-
-  const handleCopyWebhook = () => {
-    navigator.clipboard.writeText(webhookUrl);
-    toast({ title: 'URL Copied', description: 'Webhook URL copied to clipboard.' });
-  };
 
   const handleSave = async (values: any) => {
     const result = await saveNotificationTemplate({
@@ -163,36 +149,13 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">WhatsApp Notifications</h1>
-          <p className="text-muted-foreground mt-1">Configure automated messages and gateway settings.</p>
+          <p className="text-muted-foreground mt-1">Configure automated messages triggered by system events.</p>
         </div>
         <Button onClick={() => { setEditingTemplate(undefined); setIsDialogOpen(true); }}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Template
         </Button>
       </div>
-
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            Webhook Configuration (WANotifier)
-          </CardTitle>
-          <CardDescription>
-            Provide this URL to your WhatsApp provider to receive delivery status updates.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 bg-background border p-2 rounded text-xs font-mono break-all">
-              {webhookUrl || 'Loading URL...'}
-            </code>
-            <Button variant="outline" size="sm" onClick={handleCopyWebhook}>
-              <Copy className="h-3.5 w-3.5 mr-2" />
-              Copy URL
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent className="p-0">
