@@ -173,6 +173,41 @@ export async function sendTestWhatsApp(templateId: string, phone: string, variab
   }
 }
 
+/**
+ * Sends a sample POST request to a webhook URL to help external tools "learn" the data structure.
+ */
+export async function sendSampleWebhookRequest(webhookUrl: string, mapping: Record<string, string>) {
+  if (!webhookUrl) return { success: false, message: 'No URL provided' };
+
+  const dummyVars: Record<string, string> = {
+    employeeName: 'Sample Employee',
+    taskTitle: 'Sample Task',
+    taskDescription: 'This is a test description for the task.',
+    studentName: 'Sample Student',
+    studentEmail: 'sample@example.com',
+    studentPhone: '55123456',
+    dueDate: '2025-12-31',
+    assignedBy: 'System Admin',
+    taskUrl: 'https://uniapplyhub.com/tasks',
+    createdAt: new Date().toISOString(),
+    adminName: 'Super Admin',
+    messageContent: 'This is a sample update content.',
+    replyAuthor: 'System Assistant',
+    replyMessage: 'The request has been processed.',
+    documentName: 'Sample_Document.pdf',
+    uploadedBy: 'Admin Team',
+    courseOption: 'Standard Course',
+    courseStartDate: 'Sunday, Jan 1',
+    dashboardUrl: 'https://uniapplyhub.com/dashboard',
+    pendingTasksCount: '5',
+    oldestTaskDate: '2025-01-01',
+    submissionDate: '2025-01-01',
+    studentUrl: 'https://uniapplyhub.com/student/sample'
+  };
+
+  return await sendWhatsAppViaWebhook(webhookUrl, '00000000', dummyVars, mapping);
+}
+
 export async function saveNotificationTemplate(data: Omit<NotificationTemplate, 'id' | 'createdAt' | 'updatedAt'>, id?: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {

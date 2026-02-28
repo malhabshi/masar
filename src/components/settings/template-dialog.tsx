@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -35,8 +36,10 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, SendHorizontal, Phone, Sparkles, Link as LinkIcon, Plus, Trash2 } from 'lucide-react';
+import { Loader2, SendHorizontal, Phone, Sparkles, Link as LinkIcon, Plus, Trash2, Zap } from 'lucide-react';
 import type { NotificationTypeMeta } from './notification-templates-manager';
+import { sendSampleWebhookRequest } from '@/lib/actions';
+import { useToast } from '@/hooks/use-toast';
 
 const templateSchema = z.object({
   notificationType: z.string().min(1, 'Type is required.'),
@@ -66,9 +69,11 @@ export function TemplateDialog({
   onTest: (id: string, phone: string) => Promise<void>;
   types: NotificationTypeMeta[];
 }) {
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+  const [isSendingSample, setIsSendingSample] = useState(false);
 
   const form = useForm<z.infer<typeof templateSchema>>({
     resolver: zodResolver(templateSchema),
@@ -107,6 +112,7 @@ export function TemplateDialog({
   }, [isOpen, template, form]);
 
   const watchType = form.watch('notificationType');
+  const watchWebhook = form.watch('webhookUrl');
   const activeTypeMeta = types.find(t => t.type === watchType);
   const availableVars = activeTypeMeta?.variables || [];
 
@@ -131,6 +137,24 @@ export function TemplateDialog({
     if (!form.getValues('templateName')) {
         form.setValue('templateName', activeTypeMeta.label);
     }
+  };
+
+  const handleSendSample = async () => {
+    if (!watchWebhook) return;
+    setIsSendingSample(true);
+    
+    const mapping: Record<string, string> = {};
+    form.getValues('mapping').forEach(m => {
+      mapping[m.placeholder] = m.systemVar;
+    });
+
+    const result = await sendSampleWebhookRequest(watchWebhook, mapping);
+    if (result.success) {
+      toast({ title: 'Sample Sent', description: 'Sample POST request sent to webhook successfully.' });
+    } else {
+      toast({ variant: 'destructive', title: 'Sample Failed', description: result.message });
+    }
+    setIsSendingSample(false);
   };
 
   const onSubmit = async (values: z.infer<typeof templateSchema>) => {
@@ -162,7 +186,7 @@ export function TemplateDialog({
         <DialogHeader>
           <DialogTitle>{template ? 'Edit' : 'Add'} WhatsApp Template</DialogTitle>
           <DialogDescription>
-            Configure your WhatsApp message and map numbered placeholders ({"{{1}}"}), ({"{{2}}"}) to system variables.
+            Configure your WhatsApp message and map numbered placeholders ({"{{"}1{"}}"}) to system variables.
           </DialogDescription>
         </DialogHeader>
         
@@ -194,12 +218,27 @@ export function TemplateDialog({
 
                 <FormField control={form.control} name="webhookUrl" render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <LinkIcon className="h-3 w-3 text-primary" />
-                      WANotifier Webhook URL
+                    <FormLabel className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <LinkIcon className="h-3 w-3 text-primary" />
+                        WANotifier Webhook URL
+                      </div>
+                      {field.value && (
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 text-[10px] font-bold bg-primary/10 text-primary hover:bg-primary/20"
+                          onClick={handleSendSample}
+                          disabled={isSendingSample}
+                        >
+                          {isSendingSample ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
+                          Send Sample Request
+                        </Button>
+                      )}
                     </FormLabel>
                     <FormControl><Input placeholder="https://app.wanotifier.com/api/v1/notifications/..." {...field} /></FormControl>
-                    <FormDescription>The specific URL provided by WANotifier for this template.</FormDescription>
+                    <FormDescription>Step 2: Send a sample POST request to help WANotifier learn your mapping.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -212,7 +251,7 @@ export function TemplateDialog({
                     </Button>
                   </div>
                   <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
-                    Map numbering ({"{{1}}"}), ({"{{2}}"}) to system fields
+                    Map numbering ({"{{"}1{"}}"}), ({"{{"}2{"}}"}) to system fields
                   </p>
                   
                   {fields.length > 0 ? (
