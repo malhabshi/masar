@@ -337,7 +337,7 @@ export type NotificationType =
   | 'payment_received'
   | 'scholarship_approved'
   | 'visa_update'
-  | 'document_uploaded_student';
+  | 'inactivity_reminder';
 
 export interface NotificationTemplate {
   id: string;

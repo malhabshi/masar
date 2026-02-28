@@ -1649,7 +1649,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
     if (isAdminDept) {
       // Notify assigned employee
       if (studentData.employeeId) {
-        const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+        const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
         if (!employeeQuery.empty) {
           const emp = employeeQuery.docs[0].data() as User;
           await triggerWhatsAppNotification('document_uploaded_admin', {
@@ -1813,6 +1813,15 @@ export async function processInactivityReminders() {
       const employeeQuery = await adminDb!.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
       const employeeData = !employeeQuery.empty ? employeeQuery.docs[0].data() as User : null;
       
+      if (employeeData) {
+          // Trigger WhatsApp Alert for Employee
+          await triggerWhatsAppNotification('inactivity_reminder', {
+            employeeName: employeeData.name,
+            studentName: student.name,
+            dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${doc.id}`
+          }, employeeData.phone);
+      }
+
       const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
       if (!adminsSnap.empty) {
           const batch = adminDb!.batch();

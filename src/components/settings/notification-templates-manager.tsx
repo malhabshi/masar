@@ -97,6 +97,12 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     label: 'IELTS Course Registration', 
     variables: ['adminName', 'studentName', 'courseOption', 'courseStartDate', 'employeeName'],
     exampleMessage: "🎓 *IELTS Course Registration*\n\nHello {{adminName}},\n\nA new student has registered for an IELTS course:\n\nStudent: {{studentName}}\nCourse: {{courseOption}}\nStart Date: {{courseStartDate}}\nRegistered by: {{employeeName}}"
+  },
+  {
+    type: 'inactivity_reminder',
+    label: 'Inactivity Reminder (Auto)',
+    variables: ['employeeName', 'studentName', 'dashboardUrl'],
+    exampleMessage: "⚠️ *Inactivity Alert*\n\nHello {{employeeName}},\n\nThere has been no activity for *{{studentName}}* for 10 days.\n\nPlease contact the student and provide a report.\nتواصل مع الطالب و عطني تقرير عنه.\n\nProfile: {{dashboardUrl}}"
   }
 ];
 
@@ -135,7 +141,8 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
       uploadedBy: 'Admin Sarah',
       courseOption: 'One Month In-Person',
       courseStartDate: 'Sunday, Oct 12',
-      assignedBy: 'Manager Ahmad'
+      assignedBy: 'Manager Ahmad',
+      dashboardUrl: 'https://uniapplyhub.com/dashboard'
     };
 
     const result = await sendTestWhatsApp(templateId, phone, dummyVars);
