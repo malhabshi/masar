@@ -50,12 +50,6 @@ A specialized role, often for internal review or management, with broader read a
 - **Unassigned Students:** A dedicated view for admins to see newly created students and assign them to an employee.
 - **Finalized Students:** A view to see all students who have made their final university choice, with filtering options.
 
-### b. Jotform Integration (New Lead Capture)
-The system is integrated with Jotform to automatically capture new leads.
-- **Webhook Endpoint:** `/api/jotform/webhook`
-- **Data Flow:** When a student submits the Jotform, a record is created in the `students` collection with `source: "jotform"`. These students appear in the **Unassigned Students** list.
-- **Admin Alerts:** New submissions trigger an automatic task notification for all Administrators.
-
 ---
 
 ## 4. Technical Architecture
@@ -70,7 +64,6 @@ The system is integrated with Jotform to automatically capture new leads.
 The database is structured around several key collections:
 - `/users/{userId}`: Stores public profiles for all users, including their role.
 - `/students/{studentId}`: Stores all information for each student.
-- `/jotform_submissions/{submissionId}`: Stores raw data from Jotform leads.
 - `/tasks/{taskId}`: Stores all tasks and their replies.
 - `/chats/{studentId}/messages/{messageId}`: Stores chat messages, nested under the relevant student.
 - Other global collections include `/approved_universities`, `/upcoming_events`, `/shared_documents`, etc.

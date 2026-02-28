@@ -73,11 +73,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /jotform_submissions/{submissionId} {
-      allow read: if isPrivileged();
-      allow write: if false; // System only (via admin SDK)
-    }
-
     match /tasks/{taskId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn() && (
