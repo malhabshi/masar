@@ -147,7 +147,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         </div>
 
         {/* Exam Type Selection (If multiple) */}
-        {requestType.isSpecialTask && config?.examTypes?.length > 1 && (
+        {requestType.isSpecialTask && config?.examTypes && config.examTypes.length > 1 && (
           <FormField
             control={form.control}
             name="examType"
