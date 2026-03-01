@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -103,7 +102,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   const handleDocToggle = (docId: string) => {
     const current = form.getValues('selectedDocuments') || [];
     if (current.includes(docId)) {
-      form.setValue('selectedDocuments', current.filter(id => id !== docId));
+      form.setValue('selectedDocuments', current.filter((id: string) => id !== docId));
     } else {
       form.setValue('selectedDocuments', [...current, docId]);
     }
