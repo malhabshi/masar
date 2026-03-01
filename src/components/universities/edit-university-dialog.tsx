@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
   Select,
@@ -34,6 +35,7 @@ const formSchema = z.object({
   country: z.enum(['UK', 'USA', 'Australia', 'New Zealand']),
   ieltsScore: z.coerce.number().min(0).max(9),
   isAvailable: z.boolean().default(false),
+  notes: z.string().optional(),
 });
 
 interface EditUniversityDialogProps {
@@ -53,6 +55,7 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
       country: university.country,
       ieltsScore: university.ieltsScore,
       isAvailable: university.isAvailable,
+      notes: university.notes || '',
     },
   });
 
@@ -63,6 +66,7 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
         country: university.country,
         ieltsScore: university.ieltsScore,
         isAvailable: university.isAvailable,
+        notes: university.notes || '',
     });
   }, [university, form]);
 
@@ -84,7 +88,7 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
             <FilePenLine className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Approved University</DialogTitle>
           <DialogDescription>
@@ -156,6 +160,19 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
                     )}
                 />
             </div>
+            <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Internal Notes</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Add any specific requirements or details..." {...field} className="min-h-[80px]" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+            />
             <FormField
                 control={form.control}
                 name="isAvailable"

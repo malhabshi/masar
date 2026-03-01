@@ -1969,3 +1969,17 @@ export async function forceInactivity(studentId: string) {
     return { success: false, message: e.message };
   }
 }
+
+export async function deleteUniversity(id: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'Admin services not available.' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+    await adminDb!.collection('approved_universities').doc(id).delete();
+    return { success: true, message: 'University removed successfully.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}

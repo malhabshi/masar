@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -35,6 +36,7 @@ const formSchema = z.object({
   country: z.enum(['UK', 'USA', 'Australia', 'New Zealand']),
   ieltsScore: z.coerce.number().min(0).max(9),
   isAvailable: z.boolean().default(false),
+  notes: z.string().optional(),
 });
 
 interface AddUniversityDialogProps {
@@ -53,6 +55,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
       major: '',
       ieltsScore: 6.5,
       isAvailable: false,
+      notes: '',
     },
   });
 
@@ -71,7 +74,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Add Approved University</DialogTitle>
           <DialogDescription>
@@ -143,6 +146,19 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
                     )}
                 />
             </div>
+            <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Internal Notes</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Add any specific requirements or details..." {...field} className="min-h-[80px]" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+            />
             <FormField
                 control={form.control}
                 name="isAvailable"

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -18,7 +17,7 @@ import {
 import { PlusCircle, Search, Loader2 } from 'lucide-react';
 import { UniversitiesTable } from '@/components/universities/universities-table';
 import { AddUniversityDialog } from '@/components/universities/add-university-dialog';
-import { sendTask } from '@/lib/actions';
+import { sendTask, deleteUniversity } from '@/lib/actions';
 import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
@@ -79,7 +78,6 @@ export function ApprovedUniversitiesView() {
     });
 
     const taskContent = `New approved university added: ${newUniversity.name} (${newUniversity.major}).`;
-    // Pass 'system' category to hide from manual updates feed
     await sendTask(user.id, 'all', taskContent, 'system');
 
     toast({
@@ -99,13 +97,17 @@ export function ApprovedUniversitiesView() {
     });
 
     const taskContent = `Approved university updated: ${updatedUniversity.name} (${updatedUniversity.major}). Please review the changes.`;
-    // Pass 'system' category to hide from manual updates feed
     await sendTask(user.id, 'all', taskContent, 'system');
+  }, [user, toast]);
 
-    toast({
-      title: "Employees Notified",
-      description: "A notification has been sent to all employees about the university update."
-    });
+  const handleDeleteUniversity = useCallback(async (id: string) => {
+    if (!user) return;
+    const result = await deleteUniversity(id, user.id);
+    if (result.success) {
+      toast({ title: 'Deleted', description: result.message });
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: result.message });
+    }
   }, [user, toast]);
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
@@ -192,6 +194,7 @@ export function ApprovedUniversitiesView() {
         <UniversitiesTable
           universities={filteredUniversities}
           onUpdateUniversity={canManage ? handleUpdateUniversity : undefined}
+          onDeleteUniversity={canManage ? handleDeleteUniversity : undefined}
           isLoading={isLoading}
         />
       </CardContent>

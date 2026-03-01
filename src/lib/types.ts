@@ -353,3 +353,13 @@ export interface NotificationTemplate {
   updatedAt: string;
   updatedBy: string;
 }
+
+export interface ApprovedUniversity {
+  id: string;
+  name: string;
+  major: string;
+  country: Country;
+  ieltsScore: number;
+  isAvailable: boolean;
+  notes?: string;
+}

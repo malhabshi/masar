@@ -10,17 +10,30 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { ApprovedUniversity } from '@/lib/types';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Trash2 } from 'lucide-react';
 import { EditUniversityDialog } from './edit-university-dialog';
 import { Skeleton } from '../ui/skeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 
 interface UniversitiesTableProps {
   universities: ApprovedUniversity[];
   onUpdateUniversity?: (university: ApprovedUniversity) => void;
+  onDeleteUniversity?: (id: string) => void;
   isLoading: boolean;
 }
 
-export function UniversitiesTable({ universities, onUpdateUniversity, isLoading }: UniversitiesTableProps) {
+export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUniversity, isLoading }: UniversitiesTableProps) {
   const numColumns = onUpdateUniversity ? 6 : 5;
   
   if (isLoading) {
@@ -65,8 +78,19 @@ export function UniversitiesTable({ universities, onUpdateUniversity, isLoading 
           {universities.length > 0 ? (
             universities.map((uni) => (
               <TableRow key={uni.id}>
-                <TableCell className="font-medium">{uni.name}</TableCell>
-                <TableCell>{uni.major}</TableCell>
+                <TableCell className="font-medium">
+                  {uni.name}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span>{uni.major}</span>
+                    {uni.notes && (
+                      <span className="text-[10px] text-muted-foreground italic line-clamp-1" title={uni.notes}>
+                        {uni.notes}
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline">{uni.country}</Badge>
                 </TableCell>
@@ -80,7 +104,35 @@ export function UniversitiesTable({ universities, onUpdateUniversity, isLoading 
                 </TableCell>
                 {onUpdateUniversity && (
                     <TableCell className="text-right">
-                        <EditUniversityDialog university={uni} onUpdateUniversity={onUpdateUniversity} />
+                        <div className="flex items-center justify-end gap-1">
+                          <EditUniversityDialog university={uni} onUpdateUniversity={onUpdateUniversity} />
+                          {onDeleteUniversity && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Approved University?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to remove <strong>{uni.name} ({uni.major})</strong> from the list? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => onDeleteUniversity(uni.id)}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                     </TableCell>
                 )}
               </TableRow>
