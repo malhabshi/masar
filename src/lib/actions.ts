@@ -1108,7 +1108,7 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
                     const employeeDoc = employeeQuery.docs[0];
                     const employeeData = employeeDoc.data() as User;
                     await adminDb!.collection('tasks').add({ authorId: adminId, createdBy: adminId, recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: taskContent, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
-                    if (employeeData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: employeeData.name, studentName: studentName, employeeName: employeeData.name, messageContent: taskContent, studentUrl: studentUrl }, employeeData.phone);
+                    if (employeeData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: employeeData.name, studentName: studentData.name, employeeName: employeeData.name, messageContent: taskContent, studentUrl: studentUrl }, employeeData.phone);
                 }
             }
             const managementSnap = await adminDb!.collection('users').where('role', 'in', ['admin', 'department']).get();
