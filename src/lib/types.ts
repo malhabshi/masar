@@ -114,6 +114,7 @@ export interface Student {
   academicIntakeSemester?: string;
   academicIntakeYear?: number;
   changeAgentRequired?: boolean;
+  term?: string;
 }
 
 export interface ChatMessage {
@@ -364,4 +365,15 @@ export interface ApprovedUniversity {
   ieltsScore: number;
   isAvailable: boolean;
   notes?: string;
+}
+
+export interface AcademicTerm {
+  id: string;
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
+  applicationDeadline?: string;
+  createdAt?: string;
+  authorId?: string;
 }
