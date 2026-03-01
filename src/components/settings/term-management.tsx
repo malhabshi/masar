@@ -112,8 +112,8 @@ export function TermManagement() {
                   </TableCell>
                 </TableRow>
               ) : terms && terms.length > 0 ? (
-                // Sort newest first
-                [...terms].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((term) => (
+                // Sort newest first with safe check for createdAt
+                [...terms].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).map((term) => (
                   <TableRow key={term.id}>
                     <TableCell className="font-medium">{term.name}</TableCell>
                     <TableCell className="text-right">
