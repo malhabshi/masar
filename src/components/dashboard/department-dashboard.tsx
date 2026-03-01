@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -39,10 +40,15 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
             return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
         }
 
-        // ✅ FIX: Only check for the specific user ID in recipientIds (No department groups)
+        // Dashboard logic: Look for tasks targeting the user ID OR their specific department OR 'all'
+        const groups = [currentUser.id, 'all'];
+        if (currentUser.department) {
+            groups.push(`dept:${currentUser.department}`);
+        }
+
         return query(
             collection(firestore, 'tasks'), 
-            where('recipientIds', 'array-contains', currentUser.id),
+            where('recipientIds', 'array-contains-any', groups),
             orderBy('createdAt', 'desc')
         );
      }, [currentUser, isDept, isAdmin]);

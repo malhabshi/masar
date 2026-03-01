@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -49,11 +50,15 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
         );
     }
 
-    // ✅ FIX: Only use the user's specific ID for assignments (No department logic)
-    // We include 'all' for system broadcasts if needed, but the focused query is individual
+    // Task Manager for Department users: Unified query for their ID, their department, and 'all'
+    const groups = [currentUser.id, 'all'];
+    if (currentUser.department) {
+        groups.push(`dept:${currentUser.department}`);
+    }
+
     return query(
       collection(firestore, 'tasks'), 
-      where('recipientIds', 'array-contains', currentUser.id),
+      where('recipientIds', 'array-contains-any', groups),
       orderBy('createdAt', 'desc')
     );
   }, [currentUser]);
@@ -133,12 +138,13 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
     validTasks.forEach(t => {
       const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
-      // ✅ FIX: Task is personal if it contains the user ID specifically
+      // Personal tasks are those assigned specifically to this user's ID
       const isDirectlyForMe = targets.includes(currentUser.id);
 
       if (isDirectlyForMe) {
         personal.push(t);
       } else {
+        // Other tasks are those targeted via department group or 'all'
         department.push(t);
       }
     });

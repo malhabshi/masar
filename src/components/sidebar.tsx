@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sidebar,
@@ -70,7 +71,7 @@ export function AppSidebar() {
 
     const { data: students } = useCollection<Student>(studentQuery);
 
-    // 2. Listen to tasks targeted at the specific user
+    // 2. Listen to tasks targeted at the user or their department
     const taskQuery = useMemoFirebase(() => {
         if (!user || !isAdminDept) return null;
         
@@ -79,12 +80,15 @@ export function AppSidebar() {
             return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
         }
 
-        // ✅ FIX: Only listen to tasks assigned directly to the user ID (No department groups)
+        // Department users: Badge logic matches Dashboard logic (ID, dept group, and 'all')
+        const groups = [user.id, 'all'];
+        if (user.department) groups.push(`dept:${user.department}`);
+
         return query(
             collection(firestore, 'tasks'), 
-            where('recipientIds', 'array-contains', user.id)
+            where('recipientIds', 'array-contains-any', groups)
         );
-    }, [user?.id, user?.role, isAdminDept]);
+    }, [user?.id, user?.role, user?.department, isAdminDept]);
 
     const { data: tasks } = useCollection<Task>(taskQuery);
 
@@ -108,7 +112,7 @@ export function AppSidebar() {
       return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
     }, [students, user]);
 
-    // 5. Tasks notification count (Direct assignments only)
+    // 5. Tasks notification count (Real-time tracking of 'new' tasks)
     const unreadTaskCount = useMemo(() => {
         if (!tasks || !isAdminDept || !user) return 0;
         return tasks.filter(t => {

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -53,10 +54,13 @@ export function NotificationListener() {
         return query(collection(firestore, 'tasks'), where('authorId', '==', user.id));
     }
 
-    // ✅ FIX: Only listen to tasks assigned directly to the user ID (No department groups)
+    // Department users: Real-time alerts for tasks assigned to them, their dept, or 'all'
+    const groups = [user.id, 'all'];
+    if (user.department) groups.push(`dept:${user.department}`);
+
     return query(
         collection(firestore, 'tasks'), 
-        where('recipientIds', 'array-contains', user.id)
+        where('recipientIds', 'array-contains-any', groups)
     );
   }, [user]);
 

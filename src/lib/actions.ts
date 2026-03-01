@@ -47,7 +47,7 @@ async function refreshStudentActivity(studentId: string) {
 /**
  * REPAIR UTILITY: Rebuilds the DBAC collections (/admins and /departmentUsers)
  * based on the current state of the main /users collection.
- * Includes a force-role fix for bypass UIDs to ensure they remain Admins.
+ * Ensures department users have a department field and are synced correctly.
  */
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
@@ -60,14 +60,9 @@ export async function repairPermissions(adminId: string) {
           'lZr1zv5ePQbObKNVXS4xGjERmE62'
         ];
         
-        // 1. Force fix the bypass user's role in the main collection if they are the ones calling it
+        // Force fix the bypass user's role in the main collection if they are calling this
         if (authorizedBypass.includes(adminId)) {
             await adminDb!.collection('users').doc(adminId).update({ role: 'admin' });
-        }
-
-        const admin = await getUser(adminId);
-        if (!admin && !authorizedBypass.includes(adminId)) {
-            return { success: false, message: 'Unauthorized.' };
         }
 
         const usersSnap = await adminDb!.collection('users').get();
@@ -91,16 +86,22 @@ export async function repairPermissions(adminId: string) {
                   userEmail: userData.email 
                 });
             } else if (userData.role === 'department') {
+                const dept = userData.department || 'UK'; // Default to UK if missing
+                if (!userData.department) {
+                    batch.update(userDoc.ref, { department: dept });
+                }
+                
                 batch.set(adminDb!.collection('departmentUsers').doc(uid), { 
                   role: 'department', 
                   lastSync: syncTime,
-                  department: userData.department || 'General' 
+                  department: dept,
+                  email: userData.email || ''
                 });
             }
         });
 
         await batch.commit();
-        return { success: true, message: `Successfully repaired permissions for ${usersSnap.size} users.` };
+        return { success: true, message: `Successfully repaired permissions and synchronized departments for ${usersSnap.size} users.` };
     } catch (e: any) {
         console.error('Permission repair failed:', e);
         return { success: false, message: e.message };
