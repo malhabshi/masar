@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { updateFinalChoice } from '@/lib/actions';
+import { setStudentFinalChoice } from '@/lib/actions';
 import type { Student, Application } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Loader2, GraduationCap } from 'lucide-react';
@@ -39,12 +40,11 @@ export function FinalizeStudentDialog({ student, currentUser }: FinalizeStudentD
     }
     
     setIsFinalizing(true);
-    const result = await updateFinalChoice(
+    const result = await setStudentFinalChoice(
       student.id,
       selectedApplication.university,
-      currentUser.id,
-      student.name,
-      student.employeeId
+      selectedApplication.major,
+      currentUser.id
     );
 
     if (result.success) {
@@ -68,7 +68,7 @@ export function FinalizeStudentDialog({ student, currentUser }: FinalizeStudentD
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline">
-          <GraduationCap className="mr-2 h-4 w-4" />
+          <Paperclip className="mr-2 h-4 w-4" />
           Set Final Choice
         </Button>
       </DialogTrigger>
