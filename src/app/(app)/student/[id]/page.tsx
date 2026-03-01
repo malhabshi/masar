@@ -38,7 +38,6 @@ function playLoudAlert() {
     osc.connect(gain);
     gain.connect(ctx.destination);
     
-    // Very loud sawtooth sound
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(440, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.5);
@@ -98,26 +97,21 @@ export default function StudentDetailPage() {
     const studentConstraint = where('studentId', '==', studentId);
     
     // For employees, we need to see tasks they sent AND tasks they are meant to receive
-    // Wrapping composite filters in and() avoids top-level filter mixing errors
+    // ✅ FIX: Only check for the specific user ID in recipientIds (No department logic)
     if (currentUser.role === 'employee') {
-      const groups = [currentUser.id, 'all'];
-      if (currentUser.department) {
-        groups.push(`dept:${currentUser.department}`);
-      }
-
       return query(
         collection(firestore, 'tasks'),
         and(
           studentConstraint,
           or(
             where('authorId', '==', currentUser.id),
-            where('recipientIds', 'array-contains-any', groups)
+            where('recipientIds', 'array-contains', currentUser.id)
           )
         )
       );
     }
     
-    // For admins/departments, just show all tasks for this student
+    // For admins/departments, show all tasks for this student
     return query(collection(firestore, 'tasks'), studentConstraint);
   }, [studentId, currentUser]);
 
@@ -139,12 +133,10 @@ export default function StudentDetailPage() {
   }, [student?.id, student?.changeAgentRequired]);
   
   useEffect(() => {
-    // Only perform the assignment check once both student and user profiles are fully loaded
     if (isLoading || studentError) return;
     if (!currentUser || !student) return;
 
     if (currentUser.role === 'employee') {
-        // Double check assigned status. If student has no employeeId or it's different from the current employee's civilId
         if (student.employeeId !== currentUser.civilId) {
             toast({
                 title: 'Access Restricted',

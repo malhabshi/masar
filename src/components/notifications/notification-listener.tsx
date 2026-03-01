@@ -40,33 +40,25 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
-  const isEmployee = user?.role === 'employee';
-  const isAdminDept = user?.role === 'admin' || user?.role === 'department';
-  
-  const taskGroups = useMemo(() => {
-    if (!user) return [];
-    const groups = ['all'];
-    if (user.role === 'department' && user.department) {
-        groups.push(`dept:${user.department}`);
-    }
-    return groups;
-  }, [user]);
-
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
     
-    // Admins see all tasks
+    // Admins see all tasks for real-time alerting
     if (user.role === 'admin') {
       return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
     }
 
+    // Employees only listen to tasks they authored
     if (user.role === 'employee') {
-        // Employees only listen to tasks they authored
         return query(collection(firestore, 'tasks'), where('authorId', '==', user.id));
     }
 
-    return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', taskGroups));
-  }, [user, taskGroups]);
+    // ✅ FIX: Only listen to tasks assigned directly to the user ID (No department groups)
+    return query(
+        collection(firestore, 'tasks'), 
+        where('recipientIds', 'array-contains', user.id)
+    );
+  }, [user]);
 
   const { data: tasks } = useCollection<Task>(tasksQuery);
 
@@ -78,9 +70,10 @@ export function NotificationListener() {
   const { data: events } = useCollection<UpcomingEvent>(eventsQuery);
 
   const studentQuery = useMemoFirebase(() => {
-    const isAdminDept = user?.role === 'admin' || user?.role === 'department';
-    const isEmployee = user?.role === 'employee';
-    const hasCivilId = !!user?.civilId;
+    if (!user) return null;
+    const isAdminDept = user.role === 'admin' || user.role === 'department';
+    const isEmployee = user.role === 'employee';
+    const hasCivilId = !!user.civilId;
 
     if (isAdminDept) {
         return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
@@ -91,7 +84,7 @@ export function NotificationListener() {
     }
     
     return null; 
-  }, [user?.civilId, user?.role]);
+  }, [user?.civilId, user?.role, user?.id]);
 
   const { data: students } = useCollection<Student>(studentQuery);
 
@@ -181,11 +174,10 @@ export function NotificationListener() {
             return;
         }
 
-        // New Document Upload Notification
         const prevDocIds = new Set((prevStudent.documents || []).map(d => d.id));
         const newDocs = (currentStudent.documents || []).filter(d => !prevDocIds.has(d.id));
         if (newDocs.length > 0) {
-            const newDoc = newDocs[newDocs.length - 1]; // Notify for the latest one
+            const newDoc = newDocs[newDocs.length - 1]; 
             const uploader = userMap.get(newDoc.authorId);
             
             if (uploader && uploader.id !== user.id) {
@@ -198,7 +190,6 @@ export function NotificationListener() {
             }
         }
         
-        // Deletion Request Notification
         if (!prevStudent.deletionRequested && currentStudent.deletionRequested?.status === 'pending') {
             const isAdminOrDept = ['admin', 'department'].includes(user.role);
             const requester = userMap.get(currentStudent.deletionRequested.requestedBy);

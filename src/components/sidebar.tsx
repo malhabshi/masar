@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sidebar,
@@ -50,13 +49,13 @@ export function AppSidebar() {
     const pathname = usePathname();
 
     const isAdminDept = user?.role === 'admin' || user?.role === 'department';
-    const isEmployee = user?.role === 'employee';
-
-    // 1. Memoize constraints to satisfy security rules and optimize cache reuse
+    
+    // 1. Memoize constraints for real-time student monitoring
     const studentQuery = useMemoFirebase(() => {
-      const isAdminDeptRole = user?.role === 'admin' || user?.role === 'department';
-      const isEmployeeRole = user?.role === 'employee';
-      const hasCivilId = !!user?.civilId;
+      if (!user) return null;
+      const isAdminDeptRole = user.role === 'admin' || user.role === 'department';
+      const isEmployeeRole = user.role === 'employee';
+      const hasCivilId = !!user.civilId;
 
       if (isAdminDeptRole) {
           return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
@@ -67,62 +66,57 @@ export function AppSidebar() {
       }
       
       return null;
-    }, [user?.civilId, user?.role]);
+    }, [user?.civilId, user?.role, user?.id]);
 
-    // 2. Listen to students in real-time
     const { data: students } = useCollection<Student>(studentQuery);
 
-    // 3. Listen to tasks for Management counts (Tasks / IELTS / Chats)
-    const taskGroups = useMemo(() => {
-        if (!user) return [];
-        const g = [user.id, 'all'];
-        if (user.role === 'admin') g.push('admins');
-        if (user.role === 'department' && user.department) g.push(`dept:${user.department}`);
-        return g;
-    }, [user]);
-
+    // 2. Listen to tasks targeted at the specific user
     const taskQuery = useMemoFirebase(() => {
         if (!user || !isAdminDept) return null;
-        // Management staff listen to tasks targeted at them or 'all' for badge counts
-        return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', taskGroups));
-    }, [user, taskGroups, isAdminDept]);
+        
+        // Admins see all tasks for global badge
+        if (user.role === 'admin') {
+            return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+        }
+
+        // ✅ FIX: Only listen to tasks assigned directly to the user ID (No department groups)
+        return query(
+            collection(firestore, 'tasks'), 
+            where('recipientIds', 'array-contains', user.id)
+        );
+    }, [user?.id, user?.role, isAdminDept]);
 
     const { data: tasks } = useCollection<Task>(taskQuery);
 
-    // 4. Aggregate notification counts based on user role (for Student updates)
+    // 3. Aggregate notification counts based on user role (Student profile updates)
     const studentNotificationCount = useMemo(() => {
       if (!students || !user) return 0;
       
       return students.reduce((acc, student) => {
         if (user.role === 'admin' || user.role === 'department') {
-          // Admin/Dept: Count unread chat updates + new documents from employees
           return acc + (student.unreadUpdates || 0) + (student.newDocumentsForAdmin || 0);
         } else if (user.role === 'employee') {
-          // Employee: Count messages from admins + new documents from admins + new missing items
           return acc + (student.employeeUnreadMessages || 0) + (student.newDocumentsForEmployee || 0) + (student.newMissingItemsForEmployee || 0);
         }
         return acc;
       }, 0);
     }, [students, user]);
 
-    // 5. Specifically aggregate unread chats for the "Chats" link (Admin/Dept only)
+    // 4. Aggregated unread chats for "Chats" link
     const unreadChatCount = useMemo(() => {
       if (!students || !user || !['admin', 'department'].includes(user.role)) return 0;
       return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
     }, [students, user]);
 
-    // 6. Tasks notification count (Excluding IELTS Courses)
+    // 5. Tasks notification count (Direct assignments only)
     const unreadTaskCount = useMemo(() => {
         if (!tasks || !isAdminDept || !user) return 0;
         return tasks.filter(t => {
-            if (t.status !== 'new') return false;
-            if (t.category !== 'request') return false;
+            if (t.status !== 'new' || t.category !== 'request') return false;
             
-            // Check if current user has already seen this task
             const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
             if (hasSeen) return false;
 
-            // ✅ Stable check: Use programmatic markers
             const isIeltsCourse = 
               t.data?.examType === 'ielts_course' || 
               t.requestTypeId === 'ielts_course' ||
@@ -132,18 +126,15 @@ export function AppSidebar() {
         }).length;
     }, [tasks, isAdminDept, user]);
 
-    // 7. IELTS Courses notification count
+    // 6. IELTS Courses notification count
     const unreadIeltsCourseCount = useMemo(() => {
         if (!tasks || !user || user.role !== 'admin') return 0;
         return tasks.filter(t => {
-            if (t.status !== 'new') return false;
-            if (t.category !== 'request') return false;
+            if (t.status !== 'new' || t.category !== 'request') return false;
 
-            // Check if current user has already seen this task
             const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
             if (hasSeen) return false;
 
-            // ✅ Stable check: Use programmatic markers
             const isIeltsCourse = 
               t.data?.examType === 'ielts_course' || 
               t.requestTypeId === 'ielts_course' ||
@@ -181,7 +172,7 @@ export function AppSidebar() {
     ];
     
     if (!isClient) {
-      return <div className="w-64 bg-sidebar" />; // Empty sidebar placeholder
+      return <div className="w-64 bg-sidebar" />; 
     }
 
     return (

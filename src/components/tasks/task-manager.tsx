@@ -49,18 +49,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
         );
     }
 
-    // Role-based groups for department staff
-    const groups = ['all'];
-    if (currentUser.department) {
-        groups.push(`dept:${currentUser.department}`);
-    }
-    
-    // Add user's own ID to groups so they can see tasks directly assigned to them
-    groups.push(currentUser.id);
-    
+    // ✅ FIX: Only use the user's specific ID for assignments (No department logic)
+    // We include 'all' for system broadcasts if needed, but the focused query is individual
     return query(
       collection(firestore, 'tasks'), 
-      where('recipientIds', 'array-contains-any', groups),
+      where('recipientIds', 'array-contains', currentUser.id),
       orderBy('createdAt', 'desc')
     );
   }, [currentUser]);
@@ -109,7 +102,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const { userMap, isLoading: areUsersLoading } = useUserCacheById(allUserIdsInTasks);
   const isLoading = areTasksLoading || areUsersLoading;
 
-  // Calculate Categorized Tasks with full filtering so counts match display
+  // Calculate Categorized Tasks
   const categorizedTasks = useMemo(() => {
     if (!tasks || !currentUser) return { personal: [], department: [] };
 
@@ -118,15 +111,12 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
     // Filter tasks first
     const validTasks = tasks.filter(t => {
-      // Must be a request
       if (t.category !== 'request') return false;
       
-      // Filter out IELTS courses
       const isIeltsCourse = t.data?.examType === 'ielts_course' || 
                            t.taskType?.toLowerCase() === 'ielts course';
       if (isIeltsCourse) return false;
 
-      // Search query filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
@@ -141,25 +131,14 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
       return true;
     });
 
-    // Define groups for categorization
-    const personalGroups = [currentUser.id];
-    if (currentUser.role === 'admin') personalGroups.push('admins');
-
     validTasks.forEach(t => {
-      if (currentUser.role === 'employee') {
-          personal.push(t);
-          return;
-      }
-
       const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
-      
-      // ✅ MODERN CHECK: Check if task is directly for the user or their primary management role
-      const isDirectlyForMe = targets.some(id => personalGroups.includes(id));
+      // ✅ FIX: Task is personal if it contains the user ID specifically
+      const isDirectlyForMe = targets.includes(currentUser.id);
 
       if (isDirectlyForMe) {
         personal.push(t);
       } else {
-        // Everything else (Dept targeted or 'all') goes to department view
         department.push(t);
       }
     });
@@ -169,7 +148,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
   const filteredTasks = taskView === 'personal' ? categorizedTasks.personal : categorizedTasks.department;
 
-  // Mark visible "new" tasks as seen automatically when viewing the manager tabs
   useEffect(() => {
     if (currentUser && filteredTasks.length > 0) {
       const unseenIds = filteredTasks
@@ -263,11 +241,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
                         onClick={() => setTaskView('department')}
                     >
                         <Building2 className="h-3.5 w-3.5" />
-                        Dept Tasks ({categorizedTasks.department.length})
+                        Other Tasks ({categorizedTasks.department.length})
                     </Button>
                 </div>
             )}
-            <div className="relative w-full max-w-sm">
+            <div className="relative w-full max-sm:max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                 placeholder="Search requests..."

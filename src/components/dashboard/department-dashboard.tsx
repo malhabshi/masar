@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -32,30 +31,21 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
 
      const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
 
-     // ✅ FIX: Correct task query for department users to show relevant tasks only
-     const taskGroups = useMemo(() => {
-        const groups = [currentUser.id, 'all'];
-        if (currentUser.department) {
-            groups.push(`dept:${currentUser.department}`);
-        }
-        return groups;
-     }, [currentUser]);
-
      const taskQuery = useMemoFirebase(() => {
         if (!currentUser || !isDept) return null;
         
-        // Admins see all tasks
+        // Admins see all tasks for oversight
         if (isAdmin) {
             return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
         }
 
-        // Dept users see tasks sent to them, their department, or 'all'
+        // ✅ FIX: Only check for the specific user ID in recipientIds (No department groups)
         return query(
             collection(firestore, 'tasks'), 
-            where('recipientIds', 'array-contains-any', taskGroups),
+            where('recipientIds', 'array-contains', currentUser.id),
             orderBy('createdAt', 'desc')
         );
-     }, [currentUser, isDept, isAdmin, taskGroups]);
+     }, [currentUser, isDept, isAdmin]);
 
      const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(taskQuery);
      
