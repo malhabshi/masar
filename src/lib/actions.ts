@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -46,13 +47,12 @@ async function refreshStudentActivity(studentId: string) {
 /**
  * REPAIR UTILITY: Rebuilds the DBAC collections (/admins and /departmentUsers)
  * based on the current state of the main /users collection.
- * This ensures security rules and user roles are 100% in sync.
+ * Includes a force-role fix for bypass UIDs to ensure they remain Admins.
  */
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     
     try {
-        const admin = await getUser(adminId);
         const authorizedBypass = [
           'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
           'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
@@ -60,6 +60,12 @@ export async function repairPermissions(adminId: string) {
           'lZr1zv5ePQbObKNVXS4xGjERmE62'
         ];
         
+        // 1. Force fix the bypass user's role in the main collection if they are the ones calling it
+        if (authorizedBypass.includes(adminId)) {
+            await adminDb!.collection('users').doc(adminId).update({ role: 'admin' });
+        }
+
+        const admin = await getUser(adminId);
         if (!admin && !authorizedBypass.includes(adminId)) {
             return { success: false, message: 'Unauthorized.' };
         }

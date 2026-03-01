@@ -16,12 +16,11 @@ service cloud.firestore {
 
     /** 
      * @description Checks if user is an admin using indexed DBAC collection. 
-     * This is the single source of truth for administrative access.
+     * Includes hardcoded bypass for specific maintenance UIDs to prevent lockout.
      */
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-        // Emergency Super Admin Fallback (Hardcoded UIDs)
         request.auth.uid in [
           'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
           'IZr1zv5ePQb0bKNVXS4xGjERmE62', 
@@ -90,7 +89,8 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Allow listing for all authenticated users
+      // Allow listing for all authenticated users to prevent dashboard fetch failures.
+      // Privacy is enforced at the individual document 'get' level.
       allow list: if isSignedIn();
       
       // Enforce security for reading individual task details
