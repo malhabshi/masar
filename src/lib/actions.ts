@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1195,4 +1194,56 @@ export async function deleteUniversity(id: string, adminId: string) {
     await adminDb!.collection('approved_universities').doc(id).delete();
     return { success: true, message: 'Deleted.' };
   } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
+    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+    try {
+        const admin = await getUser(adminId);
+        if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+        const fromUser = await getUser(fromEmployeeId);
+        const toUser = await getUser(toEmployeeId);
+        if (!fromUser || !toUser || !toUser.civilId) return { success: false, message: 'Invalid employees.' };
+
+        const studentsSnap = await adminDb!.collection('students').where('employeeId', '==', fromUser.civilId).get();
+        if (studentsSnap.empty) return { success: true, message: 'No students to transfer.' };
+
+        const batch = adminDb!.batch();
+        const now = new Date().toISOString();
+        const studentIds: string[] = [];
+
+        studentsSnap.docs.forEach(doc => {
+            const data = doc.data() as Student;
+            studentIds.push(doc.id);
+            batch.update(doc.ref, {
+                employeeId: toUser.civilId,
+                transferHistory: [...(data.transferHistory || []), {
+                    fromEmployeeId: fromUser.civilId,
+                    toEmployeeId: toUser.civilId,
+                    date: now,
+                    transferredBy: adminId
+                }],
+                adminNotes: [...(data.adminNotes || []), {
+                    id: `note-bulk-${Date.now()}`,
+                    authorId: adminId,
+                    content: `Bulk transfer from ${fromUser.name} to ${toUser.name}.`,
+                    createdAt: now
+                }],
+                lastActivityAt: now
+            });
+        });
+
+        await batch.commit();
+        
+        return { 
+          success: true, 
+          message: `Transferred ${studentsSnap.size} students.`, 
+          studentIds, 
+          fromEmployeeName: fromUser.name,
+          toEmployeeName: toUser.name,
+          toEmployeePhone: toUser.phone 
+        };
+    } catch (error: any) {
+        return { success: false, message: error.message };
+    }
 }

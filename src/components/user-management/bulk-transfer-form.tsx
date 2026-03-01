@@ -7,7 +7,7 @@ import * as z from 'zod';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { bulkTransferStudents } from '@/lib/actions';
+import { bulkTransferStudents, triggerWhatsAppNotification } from '@/lib/actions';
 import { Loader2, ArrowRightLeft } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,7 +15,7 @@ import type { User, Task } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { addDocumentNonBlocking, useCollection } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { collection, doc, getDoc } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { Skeleton } from '../ui/skeleton';
 
 const formSchema = z.object({
@@ -46,33 +46,56 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
   });
 
   const fromEmployeeId = form.watch('fromEmployeeId');
-
   const toEmployeeOptions = employeeOptions.filter(e => e.id !== fromEmployeeId);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     if (!currentUser) {
-        toast({ variant: 'destructive', title: 'Error', description: 'User or database not available.' });
+        toast({ variant: 'destructive', title: 'Error', description: 'User session not available.' });
         setIsLoading(false);
         return;
     }
+
     const result = await bulkTransferStudents(values.fromEmployeeId, values.toEmployeeId, currentUser.id);
 
-    if (result.success) {
-      const fromUserDoc = await getDoc(doc(firestore, 'users', values.fromEmployeeId));
-      const fromEmployee = fromUserDoc.data();
-      const taskContent = `All students from ${fromEmployee?.name || 'an employee'} have been transferred to you.`;
-      
+    if (result.success && result.studentIds) {
+      const oldEmployee = employeeOptions.find(e => e.id === values.fromEmployeeId);
+      const studentIds = result.studentIds;
+      const taskContent = `You have received ${studentIds.length} students from ${oldEmployee?.name || 'an employee'}`;
+
+      // Create the complex task record as requested for feed visibility and tracking
       const tasksCollection = collection(firestore, 'tasks');
       const newTask: Omit<Task, 'id'> = {
         authorId: currentUser.id,
-        recipientId: values.toEmployeeId,
+        authorName: currentUser.name,
+        recipientId: values.toEmployeeId,                    
+        recipientIds: [values.toEmployeeId, 'all'],          
+        category: 'system',                                   
+        taskType: 'Bulk Student Transfer',
+        type: 'bulk_transfer',                                
         content: taskContent,
+        data: {
+          studentCount: studentIds.length,
+          transferredBy: currentUser.name,
+          fromEmployeeId: values.fromEmployeeId,
+          fromEmployeeName: oldEmployee?.name,
+          studentIds: studentIds                              
+        },
         createdAt: new Date().toISOString(),
         status: 'new',
         replies: []
       };
+      
       addDocumentNonBlocking(tasksCollection, newTask);
+
+      // Trigger WhatsApp Notification for the new owner
+      if (result.toEmployeePhone) {
+        await triggerWhatsAppNotification('admin_update', {
+          employeeName: result.toEmployeeName || 'Employee',
+          messageContent: taskContent,
+          dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/applicants`
+        }, result.toEmployeePhone);
+      }
       
       toast({
         title: 'Bulk Transfer Successful!',
@@ -83,7 +106,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
       toast({
         variant: 'destructive',
         title: 'Bulk Transfer Failed',
-        description: result.message,
+        description: result.message || 'An error occurred during transfer.',
       });
     }
     setIsLoading(false);
@@ -94,24 +117,13 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
       <Card>
         <CardHeader>
           <CardTitle>Bulk Student Transfer</CardTitle>
-          <CardDescription>Transfer all assigned students from one employee to another.</CardDescription>
+          <CardDescription>Reassign entire student portfolios.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-            <div className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-10 w-full" />
-            </div>
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
         </CardContent>
-        <CardFooter>
-            <Button disabled className="w-full">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading Employees...
-            </Button>
-        </CardFooter>
+        <CardFooter><Button disabled className="w-full">Loading employees...</Button></CardFooter>
       </Card>
     );
   }
@@ -120,7 +132,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
     <Card>
       <CardHeader>
         <CardTitle>Bulk Student Transfer</CardTitle>
-        <CardDescription>Transfer all assigned students from one employee to another. This is useful when an employee is leaving the company.</CardDescription>
+        <CardDescription>Reassign all students from an offboarding employee to a new owner.</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -130,11 +142,11 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
               name="fromEmployeeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Transfer From</FormLabel>
+                  <FormLabel>Offboarding Employee</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select employee to transfer from" />
+                        <SelectValue placeholder="Select current owner" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -152,11 +164,11 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
               name="toEmployeeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Transfer To</FormLabel>
+                  <FormLabel>New Responsible Employee</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={!fromEmployeeId}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select employee to transfer to" />
+                        <SelectValue placeholder="Select destination" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -171,9 +183,9 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
             />
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={isLoading} className="w-full">
+            <Button type="submit" disabled={isLoading || !fromEmployeeId} className="w-full">
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRightLeft className="mr-2 h-4 w-4" />}
-              Transfer All Students
+              Execute Portfolio Transfer
             </Button>
           </CardFooter>
         </form>

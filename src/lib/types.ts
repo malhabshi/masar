@@ -173,6 +173,7 @@ export interface Task {
   studentName?: string;
   studentPhone?: string;
   taskType?: string;
+  type?: string;
   category?: 'update' | 'system' | 'request';
   data?: any;
   viewedBy?: TaskViewRecord[];
