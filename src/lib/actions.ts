@@ -1349,8 +1349,8 @@ export async function handleEmployeeLogin(userId: string) {
     }
     await timeLogsRef.add({ employeeId: userId, date: new Date().toISOString().split('T')[0], clockIn: new Date().toISOString(), clockOut: null, lastSeen: new Date().toISOString() });
     
-    // Trigger inactivity check when employee logs in
-    await processInactivityReminders();
+    // Attempt inactivity check (throttled)
+    processInactivityReminders();
 
     return { success: true, message: 'Login session started.' };
   } catch (error: any) {
@@ -1376,9 +1376,6 @@ export async function keepAlive(userId: string) {
         const activeLogQuery = await adminDb!.collection('time_logs').where('employeeId', '==', userId).where('clockOut', '==', null).orderBy('clockIn', 'desc').limit(1).get();
         if (!activeLogQuery.empty) await activeLogQuery.docs[0].ref.update({ lastSeen: new Date().toISOString() });
         
-        // Use heartbeat to trigger background inactivity reminder checks
-        await processInactivityReminders();
-
         return { success: true };
     } catch (error) {
         return { success: false, message: 'Failed to update session.' };
@@ -1862,12 +1859,27 @@ export async function submitInactivityReport(studentId: string, employeeId: stri
 
 /**
  * BACKGROUND TASK: Scans students for inactivity (>10 days) and sends recurring 3-hour chat reminders to employees.
- * Also notifies Admins so they can track the status.
+ * Throttled to run at most once per hour globally.
  */
 export async function processInactivityReminders() {
   if (!checkAdminServices()) return { success: false };
   
   try {
+    const now = new Date();
+    const cooldownRef = adminDb!.collection('system_metadata').doc('inactivity_check');
+    const cooldownDoc = await cooldownRef.get();
+
+    // 1. Global Cooldown Check (Throttle to 1 hour)
+    if (cooldownDoc.exists) {
+      const lastRunAt = cooldownDoc.data()?.lastRunAt;
+      if (lastRunAt && differenceInMinutes(now, parseISO(lastRunAt)) < 60) {
+        return { success: true, message: 'Scan skipped: Cooldown active (1 hour).' };
+      }
+    }
+
+    // 2. Set the Lock immediately to prevent concurrent scans from multiple users
+    await cooldownRef.set({ lastRunAt: now.toISOString() }, { merge: true });
+
     const tenDaysAgo = subDays(new Date(), 10).toISOString();
     const threeHoursAgo = subMinutes(new Date(), 180).toISOString();
     
