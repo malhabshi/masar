@@ -3,7 +3,6 @@
 import { useUser } from '@/hooks/use-user';
 import { CreateUserForm } from '@/components/user-management/create-user-form';
 import { UserList } from '@/components/user-management/user-list';
-import { BulkTransferForm } from '@/components/user-management/bulk-transfer-form';
 import { Loader2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
@@ -32,7 +31,6 @@ function UserManagementContent() {
             </div>
             <div className="space-y-6">
                 <CreateUserForm />
-                <BulkTransferForm currentUser={currentUser} />
             </div>
         </div>
     );

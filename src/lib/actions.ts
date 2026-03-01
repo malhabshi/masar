@@ -664,24 +664,6 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
     } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-    try {
-        const fromEmployee = await getUser(fromEmployeeId);
-        const toEmployee = await getUser(toEmployeeId);
-        if (!fromEmployee || !toEmployee || !fromEmployee.civilId || !toEmployee.civilId) return { success: false, message: 'Invalid employees.' };
-        const snapshot = await adminDb!.collection('students').where('employeeId', '==', fromEmployee.civilId).get();
-        if (snapshot.empty) return { success: true, message: 'No students to transfer.' };
-        const batch = adminDb!.batch();
-        snapshot.docs.forEach(doc => {
-            const docData = doc.data();
-            batch.update(doc.ref, { employeeId: toEmployee.civilId, isNewForEmployee: true, lastActivityAt: new Date().toISOString(), transferHistory: [...(docData.transferHistory || []), { fromEmployeeId: fromEmployee.civilId, toEmployeeId: toEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }] });
-        });
-        await batch.commit();
-        return { success: true, message: `${snapshot.size} students transferred.` };
-    } catch (error: any) { return { success: false, message: error.message }; }
-}
-
 export async function addEmployeeNote(studentId: string, authorId: string, content: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
