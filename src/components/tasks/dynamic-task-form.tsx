@@ -181,7 +181,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         {/* IELTS / TOEFL Logic */}
         {(watchExamType === 'ielts' || watchExamType === 'toefl') && (
           <div className="space-y-4 border-t pt-4 animate-in fade-in">
-            {watchExamType === 'ielts' && (
+            {watchExamType === 'ielts' && config && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {config.ielts?.showSubtypes && (
                   <FormField
@@ -272,7 +272,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         )}
 
         {/* IELTS RETAKE LOGIC */}
-        {watchExamType === 'ielts_retake' && (
+        {watchExamType === 'ielts_retake' && config && (
           <div className="space-y-6 border-t pt-4 animate-in fade-in">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -416,7 +416,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         )}
 
         {/* IELTS COURSE LOGIC */}
-        {watchExamType === 'ielts_course' && (
+        {watchExamType === 'ielts_course' && config && (
           <div className="space-y-6 border-t pt-4 animate-in fade-in">
             <FormField
               control={form.control}
