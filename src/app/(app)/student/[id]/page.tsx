@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useDoc, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc, where, query, collection } from 'firebase/firestore';
+import { doc, where, query, collection, or } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { addAdminNote, addEmployeeNote } from '@/lib/actions';
@@ -99,9 +99,19 @@ export default function StudentDetailPage() {
     // Construct the base constraints for this student's tasks
     const constraints = [where('studentId', '==', studentId)];
     
-    // CRITICAL: Filter tasks by author for employees to satisfy security rules
+    // For employees, we need to see tasks they sent AND tasks they are meant to receive
     if (currentUser.role === 'employee') {
-      constraints.push(where('authorId', '==', currentUser.id));
+      const groups = [currentUser.id, 'all'];
+      if (currentUser.department) {
+        groups.push(`dept:${currentUser.department}`);
+      }
+
+      constraints.push(
+        or(
+          where('authorId', '==', currentUser.id),
+          where('recipientIds', 'array-contains-any', groups)
+        )
+      );
     }
     
     return query(collection(firestore, 'tasks'), ...constraints);
