@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { orderBy, where } from 'firebase/firestore';
+import { orderBy, where, collection, query } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 import type { Student, Task } from '@/lib/types';
 import { Users, FileText, AlertCircle, ArrowRight } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
@@ -19,8 +20,9 @@ import { Badge } from '@/components/ui/badge';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
      const isDept = currentUser?.role === 'department' || currentUser?.role === 'admin';
+     const isAdmin = currentUser?.role === 'admin';
+     
      const studentsPath = isDept ? 'students' : '';
-     const tasksPath = currentUser ? 'tasks' : '';
 
      const studentsConstraints = useMemoFirebase(() => {
         if (!studentsPath) return [];
@@ -28,7 +30,33 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
      }, [studentsPath]);
 
      const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
-     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksPath);
+
+     // ✅ FIX: Correct task query for department users to show relevant tasks only
+     const taskGroups = useMemo(() => {
+        const groups = [currentUser.id, 'all'];
+        if (currentUser.department) {
+            groups.push(`dept:${currentUser.department}`);
+        }
+        return groups;
+     }, [currentUser]);
+
+     const taskQuery = useMemoFirebase(() => {
+        if (!currentUser || !isDept) return null;
+        
+        // Admins see all tasks
+        if (isAdmin) {
+            return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+        }
+
+        // Dept users see tasks sent to them, their department, or 'all'
+        return query(
+            collection(firestore, 'tasks'), 
+            where('recipientIds', 'array-contains-any', taskGroups),
+            orderBy('createdAt', 'desc')
+        );
+     }, [currentUser, isDept, isAdmin, taskGroups]);
+
+     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(taskQuery);
      
      const students = useMemo(() => studentsData || [], [studentsData]);
      const tasks = useMemo(() => tasksData || [], [tasksData]);
@@ -102,7 +130,8 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                     </CardContent>
                 </Card>
             </div>
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
                     <SendTaskForm currentUser={currentUser} />
                     <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
@@ -113,5 +142,5 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                 </div>
             </div>
         </div>
-    )
+    );
 }

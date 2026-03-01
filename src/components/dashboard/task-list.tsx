@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -42,9 +41,17 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
     const storageKey = `lastViewedTasks_${currentUser.id}`;
     const lastViewed = localStorage.getItem(storageKey);
 
+    // Define groups for the current user to match against recipientIds array
+    const userGroups = [currentUser.id, 'all'];
+    if (currentUser.role === 'admin') userGroups.push('admins');
+    if (currentUser.department) userGroups.push(`dept:${currentUser.department}`);
+
     const newlyAdded = new Set<string>();
     tasks.forEach(task => {
-      const isForCurrentUser = task.recipientId === currentUser.id || (task.recipientId === 'all' && currentUser.role === 'employee');
+      // ✅ MODERN CHECK: Use recipientIds array instead of legacy singular recipientId
+      const targets = task.recipientIds || (task.recipientId ? [task.recipientId] : []);
+      const isForCurrentUser = targets.some(id => userGroups.includes(id));
+
       if (isForCurrentUser && (!lastViewed || new Date(task.createdAt) > new Date(lastViewed))) {
         newlyAdded.add(task.id);
       }
@@ -57,7 +64,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
     return () => {
       localStorage.setItem(storageKey, new Date().toISOString());
     };
-  }, [tasks, currentUser.id, currentUser.role]);
+  }, [tasks, currentUser]);
 
 
   const allUserIds = useMemo(() => {

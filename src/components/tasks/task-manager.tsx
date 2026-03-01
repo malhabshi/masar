@@ -141,6 +141,10 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
       return true;
     });
 
+    // Define groups for categorization
+    const personalGroups = [currentUser.id];
+    if (currentUser.role === 'admin') personalGroups.push('admins');
+
     validTasks.forEach(t => {
       if (currentUser.role === 'employee') {
           personal.push(t);
@@ -149,8 +153,8 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
       const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
       
-      // Personal: targeted to me specifically OR targeted to 'admins' if I am admin
-      const isDirectlyForMe = targets.includes(currentUser.id) || (targets.includes('admins') && currentUser.role === 'admin');
+      // ✅ MODERN CHECK: Check if task is directly for the user or their primary management role
+      const isDirectlyForMe = targets.some(id => personalGroups.includes(id));
 
       if (isDirectlyForMe) {
         personal.push(t);
