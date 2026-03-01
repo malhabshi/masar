@@ -165,6 +165,7 @@ export interface Task {
   authorName?: string;
   recipientId: string | 'all'; 
   recipientIds?: string[];
+  requestTypeId?: string;
   content: string;
   createdAt: string;
   status: TaskStatus;
