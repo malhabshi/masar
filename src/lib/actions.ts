@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1205,20 +1206,29 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
         const toUser = await getUser(toEmployeeId);
         if (!fromUser || !toUser || !toUser.civilId) return { success: false, message: 'Invalid employees.' };
 
-        const studentsSnap = await adminDb!.collection('students').where('employeeId', '==', fromUser.civilId).get();
-        if (studentsSnap.empty) return { success: true, message: 'No students to transfer.' };
-
-        const batch = adminDb!.batch();
         const now = new Date().toISOString();
+        const batch = adminDb!.batch();
         const studentIds: string[] = [];
 
-        studentsSnap.docs.forEach(doc => {
+        // 1. Fetch assigned students
+        const assignedSnap = await adminDb!.collection('students').where('employeeId', '==', fromUser.civilId).get();
+        
+        // 2. Fetch unassigned leads created by the offboarding employee
+        const leadsSnap = await adminDb!.collection('students')
+            .where('employeeId', '==', null)
+            .where('createdBy', '==', fromUser.id)
+            .get();
+
+        const allRelevantDocs = [...assignedSnap.docs, ...leadsSnap.docs];
+        if (allRelevantDocs.length === 0) return { success: true, message: 'No students to transfer.' };
+
+        allRelevantDocs.forEach(doc => {
             const data = doc.data() as Student;
             studentIds.push(doc.id);
             batch.update(doc.ref, {
                 employeeId: toUser.civilId,
                 transferHistory: [...(data.transferHistory || []), {
-                    fromEmployeeId: fromUser.civilId,
+                    fromEmployeeId: data.employeeId || null,
                     toEmployeeId: toUser.civilId,
                     date: now,
                     transferredBy: adminId
@@ -1226,10 +1236,11 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
                 adminNotes: [...(data.adminNotes || []), {
                     id: `note-bulk-${Date.now()}`,
                     authorId: adminId,
-                    content: `Bulk transfer from ${fromUser.name} to ${toUser.name}.`,
+                    content: `Bulk transfer from ${fromUser.name} to ${toUser.name}. Includes assigned and unassigned leads.`,
                     createdAt: now
                 }],
-                lastActivityAt: now
+                lastActivityAt: now,
+                isNewForEmployee: true
             });
         });
 
@@ -1237,7 +1248,7 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
         
         return { 
           success: true, 
-          message: `Transferred ${studentsSnap.size} students.`, 
+          message: `Transferred ${allRelevantDocs.length} students (Portfolio + Leads).`, 
           studentIds, 
           fromEmployeeName: fromUser.name,
           toEmployeeName: toUser.name,
