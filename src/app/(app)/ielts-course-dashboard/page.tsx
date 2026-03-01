@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -41,9 +42,12 @@ export default function IeltsCourseDashboard() {
     if (!tasks) return [];
     
     return tasks.filter((task) => {
-      // Robust check for IELTS Course (Programmatic type or Case-insensitive match)
-      const isIeltsCourse = task.data?.examType === 'ielts_course' || 
-                           task.taskType?.toLowerCase() === 'ielts course';
+      // ✅ Stable check: Use programmatic examType or fixed requestTypeId
+      // String matching kept as fallback for legacy data only
+      const isIeltsCourse = 
+        task.data?.examType === 'ielts_course' || 
+        task.requestTypeId === 'ielts_course' ||
+        task.taskType?.toLowerCase() === 'ielts course';
       
       if (!isIeltsCourse) return false;
 

@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sidebar,
@@ -121,8 +122,12 @@ export function AppSidebar() {
             const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
             if (hasSeen) return false;
 
-            const isIeltsCourse = t.data?.examType === 'ielts_course' || 
-                                 t.taskType?.toLowerCase() === 'ielts course';
+            // ✅ Stable check: Use programmatic markers
+            const isIeltsCourse = 
+              t.data?.examType === 'ielts_course' || 
+              t.requestTypeId === 'ielts_course' ||
+              t.taskType?.toLowerCase() === 'ielts course';
+
             return !isIeltsCourse;
         }).length;
     }, [tasks, isAdminDept, user]);
@@ -138,8 +143,12 @@ export function AppSidebar() {
             const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
             if (hasSeen) return false;
 
-            const isIeltsCourse = t.data?.examType === 'ielts_course' || 
-                                 t.taskType?.toLowerCase() === 'ielts course';
+            // ✅ Stable check: Use programmatic markers
+            const isIeltsCourse = 
+              t.data?.examType === 'ielts_course' || 
+              t.requestTypeId === 'ielts_course' ||
+              t.taskType?.toLowerCase() === 'ielts course';
+
             return isIeltsCourse;
         }).length;
     }, [tasks, user]);

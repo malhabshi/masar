@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -516,6 +517,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
             studentName: studentData.name,
             studentPhone: studentData.phone,
             taskType: requestTypeData.name,
+            requestTypeId: requestTypeId, // ✅ ADDED: Stable ID for identification
             data: {
               ...(dynamicData || {}),
               studentName: studentData.name,
