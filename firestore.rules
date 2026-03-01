@@ -43,8 +43,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    /** @description Safely retrieves user data without crashing the rule evaluation if missing. */
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) ? get(path).data : {};
     }
 
     // --- Rules ---
@@ -70,15 +72,15 @@ service cloud.firestore {
 
     match /students/{studentId} {
       allow read: if isSignedIn();
-      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().civilId);
-      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.employeeId);
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().get('civilId', ''));
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == resource.data.employeeId);
       allow delete: if isAdmin();
     }
 
     match /universityApplications/{applicationId} {
       allow read: if isSignedIn();
-      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().civilId);
-      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == request.resource.data.assignedToEmployeeId);
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().get('civilId', ''));
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == request.resource.data.assignedToEmployeeId);
       allow delete: if isAdmin();
     }
 
@@ -100,7 +102,7 @@ service cloud.firestore {
         (resource.data.recipientIds != null && (
           request.auth.uid in resource.data.recipientIds ||
           'all' in resource.data.recipientIds ||
-          (isDepartment() && ('dept:' + getUserData().department) in resource.data.recipientIds)
+          (isDepartment() && ('dept:' + getUserData().get('department', 'UNKNOWN')) in resource.data.recipientIds)
         ))
       );
       

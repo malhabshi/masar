@@ -48,6 +48,7 @@ async function refreshStudentActivity(studentId: string) {
  * REPAIR UTILITY: Rebuilds the DBAC collections (/admins and /departmentUsers)
  * based on the current state of the main /users collection.
  * Ensures department users have a department field and are synced correctly.
+ * Also handles hardcoded bypass maintenance UIDs.
  */
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
@@ -55,37 +56,38 @@ export async function repairPermissions(adminId: string) {
     try {
         const authorizedBypass = [
           'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
-          'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
           'IZr1zv5ePQb0bKNVXS4xGjERmE62', 
+          'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
           'lZr1zv5ePQbObKNVXS4xGjERmE62'
         ];
         
-        // Force fix the bypass user's role in the main collection if they are calling this
-        if (authorizedBypass.includes(adminId)) {
-            await adminDb!.collection('users').doc(adminId).update({ role: 'admin' });
-        }
-
         const usersSnap = await adminDb!.collection('users').get();
         const batch = adminDb!.batch();
 
+        // Clear existing indexes to start fresh
         const adminsSnap = await adminDb!.collection('admins').get();
         const deptsSnap = await adminDb!.collection('departmentUsers').get();
         
         adminsSnap.docs.forEach(doc => batch.delete(doc.ref));
         deptsSnap.docs.forEach(doc => batch.delete(doc.ref));
 
+        const now = new Date().toISOString();
+
         usersSnap.docs.forEach(userDoc => {
             const userData = userDoc.data();
             const uid = userDoc.id;
-            const syncTime = new Date().toISOString();
 
-            if (userData.role === 'admin') {
+            // 1. ADMISSIONS ADMINS
+            if (userData.role === 'admin' || authorizedBypass.includes(uid)) {
                 batch.set(adminDb!.collection('admins').doc(uid), { 
                   role: 'admin', 
-                  lastSync: syncTime,
-                  userEmail: userData.email 
+                  lastSync: now,
+                  userEmail: userData.email || 'bypass@system.local' 
                 });
-            } else if (userData.role === 'department') {
+            } 
+            
+            // 2. DEPARTMENT USERS
+            if (userData.role === 'department') {
                 const dept = userData.department || 'UK'; // Default to UK if missing
                 if (!userData.department) {
                     batch.update(userDoc.ref, { department: dept });
@@ -93,7 +95,7 @@ export async function repairPermissions(adminId: string) {
                 
                 batch.set(adminDb!.collection('departmentUsers').doc(uid), { 
                   role: 'department', 
-                  lastSync: syncTime,
+                  lastSync: now,
                   department: dept,
                   email: userData.email || ''
                 });
@@ -101,7 +103,7 @@ export async function repairPermissions(adminId: string) {
         });
 
         await batch.commit();
-        return { success: true, message: `Successfully repaired permissions and synchronized departments for ${usersSnap.size} users.` };
+        return { success: true, message: `Successfully repaired permissions and synchronized ${usersSnap.size} users.` };
     } catch (e: any) {
         console.error('Permission repair failed:', e);
         return { success: false, message: e.message };
