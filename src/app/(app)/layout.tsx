@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -16,7 +15,6 @@ export default function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  console.log('🔍 AuthenticatedLayout rendering', new Date().toISOString());
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
@@ -25,7 +23,8 @@ export default function AuthenticatedLayout({
   useHeartbeat();
 
   useEffect(() => {
-    console.log('✅ Component mounted:', 'AuthenticatedLayout');
+    // Moved logging into useEffect to avoid hydration mismatches with new Date()
+    console.log('🔍 AuthenticatedLayout mounted at:', new Date().toISOString());
     setIsMounted(true);
     
     // Trigger an initial background check for student inactivity reminders
@@ -44,8 +43,7 @@ export default function AuthenticatedLayout({
     }
   }, [user, isUserLoading, isMounted, router]);
 
-  // The server will always render this. The client will also render this on its
-  // first pass, preventing a hydration mismatch.
+  // Prevent hydration mismatches by returning a generic loading state on the first pass
   if (!isMounted || isUserLoading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -54,7 +52,6 @@ export default function AuthenticatedLayout({
     );
   }
 
-  // This part is now guaranteed to only run on the client, after hydration.
   return (
     <SidebarProvider>
       <NotificationListener />

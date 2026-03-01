@@ -11,8 +11,9 @@ import {
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-
-// Non-blocking add document
+/**
+ * Non-blocking add document
+ */
 export function addDocumentNonBlocking<T extends Record<string, any>>(
   collectionRef: CollectionReference, 
   data: T
@@ -28,7 +29,9 @@ export function addDocumentNonBlocking<T extends Record<string, any>>(
       });
 }
 
-// Non-blocking update document
+/**
+ * Non-blocking update document
+ */
 export function updateDocumentNonBlocking(
   docRef: DocumentReference, 
   data: any
@@ -44,7 +47,9 @@ export function updateDocumentNonBlocking(
       });
 }
 
-// Non-blocking set document
+/**
+ * Non-blocking set document
+ */
 export function setDocumentNonBlocking(
   docRef: DocumentReference,
   data: any
@@ -61,7 +66,9 @@ export function setDocumentNonBlocking(
 }
 
 
-// Non-blocking delete document
+/**
+ * Non-blocking delete document
+ */
 export function deleteDocumentNonBlocking(
   docRef: DocumentReference
 ) {

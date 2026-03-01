@@ -9,7 +9,7 @@ import {
   FirestoreError,
   DocumentSnapshot,
 } from 'firebase/firestore';
-import { firestore, auth } from '@/firebase';
+import { firestore, auth } from '../init';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 

@@ -43,7 +43,7 @@ export default function RootLayout({
       }
       h /= 6;
     }
-    return \`\${Math.round(h * 360)} \${Math.round(s * 100)}% \${Math.round(l * 100)}%\`;
+    return Math.round(h * 360) + ' ' + Math.round(s * 100) + '% ' + Math.round(l * 100) + '%';
   }
 
   try {
