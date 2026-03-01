@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -813,7 +812,15 @@ export async function deleteStudentDocument(studentId: string, documentId: strin
         const studentData = studentDoc.data() as Student;
         const deleter = await getUser(deleterId);
         if (!deleter) return { success: false, message: "Invalid user." };
-        if (deleter.role === 'employee' && deleter.civilId !== studentData.employeeId && deleter.role !== 'admin' && deleter.role !== 'department') return { success: false, message: 'Unauthorized.' };
+        
+        // Check authorization for document deletion
+        const isAdminOrDept = deleter.role === 'admin' || deleter.role === 'department';
+        const isAssignedEmployee = deleter.role === 'employee' && deleter.civilId === studentData.employeeId;
+
+        if (!isAdminOrDept && !isAssignedEmployee) {
+          return { success: false, message: 'Unauthorized.' };
+        }
+
         const bucket = storage!.bucket();
         const filePath = decodeURIComponent(new URL(documentUrl).pathname.split('/').slice(2).join('/'));
         if (filePath) await bucket.file(filePath).delete();
@@ -1003,6 +1010,8 @@ export async function addAcademicTerm(name: string, authorId: string) {
 export async function deleteAcademicTerm(termId: string, userId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
+    const user = await getUser(userId);
+    if (!user || user.role !== 'admin') return { success: false, message: 'Unauthorized.' };
     await adminDb!.collection('academic_terms').doc(termId).delete();
     return { success: true };
   } catch (e: any) { return { success: false, message: e.message }; }
@@ -1099,7 +1108,7 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
                     const employeeDoc = employeeQuery.docs[0];
                     const employeeData = employeeDoc.data() as User;
                     await adminDb!.collection('tasks').add({ authorId: adminId, createdBy: adminId, recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: taskContent, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
-                    if (employeeData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: employeeData.name, studentName: studentData.name, employeeName: employeeData.name, messageContent: taskContent, studentUrl: studentUrl }, employeeData.phone);
+                    if (employeeData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: employeeData.name, studentName: studentName, employeeName: employeeData.name, messageContent: taskContent, studentUrl: studentUrl }, employeeData.phone);
                 }
             }
             const managementSnap = await adminDb!.collection('users').where('role', 'in', ['admin', 'department']).get();
