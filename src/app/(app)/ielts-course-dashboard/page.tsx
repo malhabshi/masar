@@ -42,8 +42,8 @@ export default function IeltsCourseDashboard() {
     if (!tasks) return [];
     
     return tasks.filter((task) => {
-      // ✅ Stable check: Use programmatic examType or fixed requestTypeId
-      // String matching kept as fallback for legacy data only
+      // ✅ Stable check: Use programmatic markers (Marker 1 & 2)
+      // String matching kept as fallback for legacy data only (Marker 3)
       const isIeltsCourse = 
         task.data?.examType === 'ielts_course' || 
         task.requestTypeId === 'ielts_course' ||

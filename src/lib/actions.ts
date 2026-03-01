@@ -517,7 +517,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
             studentName: studentData.name,
             studentPhone: studentData.phone,
             taskType: requestTypeData.name,
-            requestTypeId: requestTypeId, // ✅ ADDED: Stable ID for identification
+            requestTypeId: requestTypeId, // ✅ Programmatic identification
             data: {
               ...(dynamicData || {}),
               studentName: studentData.name,
