@@ -4,7 +4,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * UNIAPPLY HUB SECURITY RULES - EMERGENCY RECOVERY VERSION
+     * UNIAPPLY HUB SECURITY RULES
+     * Single Source of Truth: /admins and /departmentUsers collections (DBAC)
      */
 
     // --- Helper Functions ---
@@ -14,28 +15,25 @@ service cloud.firestore {
     }
 
     /** 
-     * @description Checks if user is an admin. 
-     * Fallback: Checks both the dedicated DBAC collection AND the user's document role for safety.
+     * @description Checks if user is an admin using indexed DBAC collection. 
+     * This is the single source of truth for administrative access.
      */
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-        // Emergency Super Admin Fallback
-        request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1' ||
-        // Main Admin UID
-        request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' ||
-        request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' ||
-        request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62'
+        // Emergency Super Admin Fallback (Hardcoded UIDs)
+        request.auth.uid in [
+          'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
+          'IZr1zv5ePQb0bKNVXS4xGjERmE62', 
+          'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
+          'lZr1zv5ePQbObKNVXS4xGjERmE62'
+        ]
       );
     }
 
-    /** @description Checks if user is in a department. Fallback included. */
+    /** @description Checks if user is in a department using indexed DBAC collection. */
     function isDepartment() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid)) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'department')
-      );
+      return isSignedIn() && exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid));
     }
 
     function isPrivileged() {
@@ -72,13 +70,9 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // EMERGENCY: Restore read access for all staff to confirm data existence
       allow read: if isSignedIn();
-      
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().civilId);
-      
       allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.employeeId);
-      
       allow delete: if isAdmin();
     }
 
@@ -163,7 +157,6 @@ service cloud.firestore {
       allow write: if isPrivileged();
     }
     
-    // NOTIFICATION TEMPLATES RULES
     match /notification_templates/{templateId} {
       allow read, list: if isSignedIn();
       allow create: if isAdmin();

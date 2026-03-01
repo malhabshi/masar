@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -46,6 +47,7 @@ async function refreshStudentActivity(studentId: string) {
 /**
  * REPAIR UTILITY: Rebuilds the DBAC collections (/admins and /departmentUsers)
  * based on the current state of the main /users collection.
+ * This ensures security rules and user roles are 100% in sync.
  */
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
@@ -78,15 +80,24 @@ export async function repairPermissions(adminId: string) {
             const syncTime = new Date().toISOString();
 
             if (userData.role === 'admin') {
-                batch.set(adminDb!.collection('admins').doc(uid), { role: 'admin', lastSync: syncTime });
+                batch.set(adminDb!.collection('admins').doc(uid), { 
+                  role: 'admin', 
+                  lastSync: syncTime,
+                  userEmail: userData.email 
+                });
             } else if (userData.role === 'department') {
-                batch.set(adminDb!.collection('departmentUsers').doc(uid), { role: 'department', lastSync: syncTime });
+                batch.set(adminDb!.collection('departmentUsers').doc(uid), { 
+                  role: 'department', 
+                  lastSync: syncTime,
+                  department: userData.department || 'General' 
+                });
             }
         });
 
         await batch.commit();
         return { success: true, message: `Successfully repaired permissions for ${usersSnap.size} users.` };
     } catch (e: any) {
+        console.error('Permission repair failed:', e);
         return { success: false, message: e.message };
     }
 }
@@ -279,15 +290,28 @@ export async function changeUserRole(userId: string, newRole: UserRole, adminId:
     try {
         const admin = await getUser(adminId);
         if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+        
+        const targetUser = await getUser(userId);
+        if (!targetUser) return { success: false, message: 'Target user not found.' };
+
         const batch = adminDb!.batch();
         const userRef = adminDb!.collection('users').doc(userId);
         batch.update(userRef, { role: newRole });
+        
         const adminDBACRef = adminDb!.collection('admins').doc(userId);
         const deptDBACRef = adminDb!.collection('departmentUsers').doc(userId);
+        
+        // Clean up old DBAC records
         batch.delete(adminDBACRef);
         batch.delete(deptDBACRef);
-        if (newRole === 'admin') batch.set(adminDBACRef, { role: 'admin', syncAt: new Date().toISOString() });
-        else if (newRole === 'department') batch.set(deptDBACRef, { role: 'department', syncAt: new Date().toISOString() });
+        
+        const now = new Date().toISOString();
+        if (newRole === 'admin') {
+          batch.set(adminDBACRef, { role: 'admin', syncAt: now, userEmail: targetUser.email });
+        } else if (newRole === 'department') {
+          batch.set(deptDBACRef, { role: 'department', syncAt: now, department: targetUser.department || 'General' });
+        }
+        
         await batch.commit();
         return { success: true, message: `User role updated to ${newRole}.` };
     } catch (error: any) {
@@ -340,7 +364,7 @@ export async function updateApplicationStatus(studentId: string, universityName:
             const employeeDoc = employeeQuery.docs[0];
             const employeeData = employeeDoc.data() as User;
             const message = `Status update for ${studentName}: ${universityName} is now ${newStatus}.`;
-            await adminDb!.collection('tasks').add({ authorId: 'system', recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: message, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
+            await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: message, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
             let notifType: NotificationType = 'admin_update';
             if (newStatus === 'Accepted') notifType = 'scholarship_approved';
             await triggerWhatsAppNotification(notifType, { employeeName: employeeData.name, studentName: studentName, messageContent: message, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` }, employeeData.phone);
@@ -473,7 +497,7 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
         const author = await getUser(authorId);
-        if (!author) return { success: false, message: 'Unauthorized.' };
+        if (!author) return { success: false, message: 'Author not found.' };
         const taskRef = adminDb!.collection('tasks').doc(taskId);
         const taskDoc = await taskRef.get();
         if (!taskDoc.exists) return { success: false, message: 'Task not found.' };
@@ -530,8 +554,8 @@ export async function createNewUser(userData: { name: string; email: string; pas
     const newUserForDb: Omit<User, 'id'> = { name: userData.name, email: userData.email, phone: userData.phone, role: userData.role, avatarUrl, civilId: userData.civilId, employeeId: employeeId, ...(userData.department && { department: userData.department }) };
     const batch = adminDb!.batch();
     batch.set(adminDb!.collection('users').doc(authUser.uid), newUserForDb);
-    if (userData.role === 'admin') batch.set(adminDb!.collection('admins').doc(authUser.uid), { role: 'admin', syncAt: new Date().toISOString() });
-    else if (userData.role === 'department') batch.set(adminDb!.collection('departmentUsers').doc(authUser.uid), { role: 'department', syncAt: new Date().toISOString() });
+    if (userData.role === 'admin') batch.set(adminDb!.collection('admins').doc(authUser.uid), { role: 'admin', syncAt: new Date().toISOString(), userEmail: userData.email });
+    else if (userData.role === 'department') batch.set(adminDb!.collection('departmentUsers').doc(authUser.uid), { role: 'department', syncAt: new Date().toISOString(), department: userData.department || 'General' });
     await batch.commit();
     return { success: true, message: `${userData.name} added.` };
   } catch (error: any) { return { success: false, message: error.message }; }
