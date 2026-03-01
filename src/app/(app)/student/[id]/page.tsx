@@ -178,77 +178,83 @@ export default function StudentDetailPage() {
   if (!student) {
     return <div className="p-8 text-center bg-card rounded-lg border">Student not found or you do not have permission to view this page.</div>;
   }
+
+  if (!currentUser) {
+    return <div className="p-8 text-center bg-card rounded-lg border">Please sign in to view student details.</div>;
+  }
   
-  const canRenderContent = !isLoading && student && currentUser;
-  const isAssignedEmployee = canRenderContent && student.employeeId === currentUser.civilId;
-  const isAdminOrDept = canRenderContent && ['admin', 'department'].includes(currentUser.role);
+  const isAssignedEmployee = student.employeeId === currentUser.civilId;
+  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
   
-  const handleAddEmployeeNote = (content: string) => addEmployeeNote(student.id, currentUser.id, content);
-  const handleAddAdminNote = (content: string) => addAdminNote(student.id, currentUser.id, content);
+  const handleAddEmployeeNote = async (content: string) => {
+    if (!student || !currentUser) return { success: false, message: 'Missing context' };
+    return addEmployeeNote(student.id, currentUser.id, content);
+  };
+
+  const handleAddAdminNote = async (content: string) => {
+    if (!student || !currentUser) return { success: false, message: 'Missing context' };
+    return addAdminNote(student.id, currentUser.id, content);
+  };
 
 
   return (
     <div className="space-y-6">
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
-      {canRenderContent && (
-        <>
-            {student.duplicatePhoneWarning && (
-              <DuplicateWarningBanner student={student} currentUser={currentUser} />
-            )}
-            
-            <InactivityReportSection student={student} currentUser={currentUser} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                <div className="lg:col-span-2 space-y-6">
-                    <TargetCountriesCard student={student} currentUser={currentUser} />
-                    <StudentApplications student={student} />
-                    <StudentUsersCard student={student} currentUser={currentUser} />
-                    <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee ?? false} />
-                    <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept ?? false} />
-                    
-                    {isAdminOrDept && (
-                        <NotesSection
-                            title="Admin Notes"
-                            notes={student.adminNotes || []}
-                            canWrite={isAdminOrDept}
-                            onAddNote={handleAddAdminNote}
-                            placeholder="Add a new internal note..."
-                        />
-                    )}
-                </div>
-
-                <div className="space-y-6">
-                    <TaskStatsCard tasks={tasks || []} />
-                    <ReadinessChecklist student={student} currentUser={currentUser} />
-                    <MissingItemsSection student={student} currentUser={currentUser} />
-                    <AcademicIntakeCard student={student} currentUser={currentUser} />
-                    <IeltsCard student={student} currentUser={currentUser} />
-                    
-                    <NotesSection
-                        title="Employee Notes"
-                        notes={student.employeeNotes || []}
-                        canWrite={isAssignedEmployee}
-                        onAddNote={handleAddEmployeeNote}
-                        placeholder="Add a new employee note..."
-                    />
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Internal Chat</CardTitle>
-                        </CardHeader>
-                        <StudentChat student={student} currentUser={currentUser} />
-                    </Card>
-                    
-                    {student.transferHistory && student.transferHistory.length > 0 && (
-                        <TransferHistory transferHistory={student.transferHistory} />
-                    )}
-                </div>
-            </div>
-            
-            <TaskHistory tasks={tasks || []} studentId={studentId} currentUser={currentUser} isLoading={tasksLoading} />
-        </>
+      {student.duplicatePhoneWarning && (
+        <DuplicateWarningBanner student={student} currentUser={currentUser} />
       )}
+      
+      <InactivityReportSection student={student} currentUser={currentUser} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div className="lg:col-span-2 space-y-6">
+              <TargetCountriesCard student={student} currentUser={currentUser} />
+              <StudentApplications student={student} />
+              <StudentUsersCard student={student} currentUser={currentUser} />
+              <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} />
+              <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
+              
+              {isAdminOrDept && (
+                  <NotesSection
+                      title="Admin Notes"
+                      notes={student.adminNotes || []}
+                      canWrite={isAdminOrDept}
+                      onAddNote={handleAddAdminNote}
+                      placeholder="Add a new internal note..."
+                  />
+              )}
+          </div>
+
+          <div className="space-y-6">
+              <TaskStatsCard tasks={tasks || []} />
+              <ReadinessChecklist student={student} currentUser={currentUser} />
+              <MissingItemsSection student={student} currentUser={currentUser} />
+              <AcademicIntakeCard student={student} currentUser={currentUser} />
+              <IeltsCard student={student} currentUser={currentUser} />
+              
+              <NotesSection
+                  title="Employee Notes"
+                  notes={student.employeeNotes || []}
+                  canWrite={isAssignedEmployee}
+                  onAddNote={handleAddEmployeeNote}
+                  placeholder="Add a new employee note..."
+              />
+
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Internal Chat</CardTitle>
+                  </CardHeader>
+                  <StudentChat student={student} currentUser={currentUser} />
+              </Card>
+              
+              {student.transferHistory && student.transferHistory.length > 0 && (
+                  <TransferHistory transferHistory={student.transferHistory} />
+              )}
+          </div>
+      </div>
+      
+      <TaskHistory tasks={tasks || []} studentId={student.id} currentUser={currentUser} isLoading={tasksLoading} />
     </div>
   );
 }
