@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -72,6 +71,11 @@ export function TaskDetailsDialog({
   const [isSendingNotif, setIsSendingNotif] = useState(false);
   const [localStatus, setLocalStatus] = useState<TaskStatus>(task.status);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Sync local status if task prop changes (e.g. from real-time snapshot)
   useEffect(() => {
@@ -131,7 +135,7 @@ export function TaskDetailsDialog({
           {Icon && <Icon className="h-4 w-4 text-primary" />}
           <span className="text-sm">
             {Array.isArray(value) ? value.join(', ') : 
-             (value instanceof Date || (typeof value === 'string' && value.includes('T')) ? formatDateTime(value) : String(value))}
+             (isClient && (value instanceof Date || (typeof value === 'string' && value.includes('T'))) ? formatDateTime(value) : String(value))}
           </span>
         </div>
       </div>
@@ -273,7 +277,7 @@ export function TaskDetailsDialog({
             <div className="p-4 border-b space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Status / Seen</h3>
-                {task.viewedBy && task.viewedBy.length > 0 && (
+                {isClient && task.viewedBy && task.viewedBy.length > 0 && (
                   <div className="text-[10px] text-muted-foreground">
                     Seen by {task.viewedBy[0].userName} - {formatDateTime(task.viewedBy[0].timestamp)}
                   </div>
@@ -301,7 +305,7 @@ export function TaskDetailsDialog({
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold">{author?.name || 'System'}</span>
-                          <span className="text-[10px] text-muted-foreground">{formatRelativeTime(item.createdAt)}</span>
+                          <span className="text-[10px] text-muted-foreground">{isClient ? formatRelativeTime(item.createdAt) : '...'}</span>
                         </div>
                         <div className="text-xs text-muted-foreground whitespace-pre-wrap">
                           {isNotif && <BadgeComponent variant="secondary" className="mr-1 h-4 text-[8px] bg-blue-500 text-white">NOTIF</BadgeComponent>}

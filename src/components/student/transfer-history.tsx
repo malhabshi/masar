@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Student } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -13,6 +13,12 @@ interface TransferHistoryProps {
 }
 
 export function TransferHistory({ transferHistory }: TransferHistoryProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const employeeCivilIds = useMemo(() => {
     const ids = new Set<string>();
     transferHistory.forEach(t => {
@@ -73,7 +79,7 @@ export function TransferHistory({ transferHistory }: TransferHistoryProps) {
                     </div>
                 </div>
                 <div className="text-xs text-muted-foreground mt-2 pl-1">
-                    Transferred on {formatDate(transfer.date)} by {admin?.name || '...'}
+                    Transferred on {isClient ? formatDate(transfer.date) : '...'} by {admin?.name || '...'}
                 </div>
             </div>
           );

@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical } from 'lucide-react';
@@ -65,7 +64,12 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const { toast } = useToast();
   const [isTogglingAgent, setIsTogglingAgent] = useState(false);
   const [isForcingInactivity, setIsForcingInactivity] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const requesterId = student?.deletionRequested?.requestedBy;
   const { userMap } = useUserCacheById(requesterId ? [requesterId] : []);
@@ -181,7 +185,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                         </BadgeComponent>
                     </TooltipTrigger>
                     <TooltipContent>
-                        <p>Requested by {requester?.name || '...'} {formatRelativeTime(student.deletionRequested.requestedAt)}</p>
+                        <p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : '...'}</p>
                     </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>

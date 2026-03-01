@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -26,6 +25,7 @@ import type { User } from '@/lib/types';
 export default function EmployeeActivityPage() {
     const { user: currentUser, isUserLoading } = useUser();
     const { data: users, isLoading: usersLoading } = useUsersCollection<User>('users');
+    const [isMounted, setIsMounted] = useState(false);
     
     // State for filters
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
@@ -34,8 +34,8 @@ export default function EmployeeActivityPage() {
         to: new Date(),
     });
     
-    // Close inactive sessions when an admin/dept views this page
     useEffect(() => {
+        setIsMounted(true);
         if (currentUser && ['admin', 'department'].includes(currentUser.role)) {
             closeInactiveSessions();
         }
@@ -118,7 +118,7 @@ export default function EmployeeActivityPage() {
         };
     }, [filteredLogs]);
 
-    if (isLoading) {
+    if (isLoading || !isMounted) {
         return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
     

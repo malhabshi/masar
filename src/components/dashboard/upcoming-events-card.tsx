@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -33,8 +32,13 @@ export function UpcomingEventsCard() {
   const { data: events, isLoading: areEventsLoading } = useCollection<UpcomingEvent>(user ? 'upcoming_events' : '');
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   
   const [newItems, setNewItems] = useState(new Set<string>());
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     if (!events || events.length === 0 || !user) return;
@@ -123,7 +127,7 @@ export function UpcomingEventsCard() {
                 <CalendarDays className="h-4 w-4 mt-0.5 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">{event.title}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(event.date)}</p>
+                  <p className="text-xs text-muted-foreground">{isClient ? formatDate(event.date) : '...'}</p>
                 </div>
                 {canManage && (
                    <AlertDialog>
