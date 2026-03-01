@@ -106,6 +106,7 @@ export default function StudentDetailPage() {
         groups.push(`dept:${currentUser.department}`);
       }
 
+      // Use 'or' to allow visibility of tasks where the user is the author OR one of the recipients
       constraints.push(
         or(
           where('authorId', '==', currentUser.id),
