@@ -90,13 +90,20 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
+      // Allow listing for all authenticated users
       allow list: if isSignedIn();
+      
+      // Enforce security for reading individual task details
       allow get: if isSignedIn() && (
-        isAdmin() || 
-        resource.data.authorId == request.auth.uid ||
-        (resource.data.recipientIds != null && (request.auth.uid in resource.data.recipientIds || 'all' in resource.data.recipientIds)) ||
-        (isDepartment() && 'dept:' + getUserData().department in resource.data.recipientIds)
+        isAdmin() ||
+        request.auth.uid == resource.data.authorId ||
+        (resource.data.recipientIds != null && (
+          request.auth.uid in resource.data.recipientIds ||
+          'all' in resource.data.recipientIds ||
+          (isDepartment() && ('dept:' + getUserData().department) in resource.data.recipientIds)
+        ))
       );
+      
       allow create: if isSignedIn();
       allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
       allow delete: if isAdmin();
