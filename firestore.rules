@@ -79,7 +79,7 @@ service cloud.firestore {
     match /universityApplications/{applicationId} {
       allow read: if isSignedIn();
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().civilId);
-      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == resource.data.assignedToEmployeeId);
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().civilId == request.resource.data.assignedToEmployeeId);
       allow delete: if isAdmin();
     }
 

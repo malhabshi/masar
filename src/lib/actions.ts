@@ -779,7 +779,9 @@ export async function setStudentFinalChoice(studentId: string, university: strin
     const studentData = studentDoc.data() as Student;
     const updater = await getUser(updaterId);
     if (!updater) return { success: false, message: 'Updater not found.' };
-    if (updater.role === 'employee' && updater.civilId !== studentData.employeeId && updater.role !== 'admin' && updater.role !== 'department') return { success: false, message: 'Unauthorized.' };
+    if (updater.role === 'employee' && updater.civilId !== studentData.employeeId) {
+        if (!['admin', 'department'].includes(updater.role)) return { success: false, message: 'Unauthorized.' };
+    }
     await studentRef.update({ finalChoiceUniversity: university, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-finalize-${Date.now()}`, authorId: updaterId, content: `${updater.name} set final choice to ${university}.`, createdAt: new Date().toISOString() }) });
     if (updater.role === 'employee') {
         const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
@@ -984,7 +986,7 @@ export async function deleteStudentLogin(studentId: string, idToDelete: string, 
 export async function updateStudentTargetCountries(studentId: string, countries: string[], updaterId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ targetCountries: countries, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-target-${Date.now()}`, authorId: updaterId, content: `Target countries: ${countries.join(', ')}`, createdAt: new Date().toISOString() }) });
+        await adminDb!.collection('students').doc(studentId).update({ targetCountries: countries, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-target-${Date.now()}`, authorId, content: `Target countries: ${countries.join(', ')}`, createdAt: new Date().toISOString() }) });
         return { success: true, message: 'Updated.' };
     } catch (error: any) { return { success: false, message: error.message }; }
 }
@@ -992,7 +994,7 @@ export async function updateStudentTargetCountries(studentId: string, countries:
 export async function updateStudentAcademicIntake(studentId: string, semester: string, year: number, updaterId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ academicIntakeSemester: semester, academicIntakeYear: year, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-intake-${Date.now()}`, authorId: updaterId, content: `Intake: ${semester} ${year}`, createdAt: new Date().toISOString() }) });
+        await adminDb!.collection('students').doc(studentId).update({ academicIntakeSemester: semester, academicIntakeYear: year, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-intake-${Date.now()}`, authorId, updaterId, content: `Intake: ${semester} ${year}`, createdAt: new Date().toISOString() }) });
         return { success: true, message: 'Updated.' };
     } catch (error: any) { return { success: false, message: error.message }; }
 }
