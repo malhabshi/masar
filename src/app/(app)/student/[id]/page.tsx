@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -6,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useDoc, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc, where, query, collection, or } from 'firebase/firestore';
+import { doc, where, query, collection, or, and } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { addAdminNote, addEmployeeNote } from '@/lib/actions';
@@ -96,26 +95,30 @@ export default function StudentDetailPage() {
   const studentTasksQuery = useMemoFirebase(() => {
     if (!currentUser || !studentId) return null;
     
-    // Construct the base constraints for this student's tasks
-    const constraints = [where('studentId', '==', studentId)];
+    const studentConstraint = where('studentId', '==', studentId);
     
     // For employees, we need to see tasks they sent AND tasks they are meant to receive
+    // Wrapping composite filters in and() avoids top-level filter mixing errors
     if (currentUser.role === 'employee') {
       const groups = [currentUser.id, 'all'];
       if (currentUser.department) {
         groups.push(`dept:${currentUser.department}`);
       }
 
-      // Use 'or' to allow visibility of tasks where the user is the author OR one of the recipients
-      constraints.push(
-        or(
-          where('authorId', '==', currentUser.id),
-          where('recipientIds', 'array-contains-any', groups)
+      return query(
+        collection(firestore, 'tasks'),
+        and(
+          studentConstraint,
+          or(
+            where('authorId', '==', currentUser.id),
+            where('recipientIds', 'array-contains-any', groups)
+          )
         )
       );
     }
     
-    return query(collection(firestore, 'tasks'), ...constraints);
+    // For admins/departments, just show all tasks for this student
+    return query(collection(firestore, 'tasks'), studentConstraint);
   }, [studentId, currentUser]);
 
   const { data: tasks, isLoading: tasksLoading } = useCollection<Task>(studentTasksQuery);
