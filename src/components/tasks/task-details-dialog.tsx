@@ -44,6 +44,7 @@ import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { firestore } from '@/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface TaskDetailsDialogProps {
   isOpen: boolean;
@@ -91,7 +92,7 @@ export function TaskDetailsDialog({
     return doc(firestore, 'students', task.studentId);
   }, [task.studentId]);
 
-  const { data: student } = useDoc<any>(studentRef);
+  const { data: student, isLoading: isStudentLoading } = useDoc<any>(studentRef);
 
   const taskThread = useMemo(() => {
     const thread: any[] = [];
@@ -254,18 +255,36 @@ export function TaskDetailsDialog({
                 <h3 className="text-lg font-bold">Attached Student Documents</h3>
                 <div className="space-y-2">
                   {data.selectedDocuments.map((docId: string) => {
-                    const doc = student?.documents?.find((d: any) => d.id === docId);
-                    return doc ? (
-                      <div key={docId} className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium">{doc.name}</span>
+                    if (isStudentLoading) {
+                      return <Skeleton key={docId} className="h-12 w-full rounded-md" />;
+                    }
+
+                    const docItem = student?.documents?.find((d: any) => d.id === docId);
+                    
+                    if (docItem) {
+                      return (
+                        <div key={docId} className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{docItem.name}</span>
+                          </div>
+                          <Button size="sm" variant="ghost" asChild>
+                            <a href={docItem.url} target="_blank" rel="noopener noreferrer">Download</a>
+                          </Button>
                         </div>
-                        <Button size="sm" variant="ghost" asChild>
-                          <a href={doc.url} target="_blank" rel="noopener noreferrer">Download</a>
-                        </Button>
+                      );
+                    }
+
+                    // Fallback for deleted or missing documents (Fix for Issue #10)
+                    return (
+                      <div key={docId} className="flex items-center justify-between p-3 border border-destructive/20 bg-destructive/5 rounded-md text-destructive">
+                        <div className="flex items-center gap-3">
+                          <XCircle className="h-4 w-4" />
+                          <span className="text-xs font-medium italic">Document reference was deleted from profile</span>
+                        </div>
+                        <span className="text-[10px] font-mono opacity-50">{docId}</span>
                       </div>
-                    ) : null;
+                    );
                   })}
                 </div>
               </section>
