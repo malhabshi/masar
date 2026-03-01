@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -18,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { setStudentFinalChoice } from '@/lib/actions';
 import type { Student, Application } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Loader2, GraduationCap } from 'lucide-react';
+import { Loader2, GraduationCap, Paperclip } from 'lucide-react';
 
 interface FinalizeStudentDialogProps {
   student: Student;
