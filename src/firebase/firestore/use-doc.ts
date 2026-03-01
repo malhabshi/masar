@@ -1,13 +1,21 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, DocumentData, DocumentReference } from 'firebase/firestore';
+import {
+  doc,
+  onSnapshot,
+  DocumentData,
+  DocumentReference,
+  FirestoreError,
+  DocumentSnapshot,
+} from 'firebase/firestore';
 import { firestore, auth } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 
-// Recursively convert all Timestamps to Date objects
+/**
+ * Recursively convert all Timestamps to Date objects within a data structure.
+ */
 function convertTimestamps<T>(data: any): T {
   if (!data) return data as T;
   
@@ -23,8 +31,7 @@ function convertTimestamps<T>(data: any): T {
     const converted: any = {};
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
-        const value = data[key];
-        converted[key] = convertTimestamps(value);
+        converted[key] = convertTimestamps(data[key]);
       }
     }
     return converted as T;
@@ -33,14 +40,20 @@ function convertTimestamps<T>(data: any): T {
   return data as T;
 }
 
+function isDocumentReference(obj: any): obj is DocumentReference {
+  return obj && typeof obj === 'object' && obj.type === 'document';
+}
+
 /**
- * Unified hook to subscribe to a single Firestore document.
- * Supports both string path segments and Reference objects.
+ * Robust hook to subscribe to a single Firestore document in real-time.
  */
-export function useDoc<T>(target: string | DocumentReference | null | undefined, ...pathSegments: string[]) {
+export function useDoc<T = any>(
+  target: string | DocumentReference<DocumentData> | null | undefined,
+  ...pathSegments: string[]
+) {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<FirestoreError | Error | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
@@ -52,64 +65,66 @@ export function useDoc<T>(target: string | DocumentReference | null | undefined,
 
   useEffect(() => {
     if (!isAuthReady) return;
+
     if (!target) {
-      setIsLoading(false);
       setData(null);
+      setIsLoading(false);
       return;
     }
 
-    let isMounted = true;
     setIsLoading(true);
+    let unsubscribe = () => {};
 
     try {
       let docRef: DocumentReference;
+
       if (typeof target === 'string') {
         if (pathSegments.some(s => !s)) {
           setIsLoading(false);
           return;
         }
         docRef = doc(firestore, target, ...pathSegments);
-      } else {
+      } else if (isDocumentReference(target)) {
         docRef = target;
+      } else {
+        setIsLoading(false);
+        return;
       }
 
-      const unsubscribe = onSnapshot(docRef, 
-        (snapshot) => {
-          if (isMounted) {
-            if (snapshot.exists()) {
-              const docData = snapshot.data();
-              const converted = convertTimestamps<DocumentData>(docData);
-              setData({ id: snapshot.id, ...converted } as T);
-            } else {
-              setData(null);
-            }
-            setIsLoading(false);
-            setError(null);
+      unsubscribe = onSnapshot(
+        docRef,
+        (snapshot: DocumentSnapshot<DocumentData>) => {
+          if (snapshot.exists()) {
+            const rawData = snapshot.data();
+            const converted = convertTimestamps<DocumentData>(rawData);
+            setData({ id: snapshot.id, ...(converted as any) } as T);
+          } else {
+            setData(null);
           }
+          setIsLoading(false);
+          setError(null);
         },
         (err) => {
-          if (isMounted) {
-            console.error(`[useDoc] error:`, err);
-            const permissionError = new FirestorePermissionError({
-                path: docRef.path,
-                operation: 'get'
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            setError(err);
-            setIsLoading(false);
-          }
+          console.error(`[useDoc] subscription error:`, err);
+          
+          const contextualError = new FirestorePermissionError({
+            operation: 'get',
+            path: docRef.path,
+          });
+
+          setError(contextualError);
+          setData(null);
+          setIsLoading(false);
+          errorEmitter.emit('permission-error', contextualError);
         }
       );
-
-      return () => {
-        isMounted = false;
-        unsubscribe();
-      };
     } catch (e: any) {
       console.error(`[useDoc] setup error:`, e);
       setIsLoading(false);
       setError(e);
     }
+
+    return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthReady, JSON.stringify(typeof target === 'string' ? [target, ...pathSegments] : null), (target as any)?.__memo]);
 

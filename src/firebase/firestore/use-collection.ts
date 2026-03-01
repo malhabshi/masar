@@ -1,9 +1,17 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, QueryConstraint, DocumentData, CollectionReference, Query } from 'firebase/firestore';
-import { firestore } from '@/firebase';
+import {
+  collection,
+  onSnapshot,
+  query,
+  QueryConstraint,
+  DocumentData,
+  CollectionReference,
+  Query,
+  FirestoreError,
+} from 'firebase/firestore';
+import { firestore, auth } from '@/firebase';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
 
@@ -34,16 +42,33 @@ function convertTimestamps<T>(data: any): T {
   return data as T;
 }
 
+function isValidQueryOrRef(obj: any): obj is CollectionReference | Query {
+  return obj && typeof obj === 'object' && (obj.type === 'collection' || obj.type === 'query');
+}
+
 /**
- * Unified hook to subscribe to a Firestore collection or reference with real-time updates.
- * Supports both string paths and Reference/Query objects.
+ * Unified hook to subscribe to a Firestore collection or query in real-time.
  */
-export function useCollection<T>(target: string | CollectionReference | Query | null | undefined, ...queryConstraints: QueryConstraint[]) {
+export function useCollection<T = any>(
+  target: string | CollectionReference<DocumentData> | Query<DocumentData> | null | undefined,
+  ...constraints: QueryConstraint[]
+) {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<FirestoreError | Error | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // Guard against race conditions where query runs before auth is determined
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
+    if (!isAuthReady) return;
+    
     if (!target) {
       setData([]);
       setIsLoading(false);
@@ -58,40 +83,51 @@ export function useCollection<T>(target: string | CollectionReference | Query | 
 
       if (typeof target === 'string') {
         const collectionRef = collection(firestore, target);
-        q = queryConstraints.length > 0 
-          ? query(collectionRef, ...queryConstraints)
-          : collectionRef;
-      } else {
+        q = constraints.length > 0 ? query(collectionRef, ...constraints) : collectionRef;
+      } else if (isValidQueryOrRef(target)) {
         q = target;
+      } else {
+        setIsLoading(false);
+        return;
       }
 
-      unsubscribe = onSnapshot(q, 
+      unsubscribe = onSnapshot(
+        q,
         (snapshot) => {
-          const items = snapshot.docs.map(doc => {
+          const items = snapshot.docs.map((doc) => {
             const converted = convertTimestamps<DocumentData>(doc.data());
-            return { id: doc.id, ...converted } as T;
+            return {
+              id: doc.id,
+              ...(converted as any),
+            } as T;
           });
           setData(items);
           setIsLoading(false);
           setError(null);
         },
         (err) => {
-          console.error(`[useCollection] error:`, err);
+          console.error(`[useCollection] subscription error:`, err);
           
           let path = 'unknown';
           try {
-            // @ts-ignore - reaching into internal for path string if possible
-            path = typeof target === 'string' ? target : (target as any).path || (target as any)._query?.path?.canonicalString() || 'unknown';
-          } catch(e) {}
+            if (typeof target === 'string') path = target;
+            else if ((target as any).path) path = (target as any).path;
+            else {
+              const internalQuery = (target as any)._query || (target as any).query;
+              if (internalQuery?.path?.canonicalString) {
+                path = internalQuery.path.canonicalString();
+              }
+            }
+          } catch (e) {}
 
-          if (err.message.toLowerCase().includes('permissions')) {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: path,
-              operation: 'list'
-            }));
-          }
-          setError(err);
+          const contextualError = new FirestorePermissionError({
+            operation: 'list',
+            path: path,
+          });
+
+          setError(contextualError);
           setIsLoading(false);
+          errorEmitter.emit('permission-error', contextualError);
         }
       );
     } catch (e: any) {
@@ -102,7 +138,7 @@ export function useCollection<T>(target: string | CollectionReference | Query | 
 
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(target === 'string' ? target : null), queryConstraints.length, (target as any)?.__memo]);
+  }, [isAuthReady, JSON.stringify(typeof target === 'string' ? target : null), constraints.length, (target as any)?.__memo]);
 
   return { data, isLoading, error };
 }
