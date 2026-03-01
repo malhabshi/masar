@@ -6,6 +6,11 @@ import { keepAlive } from '@/lib/actions';
 
 const HEARTBEAT_INTERVAL = 60 * 1000; // 60 seconds
 
+/**
+ * Hook to maintain a lightweight "active" session for employees.
+ * Updates the user's lastSeen timestamp every minute.
+ * Heavy background tasks (like inactivity scans) are decoupled from this hook.
+ */
 export function useHeartbeat() {
   const { user } = useUser();
   const [isMounted, setIsMounted] = useState(false);
@@ -15,15 +20,13 @@ export function useHeartbeat() {
   }, []);
 
   useEffect(() => {
-    // Guard against running on server or before mount
-    if (!isMounted) {
-      return;
-    }
+    if (!isMounted) return;
 
     let intervalId: NodeJS.Timeout | null = null;
     
     const sendKeepAlive = () => {
       if (user && user.role === 'employee') {
+        // Lightweight call: only updates the user's specific time_log document
         keepAlive(user.id);
       }
     };
@@ -42,9 +45,7 @@ export function useHeartbeat() {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      if (intervalId) clearInterval(intervalId);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [user, isMounted]);
