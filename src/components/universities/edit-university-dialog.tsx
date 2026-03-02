@@ -33,6 +33,7 @@ const formSchema = z.object({
   name: z.string().min(3, { message: 'University name is required.' }),
   major: z.string().min(3, { message: 'Major is required.' }),
   country: z.enum(['UK', 'USA', 'Australia', 'New Zealand']),
+  category: z.enum(['MOHE', 'Merit', 'General']),
   ieltsScore: z.coerce.number().min(0).max(9),
   isAvailable: z.boolean().default(false),
   notes: z.string().optional(),
@@ -53,6 +54,7 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
       name: university.name,
       major: university.major,
       country: university.country,
+      category: university.category || 'General',
       ieltsScore: university.ieltsScore,
       isAvailable: university.isAvailable,
       notes: university.notes || '',
@@ -64,11 +66,12 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
         name: university.name,
         major: university.major,
         country: university.country,
+        category: university.category || 'General',
         ieltsScore: university.ieltsScore,
         isAvailable: university.isAvailable,
         notes: university.notes || '',
     });
-  }, [university, form]);
+  }, [university, form, isOpen]);
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
 
@@ -115,7 +118,7 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
               name="major"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Major</FormLabel>
+                  <FormLabel>Major Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Computer Science" {...field} />
                   </FormControl>
@@ -148,18 +151,40 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
                 />
                 <FormField
                     control={form.control}
-                    name="ieltsScore"
+                    name="category"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>IELTS Score</FormLabel>
-                        <FormControl>
-                            <Input type="number" step="0.5" {...field} />
-                        </FormControl>
+                        <FormLabel>Category</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                <SelectItem value="General">General</SelectItem>
+                                <SelectItem value="MOHE">MOHE Approved</SelectItem>
+                                <SelectItem value="Merit">Merit List</SelectItem>
+                            </SelectContent>
+                        </Select>
                         <FormMessage />
                         </FormItem>
                     )}
                 />
             </div>
+            <FormField
+                control={form.control}
+                name="ieltsScore"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>IELTS Score</FormLabel>
+                    <FormControl>
+                        <Input type="number" step="0.5" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+            />
             <FormField
                 control={form.control}
                 name="notes"

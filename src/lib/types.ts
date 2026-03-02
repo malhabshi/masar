@@ -357,6 +357,8 @@ export interface NotificationTemplate {
   updatedBy: string;
 }
 
+export type UniversityCategory = 'MOHE' | 'Merit' | 'General';
+
 export interface ApprovedUniversity {
   id: string;
   name: string;
@@ -365,6 +367,7 @@ export interface ApprovedUniversity {
   ieltsScore: number;
   isAvailable: boolean;
   notes?: string;
+  category?: UniversityCategory;
 }
 
 export interface AcademicTerm {

@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { ApprovedUniversity, Country } from '@/lib/types';
+import type { ApprovedUniversity, Country, UniversityCategory } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +35,7 @@ export function ApprovedUniversitiesView() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
   const [countryFilter, setCountryFilter] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<UniversityCategory | 'all'>('all');
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -50,7 +50,6 @@ export function ApprovedUniversitiesView() {
   const filteredUniversities = useMemo(() => {
     if (!universitiesData) return [];
     
-    // 1. Filter the list
     const results = universitiesData.filter(uni => {
       const searchLower = debouncedSearchQuery.toLowerCase();
       const matchesSearch =
@@ -64,12 +63,13 @@ export function ApprovedUniversitiesView() {
         (availabilityFilter === 'available' && uni.isAvailable) ||
         (availabilityFilter === 'unavailable' && !uni.isAvailable);
 
-      return matchesSearch && matchesCountry && matchesAvailability;
+      const matchesCategory = categoryFilter === 'all' || uni.category === categoryFilter;
+
+      return matchesSearch && matchesCountry && matchesAvailability && matchesCategory;
     });
 
-    // 2. Sort the filtered list A-Z by University Name
     return results.sort((a, b) => a.name.localeCompare(b.name));
-  }, [debouncedSearchQuery, countryFilter, availabilityFilter, universitiesData]);
+  }, [debouncedSearchQuery, countryFilter, availabilityFilter, categoryFilter, universitiesData]);
 
   const canManage = user?.role === 'admin' || user?.role === 'department';
 
@@ -80,16 +80,11 @@ export function ApprovedUniversitiesView() {
 
     toast({
         title: "University Added",
-        description: `${newUniversity.name} has been added to the list.`
+        description: `${newUniversity.name} (${newUniversity.major}) has been added.`
     });
 
-    const taskContent = `New approved university added: ${newUniversity.name} (${newUniversity.major}).`;
+    const taskContent = `New approved university added: ${newUniversity.name} (${newUniversity.major}). Category: ${newUniversity.category || 'General'}`;
     await sendTask(user.id, 'all', taskContent, 'system');
-
-    toast({
-      title: "Employees Notified",
-      description: "A notification has been sent to all employees about the new university."
-    });
   }, [user, toast]);
 
   const handleUpdateUniversity = useCallback(async (updatedUniversity: ApprovedUniversity) => {
@@ -101,9 +96,6 @@ export function ApprovedUniversitiesView() {
         title: "University Updated",
         description: `${updatedUniversity.name} has been updated.`
     });
-
-    const taskContent = `Approved university updated: ${updatedUniversity.name} (${updatedUniversity.major}). Please review the changes.`;
-    await sendTask(user.id, 'all', taskContent, 'system');
   }, [user, toast]);
 
   const handleDeleteUniversity = useCallback(async (id: string) => {
@@ -147,10 +139,10 @@ export function ApprovedUniversitiesView() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
             <CardTitle>Approved Universities</CardTitle>
-            <CardDescription>A list of universities that can be applied to.</CardDescription>
+            <CardDescription>A master list of universities approved by MOHE and the Merit scholarship list.</CardDescription>
         </div>
         {canManage && (
             <AddUniversityDialog onAddUniversity={handleAddUniversity}>
@@ -162,37 +154,46 @@ export function ApprovedUniversitiesView() {
         )}
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-4">
-            <div className="relative w-full md:max-w-sm">
+        <div className="flex flex-col space-y-4 mb-6">
+            <div className="relative w-full">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                     type="search"
-                    placeholder="Search by university or major..."
+                    placeholder="Search by university name or specific major..."
                     className="pl-8"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />
             </div>
-            <div className="flex gap-2 w-full md:w-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Select value={countryFilter} onValueChange={setCountryFilter}>
-                    <SelectTrigger className="w-full md:w-[180px]">
-                        <SelectValue placeholder="Filter by country" />
+                    <SelectTrigger>
+                        <SelectValue placeholder="All Countries" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Countries</SelectItem>
-                        {countries.map(c => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
+                        {countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as any)}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        <SelectItem value="MOHE">MOHE Only</SelectItem>
+                        <SelectItem value="Merit">Merit List Only</SelectItem>
+                        <SelectItem value="General">General Only</SelectItem>
                     </SelectContent>
                 </Select>
                 <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-                    <SelectTrigger className="w-full md:w-[180px]">
-                        <SelectValue placeholder="Filter by availability" />
+                    <SelectTrigger>
+                        <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
                         <SelectItem value="available">Available</SelectItem>
-                        <SelectItem value="unavailable">Unavailable</SelectItem>
+                        <SelectItem value="unavailable">Closed/Unavailable</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

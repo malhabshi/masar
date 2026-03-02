@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { ApprovedUniversity } from '@/lib/types';
-import { CheckCircle, XCircle, Loader2, Trash2 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck } from 'lucide-react';
 import { EditUniversityDialog } from './edit-university-dialog';
 import { Skeleton } from '../ui/skeleton';
 import {
@@ -25,6 +25,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface UniversitiesTableProps {
   universities: ApprovedUniversity[];
@@ -78,12 +79,24 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
           {universities.length > 0 ? (
             universities.map((uni) => (
               <TableRow key={uni.id}>
-                <TableCell className="font-medium">
+                <TableCell className="font-bold">
                   {uni.name}
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col">
-                    <span>{uni.major}</span>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{uni.major}</span>
+                        {uni.category === 'Merit' && (
+                            <Badge className="bg-yellow-500 hover:bg-yellow-600 text-black text-[9px] font-bold px-1.5 h-4 gap-1">
+                                <Star className="h-2 w-2 fill-current" /> MERIT
+                            </Badge>
+                        )}
+                        {uni.category === 'MOHE' && (
+                            <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-bold px-1.5 h-4 gap-1">
+                                <ShieldCheck className="h-2 w-2" /> MOHE
+                            </Badge>
+                        )}
+                    </div>
                     {uni.notes && (
                       <span className="text-[10px] text-muted-foreground italic line-clamp-1" title={uni.notes}>
                         {uni.notes}
@@ -92,9 +105,13 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{uni.country}</Badge>
+                  <Badge variant="outline" className="font-mono text-[10px]">{uni.country}</Badge>
                 </TableCell>
-                <TableCell>{uni.ieltsScore.toFixed(1)}</TableCell>
+                <TableCell>
+                    <Badge variant="secondary" className="font-mono">
+                        {uni.ieltsScore.toFixed(1)}
+                    </Badge>
+                </TableCell>
                 <TableCell>
                   {uni.isAvailable ? (
                     <CheckCircle className="h-5 w-5 text-success" />
@@ -139,7 +156,7 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={numColumns} className="h-24 text-center">
+              <TableCell colSpan={numColumns} className="h-24 text-center text-muted-foreground">
                 No universities match your filters.
               </TableCell>
             </TableRow>
