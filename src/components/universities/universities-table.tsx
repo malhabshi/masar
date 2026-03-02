@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { ApprovedUniversity } from '@/lib/types';
-import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck, GraduationCap } from 'lucide-react';
 import { EditUniversityDialog } from './edit-university-dialog';
 import { Skeleton } from '../ui/skeleton';
 import {
@@ -35,7 +35,7 @@ interface UniversitiesTableProps {
 }
 
 export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUniversity, isLoading }: UniversitiesTableProps) {
-  const numColumns = onUpdateUniversity ? 6 : 5;
+  const numColumns = onUpdateUniversity ? 7 : 6;
   
   if (isLoading) {
     return (
@@ -70,6 +70,7 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
             <TableHead>University</TableHead>
             <TableHead>Major</TableHead>
             <TableHead>Country</TableHead>
+            <TableHead>Entry Levels</TableHead>
             <TableHead>IELTS Score</TableHead>
             <TableHead>Available</TableHead>
             {onUpdateUniversity && <TableHead className="text-right">Actions</TableHead>}
@@ -106,6 +107,19 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="font-mono text-[10px]">{uni.country}</Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {(uni.entryLevels || []).length > 0 ? (
+                      uni.entryLevels?.map(level => (
+                        <Badge key={level} variant="secondary" className="text-[9px] px-1 h-4 whitespace-nowrap bg-primary/10 text-primary border-primary/20">
+                          {level}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic">Standard</span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                     <Badge variant="secondary" className="font-mono">

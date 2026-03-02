@@ -368,6 +368,7 @@ export interface ApprovedUniversity {
   isAvailable: boolean;
   notes?: string;
   category?: UniversityCategory;
+  entryLevels?: string[]; // Added: Foundation, First Year, Bachelor Degree
 }
 
 export interface AcademicTerm {

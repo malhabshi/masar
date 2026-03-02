@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -26,15 +27,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
 import type { ApprovedUniversity, Country } from '@/lib/types';
+
+const ENTRY_LEVELS = ['Foundation', 'First Year', 'Bachelor Degree'];
 
 const formSchema = z.object({
   name: z.string().min(3, { message: 'University name is required.' }),
   major: z.string().min(3, { message: 'Major is required.' }),
   country: z.enum(['UK', 'USA', 'Australia', 'New Zealand']),
   category: z.enum(['MOHE', 'Merit', 'General']),
+  entryLevels: z.array(z.string()).default([]),
   ieltsScore: z.coerce.number().min(0).max(9),
   isAvailable: z.boolean().default(false),
   notes: z.string().optional(),
@@ -56,6 +60,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
       major: '',
       country: 'UK',
       category: 'General',
+      entryLevels: [],
       ieltsScore: 6.5,
       isAvailable: true,
       notes: '',
@@ -77,7 +82,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Approved University</DialogTitle>
           <DialogDescription>
@@ -141,7 +146,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
                     name="category"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Category</FormLabel>
+                        <FormLabel>Scholarship Type</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                             <SelectTrigger>
@@ -154,11 +159,61 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
                                 <SelectItem value="Merit">Merit List</SelectItem>
                             </SelectContent>
                         </Select>
+                        <FormDescription>Choose if MOHE or Merit.</FormDescription>
                         <FormMessage />
                         </FormItem>
                     )}
                 />
             </div>
+
+            <FormField
+              control={form.control}
+              name="entryLevels"
+              render={() => (
+                <FormItem>
+                  <div className="mb-4">
+                    <FormLabel>Allowed Entry Levels</FormLabel>
+                    <FormDescription>Select one or more available entry points.</FormDescription>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {ENTRY_LEVELS.map((level) => (
+                      <FormField
+                        key={level}
+                        control={form.control}
+                        name="entryLevels"
+                        render={({ field }) => {
+                          return (
+                            <FormItem
+                              key={level}
+                              className="flex flex-row items-start space-x-3 space-y-0 p-2 border rounded-md hover:bg-muted/50 cursor-pointer"
+                            >
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value?.includes(level)}
+                                  onCheckedChange={(checked) => {
+                                    return checked
+                                      ? field.onChange([...field.value, level])
+                                      : field.onChange(
+                                          field.value?.filter(
+                                            (value) => value !== level
+                                          )
+                                        )
+                                  }}
+                                />
+                              </FormControl>
+                              <FormLabel className="text-sm font-normal cursor-pointer w-full">
+                                {level}
+                              </FormLabel>
+                            </FormItem>
+                          )
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
                 control={form.control}
