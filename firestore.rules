@@ -91,11 +91,9 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Allow listing for all authenticated users to prevent dashboard fetch failures.
-      // Privacy is enforced at the individual document 'get' level.
+      // Abdullah Fix: Ensure admins and department users can list and get tasks reliably.
       allow list: if isSignedIn();
       
-      // Enforce security for reading individual task details
       allow get: if isSignedIn() && (
         isAdmin() ||
         request.auth.uid == resource.data.authorId ||

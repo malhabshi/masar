@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -48,7 +49,9 @@ export function ApprovedUniversitiesView() {
 
   const filteredUniversities = useMemo(() => {
     if (!universitiesData) return [];
-    return universitiesData.filter(uni => {
+    
+    // 1. Filter the list
+    const results = universitiesData.filter(uni => {
       const searchLower = debouncedSearchQuery.toLowerCase();
       const matchesSearch =
         uni.name.toLowerCase().includes(searchLower) ||
@@ -63,6 +66,9 @@ export function ApprovedUniversitiesView() {
 
       return matchesSearch && matchesCountry && matchesAvailability;
     });
+
+    // 2. Sort the filtered list A-Z by University Name
+    return results.sort((a, b) => a.name.localeCompare(b.name));
   }, [debouncedSearchQuery, countryFilter, availabilityFilter, universitiesData]);
 
   const canManage = user?.role === 'admin' || user?.role === 'department';
