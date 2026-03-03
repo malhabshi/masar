@@ -384,6 +384,71 @@ export async function updateApplicationStatus(studentId: string, universityName:
   }
 }
 
+export async function deleteApplication(studentId: string, university: string, major: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+    const studentData = studentDoc.data() as Student;
+    const updatedApplications = (studentData.applications || []).filter(
+      app => !(app.university === university && app.major === major)
+    );
+
+    const updates: any = { 
+      applications: updatedApplications,
+      lastActivityAt: new Date().toISOString()
+    };
+
+    // If we deleted the final choice, clear it
+    if (studentData.finalChoiceUniversity === university) {
+      updates.finalChoiceUniversity = FieldValue.delete();
+    }
+
+    await studentRef.update(updates);
+
+    return { success: true, message: 'Application deleted successfully.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function updateApplicationMajor(studentId: string, university: string, oldMajor: string, newMajor: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+    const studentData = studentDoc.data() as Student;
+    const appIndex = studentData.applications.findIndex(
+      app => app.university === university && app.major === oldMajor
+    );
+
+    if (appIndex === -1) return { success: false, message: 'Application not found.' };
+
+    const updatedApplications = [...studentData.applications];
+    updatedApplications[appIndex].major = newMajor;
+    updatedApplications[appIndex].updatedAt = new Date().toISOString();
+
+    await studentRef.update({ 
+      applications: updatedApplications,
+      lastActivityAt: new Date().toISOString()
+    });
+
+    return { success: true, message: 'Major updated successfully.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
 export async function updateStudentPipelineStatus(studentId: string, status: string, userName: string, studentName: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
