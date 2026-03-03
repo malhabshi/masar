@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, RequestType, Application } from '@/lib/types';
+import type { Student, RequestType, Application, ApprovedUniversity, Country } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -11,13 +11,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Calendar as CalendarIcon, GraduationCap } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search } from 'lucide-react';
 import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { Badge } from '../ui/badge';
+import { useCollection } from '@/firebase/client';
+import { useState, useMemo } from 'react';
 
 interface DynamicTaskFormProps {
   student: Student;
@@ -36,7 +38,13 @@ const IELTS_COURSE_OPTIONS = [
 
 export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSubmitting }: DynamicTaskFormProps) {
   const config = requestType.specialConfig;
+  const [uniSearch, setUniSearch] = useState('');
   
+  // Fetch master universities list
+  const { data: globalUniversities, isLoading: unisLoading } = useCollection<ApprovedUniversity>(
+    config?.useApprovedUniversitiesList ? 'approved_universities' : ''
+  );
+
   // Dynamic Schema Builder
   const schemaFields: any = {
     notes: z.string().optional(),
@@ -74,9 +82,14 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     }
   }
 
-  // University Selection Logic
   if (config?.requireUniversitySelection) {
     schemaFields.selectedApplicationId = z.string({ required_error: 'Please select a university application' }).min(1, 'Selection is required');
+    schemaFields.selectedApplicationDetails = z.any().optional();
+  }
+
+  if (config?.useApprovedUniversitiesList) {
+    schemaFields.selectedGlobalUniversityId = z.string({ required_error: 'Please select a university from the list' }).min(1, 'Selection is required');
+    schemaFields.selectedGlobalUniversityDetails = z.any().optional();
   }
 
   const formSchema = z.object(schemaFields).refine(data => {
@@ -100,6 +113,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       courseOption: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
       selectedApplicationId: '',
+      selectedGlobalUniversityId: '',
     },
   });
 
@@ -115,16 +129,30 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     }
   };
 
-  const handleApplicationSelect = (app: Application) => {
-    // We store a combined string as the ID for simple identification in the radio group
-    const appId = `${app.university}|${app.major}`;
-    form.setValue('selectedApplicationId', appId);
-    // Also store formatted details for the server action
-    form.setValue('selectedApplicationDetails', {
-        university: app.university,
-        major: app.major,
-        country: app.country,
-        status: app.status
+  const filteredGlobalUnis = useMemo(() => {
+    if (!globalUniversities) return [];
+    let list = globalUniversities.filter(u => u.isAvailable);
+    
+    // Country Filter from Config
+    if (config?.countryFilter && config.countryFilter !== 'all') {
+      list = list.filter(u => u.country === config.countryFilter);
+    }
+
+    if (uniSearch) {
+      const q = uniSearch.toLowerCase();
+      list = list.filter(u => u.name.toLowerCase().includes(q) || u.major.toLowerCase().includes(q));
+    }
+
+    return list.slice(0, 50); // Limit display for performance
+  }, [globalUniversities, uniSearch, config?.countryFilter]);
+
+  const handleGlobalUniSelect = (uni: ApprovedUniversity) => {
+    form.setValue('selectedGlobalUniversityId', uni.id);
+    form.setValue('selectedGlobalUniversityDetails', {
+      name: uni.name,
+      major: uni.major,
+      country: uni.country,
+      category: uni.category
     });
   };
 
@@ -166,7 +194,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           )}
         </div>
 
-        {/* University Selection Section */}
+        {/* Existing Application Selection */}
         {config?.requireUniversitySelection && (
           <div className="space-y-4 border-t pt-4">
             <FormLabel className="text-base font-bold flex items-center gap-2">
@@ -184,7 +212,14 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                         field.onChange(val);
                         const [uni, major] = val.split('|');
                         const app = student.applications.find(a => a.university === uni && a.major === major);
-                        if (app) handleApplicationSelect(app);
+                        if (app) {
+                          form.setValue('selectedApplicationDetails', {
+                            university: app.university,
+                            major: app.major,
+                            country: app.country,
+                            status: app.status
+                          });
+                        }
                       }}
                       value={field.value}
                       className="grid grid-cols-1 gap-3"
@@ -222,7 +257,73 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           </div>
         )}
 
-        {/* Exam Type Selection (If multiple) */}
+        {/* Master Universities List Selection */}
+        {config?.useApprovedUniversitiesList && (
+          <div className="space-y-4 border-t pt-4">
+            <FormLabel className="text-base font-bold flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                Choose School & Major from Approved List *
+            </FormLabel>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search by school name or major..." 
+                className="pl-8"
+                value={uniSearch}
+                onChange={(e) => setUniSearch(e.target.value)}
+              />
+            </div>
+            
+            <FormField
+              control={form.control}
+              name="selectedGlobalUniversityId"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormControl>
+                    {unisLoading ? (
+                      <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                    ) : (
+                      <RadioGroup
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          const uni = globalUniversities?.find(u => u.id === val);
+                          if (uni) handleGlobalUniSelect(uni);
+                        }}
+                        value={field.value}
+                        className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto p-1"
+                      >
+                        {filteredGlobalUnis.length > 0 ? (
+                          filteredGlobalUnis.map((uni) => (
+                            <FormItem key={uni.id} className="flex items-center space-x-3 space-y-0 border p-3 rounded-lg bg-background hover:bg-muted/20 transition-colors cursor-pointer">
+                              <FormControl><RadioGroupItem value={uni.id} /></FormControl>
+                              <FormLabel className="cursor-pointer flex-1 flex items-center justify-between">
+                                <div>
+                                  <span className="block text-sm font-bold">{uni.name}</span>
+                                  <span className="block text-xs text-muted-foreground">{uni.major}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-[10px]">{uni.country}</Badge>
+                                  {uni.category !== 'General' && <Badge className="text-[10px] bg-yellow-500 text-black">{uni.category}</Badge>}
+                                </div>
+                              </FormLabel>
+                            </FormItem>
+                          ))
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground italic border border-dashed rounded-lg">
+                            No matching universities found{config.countryFilter !== 'all' ? ` in ${config.countryFilter}` : ''}.
+                          </div>
+                        )}
+                      </RadioGroup>
+                    )}
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
+        {/* Exam Type Selection */}
         {requestType.isSpecialTask && config?.examTypes && config.examTypes.length > 1 && (
           <FormField
             control={form.control}
@@ -231,19 +332,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
               <FormItem className="space-y-3">
                 <FormLabel>Select Exam/Course Category *</FormLabel>
                 <FormControl>
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    className="flex flex-col space-y-1"
-                  >
+                  <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
                     {config.examTypes.map((type: string) => (
                       <FormItem key={type} className="flex items-center space-x-3 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value={type} />
-                        </FormControl>
-                        <FormLabel className="font-normal uppercase">
-                          {type.replace('_', ' ')}
-                        </FormLabel>
+                        <FormControl><RadioGroupItem value={type} /></FormControl>
+                        <FormLabel className="font-normal uppercase">{type.replace('_', ' ')}</FormLabel>
                       </FormItem>
                     ))}
                   </RadioGroup>
@@ -267,11 +360,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                       <FormItem>
                         <FormLabel>IELTS Type *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select subtype" />
-                            </SelectTrigger>
-                          </FormControl>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select subtype" /></SelectTrigger></FormControl>
                           <SelectContent>
                             <SelectItem value="academic">Academic</SelectItem>
                             <SelectItem value="ukvi">UKVI</SelectItem>
@@ -282,7 +371,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     )}
                   />
                 )}
-
                 {config.ielts?.showDates && (
                   <FormField
                     control={form.control}
@@ -293,13 +381,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
+                              <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
                                 {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -326,7 +408,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     )}
                   />
                 )}
-
                 {config.ielts?.showAmount && (
                   <FormField
                     control={form.control}
@@ -334,9 +415,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Exam Price ({config.ielts.amountCurrency || 'KWD'}) *</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                        </FormControl>
+                        <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -374,7 +453,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 )}
               />
             </div>
-
             <div className="space-y-3">
               <FormLabel>Select Section to Retake *</FormLabel>
               <FormField
@@ -383,16 +461,10 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="grid grid-cols-2 md:grid-cols-4 gap-4"
-                      >
+                      <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {['Listening', 'Reading', 'Writing', 'Speaking'].map((section) => (
                           <FormItem key={section} className="flex items-center space-x-2 space-y-0 border p-3 rounded-md">
-                            <FormControl>
-                              <RadioGroupItem value={section} />
-                            </FormControl>
+                            <FormControl><RadioGroupItem value={section} /></FormControl>
                             <FormLabel className="font-medium cursor-pointer">{section}</FormLabel>
                           </FormItem>
                         ))}
@@ -403,7 +475,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 )}
               />
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
@@ -421,21 +492,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < addDays(startOfDay(new Date()), 3)}
-                          initialFocus
-                        />
+                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < addDays(startOfDay(new Date()), 3)} initialFocus />
                       </PopoverContent>
                     </Popover>
-                    <FormDescription>Min 3 days from today.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="preferredTime"
@@ -457,37 +520,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="originalExamDate"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Original Exam Date *</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                          {field.value ? format(field.value, "PPP") : <span>Pick original date</span>}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => date > startOfDay(new Date())}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormDescription>Must be in the past.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </div>
         )}
 
@@ -501,16 +533,10 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 <FormItem className="space-y-3">
                   <FormLabel>Select Course Option *</FormLabel>
                   <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                    >
+                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {IELTS_COURSE_OPTIONS.map((option) => (
                         <FormItem key={option} className="flex items-center space-x-3 space-y-0 border p-4 rounded-lg bg-muted/20">
-                          <FormControl>
-                            <RadioGroupItem value={option} />
-                          </FormControl>
+                          <FormControl><RadioGroupItem value={option} /></FormControl>
                           <FormLabel className="font-medium cursor-pointer">{option}</FormLabel>
                         </FormItem>
                       ))}
@@ -520,7 +546,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 </FormItem>
               )}
             />
-
             <FormField
               control={form.control}
               name="courseStartDate"
@@ -537,20 +562,9 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                       </FormControl>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => {
-                          const today = startOfDay(new Date());
-                          // Disable if not Sunday (0) OR if in the past
-                          return date.getDay() !== 0 || date < today;
-                        }}
-                        initialFocus
-                      />
+                      <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date.getDay() !== 0 || date < startOfDay(new Date())} initialFocus />
                     </PopoverContent>
                   </Popover>
-                  <FormDescription>Courses start every Sunday. Please select a future Sunday.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -563,29 +577,18 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           <div className="space-y-4 border-t pt-4">
             <div className="flex items-center justify-between">
               <FormLabel>Select Documents</FormLabel>
-              {config.documents.allowUpload && (
-                <UploadDocumentDialog student={student} />
-              )}
+              {config.documents.allowUpload && <UploadDocumentDialog student={student} />}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 border rounded-md bg-muted/10">
               {student.documents?.length > 0 ? (
                 student.documents.map((doc) => (
                   <div key={doc.id} className="flex items-center space-x-3 p-2 rounded hover:bg-muted/50 transition-colors">
-                    <Checkbox 
-                      id={`doc-${doc.id}`} 
-                      checked={watchDocs.includes(doc.id)} 
-                      onCheckedChange={() => handleDocToggle(doc.id)}
-                    />
-                    <label htmlFor={`doc-${doc.id}`} className="text-xs truncate cursor-pointer flex-1">
-                      {doc.name}
-                    </label>
+                    <Checkbox id={`doc-${doc.id}`} checked={watchDocs.includes(doc.id)} onCheckedChange={() => handleDocToggle(doc.id)} />
+                    <label htmlFor={`doc-${doc.id}`} className="text-xs truncate cursor-pointer flex-1">{doc.name}</label>
                   </div>
                 ))
-              ) : (
-                <p className="text-xs text-muted-foreground col-span-2 text-center py-4">No documents available.</p>
-              )}
+              ) : <p className="text-xs text-muted-foreground col-span-2 text-center py-4">No documents available.</p>}
             </div>
-            <FormDescription>Select documents from the student profile to include with this request.</FormDescription>
           </div>
         )}
 
@@ -595,9 +598,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           render={({ field }) => (
             <FormItem className="border-t pt-4">
               <FormLabel>Additional Notes</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Any specific instructions or context..." {...field} />
-              </FormControl>
+              <FormControl><Textarea placeholder="Any specific instructions or context..." {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}

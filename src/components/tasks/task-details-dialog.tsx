@@ -34,7 +34,8 @@ import {
   MessageSquare,
   BellRing,
   Save,
-  Building2
+  Building2,
+  GraduationCap
 } from 'lucide-react';
 import type { Task, TaskStatus, User as UserType, Document as StudentDoc } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
@@ -79,7 +80,6 @@ export function TaskDetailsDialog({
     setIsClient(true);
   }, []);
 
-  // Sync local status if task prop changes (e.g. from real-time snapshot)
   useEffect(() => {
     setLocalStatus(task.status);
   }, [task.status, isOpen]);
@@ -87,7 +87,6 @@ export function TaskDetailsDialog({
   const author = userMap.get(task.authorId);
   const data = task.data || {};
   
-  // Real-time student lookup for existing documents
   const studentRef = useMemoFirebase(() => {
     if (!task.studentId) return null;
     return doc(firestore, 'students', task.studentId);
@@ -97,10 +96,8 @@ export function TaskDetailsDialog({
 
   const taskThread = useMemo(() => {
     const thread: any[] = [];
-    
     (task.replies || []).forEach(r => thread.push({ ...r, type: 'reply' }));
     (task.notifications || []).forEach(n => thread.push({ ...n, id: `notif-${n.timestamp}`, createdAt: n.timestamp, type: 'notif', content: n.message, authorId: n.fromId }));
-    
     return thread.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [task.replies, task.notifications]);
 
@@ -145,8 +142,8 @@ export function TaskDetailsDialog({
   };
 
   const hasStatusChanged = localStatus !== task.status;
-
   const selectedApp = data.selectedApplicationDetails;
+  const selectedGlobalUni = data.selectedGlobalUniversityDetails;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -194,12 +191,7 @@ export function TaskDetailsDialog({
                   ))}
                 </div>
                 {hasStatusChanged && (
-                  <Button 
-                    size="sm" 
-                    className="h-8 font-bold gap-2 animate-in fade-in slide-in-from-top-1 w-full"
-                    onClick={handleSaveStatus}
-                    disabled={isSavingStatus}
-                  >
+                  <Button size="sm" className="h-8 font-bold gap-2 animate-in fade-in slide-in-from-top-1 w-full" onClick={handleSaveStatus} disabled={isSavingStatus}>
                     {isSavingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                     Save Status
                   </Button>
@@ -210,19 +202,33 @@ export function TaskDetailsDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-5">
-          {/* Main Info Section */}
           <div className="lg:col-span-3 border-r overflow-y-auto p-6 space-y-8">
             {selectedApp && (
                 <section className="space-y-4">
                     <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
                         <Building2 className="h-5 w-5" /> 
-                        Targeted Application
+                        Existing Application Context
                     </h3>
                     <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 grid grid-cols-1 md:grid-cols-2 gap-4">
                         {renderDataField('University', selectedApp.university)}
                         {renderDataField('Major', selectedApp.major)}
                         {renderDataField('Country', selectedApp.country)}
                         {renderDataField('Current Status', selectedApp.status)}
+                    </div>
+                </section>
+            )}
+
+            {selectedGlobalUni && (
+                <section className="space-y-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                        <GraduationCap className="h-5 w-5" /> 
+                        Requested New school/major
+                    </h3>
+                    <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderDataField('New University', selectedGlobalUni.name)}
+                        {renderDataField('New Major', selectedGlobalUni.major)}
+                        {renderDataField('Country', selectedGlobalUni.country)}
+                        {renderDataField('Category', selectedGlobalUni.category)}
                     </div>
                 </section>
             )}
@@ -270,15 +276,11 @@ export function TaskDetailsDialog({
 
             {data.selectedDocuments && data.selectedDocuments.length > 0 && (
               <section className="space-y-4">
-                <h3 className="text-lg font-bold">Attached Student Documents</h3>
+                <h3 className="text-lg font-bold">Attached Documents</h3>
                 <div className="space-y-2">
                   {data.selectedDocuments.map((docId: string) => {
-                    if (isStudentLoading) {
-                      return <Skeleton key={docId} className="h-12 w-full rounded-md" />;
-                    }
-
+                    if (isStudentLoading) return <Skeleton key={docId} className="h-12 w-full rounded-md" />;
                     const docItem = student?.documents?.find((d: any) => d.id === docId);
-                    
                     if (docItem) {
                       return (
                         <div key={docId} className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors">
@@ -292,15 +294,9 @@ export function TaskDetailsDialog({
                         </div>
                       );
                     }
-
-                    // Fallback for deleted or missing documents (Fix for Issue #10)
                     return (
                       <div key={docId} className="flex items-center justify-between p-3 border border-destructive/20 bg-destructive/5 rounded-md text-destructive">
-                        <div className="flex items-center gap-3">
-                          <XCircle className="h-4 w-4" />
-                          <span className="text-xs font-medium italic">Document reference was deleted from profile</span>
-                        </div>
-                        <span className="text-[10px] font-mono opacity-50">{docId}</span>
+                        <div className="flex items-center gap-3"><XCircle className="h-4 w-4" /><span className="text-xs font-medium italic">Document missing from profile</span></div>
                       </div>
                     );
                   })}
@@ -309,36 +305,21 @@ export function TaskDetailsDialog({
             )}
           </div>
 
-          {/* Workflow & Thread Section */}
           <div className="lg:col-span-2 bg-muted/5 flex flex-col">
             <div className="p-4 border-b space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Status / Seen</h3>
-                {isClient && task.viewedBy && task.viewedBy.length > 0 && (
-                  <div className="text-[10px] text-muted-foreground">
-                    Seen by {task.viewedBy[0].userName} - {formatDateTime(task.viewedBy[0].timestamp)}
-                  </div>
-                )}
-              </div>
+              <h3 className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Workflow</h3>
               <div className="flex gap-2">
                 <UploadDocumentDialog student={student || { id: task.studentId }} />
               </div>
             </div>
-
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-6">
                 {taskThread.map((item: any) => {
                   const author = userMap.get(item.authorId);
                   const isNotif = item.type === 'notif';
                   return (
-                    <div key={item.id} className={cn(
-                      "flex items-start gap-3",
-                      isNotif && "bg-blue-50/50 p-3 rounded-lg border border-blue-100"
-                    )}>
-                      <Avatar className="h-7 w-7 mt-1">
-                        <AvatarImage src={author?.avatarUrl} />
-                        <AvatarFallback>{author?.name?.charAt(0) || '?'}</AvatarFallback>
-                      </Avatar>
+                    <div key={item.id} className={cn("flex items-start gap-3", isNotif && "bg-blue-50/50 p-3 rounded-lg border border-blue-100")}>
+                      <Avatar className="h-7 w-7 mt-1"><AvatarImage src={author?.avatarUrl} /><AvatarFallback>{author?.name?.charAt(0) || '?'}</AvatarFallback></Avatar>
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold">{author?.name || 'System'}</span>
@@ -352,42 +333,20 @@ export function TaskDetailsDialog({
                     </div>
                   );
                 })}
-                {taskThread.length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                    <p className="text-xs font-medium">No updates in thread.</p>
-                  </div>
-                )}
               </div>
             </ScrollArea>
-
             <div className="p-4 border-t space-y-4 bg-background">
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold flex items-center gap-1.5"><BellRing className="h-3 w-3" /> NOTIFY EMPLOYEE</Label>
+                <Label className="text-[10px] font-bold flex items-center gap-1.5 uppercase"><BellRing className="h-3 w-3" /> Quick Notification</Label>
                 <div className="flex gap-2">
-                  <Input 
-                    placeholder="Send a quick notification note..." 
-                    className="text-xs h-8"
-                    value={notifContent}
-                    onChange={(e) => setNotifContent(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleNotifClick()}
-                  />
-                  <Button size="sm" className="h-8" onClick={handleNotifClick} disabled={!notifContent.trim() || isSendingNotif}>
-                    {isSendingNotif ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                  </Button>
+                  <Input placeholder="Note for employee..." className="text-xs h-8" value={notifContent} onChange={(e) => setNotifContent(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNotifClick()} />
+                  <Button size="sm" className="h-8" onClick={handleNotifClick} disabled={!notifContent.trim() || isSendingNotif}>{isSendingNotif ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}</Button>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold flex items-center gap-1.5"><MessageSquare className="h-3 w-3" /> ADD COMMENT</Label>
-                <Textarea 
-                  placeholder="Type a internal reply..." 
-                  className="text-xs min-h-[60px]"
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
-                />
-                <Button size="sm" className="w-full h-8" onClick={handleReplyClick} disabled={!replyContent.trim()}>
-                  Post Comment
-                </Button>
+                <Label className="text-[10px] font-bold flex items-center gap-1.5 uppercase"><MessageSquare className="h-3 w-3" /> Add Internal Comment</Label>
+                <Textarea placeholder="Type comment..." className="text-xs min-h-[60px]" value={replyContent} onChange={(e) => setReplyContent(e.target.value)} />
+                <Button size="sm" className="w-full h-8" onClick={handleReplyClick} disabled={!replyContent.trim()}>Post</Button>
               </div>
             </div>
           </div>

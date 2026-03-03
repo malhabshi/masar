@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Separator } from '../ui/separator';
 
 export function SpecialTaskConfigSection({ form }: { form: any }) {
   const watchExamTypes = form.watch('specialConfig.examTypes') || [];
@@ -39,13 +40,13 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
           </Card>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-sm">Logic & Student Info</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Logic & Selection</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <FormField control={form.control} name="specialConfig.requireUniversitySelection" render={({ field }) => (
                 <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                   <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel className="text-xs">Require University Application Selection</FormLabel>
+                    <FormLabel className="text-xs">Select from existing student applications</FormLabel>
                     <FormDescription className="text-[10px]">Employee must pick one of the student's existing applications.</FormDescription>
                   </div>
                 </FormItem>
@@ -53,8 +54,61 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
               
               <Separator className="my-2" />
 
+              <FormField control={form.control} name="specialConfig.useApprovedUniversitiesList" render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-xs font-bold text-primary">Use Master Universities List</FormLabel>
+                    <FormDescription className="text-[10px]">Employee picks a new school and major from the master Approved Universities list.</FormDescription>
+                  </div>
+                </FormItem>
+              )} />
+
+              {form.watch('specialConfig.useApprovedUniversitiesList') && (
+                <FormField control={form.control} name="specialConfig.countryFilter" render={({ field }) => (
+                  <FormItem className="pl-7">
+                    <FormLabel className="text-[10px] font-bold uppercase">Filter list by Country</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value || 'all'}>
+                      <FormControl>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Select country" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="all">All Countries</SelectItem>
+                        <SelectItem value="UK">United Kingdom</SelectItem>
+                        <SelectItem value="USA">USA</SelectItem>
+                        <SelectItem value="Australia">Australia</SelectItem>
+                        <SelectItem value="New Zealand">New Zealand</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )} />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Student Data Fields</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
               {['pullName', 'pullEmail', 'pullPhone', 'passportNameField'].map((f) => (
                 <FormField key={f} control={form.control} name={`specialConfig.studentInfo.${f}`} render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                    <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormLabel className="text-xs">{f.replace(/([A-Z])/g, ' $1').trim()}</FormLabel>
+                  </FormItem>
+                )} />
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Document Selection</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4">
+              {['allowSelection', 'requireAtLeastOne', 'allowUpload'].map((f) => (
+                <FormField key={f} control={form.control} name={`specialConfig.documents.${f}`} render={({ field }) => (
                   <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                     <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
                     <FormLabel className="text-xs">{f.replace(/([A-Z])/g, ' $1').trim()}</FormLabel>
@@ -166,23 +220,7 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
             </CardContent>
           </Card>
         )}
-
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Document Selection</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {['allowSelection', 'requireAtLeastOne', 'allowUpload'].map((f) => (
-              <FormField key={f} control={form.control} name={`specialConfig.documents.${f}`} render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                  <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
-                  <FormLabel className="text-xs">{f.replace(/([A-Z])/g, ' $1').trim()}</FormLabel>
-                </FormItem>
-              )} />
-            ))}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
 }
-
-import { Separator } from '../ui/separator';
