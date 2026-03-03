@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useFormContext } from 'react-hook-form';
@@ -40,8 +39,20 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
           </Card>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-sm">Student Info to Auto-Pull</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Logic & Student Info</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <FormField control={form.control} name="specialConfig.requireUniversitySelection" render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-xs">Require University Application Selection</FormLabel>
+                    <FormDescription className="text-[10px]">Employee must pick one of the student's existing applications.</FormDescription>
+                  </div>
+                </FormItem>
+              )} />
+              
+              <Separator className="my-2" />
+
               {['pullName', 'pullEmail', 'pullPhone', 'passportNameField'].map((f) => (
                 <FormField key={f} control={form.control} name={`specialConfig.studentInfo.${f}`} render={({ field }) => (
                   <FormItem className="flex flex-row items-center space-x-3 space-y-0">
@@ -173,3 +184,5 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
     </div>
   );
 }
+
+import { Separator } from '../ui/separator';

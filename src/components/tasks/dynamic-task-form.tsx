@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, RequestType } from '@/lib/types';
+import type { Student, RequestType, Application } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -11,12 +11,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, GraduationCap } from 'lucide-react';
 import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
+import { Badge } from '../ui/badge';
 
 interface DynamicTaskFormProps {
   student: Student;
@@ -73,6 +74,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     }
   }
 
+  // University Selection Logic
+  if (config?.requireUniversitySelection) {
+    schemaFields.selectedApplicationId = z.string({ required_error: 'Please select a university application' }).min(1, 'Selection is required');
+  }
+
   const formSchema = z.object(schemaFields).refine(data => {
     if (data.examType === 'ielts' && config?.ielts) {
       if (config.ielts.showSubtypes && !data.ieltsSubtype) return false;
@@ -93,6 +99,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       retakeSection: undefined,
       courseOption: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
+      selectedApplicationId: '',
     },
   });
 
@@ -106,6 +113,19 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     } else {
       form.setValue('selectedDocuments', [...current, docId]);
     }
+  };
+
+  const handleApplicationSelect = (app: Application) => {
+    // We store a combined string as the ID for simple identification in the radio group
+    const appId = `${app.university}|${app.major}`;
+    form.setValue('selectedApplicationId', appId);
+    // Also store formatted details for the server action
+    form.setValue('selectedApplicationDetails', {
+        university: app.university,
+        major: app.major,
+        country: app.country,
+        status: app.status
+    });
   };
 
   return (
@@ -146,6 +166,62 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           )}
         </div>
 
+        {/* University Selection Section */}
+        {config?.requireUniversitySelection && (
+          <div className="space-y-4 border-t pt-4">
+            <FormLabel className="text-base font-bold flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-primary" />
+                Select Targeted University Application *
+            </FormLabel>
+            <FormField
+              control={form.control}
+              name="selectedApplicationId"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={(val) => {
+                        field.onChange(val);
+                        const [uni, major] = val.split('|');
+                        const app = student.applications.find(a => a.university === uni && a.major === major);
+                        if (app) handleApplicationSelect(app);
+                      }}
+                      value={field.value}
+                      className="grid grid-cols-1 gap-3"
+                    >
+                      {student.applications && student.applications.length > 0 ? (
+                        student.applications.map((app, idx) => (
+                          <FormItem key={idx} className="flex items-center space-x-3 space-y-0 border p-4 rounded-lg bg-background hover:bg-muted/20 transition-colors cursor-pointer">
+                            <FormControl>
+                              <RadioGroupItem value={`${app.university}|${app.major}`} />
+                            </FormControl>
+                            <FormLabel className="font-medium cursor-pointer flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                              <div>
+                                <span className="block text-sm font-bold">{app.university}</span>
+                                <span className="block text-xs text-muted-foreground">{app.major}</span>
+                              </div>
+                              <div className="flex items-center gap-2 md:justify-end">
+                                <Badge variant="outline" className="text-[10px] uppercase font-mono">{app.country}</Badge>
+                                <Badge variant="secondary" className="text-[10px] uppercase">{app.status}</Badge>
+                              </div>
+                            </FormLabel>
+                          </FormItem>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 border rounded-lg border-dashed bg-red-50 text-red-600">
+                            <p className="text-sm font-bold">No active applications found for this student.</p>
+                            <p className="text-xs mt-1">Please add a university application to the profile first.</p>
+                        </div>
+                      )}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
         {/* Exam Type Selection (If multiple) */}
         {requestType.isSpecialTask && config?.examTypes && config.examTypes.length > 1 && (
           <FormField
@@ -179,9 +255,9 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         )}
 
         {/* IELTS / TOEFL Logic */}
-        {(watchExamType === 'ielts' || watchExamType === 'toefl') && (
+        {(watchExamType === 'ielts' || watchExamType === 'toefl') && config && (
           <div className="space-y-4 border-t pt-4 animate-in fade-in">
-            {watchExamType === 'ielts' && config && (
+            {watchExamType === 'ielts' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {config.ielts?.showSubtypes && (
                   <FormField

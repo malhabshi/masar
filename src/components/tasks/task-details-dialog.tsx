@@ -33,7 +33,8 @@ import {
   ExternalLink,
   MessageSquare,
   BellRing,
-  Save
+  Save,
+  Building2
 } from 'lucide-react';
 import type { Task, TaskStatus, User as UserType, Document as StudentDoc } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
@@ -145,6 +146,8 @@ export function TaskDetailsDialog({
 
   const hasStatusChanged = localStatus !== task.status;
 
+  const selectedApp = data.selectedApplicationDetails;
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[95vh] p-0 flex flex-col overflow-hidden">
@@ -209,6 +212,21 @@ export function TaskDetailsDialog({
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-5">
           {/* Main Info Section */}
           <div className="lg:col-span-3 border-r overflow-y-auto p-6 space-y-8">
+            {selectedApp && (
+                <section className="space-y-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                        <Building2 className="h-5 w-5" /> 
+                        Targeted Application
+                    </h3>
+                    <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderDataField('University', selectedApp.university)}
+                        {renderDataField('Major', selectedApp.major)}
+                        {renderDataField('Country', selectedApp.country)}
+                        {renderDataField('Current Status', selectedApp.status)}
+                    </div>
+                </section>
+            )}
+
             <section className="space-y-4">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" /> 

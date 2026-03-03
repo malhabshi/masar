@@ -251,6 +251,7 @@ export interface SpecialTaskConfig {
     showOptions: boolean;
     showSundaysOnly: boolean;
   };
+  requireUniversitySelection?: boolean;
   studentInfo: {
     pullName: boolean;
     pullEmail: boolean;
