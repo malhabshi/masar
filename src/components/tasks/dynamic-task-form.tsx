@@ -131,19 +131,26 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
   const filteredGlobalUnis = useMemo(() => {
     if (!globalUniversities) return [];
-    let list = globalUniversities.filter(u => u.isAvailable);
     
-    // Country Filter from Config
+    // Start with universities from the correct country (if filtered)
+    let list = globalUniversities;
+    
     if (config?.countryFilter && config.countryFilter !== 'all') {
       list = list.filter(u => u.country === config.countryFilter);
     }
 
+    // Apply searchable keywords fuzzy logic
     if (uniSearch) {
-      const q = uniSearch.toLowerCase();
-      list = list.filter(u => u.name.toLowerCase().includes(q) || u.major.toLowerCase().includes(q));
+      const searchWords = uniSearch.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      list = list.filter(u => {
+        const uName = (u.name || '').toLowerCase();
+        const uMajor = (u.major || '').toLowerCase();
+        return searchWords.every(word => uName.includes(word) || uMajor.includes(word));
+      });
     }
 
-    return list.slice(0, 50); // Limit display for performance
+    // Sort by name
+    return list.sort((a,b) => (a.name || '').localeCompare(b.name || '')).slice(0, 300); // Higher limit
   }, [globalUniversities, uniSearch, config?.countryFilter]);
 
   const handleGlobalUniSelect = (uni: ApprovedUniversity) => {
@@ -304,6 +311,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                                 <div className="flex items-center gap-2">
                                   <Badge variant="outline" className="text-[10px]">{uni.country}</Badge>
                                   {uni.category !== 'General' && <Badge className="text-[10px] bg-yellow-500 text-black">{uni.category}</Badge>}
+                                  {!uni.isAvailable && <Badge variant="destructive" className="text-[10px]">CLOSED</Badge>}
                                 </div>
                               </FormLabel>
                             </FormItem>

@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle, Search, Loader2 } from 'lucide-react';
+import { PlusCircle, Search, Loader2, X } from 'lucide-react';
 import { UniversitiesTable } from '@/components/universities/universities-table';
 import { AddUniversityDialog } from '@/components/universities/add-university-dialog';
 import { sendTask, deleteUniversity } from '@/lib/actions';
@@ -47,14 +47,34 @@ export function ApprovedUniversitiesView() {
     };
   }, [searchQuery]);
 
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setCountryFilter('all');
+    setAvailabilityFilter('all');
+    setCategoryFilter('all');
+  };
+
+  const isFiltered = searchQuery !== '' || countryFilter !== 'all' || availabilityFilter !== 'all' || categoryFilter !== 'all';
+
   const filteredUniversities = useMemo(() => {
     if (!universitiesData) return [];
     
+    // Split search query into individual keywords for "fuzzy" multi-field matching
+    const searchWords = debouncedSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+
     const results = universitiesData.filter(uni => {
-      const searchLower = debouncedSearchQuery.toLowerCase();
-      const matchesSearch =
-        uni.name.toLowerCase().includes(searchLower) ||
-        uni.major.toLowerCase().includes(searchLower);
+      const uniName = (uni.name || '').toLowerCase();
+      const uniMajor = (uni.major || '').toLowerCase();
+      const uniCountry = (uni.country || '').toLowerCase();
+      const uniCategory = (uni.category || '').toLowerCase();
+
+      // Check if all keywords are present in any of the primary fields
+      const matchesSearch = searchWords.every(word => 
+        uniName.includes(word) || 
+        uniMajor.includes(word) || 
+        uniCountry.includes(word) || 
+        uniCategory.includes(word)
+      );
 
       const matchesCountry = countryFilter === 'all' || uni.country === countryFilter;
       
@@ -68,7 +88,12 @@ export function ApprovedUniversitiesView() {
       return matchesSearch && matchesCountry && matchesAvailability && matchesCategory;
     });
 
-    return results.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort: Alphabetical by Name, then Major
+    return results.sort((a, b) => {
+        const nameCompare = (a.name || '').localeCompare(b.name || '');
+        if (nameCompare !== 0) return nameCompare;
+        return (a.major || '').localeCompare(b.major || '');
+    });
   }, [debouncedSearchQuery, countryFilter, availabilityFilter, categoryFilter, universitiesData]);
 
   const canManage = user?.role === 'admin' || user?.role === 'department';
@@ -155,15 +180,23 @@ export function ApprovedUniversitiesView() {
       </CardHeader>
       <CardContent>
         <div className="flex flex-col space-y-4 mb-6">
-            <div className="relative w-full">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                    type="search"
-                    placeholder="Search by university name or specific major..."
-                    className="pl-8"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
+            <div className="flex flex-col md:flex-row gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Search by university name, major, country or category..."
+                        className="pl-8"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
+                {isFiltered && (
+                    <Button variant="ghost" onClick={handleClearFilters} className="gap-2">
+                        <X className="h-4 w-4" />
+                        Clear Filters
+                    </Button>
+                )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Select value={countryFilter} onValueChange={setCountryFilter}>
