@@ -994,7 +994,7 @@ export async function deleteEvent(eventId: string, userId: string) {
         if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
         await adminDb!.collection('upcoming_events').doc(eventId).delete();
         return { success: true, message: 'Event deleted.' };
-    } catch (error: any) { return { success: false, message: error.message }; }
+    } catch (e: any) { return { success: false, message: e.message }; }
 }
 
 export async function getEmployeeStudentStats(): Promise<{ success: boolean; data?: EmployeeStats[]; message?: string; }> {
@@ -1349,4 +1349,41 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
     } catch (error: any) {
         return { success: false, message: error.message };
     }
+}
+
+/**
+ * EXPORT UTILITY: Fetches entire data tables for manual system backup.
+ * Only accessible by administrators.
+ */
+export async function getFullSystemBackup(adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized access.' };
+
+    const collections = [
+      'users', 
+      'students', 
+      'tasks', 
+      'approved_universities', 
+      'request_types', 
+      'notification_templates', 
+      'upcoming_events'
+    ];
+
+    const backupData: Record<string, any[]> = {};
+
+    for (const col of collections) {
+      const snap = await adminDb!.collection(col).get();
+      backupData[col] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    return { 
+      success: true, 
+      data: backupData,
+      filename: `UniApply_Hub_System_Backup_${format(new Date(), 'yyyy-MM-dd_HHmm')}.json`
+    };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
 }

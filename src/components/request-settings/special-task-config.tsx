@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useFormContext } from 'react-hook-form';
@@ -65,25 +66,34 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
               )} />
 
               {form.watch('specialConfig.useApprovedUniversitiesList') && (
-                <FormField control={form.control} name="specialConfig.countryFilter" render={({ field }) => (
-                  <FormItem className="pl-7">
-                    <FormLabel className="text-[10px] font-bold uppercase">Filter list by Country</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value || 'all'}>
-                      <FormControl>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Select country" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="all">All Countries</SelectItem>
-                        <SelectItem value="UK">United Kingdom</SelectItem>
-                        <SelectItem value="USA">USA</SelectItem>
-                        <SelectItem value="Australia">Australia</SelectItem>
-                        <SelectItem value="New Zealand">New Zealand</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )} />
+                <div className="pl-7 space-y-3">
+                  <FormField control={form.control} name="specialConfig.allowMultipleUniversitySelection" render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                      <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <FormLabel className="text-[10px] font-bold text-blue-600">Allow Multiple Selections</FormLabel>
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="specialConfig.countryFilter" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase">Filter list by Country</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value || 'all'}>
+                        <FormControl>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Select country" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="all">All Countries</SelectItem>
+                          <SelectItem value="UK">United Kingdom</SelectItem>
+                          <SelectItem value="USA">USA</SelectItem>
+                          <SelectItem value="Australia">Australia</SelectItem>
+                          <SelectItem value="New Zealand">New Zealand</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )} />
+                </div>
               )}
 
               <Separator className="my-2" />

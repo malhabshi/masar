@@ -7,14 +7,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Database, Download } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { AvatarUpload } from '@/components/user-management/avatar-upload';
+import { getFullSystemBackup } from '@/lib/actions';
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
   
+  // Backup state
+  const [isBackingUp, setIsBackingUp] = useState(false);
+
   // Theme Settings
   const [primaryColor, setPrimaryColor] = useState('#5E60A4');
   const [backgroundColor, setBackgroundColor] = useState('#EFF1F9');
@@ -101,6 +105,29 @@ export default function SettingsPage() {
       reader.readAsDataURL(file);
     }
   };
+
+  const handleDownloadBackup = async () => {
+    if (!user) return;
+    setIsBackingUp(true);
+    const result = await getFullSystemBackup(user.id);
+    
+    if (result.success && result.data) {
+      const dataStr = JSON.stringify(result.data, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.filename || 'system_backup.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: 'Backup Successful', description: 'The complete system data has been downloaded.' });
+    } else {
+      toast({ variant: 'destructive', title: 'Backup Failed', description: result.message });
+    }
+    setIsBackingUp(false);
+  };
   
   if (isUserLoading || !user) {
     return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
@@ -121,38 +148,63 @@ export default function SettingsPage() {
       </Card>
       
       {canManageTheme && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Theme Customization</CardTitle>
-            <CardDescription>Customize the look and feel of the application.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="primary-color">Primary Color</Label>
-                <Input id="primary-color" type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+        <>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-primary" />
+                <CardTitle>Data Management & Safety</CardTitle>
               </div>
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="background-color">Background Color</Label>
-                <Input id="background-color" type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} />
-              </div>
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="accent-color">Accent Color</Label>
-                <Input id="accent-color" type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="logo-upload">Custom Logo</Label>
+              <CardDescription>Secure your data by downloading a full system backup of all students, tasks, and settings.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={handleDownloadBackup} 
+                disabled={isBackingUp}
+                className="gap-2 font-bold"
+              >
+                {isBackingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Download Complete System Backup (.JSON)
+              </Button>
+              <p className="text-[10px] text-muted-foreground mt-2 italic">
+                Note: This file contains raw system data and can be used for manual auditing or offline records.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Theme Customization</CardTitle>
+              <CardDescription>Customize the look and feel of the application.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="flex items-center gap-4">
-                <Input id="logo-upload" type="file" accept="image/*" onChange={handleLogoChange} className="flex-1" />
-                {logoPreview && <img src={logoPreview} alt="Logo Preview" className="h-10 w-10 object-contain rounded-md border p-1" />}
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="primary-color">Primary Color</Label>
+                  <Input id="primary-color" type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+                </div>
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="background-color">Background Color</Label>
+                  <Input id="background-color" type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} />
+                </div>
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="accent-color">Accent Color</Label>
+                  <Input id="accent-color" type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} />
+                </div>
               </div>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button onClick={handleSaveTheme}>Save Theme</Button>
-          </CardFooter>
-        </Card>
+              <div className="space-y-2">
+                <Label htmlFor="logo-upload">Custom Logo</Label>
+                <div className="flex items-center gap-4">
+                  <Input id="logo-upload" type="file" accept="image/*" onChange={handleLogoChange} className="flex-1" />
+                  {logoPreview && <img src={logoPreview} alt="Logo Preview" className="h-10 w-10 object-contain rounded-md border p-1" />}
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={handleSaveTheme}>Save Theme</Button>
+            </CardFooter>
+          </Card>
+        </>
       )}
     </div>
   );

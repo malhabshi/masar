@@ -253,6 +253,7 @@ export interface SpecialTaskConfig {
   };
   requireUniversitySelection?: boolean;
   useApprovedUniversitiesList?: boolean; // Toggles selection from Global Approved Universities
+  allowMultipleUniversitySelection?: boolean; // NEW: Allow picking more than one school
   countryFilter?: Country | 'all'; // Filters the selection list by country
   allowPortalReferenceSelection?: boolean; // NEW: Optional selection of stored student logins
   studentInfo: {

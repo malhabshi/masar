@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -10,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { ApprovedUniversity } from '@/lib/types';
-import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck, GraduationCap, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck, AlertCircle } from 'lucide-react';
 import { EditUniversityDialog } from './edit-university-dialog';
 import { Skeleton } from '../ui/skeleton';
 import {

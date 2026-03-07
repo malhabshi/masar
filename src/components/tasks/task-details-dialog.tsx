@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -145,6 +146,7 @@ export function TaskDetailsDialog({
   const hasStatusChanged = localStatus !== task.status;
   const selectedApp = data.selectedApplicationDetails;
   const selectedGlobalUni = data.selectedGlobalUniversityDetails;
+  const selectedMultiUnis = data.selectedGlobalUniversities;
   const selectedPortal = data.selectedPortalDetails;
 
   return (
@@ -235,7 +237,24 @@ export function TaskDetailsDialog({
                 </section>
             )}
 
-            {selectedGlobalUni && (
+            {selectedMultiUnis && selectedMultiUnis.length > 0 ? (
+                <section className="space-y-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                        <GraduationCap className="h-5 w-5" /> 
+                        Requested Universities ({selectedMultiUnis.length})
+                    </h3>
+                    <div className="space-y-3">
+                        {selectedMultiUnis.map((uni: any, i: number) => (
+                            <div key={i} className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {renderDataField('University', uni.name)}
+                                {renderDataField('Major', uni.major)}
+                                {renderDataField('Country', uni.country)}
+                                {renderDataField('Category', uni.category)}
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            ) : selectedGlobalUni && (
                 <section className="space-y-4">
                     <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
                         <GraduationCap className="h-5 w-5" /> 

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -92,8 +93,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   }
 
   if (config?.useApprovedUniversitiesList) {
-    schemaFields.selectedGlobalUniversityId = z.string({ required_error: 'Please select a university from the list' }).min(1, 'Selection is required');
-    schemaFields.selectedGlobalUniversityDetails = z.any().optional();
+    if (config.allowMultipleUniversitySelection) {
+      schemaFields.selectedGlobalUniversityIds = z.array(z.string()).min(1, 'Please select at least one university');
+      schemaFields.selectedGlobalUniversities = z.array(z.any()).optional();
+    } else {
+      schemaFields.selectedGlobalUniversityId = z.string({ required_error: 'Please select a university from the list' }).min(1, 'Selection is required');
+      schemaFields.selectedGlobalUniversityDetails = z.any().optional();
+    }
   }
 
   const formSchema = z.object(schemaFields).refine(data => {
@@ -113,6 +119,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     defaultValues: {
       notes: '',
       selectedDocuments: [],
+      selectedGlobalUniversityIds: [],
       retakeSection: undefined,
       courseOption: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
@@ -124,6 +131,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
   const watchExamType = form.watch('examType');
   const watchDocs = form.watch('selectedDocuments') || [];
+  const watchMultiUnis = form.watch('selectedGlobalUniversityIds') || [];
 
   const handleDocToggle = (docId: string) => {
     const current = form.getValues('selectedDocuments') || [];
@@ -131,6 +139,25 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       form.setValue('selectedDocuments', current.filter((id: string) => id !== docId));
     } else {
       form.setValue('selectedDocuments', [...current, docId]);
+    }
+  };
+
+  const handleMultiUniToggle = (uni: ApprovedUniversity) => {
+    const currentIds = form.getValues('selectedGlobalUniversityIds') || [];
+    const currentDetails = form.getValues('selectedGlobalUniversities') || [];
+    
+    if (currentIds.includes(uni.id)) {
+      form.setValue('selectedGlobalUniversityIds', currentIds.filter((id: string) => id !== uni.id));
+      form.setValue('selectedGlobalUniversities', currentDetails.filter((d: any) => d.id !== uni.id));
+    } else {
+      form.setValue('selectedGlobalUniversityIds', [...currentIds, uni.id]);
+      form.setValue('selectedGlobalUniversities', [...currentDetails, {
+        id: uni.id,
+        name: uni.name,
+        major: uni.major,
+        country: uni.country,
+        category: uni.category
+      }]);
     }
   };
 
@@ -150,12 +177,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       list = list.filter(u => {
         const uName = (u.name || '').toLowerCase();
         const uMajor = (u.major || '').toLowerCase();
-        return searchWords.every(word => uName.includes(word) || uMajor.includes(word));
+        const uImportant = (u.importantNote || '').toLowerCase();
+        return searchWords.every(word => uName.includes(word) || uMajor.includes(word) || uImportant.includes(word));
       });
     }
 
     // Sort by name
-    return list.sort((a,b) => (a.name || '').localeCompare(b.name || '')).slice(0, 300); // Higher limit
+    return list.sort((a,b) => (a.name || '').localeCompare(b.name || '')).slice(0, 500); 
   }, [globalUniversities, uniSearch, config?.countryFilter]);
 
   const handleGlobalUniSelect = (uni: ApprovedUniversity) => {
@@ -342,65 +370,65 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           <div className="space-y-4 border-t pt-4">
             <FormLabel className="text-base font-bold flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-primary" />
-                Choose School & Major from Approved List *
+                {config.allowMultipleUniversitySelection ? 'Choose Multiple Schools/Majors *' : 'Choose School & Major from Approved List *'}
             </FormLabel>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Search by school name or major..." 
+                placeholder="Search by school name, major, or important notes..." 
                 className="pl-8"
                 value={uniSearch}
                 onChange={(e) => setUniSearch(e.target.value)}
               />
             </div>
             
-            <FormField
-              control={form.control}
-              name="selectedGlobalUniversityId"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormControl>
-                    {unisLoading ? (
-                      <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                    ) : (
-                      <RadioGroup
-                        onValueChange={(val) => {
-                          field.onChange(val);
-                          const uni = globalUniversities?.find(u => u.id === val);
-                          if (uni) handleGlobalUniSelect(uni);
-                        }}
-                        value={field.value}
-                        className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto p-1"
-                      >
-                        {filteredGlobalUnis.length > 0 ? (
-                          filteredGlobalUnis.map((uni) => (
-                            <FormItem key={uni.id} className="flex items-center space-x-3 space-y-0 border p-3 rounded-lg bg-background hover:bg-muted/20 transition-colors cursor-pointer">
-                              <FormControl><RadioGroupItem value={uni.id} /></FormControl>
-                              <FormLabel className="cursor-pointer flex-1 flex items-center justify-between">
-                                <div>
-                                  <span className="block text-sm font-bold">{uni.name}</span>
-                                  <span className="block text-xs text-muted-foreground">{uni.major}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-[10px]">{uni.country}</Badge>
-                                  {uni.category !== 'General' && <Badge className="text-[10px] bg-yellow-500 text-black">{uni.category}</Badge>}
-                                  {!uni.isAvailable && <Badge variant="destructive" className="text-[10px]">CLOSED</Badge>}
-                                </div>
-                              </FormLabel>
-                            </FormItem>
-                          ))
+            <div className="space-y-3">
+              {unisLoading ? (
+                <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 max-h-80 overflow-y-auto p-1 border rounded-lg bg-muted/5">
+                  {filteredGlobalUnis.length > 0 ? (
+                    filteredGlobalUnis.map((uni) => (
+                      <div key={uni.id} className="flex items-center space-x-3 space-y-0 border p-3 rounded-lg bg-background hover:bg-muted/20 transition-colors">
+                        {config.allowMultipleUniversitySelection ? (
+                          <Checkbox 
+                            checked={watchMultiUnis.includes(uni.id)} 
+                            onCheckedChange={() => handleMultiUniToggle(uni)} 
+                          />
                         ) : (
-                          <div className="text-center py-8 text-muted-foreground italic border border-dashed rounded-lg">
-                            No matching universities found{config.countryFilter !== 'all' ? ` in ${config.countryFilter}` : ''}.
-                          </div>
+                          <Checkbox 
+                            checked={form.watch('selectedGlobalUniversityId') === uni.id}
+                            onCheckedChange={() => handleGlobalUniSelect(uni)}
+                          />
                         )}
-                      </RadioGroup>
-                    )}
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+                        <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <span className="block text-sm font-bold">{uni.name}</span>
+                            <span className="block text-xs text-muted-foreground">{uni.major}</span>
+                            {uni.importantNote && <span className="block text-[10px] text-red-600 font-black uppercase">⚠️ {uni.importantNote}</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] font-mono">{uni.country}</Badge>
+                            {uni.category !== 'General' && <Badge className={cn("text-[10px] font-bold", uni.category === 'Merit' ? "bg-yellow-500 text-black" : "bg-blue-600 text-white")}>{uni.category}</Badge>}
+                            {!uni.isAvailable && <Badge variant="destructive" className="text-[10px]">CLOSED</Badge>}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground italic">
+                      No matching universities found{config.countryFilter !== 'all' ? ` in ${config.countryFilter}` : ''}.
+                    </div>
+                  )}
+                </div>
               )}
-            />
+              {config.allowMultipleUniversitySelection && watchMultiUnis.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <span className="text-xs font-bold text-muted-foreground">Selected:</span>
+                  <Badge variant="secondary" className="bg-primary text-primary-foreground">{watchMultiUnis.length} choices</Badge>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
