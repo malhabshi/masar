@@ -22,6 +22,7 @@ import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { Skeleton } from '../ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 
 export function ApprovedUniversitiesView() {
   const { user, isUserLoading: isUserLoadingHook } = useUser();
@@ -59,7 +60,6 @@ export function ApprovedUniversitiesView() {
   const filteredUniversities = useMemo(() => {
     if (!universitiesData) return [];
     
-    // Split search query into individual keywords for "fuzzy" multi-field matching
     const searchWords = debouncedSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
 
     const results = universitiesData.filter(uni => {
@@ -68,7 +68,6 @@ export function ApprovedUniversitiesView() {
       const uniCountry = (uni.country || '').toLowerCase();
       const uniCategory = (uni.category || '').toLowerCase();
 
-      // Check if all keywords are present in any of the primary fields
       const matchesSearch = searchWords.every(word => 
         uniName.includes(word) || 
         uniMajor.includes(word) || 
@@ -88,7 +87,6 @@ export function ApprovedUniversitiesView() {
       return matchesSearch && matchesCountry && matchesAvailability && matchesCategory;
     });
 
-    // Sort: Alphabetical by Name, then Major
     return results.sort((a, b) => {
         const nameCompare = (a.name || '').localeCompare(b.name || '');
         if (nameCompare !== 0) return nameCompare;
@@ -165,8 +163,13 @@ export function ApprovedUniversitiesView() {
   return (
     <Card>
       <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-            <CardTitle>Approved Universities</CardTitle>
+        <div className="space-y-1">
+            <CardTitle className="flex items-center gap-3">
+                Approved Universities
+                <Badge variant="secondary" className="font-mono text-sm">
+                    {filteredUniversities.length} {isFiltered ? 'Found' : 'Total'}
+                </Badge>
+            </CardTitle>
             <CardDescription>A master list of universities approved by MOHE and the Merit scholarship list.</CardDescription>
         </div>
         {canManage && (
