@@ -22,12 +22,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, Calculator, LayoutTemplate } from 'lucide-react';
+import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag } from 'lucide-react';
 
 const invoiceSchema = z.object({
   studentId: z.string().min(1, 'Please select a student.'),
   templateId: z.string().min(1, 'Please select a branding template.'),
   notes: z.string().optional(),
+  discountAmount: z.coerce.number().min(0, 'Discount cannot be negative.').default(0),
   items: z.array(z.object({
     description: z.string().min(1, 'Description required.'),
     amount: z.coerce.number().min(0.01, 'Amount must be greater than 0.'),
@@ -53,6 +54,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       studentId: '',
       templateId: templates.length === 1 ? templates[0].id : '',
       notes: '',
+      discountAmount: 0,
       items: [{ description: '', amount: 0, quantity: 1 }],
     },
   });
@@ -63,7 +65,10 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   });
 
   const watchItems = form.watch('items');
-  const total = watchItems.reduce((acc, item) => acc + (item.amount * item.quantity), 0);
+  const watchDiscount = form.watch('discountAmount') || 0;
+  
+  const subtotal = watchItems.reduce((acc, item) => acc + (item.amount * item.quantity), 0);
+  const total = Math.max(0, subtotal - watchDiscount);
 
   const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
     setIsSubmitting(true);
@@ -83,6 +88,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       studentPhone: selectedStudent.phone,
       items: values.items.map((item, idx) => ({ ...item, id: `item-${idx}-${Date.now()}` })),
       totalAmount: total,
+      discountAmount: values.discountAmount,
       status: 'unpaid' as const,
       notes: values.notes,
     };
@@ -212,13 +218,42 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t">
-              <div className="bg-muted/50 p-4 rounded-lg flex items-center gap-6 min-w-[200px]">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Calculator className="h-4 w-4" />
-                  <span className="text-sm font-bold uppercase tracking-widest">Total</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end pt-4 border-t">
+              <FormField
+                control={form.control}
+                name="discountAmount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <Tag className="h-3 w-3" />
+                      Discount Amount (KWD)
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" placeholder="0.00" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="bg-muted/50 p-4 rounded-lg flex flex-col gap-2">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>{subtotal.toFixed(2)} KWD</span>
                 </div>
-                <div className="text-2xl font-black text-primary ml-auto">{total.toFixed(2)} KWD</div>
+                {watchDiscount > 0 && (
+                  <div className="flex justify-between text-xs text-destructive">
+                    <span>Discount</span>
+                    <span>-{watchDiscount.toFixed(2)} KWD</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t pt-2 mt-1">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Calculator className="h-4 w-4" />
+                    <span className="text-sm font-bold uppercase tracking-widest">Total</span>
+                  </div>
+                  <div className="text-2xl font-black text-primary">{total.toFixed(2)} KWD</div>
+                </div>
               </div>
             </div>
 

@@ -419,6 +419,7 @@ export interface Invoice {
   studentPhone?: string;
   items: InvoiceItem[];
   totalAmount: number;
+  discountAmount?: number;
   status: InvoiceStatus;
   notes?: string;
   createdAt: string;

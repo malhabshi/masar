@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -10,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileDown, GraduationCap, Printer, MapPin, Phone, Mail, User } from 'lucide-react';
+import { Loader2, FileDown, GraduationCap, Printer, MapPin, Phone, Mail, User, Tag } from 'lucide-react';
 import { formatDate } from '@/lib/timestamp-utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -120,6 +119,9 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
     window.print();
   };
 
+  const subtotal = invoice.items.reduce((acc, item) => acc + (item.amount * item.quantity), 0);
+  const discount = invoice.discountAmount || 0;
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[95vh]">
@@ -202,7 +204,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                     <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest w-12">#</th>
                     <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest">Description</th>
                     <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-center">Qty</th>
-                    <th className="py-4 px-2 text-[10px) font-black uppercase tracking-widest text-right">Unit Price</th>
+                    <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-right">Unit Price</th>
                     <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-right">Amount</th>
                   </tr>
                 </thead>
@@ -227,8 +229,19 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               <div className="w-80 space-y-3">
                 <div className="flex justify-between text-xs font-bold px-4">
                   <span className="text-slate-400 uppercase tracking-widest">Subtotal</span>
-                  <span className="text-slate-900">{invoice.totalAmount.toFixed(2)} KWD</span>
+                  <span className="text-slate-900">{subtotal.toFixed(2)} KWD</span>
                 </div>
+                
+                {discount > 0 && (
+                  <div className="flex justify-between text-xs font-bold px-4 text-red-600">
+                    <div className="flex items-center gap-1">
+                      <Tag className="h-3 w-3" />
+                      <span className="uppercase tracking-widest">Discount</span>
+                    </div>
+                    <span>-{discount.toFixed(2)} KWD</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between bg-slate-50 border border-slate-900 p-6 rounded-xl mt-4">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Due</span>
