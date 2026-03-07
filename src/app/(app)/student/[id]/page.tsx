@@ -97,7 +97,6 @@ export default function StudentDetailPage() {
     const studentConstraint = where('studentId', '==', studentId);
     
     // For employees, we need to see tasks they sent AND tasks they are meant to receive
-    // ✅ FIX: Only check for the specific user ID in recipientIds (No department logic)
     if (currentUser.role === 'employee') {
       return query(
         collection(firestore, 'tasks'),
@@ -190,14 +189,18 @@ export default function StudentDetailPage() {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" id="student-profile-content">
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
       {student.duplicatePhoneWarning && (
-        <DuplicateWarningBanner student={student} currentUser={currentUser} />
+        <div className="pdf-hide">
+          <DuplicateWarningBanner student={student} currentUser={currentUser} />
+        </div>
       )}
       
-      <InactivityReportSection student={student} currentUser={currentUser} />
+      <div className="pdf-hide">
+        <InactivityReportSection student={student} currentUser={currentUser} />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="lg:col-span-2 space-y-6">
@@ -219,7 +222,9 @@ export default function StudentDetailPage() {
           </div>
 
           <div className="space-y-6">
-              <TaskStatsCard tasks={tasks || []} />
+              <div className="pdf-hide">
+                <TaskStatsCard tasks={tasks || []} />
+              </div>
               <ReadinessChecklist student={student} currentUser={currentUser} />
               <MissingItemsSection student={student} currentUser={currentUser} />
               <AcademicIntakeCard student={student} currentUser={currentUser} />
@@ -233,7 +238,7 @@ export default function StudentDetailPage() {
                   placeholder="Add a new employee note..."
               />
 
-              <Card>
+              <Card className="pdf-hide">
                   <CardHeader>
                       <CardTitle>Internal Chat</CardTitle>
                   </CardHeader>
@@ -246,7 +251,9 @@ export default function StudentDetailPage() {
           </div>
       </div>
       
-      <TaskHistory tasks={tasks || []} studentId={student.id} currentUser={currentUser} isLoading={tasksLoading} />
+      <div className="pdf-hide">
+        <TaskHistory tasks={tasks || []} studentId={student.id} currentUser={currentUser} isLoading={tasksLoading} />
+      </div>
     </div>
   );
 }

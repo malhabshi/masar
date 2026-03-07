@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -64,6 +64,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const { toast } = useToast();
   const [isTogglingAgent, setIsTogglingAgent] = useState(false);
   const [isForcingInactivity, setIsForcingInactivity] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
@@ -118,7 +119,6 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     const result = await forceInactivity(student.id);
     if (result.success) {
       toast({ title: 'Simulating 11 days of inactivity...' });
-      // Reload to trigger logic checks
       setTimeout(() => window.location.reload(), 1000);
     } else {
       toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
@@ -126,7 +126,47 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     setIsForcingInactivity(false);
   };
 
-  // Only use countries from active applications for the header flags
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: html2canvas } = await import('html2canvas');
+      
+      const element = document.getElementById('student-profile-content');
+      if (!element) return;
+
+      // Hide interactive elements during capture
+      const actionsToHide = element.querySelectorAll('.pdf-hide');
+      actionsToHide.forEach(el => (el as HTMLElement).style.display = 'none');
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      // Show elements back
+      actionsToHide.forEach(el => (el as HTMLElement).style.display = '');
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${student.name.replace(/\s+/g, '_')}_Profile.pdf`);
+      
+      toast({ title: 'PDF Ready', description: 'The profile document has been generated.' });
+    } catch (error) {
+      console.error('PDF Error:', error);
+      toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not generate the profile PDF.' });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   const allCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
   return (
@@ -154,14 +194,12 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               {student.name || 'Unknown Student'}
             </h1>
             
-            {/* Change Agent Badge */}
             {student.changeAgentRequired && (
               <BadgeComponent className="bg-black text-red-500 border-red-500 border-2 font-black animate-pulse text-sm px-3 py-1">
                 CHANGE AGENT
               </BadgeComponent>
             )}
 
-            {/* Academic Intake Badge next to name (Visible to all if set) */}
             {student.academicIntakeSemester && (
               <BadgeComponent variant="default" className="bg-primary text-primary-foreground flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold shadow-sm rounded-full">
                 <Calendar className="h-4 w-4" />
@@ -169,65 +207,76 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               </BadgeComponent>
             )}
 
-            {student.transferRequested && !canApproveTransfer && (
-                <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3">
-                    <ArrowRightLeft className="mr-2 h-4 w-4" />
-                    Transfer Requested
-                </BadgeComponent>
-            )}
-            {student.deletionRequested?.status === 'pending' && (
-                <TooltipProvider>
-                    <Tooltip>
-                    <TooltipTrigger>
-                        <BadgeComponent variant="destructive" className="flex items-center gap-1 text-base py-1 px-3">
-                            <ShieldAlert className="mr-1 h-4 w-4" />
-                            Deletion Requested
-                        </BadgeComponent>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : '...'}</p>
-                    </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-            )}
-            {canEdit && <EditStudentDialog student={student} />}
-            {isAssignedEmployee && <CreateStudentTaskDialog student={student} currentUser={currentUser} />}
-            {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
-            {canRequestDeletion && <RequestDeletionDialog student={student} currentUser={currentUser} />}
-            
-            {canManage && (
+            <div className="pdf-hide flex flex-wrap gap-2 items-center">
               <Button 
-                variant={student.changeAgentRequired ? "destructive" : "outline"}
-                size="sm"
-                onClick={handleToggleChangeAgent}
-                disabled={isTogglingAgent}
-                className={student.changeAgentRequired ? "bg-black text-red-500 hover:bg-black/90" : ""}
-              >
-                {isTogglingAgent ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundX className="mr-2 h-4 w-4" />}
-                {student.changeAgentRequired ? 'Remove Change Agent' : 'Change Agent'}
-              </Button>
-            )}
-
-            {/* DEBUG TOOLS */}
-            {isAdmin && (
-              <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                onClick={handleForceInactivity} 
-                disabled={isForcingInactivity}
-                className="opacity-20 hover:opacity-100 hover:bg-orange-100 hover:text-orange-700 h-8 gap-1 text-[10px] font-bold"
+                onClick={handleDownloadPDF} 
+                disabled={isGeneratingPDF}
+                className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
               >
-                {isForcingInactivity ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
-                DEBUG: Force 10d Inactivity
+                {isGeneratingPDF ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
+                Download PDF
               </Button>
-            )}
 
-            {/* Explicitly separate Assign from Transfer Approve */}
-            {canAssign && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="assign" />}
-            {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="transfer" />}
+              {student.transferRequested && !canApproveTransfer && (
+                  <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3">
+                      <ArrowRightLeft className="mr-2 h-4 w-4" />
+                      Transfer Requested
+                  </BadgeComponent>
+              )}
+              {student.deletionRequested?.status === 'pending' && (
+                  <TooltipProvider>
+                      <Tooltip>
+                      <TooltipTrigger>
+                          <BadgeComponent variant="destructive" className="flex items-center gap-1 text-base py-1 px-3">
+                              <ShieldAlert className="mr-1 h-4 w-4" />
+                              Deletion Requested
+                          </BadgeComponent>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                          <p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : '...'}</p>
+                      </TooltipContent>
+                      </Tooltip>
+                  </TooltipProvider>
+              )}
+              {canEdit && <EditStudentDialog student={student} />}
+              {isAssignedEmployee && <CreateStudentTaskDialog student={student} currentUser={currentUser} />}
+              {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
+              {canRequestDeletion && <RequestDeletionDialog student={student} currentUser={currentUser} />}
+              
+              {canManage && (
+                <Button 
+                  variant={student.changeAgentRequired ? "destructive" : "outline"}
+                  size="sm"
+                  onClick={handleToggleChangeAgent}
+                  disabled={isTogglingAgent}
+                  className={student.changeAgentRequired ? "bg-black text-red-500 hover:bg-black/90" : ""}
+                >
+                  {isTogglingAgent ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundX className="mr-2 h-4 w-4" />}
+                  {student.changeAgentRequired ? 'Remove Change Agent' : 'Change Agent'}
+                </Button>
+              )}
 
-            {canApproveDeletion && <ApproveDeletionDialog student={student} currentUser={currentUser} />}
-            {isAdmin && !canApproveDeletion && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
+              {isAdmin && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleForceInactivity} 
+                  disabled={isForcingInactivity}
+                  className="opacity-20 hover:opacity-100 hover:bg-orange-100 hover:text-orange-700 h-8 gap-1 text-[10px] font-bold"
+                >
+                  {isForcingInactivity ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
+                  DEBUG: Force 10d Inactivity
+                </Button>
+              )}
+
+              {canAssign && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="assign" />}
+              {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="transfer" />}
+
+              {canApproveDeletion && <ApproveDeletionDialog student={student} currentUser={currentUser} />}
+              {isAdmin && !canApproveDeletion && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
+            </div>
           </div>
           {student.finalChoiceUniversity && (
             <div className="flex items-center gap-2 mt-2 text-lg font-semibold text-success">
@@ -243,16 +292,18 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4" />
               <span>{student.phone || 'No Phone'}</span>
-              {student.phone && (
-                <a
-                  href={`https://wa.me/965${student.phone.replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-green-500 hover:text-green-600"
-                >
-                  <WhatsAppIcon className="h-5 w-5" />
-                </a>
-              )}
+              <div className="pdf-hide">
+                {student.phone && (
+                  <a
+                    href={`https://wa.me/965${student.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-500 hover:text-green-600"
+                  >
+                    <WhatsAppIcon className="h-5 w-5" />
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>
