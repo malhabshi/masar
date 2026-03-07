@@ -2,7 +2,7 @@
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1371,5 +1371,60 @@ export async function getFullSystemBackup(adminId: string) {
     });
   } catch (e: any) {
     return { success: false, message: e.message };
+  }
+}
+
+export async function createInvoice(adminId: string, data: Omit<Invoice, 'id' | 'invoiceNumber' | 'createdAt' | 'updatedAt' | 'createdBy' | 'authorName'>) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    const now = new Date().toISOString();
+    const invoiceNumber = `INV-${Date.now()}`;
+    const invoiceRef = await adminDb!.collection('invoices').add({
+      ...data,
+      invoiceNumber,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: adminId,
+      authorName: admin.name,
+    });
+
+    await refreshStudentActivity(data.studentId);
+
+    return { success: true, id: invoiceRef.id, message: 'Invoice created successfully.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function updateInvoiceStatus(invoiceId: string, status: InvoiceStatus, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    await adminDb!.collection('invoices').doc(invoiceId).update({
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return { success: true, message: `Invoice status updated to ${status}.` };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function deleteInvoice(invoiceId: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+
+    await adminDb!.collection('invoices').doc(invoiceId).delete();
+    return { success: true, message: 'Invoice deleted.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
   }
 }

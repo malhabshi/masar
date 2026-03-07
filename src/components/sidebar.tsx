@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sidebar,
@@ -30,6 +29,7 @@ import {
   LineChart,
   BookOpenCheck,
   BellRing,
+  ReceiptText,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -82,7 +82,9 @@ export function AppSidebar() {
 
         // Department users: Badge logic matches Dashboard logic (ID, dept group, and 'all')
         const groups = [user.id, 'all'];
-        if (user.department) groups.push(`dept:${user.department}`);
+        if (user.department) {
+            groups.push(`dept:${user.department}`);
+        }
 
         return query(
             collection(firestore, 'tasks'), 
@@ -161,6 +163,7 @@ export function AppSidebar() {
     
     const managementNav = [
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
+        { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin', 'department'] },
         { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'], badge: unreadIeltsCourseCount },
         { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'], badge: unreadChatCount },
     ];

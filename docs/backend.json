@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -35,6 +34,7 @@
         "documents": { "type": "array", "description": "A list of documents uploaded for the student.", "items": { "$ref": "#/entities/StudentDocument" } },
         "createdAt": { "type": "string", "description": "Timestamp indicating when the student record was created.", "format": "date-time" },
         "createdBy": { "type": "string", "description": "The ID of the user who created the student record." },
+        "lastActivityAt": { "type": "string", "description": "Timestamp of the last meaningful interaction with the student profile.", "format": "date-time" },
         "targetCountries": { "type": "array", "description": "List of countries the student is interested in.", "items": { "type": "string" } },
         "missingItems": { "type": "array", "description": "A list of missing documents or information required from the student.", "items": { "type": "string" } },
         "pipelineStatus": { "type": "string", "description": "The student's status in the application pipeline.", "enum": ["green", "orange", "red", "none"] },
@@ -60,25 +60,25 @@
         },
         "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
         "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." },
-        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." }
+        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." },
+        "changeAgentRequired": { "type": "boolean", "description": "Flag indicating if this student requires an urgent agent change or high-priority oversight." }
       },
       "required": ["id", "name", "phone", "createdAt", "createdBy"]
     },
-    "NotificationTemplate": {
-      "title": "Notification Template",
+    "Invoice": {
+      "title": "Invoice",
       "type": "object",
-      "description": "Configuration for automated WhatsApp messages via specific WANotifier webhook URLs.",
+      "description": "Financial records for services provided to students.",
       "properties": {
-        "notificationType": { "type": "string" },
-        "templateName": { "type": "string" },
-        "message": { "type": "string" },
-        "webhookUrl": { "type": "string", "format": "uri" },
-        "isActive": { "type": "boolean" },
-        "variables": { "type": "array", "items": { "type": "string" } },
-        "updatedAt": { "type": "string", "format": "date-time" },
-        "updatedBy": { "type": "string" }
+        "invoiceNumber": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "items": { "type": "array", "items": { "type": "object", "properties": { "description": { "type": "string" }, "amount": { "type": "number" }, "quantity": { "type": "number" } } } },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["paid", "unpaid", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["notificationType", "templateName", "message", "isActive"]
+      "required": ["invoiceNumber", "studentId", "totalAmount", "status"]
     }
   },
   "firestore": {
@@ -93,6 +93,10 @@
     "/tasks/{taskId}": {
       "schema": { "$ref": "#/entities/Task" },
       "description": "Stores tasks and their replies."
+    },
+    "/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Stores billing information."
     },
     "/notification_templates/{templateId}": {
       "schema": { "$ref": "#/entities/NotificationTemplate" },

@@ -387,3 +387,29 @@ export interface AcademicTerm {
   createdAt?: string;
   authorId?: string;
 }
+
+export type InvoiceStatus = 'paid' | 'unpaid' | 'cancelled';
+
+export interface InvoiceItem {
+  id: string;
+  description: string;
+  amount: number;
+  quantity: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  studentPhone?: string;
+  items: InvoiceItem[];
+  totalAmount: number;
+  status: InvoiceStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  authorName?: string;
+}
