@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Invoice, InvoiceTemplate } from '@/lib/types';
 import {
   Dialog,
@@ -23,6 +23,11 @@ interface InvoiceViewDialogProps {
 export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: InvoiceViewDialogProps) {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const selectedTemplate = useMemo(() => {
     if (!invoice.templateId) return null;
@@ -38,9 +43,22 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       const element = document.getElementById('invoice-render-area');
       if (!element) return;
 
+      // Ensure all images are loaded before capture
+      const images = element.getElementsByTagName('img');
+      const loadPromises = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      });
+
+      await Promise.all(loadPromises);
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         logging: false,
         backgroundColor: '#ffffff'
       });
@@ -93,7 +111,12 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               <div className="flex items-center gap-3">
                 <div className="bg-primary text-primary-foreground p-2 rounded-xl h-16 w-16 flex items-center justify-center overflow-hidden">
                   {selectedTemplate?.logoUrl ? (
-                    <img src={selectedTemplate.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                    <img 
+                      src={selectedTemplate.logoUrl} 
+                      alt="Logo" 
+                      className="max-h-full max-w-full object-contain"
+                      crossOrigin="anonymous"
+                    />
                   ) : (
                     <GraduationCap className="h-10 w-10" />
                   )}
@@ -109,7 +132,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                 <h2 className="text-4xl font-black text-slate-200 uppercase tracking-tighter leading-none mb-2">INVOICE</h2>
                 <div className="space-y-1">
                   <p className="text-sm font-bold text-slate-700">{invoice.invoiceNumber}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(invoice.createdAt)}</p>
+                  <p className="text-xs text-muted-foreground">{isClient ? formatDate(invoice.createdAt) : '...'}</p>
                   <div className="flex justify-end pt-1">
                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
                       invoice.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200'

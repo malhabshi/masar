@@ -7,6 +7,7 @@ import * as z from 'zod';
 import type { InvoiceTemplate, AppUser } from '@/lib/types';
 import { saveInvoiceTemplate, deleteInvoiceTemplate } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
+import { useUser } from '@/hooks/use-user';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,7 @@ export function InvoiceSettingsDialog({ currentUser, templates, children }: Invo
   const [isUploading, setIsUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const { toast } = useToast();
+  const { auth: authUser } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof templateSchema>>({
@@ -85,7 +87,7 @@ export function InvoiceSettingsDialog({ currentUser, templates, children }: Invo
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !authUser) return;
 
     setIsUploading(true);
     const formData = new FormData();
@@ -93,9 +95,10 @@ export function InvoiceSettingsDialog({ currentUser, templates, children }: Invo
     formData.append('destination', 'shared'); // Reusing shared storage for invoice logos
 
     try {
+      const token = await authUser.getIdToken();
       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, // Assumes token is managed via middleware or similar
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       });
       const result = await response.json();
@@ -177,7 +180,12 @@ export function InvoiceSettingsDialog({ currentUser, templates, children }: Invo
                     <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/10">
                       <div className="h-16 w-16 rounded-lg bg-white border flex items-center justify-center overflow-hidden">
                         {logoUrl ? (
-                          <img src={logoUrl} alt="Logo Preview" className="max-h-full max-w-full object-contain" />
+                          <img 
+                            src={logoUrl} 
+                            alt="Logo Preview" 
+                            className="max-h-full max-w-full object-contain"
+                            crossOrigin="anonymous"
+                          />
                         ) : (
                           <UploadCloud className="h-8 w-8 text-muted-foreground" />
                         )}
@@ -264,7 +272,7 @@ export function InvoiceSettingsDialog({ currentUser, templates, children }: Invo
                       <TableRow key={t.id}>
                         <TableCell>
                           <Avatar className="h-10 w-10 rounded-md border">
-                            <AvatarImage src={t.logoUrl} className="object-contain" />
+                            <AvatarImage src={t.logoUrl} className="object-contain" crossOrigin="anonymous" />
                             <AvatarFallback><GraduationCap className="h-5 w-5" /></AvatarFallback>
                           </Avatar>
                         </TableCell>
