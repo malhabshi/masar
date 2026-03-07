@@ -22,6 +22,7 @@ interface InvoiceViewDialogProps {
 
 export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: InvoiceViewDialogProps) {
   const [isExporting, setIsExporting] = useState(false);
+  const [logoDataUri, setLogoDataUri] = useState<string | null>(null);
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
 
@@ -34,6 +35,27 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
     return templates.find(t => t.id === invoice.templateId) || null;
   }, [invoice.templateId, templates]);
 
+  // Pre-fetch logo as Data URI to bypass CORS issues with canvas capture
+  useEffect(() => {
+    async function fetchLogo() {
+      if (selectedTemplate?.logoUrl && isOpen) {
+        try {
+          const response = await fetch(selectedTemplate.logoUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setLogoDataUri(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        } catch (error) {
+          console.error('Failed to convert logo to Data URI:', error);
+          setLogoDataUri(selectedTemplate.logoUrl); // Fallback to original URL
+        }
+      }
+    }
+    fetchLogo();
+  }, [selectedTemplate, isOpen]);
+
   const handleDownloadPDF = async () => {
     setIsExporting(true);
     try {
@@ -43,22 +65,13 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       const element = document.getElementById('invoice-render-area');
       if (!element) return;
 
-      // Ensure all images are loaded before capture
-      const images = element.getElementsByTagName('img');
-      const loadPromises = Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = resolve;
-        });
-      });
-
-      await Promise.all(loadPromises);
+      // Wait a moment for layout stability
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         logging: false,
         backgroundColor: '#ffffff'
       });
@@ -110,7 +123,14 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             <div className="flex justify-between items-start border-b-2 border-primary pb-8 mb-8">
               <div className="flex items-center gap-3">
                 <div className="bg-primary text-primary-foreground p-2 rounded-xl h-16 w-16 flex items-center justify-center overflow-hidden">
-                  {selectedTemplate?.logoUrl ? (
+                  {logoDataUri ? (
+                    <img 
+                      src={logoDataUri} 
+                      alt="Logo" 
+                      className="max-h-full max-w-full object-contain"
+                      crossOrigin="anonymous"
+                    />
+                  ) : selectedTemplate?.logoUrl ? (
                     <img 
                       src={selectedTemplate.logoUrl} 
                       alt="Logo" 
