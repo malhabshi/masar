@@ -251,10 +251,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   <span className="text-slate-400 uppercase tracking-widest">Subtotal</span>
                   <span className="text-slate-900">{invoice.totalAmount.toFixed(2)} KWD</span>
                 </div>
-                <div className="flex justify-between text-xs font-bold px-4">
-                  <span className="text-slate-400 uppercase tracking-widest">Service Tax (0%)</span>
-                  <span className="text-slate-900">0.00 KWD</span>
-                </div>
                 <div className="flex items-center justify-between bg-slate-50 border border-slate-900 p-6 rounded-xl mt-4">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Due</span>
