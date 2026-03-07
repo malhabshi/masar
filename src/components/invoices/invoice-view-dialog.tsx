@@ -202,7 +202,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                     <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest w-12">#</th>
                     <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest">Description</th>
                     <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-center">Qty</th>
-                    <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-right">Unit Price</th>
+                    <th className="py-4 px-2 text-[10px) font-black uppercase tracking-widest text-right">Unit Price</th>
                     <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-right">Amount</th>
                   </tr>
                 </thead>
@@ -256,9 +256,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                 
                 {/* Agency Details relocated to footer */}
                 <div className="space-y-1 text-xs text-slate-600 font-medium mb-6">
-                  <p className="font-black text-slate-900 uppercase tracking-wider text-sm mb-1">
-                    {selectedTemplate?.companyName || 'UniApply Hub'}
-                  </p>
                   <p className="whitespace-pre-wrap">
                     {selectedTemplate?.companyAddress || 'Kuwait City, State of Kuwait'}
                   </p>
@@ -268,7 +265,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   </div>
                 </div>
 
-                <p className="text-[9px] text-slate-300 font-bold italic">© {new Date().getFullYear()} {selectedTemplate?.companyName || 'UniApply Hub'}. Generated electronically.</p>
+                <p className="text-[9px] text-slate-300 font-bold italic">© {new Date().getFullYear()}. Generated electronically.</p>
               </div>
             </div>
           </div>
