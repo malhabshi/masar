@@ -173,5 +173,10 @@ service cloud.firestore {
     match /invoices/{invoiceId} {
       allow read, write: if isPrivileged();
     }
+
+    match /invoice_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
   }
 }
