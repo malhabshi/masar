@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -23,6 +24,7 @@ interface InvoiceViewDialogProps {
 export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: InvoiceViewDialogProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [logoDataUri, setLogoDataUri] = useState<string | null>(null);
+  const [isLogoLoading, setIsLogoLoading] = useState(false);
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
 
@@ -35,28 +37,40 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
     return templates.find(t => t.id === invoice.templateId) || null;
   }, [invoice.templateId, templates]);
 
-  // Pre-fetch logo as Data URI to bypass CORS issues with canvas capture
+  // Pre-fetch logo as Data URI via our server proxy to bypass CORS
   useEffect(() => {
     async function fetchLogo() {
       if (selectedTemplate?.logoUrl && isOpen) {
+        setIsLogoLoading(true);
         try {
-          const response = await fetch(selectedTemplate.logoUrl);
-          const blob = await response.blob();
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setLogoDataUri(reader.result as string);
-          };
-          reader.readAsDataURL(blob);
+          // Use the proxy route to avoid CORS issues entirely
+          const response = await fetch(`/api/proxy-image?url=${encodeURIComponent(selectedTemplate.logoUrl)}`);
+          if (response.ok) {
+            const dataUri = await response.text();
+            setLogoDataUri(dataUri);
+          } else {
+            throw new Error('Proxy failed');
+          }
         } catch (error) {
-          console.error('Failed to convert logo to Data URI:', error);
-          setLogoDataUri(selectedTemplate.logoUrl); // Fallback to original URL
+          console.error('Failed to proxy logo:', error);
+          // Fallback to original URL if proxy fails (might still fail in PDF but better than nothing)
+          setLogoDataUri(selectedTemplate.logoUrl);
+        } finally {
+          setIsLogoLoading(false);
         }
+      } else {
+        setLogoDataUri(null);
       }
     }
     fetchLogo();
   }, [selectedTemplate, isOpen]);
 
   const handleDownloadPDF = async () => {
+    if (isLogoLoading) {
+        toast({ title: 'Please wait', description: 'Logo is still loading...' });
+        return;
+    }
+
     setIsExporting(true);
     try {
       const { default: jsPDF } = await import('jspdf');
@@ -65,15 +79,27 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       const element = document.getElementById('invoice-render-area');
       if (!element) return;
 
+      // Ensure all images inside are loaded
+      const images = element.getElementsByTagName('img');
+      const loadPromises = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      });
+      await Promise.all(loadPromises);
+
       // Wait a moment for layout stability
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        allowTaint: false,
+        allowTaint: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        imageTimeout: 15000, // Increase timeout
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -110,9 +136,9 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             <Button variant="outline" size="sm" onClick={handlePrint} className="print:hidden">
               <Printer className="h-4 w-4 mr-2" /> Print
             </Button>
-            <Button size="sm" onClick={handleDownloadPDF} disabled={isExporting} className="print:hidden">
-              {isExporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
-              Download PDF
+            <Button size="sm" onClick={handleDownloadPDF} disabled={isExporting || isLogoLoading} className="print:hidden">
+              {isExporting || isLogoLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
+              {isLogoLoading ? 'Preparing Logo...' : 'Download PDF'}
             </Button>
           </div>
         </DialogHeader>
@@ -127,14 +153,14 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                     <img 
                       src={logoDataUri} 
                       alt="Logo" 
-                      className="max-h-full max-w-full object-contain"
+                      style={{ width: 'auto', height: '100%', maxWidth: '100%' }}
                       crossOrigin="anonymous"
                     />
                   ) : selectedTemplate?.logoUrl ? (
                     <img 
                       src={selectedTemplate.logoUrl} 
                       alt="Logo" 
-                      className="max-h-full max-w-full object-contain"
+                      style={{ width: 'auto', height: '100%', maxWidth: '100%' }}
                       crossOrigin="anonymous"
                     />
                   ) : (
