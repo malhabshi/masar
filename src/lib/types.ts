@@ -253,9 +253,9 @@ export interface SpecialTaskConfig {
   };
   requireUniversitySelection?: boolean;
   useApprovedUniversitiesList?: boolean; // Toggles selection from Global Approved Universities
-  allowMultipleUniversitySelection?: boolean; // NEW: Allow picking more than one school
+  allowMultipleUniversitySelection?: boolean; // Allow picking more than one school
   countryFilter?: Country | 'all'; // Filters the selection list by country
-  allowPortalReferenceSelection?: boolean; // NEW: Optional selection of stored student logins
+  allowPortalReferenceSelection?: boolean; // Optional selection of stored student logins
   studentInfo: {
     pullName: boolean;
     pullEmail: boolean;
@@ -374,7 +374,7 @@ export interface ApprovedUniversity {
   notes?: string;
   importantNote?: string; // High-priority red note
   category?: UniversityCategory;
-  entryLevels?: string[]; // Added: Foundation, First Year, Bachelor Degree
+  entryLevels?: string[]; // Foundation, First Year, Bachelor Degree
 }
 
 export interface AcademicTerm {

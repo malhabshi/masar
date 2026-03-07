@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
@@ -171,13 +170,13 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const allCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
   return (
-    <div className="mb-6 relative">
+    <div className="mb-6 relative" id="student-header">
       {allCountries.length > 0 && (
         <div className="absolute top-0 right-0 flex gap-2" title={allCountries.join(', ')}>
             {allCountries.map(country => (
-                countryEmojis[country] ? (
+                countryEmojis[country as Country] ? (
                   <div key={country} className="text-4xl">
-                      {countryEmojis[country]}
+                      {countryEmojis[country as Country]}
                   </div>
                 ) : null
             ))}
@@ -243,7 +242,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               )}
               {canEdit && <EditStudentDialog student={student} />}
               
-              {/* RESTORED TASK BUTTON: Available to assigned agent and management */}
+              {/* Restored "New Task" Button */}
               {(isAssignedEmployee || canManage) && (
                 <CreateStudentTaskDialog student={student} currentUser={currentUser} />
               )}
