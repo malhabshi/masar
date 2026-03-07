@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Invoice, InvoiceStatus, AppUser } from '@/lib/types';
+import type { Invoice, InvoiceStatus, AppUser, InvoiceTemplate } from '@/lib/types';
 import {
   Table,
   TableBody,
@@ -19,7 +19,6 @@ import {
   XCircle, 
   Trash2, 
   Loader2,
-  FileDown,
   Clock
 } from 'lucide-react';
 import {
@@ -46,6 +45,7 @@ import { InvoiceViewDialog } from './invoice-view-dialog';
 
 interface InvoiceTableProps {
   invoices: Invoice[];
+  templates: InvoiceTemplate[];
   currentUser: AppUser;
 }
 
@@ -55,7 +55,7 @@ const statusVariants: Record<InvoiceStatus, string> = {
   cancelled: 'bg-muted text-muted-foreground hover:bg-muted border-transparent',
 };
 
-export function InvoiceTable({ invoices, currentUser }: InvoiceTableProps) {
+export function InvoiceTable({ invoices, templates, currentUser }: InvoiceTableProps) {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -155,6 +155,7 @@ export function InvoiceTable({ invoices, currentUser }: InvoiceTableProps) {
       {viewingInvoice && (
         <InvoiceViewDialog 
           invoice={viewingInvoice} 
+          templates={templates}
           isOpen={!!viewingInvoice} 
           onOpenChange={(open) => !open && setViewingInvoice(null)} 
         />

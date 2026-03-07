@@ -397,9 +397,22 @@ export interface InvoiceItem {
   quantity: number;
 }
 
+export interface InvoiceTemplate {
+  id: string;
+  name: string;
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+  logoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
+  templateId?: string;
   studentId: string;
   studentName: string;
   studentEmail?: string;

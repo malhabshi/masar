@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import type { Invoice } from '@/lib/types';
+import { useState, useMemo } from 'react';
+import type { Invoice, InvoiceTemplate } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -15,13 +15,19 @@ import { useToast } from '@/hooks/use-toast';
 
 interface InvoiceViewDialogProps {
   invoice: Invoice;
+  templates: InvoiceTemplate[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function InvoiceViewDialog({ invoice, isOpen, onOpenChange }: InvoiceViewDialogProps) {
+export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: InvoiceViewDialogProps) {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
+
+  const selectedTemplate = useMemo(() => {
+    if (!invoice.templateId) return null;
+    return templates.find(t => t.id === invoice.templateId) || null;
+  }, [invoice.templateId, templates]);
 
   const handleDownloadPDF = async () => {
     setIsExporting(true);
@@ -85,11 +91,17 @@ export function InvoiceViewDialog({ invoice, isOpen, onOpenChange }: InvoiceView
             {/* Invoice Header */}
             <div className="flex justify-between items-start border-b-2 border-primary pb-8 mb-8">
               <div className="flex items-center gap-3">
-                <div className="bg-primary text-primary-foreground p-3 rounded-xl">
-                  <GraduationCap className="h-10 w-10" />
+                <div className="bg-primary text-primary-foreground p-2 rounded-xl h-16 w-16 flex items-center justify-center overflow-hidden">
+                  {selectedTemplate?.logoUrl ? (
+                    <img src={selectedTemplate.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <GraduationCap className="h-10 w-10" />
+                  )}
                 </div>
                 <div>
-                  <h1 className="text-3xl font-black tracking-tighter text-primary">UniApply Hub</h1>
+                  <h1 className="text-3xl font-black tracking-tighter text-primary">
+                    {selectedTemplate?.companyName || 'UniApply Hub'}
+                  </h1>
                   <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Premium Educational Agency</p>
                 </div>
               </div>
@@ -125,10 +137,21 @@ export function InvoiceViewDialog({ invoice, isOpen, onOpenChange }: InvoiceView
                 <div>
                   <h3 className="text-[10px] font-black uppercase text-primary mb-2 tracking-widest border-b pb-1">Agency Details</h3>
                   <div className="space-y-1.5 text-xs text-slate-600 font-medium">
-                    <p className="font-bold text-slate-800 text-sm">UniApply Hub Management</p>
-                    <p className="flex items-center justify-end gap-2">Kuwait City, State of Kuwait <MapPin className="h-3 w-3 opacity-50" /></p>
-                    <p className="flex items-center justify-end gap-2">contact@uniapplyhub.com <Mail className="h-3 w-3 opacity-50" /></p>
-                    <p className="flex items-center justify-end gap-2">+965 [Agency Phone] <Phone className="h-3 w-3 opacity-50" /></p>
+                    <p className="font-bold text-slate-800 text-sm">
+                      {selectedTemplate?.companyName || 'UniApply Hub Management'}
+                    </p>
+                    <p className="flex items-center justify-end gap-2 whitespace-pre-wrap max-w-[200px] ml-auto">
+                      {selectedTemplate?.companyAddress || 'Kuwait City, State of Kuwait'} 
+                      <MapPin className="h-3 w-3 opacity-50 shrink-0" />
+                    </p>
+                    <p className="flex items-center justify-end gap-2">
+                      {selectedTemplate?.companyEmail || 'contact@uniapplyhub.com'} 
+                      <Mail className="h-3 w-3 opacity-50" />
+                    </p>
+                    <p className="flex items-center justify-end gap-2">
+                      {selectedTemplate?.companyPhone || '+965 [Agency Phone]'} 
+                      <Phone className="h-3 w-3 opacity-50" />
+                    </p>
                   </div>
                 </div>
               </div>
@@ -173,7 +196,7 @@ export function InvoiceViewDialog({ invoice, isOpen, onOpenChange }: InvoiceView
                   <span className="text-slate-400 uppercase tracking-widest">Service Tax (0%)</span>
                   <span className="text-slate-800">0.00 KWD</span>
                 </div>
-                <div className="flex justify-between items-center bg-primary text-primary-foreground p-5 rounded-2xl shadow-lg shadow-primary/20">
+                <div className="flex items-center justify-between bg-primary text-primary-foreground p-5 rounded-2xl shadow-lg shadow-primary/20">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Total Due</span>
                     <span className="text-xs italic opacity-60">Kuwaiti Dinar</span>
@@ -196,7 +219,7 @@ export function InvoiceViewDialog({ invoice, isOpen, onOpenChange }: InvoiceView
               )}
               <div className="text-center border-t pt-8">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Thank you for your business</p>
-                <p className="text-[9px] text-slate-300 mt-2">© {new Date().getFullYear()} UniApply Hub. Generated electronically.</p>
+                <p className="text-[9px] text-slate-300 mt-2">© {new Date().getFullYear()} {selectedTemplate?.companyName || 'UniApply Hub'}. Generated electronically.</p>
               </div>
             </div>
           </div>

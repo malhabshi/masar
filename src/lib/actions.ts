@@ -2,7 +2,7 @@
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -609,7 +609,7 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
             }
         }
         return { success: true, message: 'Status updated.' };
-    } catch(error: any) { return { success: false, message: error.message }; }
+    } catch(error: any) { error.message; return { success: false, message: error.message }; }
 }
 
 export async function toggleTaskPriority(taskId: string, isPrioritized: boolean) {
@@ -956,7 +956,7 @@ export async function closeInactiveSessions() {
 }
 
 export async function updateUserAvatar(userId: string, avatarUrl: string) {
-  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  if (!checkAdminServices()) return { success: true, message: 'DB not available' };
   try {
     await adminDb!.collection('users').doc(userId).update({ avatarUrl });
     return { success: true, message: 'Avatar updated.' };
@@ -1424,6 +1424,37 @@ export async function deleteInvoice(invoiceId: string, adminId: string) {
 
     await adminDb!.collection('invoices').doc(invoiceId).delete();
     return { success: true, message: 'Invoice deleted.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function saveInvoiceTemplate(adminId: string, data: Omit<InvoiceTemplate, 'id' | 'createdAt' | 'updatedAt'>, id?: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    const now = new Date().toISOString();
+    if (id) {
+      await adminDb!.collection('invoice_templates').doc(id).update({ ...data, updatedAt: now });
+    } else {
+      await adminDb!.collection('invoice_templates').add({ ...data, createdAt: now, updatedAt: now });
+    }
+    return { success: true, message: 'Branding template saved.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function deleteInvoiceTemplate(adminId: string, templateId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+
+    await adminDb!.collection('invoice_templates').doc(templateId).delete();
+    return { success: true, message: 'Template removed.' };
   } catch (error: any) {
     return { success: false, message: error.message };
   }

@@ -3,12 +3,13 @@
 import { useState, useMemo } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
-import type { Invoice, Student } from '@/lib/types';
+import type { Invoice, Student, InvoiceTemplate } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Loader2, ReceiptText, Search } from 'lucide-react';
+import { PlusCircle, Loader2, ReceiptText, Search, Settings2 } from 'lucide-react';
 import { InvoiceTable } from '@/components/invoices/invoice-table';
 import { CreateInvoiceDialog } from '@/components/invoices/create-invoice-dialog';
+import { InvoiceSettingsDialog } from '@/components/invoices/invoice-settings-dialog';
 import { Input } from '@/components/ui/input';
 
 export default function InvoicesPage() {
@@ -17,6 +18,7 @@ export default function InvoicesPage() {
   
   const { data: invoices, isLoading: invoicesLoading } = useCollection<Invoice>(currentUser ? 'invoices' : '');
   const { data: students } = useCollection<Student>(currentUser ? 'students' : '');
+  const { data: templates, isLoading: templatesLoading } = useCollection<InvoiceTemplate>(currentUser ? 'invoice_templates' : '');
 
   const filteredInvoices = useMemo(() => {
     if (!invoices) return [];
@@ -27,7 +29,7 @@ export default function InvoicesPage() {
     ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [invoices, searchQuery]);
 
-  if (isUserLoading || invoicesLoading) {
+  if (isUserLoading || invoicesLoading || templatesLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -49,12 +51,20 @@ export default function InvoicesPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Generate and track student billing records.</p>
         </div>
-        <CreateInvoiceDialog currentUser={currentUser} students={students || []}>
-          <Button className="font-bold">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Create Invoice
-          </Button>
-        </CreateInvoiceDialog>
+        <div className="flex gap-2">
+          <InvoiceSettingsDialog currentUser={currentUser} templates={templates || []}>
+            <Button variant="outline" className="font-bold">
+              <Settings2 className="mr-2 h-4 w-4" />
+              Template Settings
+            </Button>
+          </InvoiceSettingsDialog>
+          <CreateInvoiceDialog currentUser={currentUser} students={students || []} templates={templates || []}>
+            <Button className="font-bold">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create Invoice
+            </Button>
+          </CreateInvoiceDialog>
+        </div>
       </div>
 
       <Card>
@@ -73,7 +83,7 @@ export default function InvoicesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <InvoiceTable invoices={filteredInvoices} currentUser={currentUser} />
+          <InvoiceTable invoices={filteredInvoices} currentUser={currentUser} templates={templates || []} />
         </CardContent>
       </Card>
     </div>

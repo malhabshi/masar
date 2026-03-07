@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, AppUser, InvoiceItem } from '@/lib/types';
+import type { Student, AppUser, InvoiceItem, InvoiceTemplate } from '@/lib/types';
 import { createInvoice } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -22,10 +22,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, Calculator } from 'lucide-react';
+import { Plus, Trash2, Loader2, Calculator, LayoutTemplate } from 'lucide-react';
 
 const invoiceSchema = z.object({
   studentId: z.string().min(1, 'Please select a student.'),
+  templateId: z.string().min(1, 'Please select a branding template.'),
   notes: z.string().optional(),
   items: z.array(z.object({
     description: z.string().min(1, 'Description required.'),
@@ -37,10 +38,11 @@ const invoiceSchema = z.object({
 interface CreateInvoiceDialogProps {
   currentUser: AppUser;
   students: Student[];
+  templates: InvoiceTemplate[];
   children: React.ReactNode;
 }
 
-export function CreateInvoiceDialog({ currentUser, students, children }: CreateInvoiceDialogProps) {
+export function CreateInvoiceDialog({ currentUser, students, templates, children }: CreateInvoiceDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -49,6 +51,7 @@ export function CreateInvoiceDialog({ currentUser, students, children }: CreateI
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       studentId: '',
+      templateId: templates.length === 1 ? templates[0].id : '',
       notes: '',
       items: [{ description: '', amount: 0, quantity: 1 }],
     },
@@ -74,6 +77,7 @@ export function CreateInvoiceDialog({ currentUser, students, children }: CreateI
 
     const invoiceData = {
       studentId: values.studentId,
+      templateId: values.templateId,
       studentName: selectedStudent.name,
       studentEmail: selectedStudent.email,
       studentPhone: selectedStudent.phone,
@@ -105,28 +109,59 @@ export function CreateInvoiceDialog({ currentUser, students, children }: CreateI
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-            <FormField
-              control={form.control}
-              name="studentId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Select Student</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Search students..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {students.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name} ({s.phone})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="studentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Student</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Search students..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {students.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name} ({s.phone})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="templateId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <LayoutTemplate className="h-3 w-3" />
+                      Select Branding
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a template (Masar/Mostajed)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {templates.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.name} ({t.companyName})</SelectItem>
+                        ))}
+                        {templates.length === 0 && (
+                          <SelectItem value="none" disabled>No templates found. Go to Settings.</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
