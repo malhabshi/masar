@@ -65,10 +65,17 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   });
 
   const watchItems = form.watch('items');
-  const watchDiscount = form.watch('discountAmount') || 0;
+  const watchDiscount = form.watch('discountAmount');
   
-  const subtotal = watchItems.reduce((acc, item) => acc + (item.amount * item.quantity), 0);
-  const total = Math.max(0, subtotal - watchDiscount);
+  // Ensure we treat values as numbers during the calculation phase
+  const discountValue = Number(watchDiscount) || 0;
+  const subtotal = watchItems.reduce((acc, item) => {
+    const amount = Number(item.amount) || 0;
+    const quantity = Number(item.quantity) || 0;
+    return acc + (amount * quantity);
+  }, 0);
+  
+  const total = Math.max(0, subtotal - discountValue);
 
   const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
     setIsSubmitting(true);
@@ -86,9 +93,14 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       studentName: selectedStudent.name,
       studentEmail: selectedStudent.email,
       studentPhone: selectedStudent.phone,
-      items: values.items.map((item, idx) => ({ ...item, id: `item-${idx}-${Date.now()}` })),
+      items: values.items.map((item, idx) => ({ 
+        id: `item-${idx}-${Date.now()}`,
+        description: item.description,
+        amount: Number(item.amount),
+        quantity: Number(item.quantity)
+      })),
       totalAmount: total,
-      discountAmount: values.discountAmount,
+      discountAmount: discountValue,
       status: 'unpaid' as const,
       notes: values.notes,
     };
@@ -241,10 +253,10 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                   <span>Subtotal</span>
                   <span>{subtotal.toFixed(2)} KWD</span>
                 </div>
-                {watchDiscount > 0 && (
+                {discountValue > 0 && (
                   <div className="flex justify-between text-xs text-destructive">
                     <span>Discount</span>
-                    <span>-{watchDiscount.toFixed(2)} KWD</span>
+                    <span>-{discountValue.toFixed(2)} KWD</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t pt-2 mt-1">
