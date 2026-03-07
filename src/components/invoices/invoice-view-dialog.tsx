@@ -182,13 +182,13 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1">Bill To</h3>
                   <div className="flex gap-2 items-baseline mt-2">
                     <span className="text-xs font-black uppercase text-slate-400 shrink-0">Name:</span>
-                    <p className="text-2xl font-black text-black underline decoration-slate-900 decoration-2 underline-offset-4">
+                    <p className="text-xs font-black text-black">
                       {invoice.studentName}
                     </p>
                   </div>
                   <div className="mt-4 space-y-1 text-sm text-slate-700 font-bold">
-                    <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 opacity-50" /> {invoice.studentPhone}</p>
-                    {invoice.studentEmail && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 opacity-50" /> {invoice.studentEmail}</p>}
+                    <p className="flex items-center gap-2">Phone Number: {invoice.studentPhone}</p>
+                    {invoice.studentEmail && <p className="flex items-center gap-2">Email: {invoice.studentEmail}</p>}
                   </div>
                 </div>
               </div>
