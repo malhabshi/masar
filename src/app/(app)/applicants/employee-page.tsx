@@ -13,9 +13,11 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
-import { Loader2, AlertTriangle, Sparkles } from 'lucide-react';
+import { Loader2, AlertTriangle, Sparkles, FileSpreadsheet } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { format } from 'date-fns';
 
 export function EmployeeApplicantsPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -48,6 +50,57 @@ export function EmployeeApplicantsPage() {
   // Group students into "New" and "Portfolio"
   const newlyAssigned = useMemo(() => (myStudents || []).filter(s => s.isNewForEmployee), [myStudents]);
   const portfolio = useMemo(() => (myStudents || []).filter(s => !s.isNewForEmployee), [myStudents]);
+
+  const handleDownloadExcel = () => {
+    if (!myStudents || myStudents.length === 0) return;
+
+    // Excel/CSV Headers
+    const headers = [
+      "Student Name", 
+      "Phone", 
+      "Email", 
+      "Internal ID", 
+      "Pipeline Status", 
+      "Target Countries",
+      "Missing Items",
+      "Final University", 
+      "IELTS", 
+      "Intake Semester", 
+      "Intake Year", 
+      "Created Date"
+    ];
+    
+    // Excel/CSV Rows
+    const rows = myStudents.map(s => [
+      s.name || '',
+      s.phone || '',
+      s.email || '',
+      s.internalNumber || '',
+      s.pipelineStatus || 'none',
+      (s.targetCountries || []).join('; '),
+      (s.missingItems || []).join('; '),
+      s.finalChoiceUniversity || '',
+      s.ieltsOverall ? s.ieltsOverall.toFixed(1) : '0.0',
+      s.academicIntakeSemester || '',
+      s.academicIntakeYear?.toString() || '',
+      s.createdAt ? format(new Date(s.createdAt), 'yyyy-MM-dd') : ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `my_applicants_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const dataIsLoading = isUserLoading || studentsAreLoading || usersAreLoading;
 
@@ -133,14 +186,24 @@ export function EmployeeApplicantsPage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <CardTitle>My Portfolio</CardTitle>
             <CardDescription>
               A filterable list of your assigned students.
             </CardDescription>
           </div>
-          <AddStudentDialog source="applicants" />
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleDownloadExcel}
+              className="gap-2 border-green-600 text-green-700 hover:bg-green-50"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Download Excel
+            </Button>
+            <AddStudentDialog source="applicants" />
+          </div>
         </CardHeader>
         <CardContent>
           <StudentTable
