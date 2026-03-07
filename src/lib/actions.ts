@@ -24,6 +24,15 @@ function checkAdminServices() {
   return true;
 }
 
+/**
+ * SCRUBBER: Ensures data is a plain object for Server-to-Client boundaries.
+ * This prevents the "Classes or null prototypes are not supported" error.
+ */
+function scrub<T>(data: T): T {
+  if (data === undefined) return data;
+  return JSON.parse(JSON.stringify(data));
+}
+
 // Helper to get user from DB
 async function getUser(userId: string): Promise<User | null> {
     if (!checkAdminServices()) return null;
@@ -46,8 +55,6 @@ async function refreshStudentActivity(studentId: string) {
 /**
  * REPAIR UTILITY: Rebuilds the DBAC collections (/admins and /departmentUsers)
  * based on the current state of the main /users collection.
- * Ensures department users have a department field and are synced correctly.
- * Also handles hardcoded bypass maintenance UIDs.
  */
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
@@ -76,7 +83,6 @@ export async function repairPermissions(adminId: string) {
             const userData = userDoc.data();
             const uid = userDoc.id;
 
-            // 1. ADMISSIONS ADMINS
             if (userData.role === 'admin' || authorizedBypass.includes(uid)) {
                 batch.set(adminDb!.collection('admins').doc(uid), { 
                   role: 'admin', 
@@ -85,16 +91,15 @@ export async function repairPermissions(adminId: string) {
                 });
             } 
             
-            // 2. DEPARTMENT USERS
             if (userData.role === 'department') {
-                const dept = userData.department || 'UK'; // Default to UK if missing
+                const dept = userData.department || 'UK'; 
                 if (!userData.department) {
                     batch.update(userDoc.ref, { department: dept });
                 }
                 
                 batch.set(adminDb!.collection('departmentUsers').doc(uid), { 
                   role: 'department', 
-                  lastSync: now,
+                  lastSync: now, 
                   department: dept,
                   email: userData.email || ''
                 });
@@ -308,7 +313,6 @@ export async function changeUserRole(userId: string, newRole: UserRole, adminId:
         const adminDBACRef = adminDb!.collection('admins').doc(userId);
         const deptDBACRef = adminDb!.collection('departmentUsers').doc(userId);
         
-        // Clean up old DBAC records
         batch.delete(adminDBACRef);
         batch.delete(deptDBACRef);
         
@@ -403,7 +407,6 @@ export async function deleteApplication(studentId: string, university: string, m
       lastActivityAt: new Date().toISOString()
     };
 
-    // If we deleted the final choice, clear it
     if (studentData.finalChoiceUniversity === university) {
       updates.finalChoiceUniversity = FieldValue.delete();
     }
@@ -886,7 +889,6 @@ export async function deleteStudentDocument(studentId: string, documentId: strin
         const deleter = await getUser(deleterId);
         if (!deleter) return { success: false, message: "Invalid user." };
         
-        // Check authorization for document deletion
         const isAdminOrDept = deleter.role === 'admin' || deleter.role === 'department';
         const isAssignedEmployee = deleter.role === 'employee' && deleter.civilId === studentData.employeeId;
 
@@ -972,7 +974,7 @@ export async function getReportStats(dateRange: { from: string; to: string; }): 
     const studentsInRange = allStudents.filter(s => s.createdAt && isWithinInterval(parseISO(s.createdAt), interval));
     const appsInRange = allStudents.flatMap(s => s.applications || []).filter(app => app.updatedAt && isWithinInterval(parseISO(app.updatedAt), interval));
     const stats: ReportStats = { totalStudents: allStudents.length, totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), totalEmployees: allUsers.filter(u => u.role === 'employee').length, applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + (s.applications?.length || 0); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentGrowthData: Object.entries(studentsInRange.reduce((acc, s) => { const d = format(parseISO(s.createdAt), 'yyyy-MM-dd'); acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)), applicationCountryData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.country] = (acc[app.country] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), employeeHoursData: Object.entries(allTimeLogs.filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval)).reduce((acc, log) => { const user = allUsers.find(u => u.id === log.employeeId); if (user) acc[user.name] = (acc[user.name] || 0) + (differenceInMinutes(parseISO(log.clockOut!), parseISO(log.clockIn)) / 60); return acc; }, {} as Record<string, number>)).map(([name, hours]) => ({ name, hours: parseFloat(hours.toFixed(1))})) };
-    return { success: true, data: stats };
+    return scrub({ success: true, data: stats });
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
@@ -1013,7 +1015,7 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
             });
             return { employeeId: employee.id, employeeName: employee.name, totalStudents: created.length, dailyCounts: Array.from({ length: 30 }, (_, i) => format(subDays(new Date(), i), 'yyyy-MM-dd')).map(date => ({ date, count: dailyCountsMap[date] || 0 })).sort((a,b) => a.date.localeCompare(b.date)), monthlyTotals: Object.entries(monthlyMap).map(([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month)), };
         });
-        return { success: true, data: stats };
+        return scrub({ success: true, data: stats });
     } catch (error: any) { return { success: false, message: error.message }; }
 }
 
@@ -1128,7 +1130,7 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
       for (const adminDoc of adminsSnap.docs) {
         const adminData = adminDoc.data() as User;
-        await triggerWhatsAppNotification('admin_update', { employeeName: adminData.name, messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/internal-chat` }, adminData.phone);
+        await triggerWhatsAppNotification('admin_update', { employeeName: adminData.name, studentName: studentData.name, messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/internal-chat` }, adminData.phone);
       }
     }
     return { success: true };
@@ -1207,10 +1209,6 @@ export async function submitInactivityReport(studentId: string, employeeId: stri
   } catch (e: any) { return { success: false, message: e.message }; }
 }
 
-/**
- * BACKGROUND TASK: Scans students for inactivity (>10 days) and sends reminders.
- * Throttled to run at most once per hour globally via a Firestore "Lock".
- */
 export async function processInactivityReminders() {
   if (!checkAdminServices()) return { success: false };
   
@@ -1219,7 +1217,6 @@ export async function processInactivityReminders() {
     const cooldownRef = adminDb!.collection('system_metadata').doc('inactivity_check');
     const cooldownDoc = await cooldownRef.get();
 
-    // 1. Global Cooldown Check (Throttle to 1 hour)
     if (cooldownDoc.exists) {
       const lastRunAt = cooldownDoc.data()?.lastRunAt;
       if (lastRunAt && differenceInMinutes(now, parseISO(lastRunAt)) < 60) {
@@ -1227,13 +1224,11 @@ export async function processInactivityReminders() {
       }
     }
 
-    // 2. Set the Lock immediately to prevent race conditions
     await cooldownRef.set({ lastRunAt: now.toISOString() }, { merge: true });
 
     const tenDaysAgo = subDays(new Date(), 10).toISOString();
     const threeHoursAgo = subMinutes(new Date(), 180).toISOString();
     
-    // Find students with no activity for 10 days
     const snapshot = await adminDb!.collection('students')
       .where('lastActivityAt', '<', tenDaysAgo)
       .get();
@@ -1292,20 +1287,13 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
         const batch = adminDb!.batch();
         const studentIds: string[] = [];
 
-        // Comprehensive search for ALL students linked to the offboarding employee
-        // 1. Match by Civil ID (Primary assignment)
         const assignedSnap = await adminDb!.collection('students').where('employeeId', '==', fromUser.civilId).get();
-        
-        // 2. Match by legacy User ID (Backup assignment)
         const assignedLegacySnap = await adminDb!.collection('students').where('employeeId', '==', fromUser.id).get();
-
-        // 3. Match unassigned leads created by this employee
         const leadsSnap = await adminDb!.collection('students')
             .where('employeeId', '==', null)
             .where('createdBy', '==', fromUser.id)
             .get();
 
-        // Combine all unique document matches
         const allRelevantDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
         assignedSnap.docs.forEach(d => allRelevantDocs.set(d.id, d));
         assignedLegacySnap.docs.forEach(d => allRelevantDocs.set(d.id, d));
@@ -1337,14 +1325,14 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 
         await batch.commit();
         
-        return { 
+        return scrub({ 
           success: true, 
           message: `Transferred ${allRelevantDocs.size} students to ${toUser.name}.`, 
           studentIds, 
           fromEmployeeName: fromUser.name,
           toEmployeeName: toUser.name,
           toEmployeePhone: toUser.phone 
-        };
+        });
     } catch (error: any) {
         return { success: false, message: error.message };
     }
@@ -1352,7 +1340,6 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 
 /**
  * EXPORT UTILITY: Fetches entire data tables for manual system backup.
- * Only accessible by administrators.
  */
 export async function getFullSystemBackup(adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
@@ -1377,11 +1364,11 @@ export async function getFullSystemBackup(adminId: string) {
       backupData[col] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    return { 
+    return scrub({ 
       success: true, 
       data: backupData,
       filename: `UniApply_Hub_System_Backup_${format(new Date(), 'yyyy-MM-dd_HHmm')}.json`
-    };
+    });
   } catch (e: any) {
     return { success: false, message: e.message };
   }
