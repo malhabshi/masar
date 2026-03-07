@@ -144,7 +144,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             {/* Invoice Header */}
             <div className="flex justify-between items-center border-b-2 border-slate-900 pb-8 mb-12">
               <div className="flex items-center">
-                <div className="h-32 w-48 flex items-center justify-start overflow-hidden">
+                <div className="h-40 w-64 flex items-center justify-start overflow-hidden">
                   {logoDataUri ? (
                     <img 
                       src={logoDataUri} 
@@ -176,10 +176,10 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             </div>
 
             {/* Information Grid */}
-            <div className="grid grid-cols-2 gap-16 mb-16">
+            <div className="mb-16">
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1">Bill To</h3>
+                  <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1 w-32">Bill To</h3>
                   <div className="flex gap-2 items-baseline mt-2">
                     <span className="text-xs font-black uppercase text-slate-400 shrink-0">Name:</span>
                     <p className="text-xs font-black text-black">
@@ -187,30 +187,8 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                     </p>
                   </div>
                   <div className="mt-4 space-y-1 text-sm text-slate-700 font-bold">
-                    <p className="flex items-center gap-2">Phone Number: {invoice.studentPhone}</p>
-                    {invoice.studentEmail && <p className="flex items-center gap-2">Email: {invoice.studentEmail}</p>}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right space-y-4">
-                <div>
-                  <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1">Agency Details</h3>
-                  <div className="space-y-1.5 text-xs text-slate-600 font-medium">
-                    <p className="font-bold text-slate-900 text-sm">
-                      {selectedTemplate?.companyName || 'UniApply Hub Management'}
-                    </p>
-                    <p className="flex items-center justify-end gap-2 whitespace-pre-wrap max-w-[200px] ml-auto">
-                      {selectedTemplate?.companyAddress || 'Kuwait City, State of Kuwait'} 
-                      <MapPin className="h-3 w-3 opacity-50 shrink-0" />
-                    </p>
-                    <p className="flex items-center justify-end gap-2">
-                      {selectedTemplate?.companyEmail || 'contact@uniapplyhub.com'} 
-                      <Mail className="h-3 w-3 opacity-50" />
-                    </p>
-                    <p className="flex items-center justify-end gap-2">
-                      {selectedTemplate?.companyPhone || '+965 [Agency Phone]'} 
-                      <Phone className="h-3 w-3 opacity-50" />
-                    </p>
+                    <p>Phone Number: {invoice.studentPhone}</p>
+                    {invoice.studentEmail && <p>Email: {invoice.studentEmail}</p>}
                   </div>
                 </div>
               </div>
@@ -261,7 +239,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               </div>
             </div>
 
-            {/* Footer Notes */}
+            {/* Footer Notes & Agency Details */}
             <div className="mt-auto pt-16">
               {invoice.notes && (
                 <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
@@ -272,9 +250,25 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   <p className="text-xs text-slate-700 italic font-medium leading-relaxed whitespace-pre-wrap">{invoice.notes}</p>
                 </div>
               )}
+              
               <div className="text-center border-t pt-8">
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Thank you for your business</p>
-                <p className="text-[9px] text-slate-300 mt-2 font-bold italic">© {new Date().getFullYear()} {selectedTemplate?.companyName || 'UniApply Hub'}. Generated electronically.</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-4">Thank you for your business</p>
+                
+                {/* Agency Details relocated to footer */}
+                <div className="space-y-1 text-xs text-slate-600 font-medium mb-6">
+                  <p className="font-black text-slate-900 uppercase tracking-wider text-sm mb-1">
+                    {selectedTemplate?.companyName || 'UniApply Hub'}
+                  </p>
+                  <p className="whitespace-pre-wrap">
+                    {selectedTemplate?.companyAddress || 'Kuwait City, State of Kuwait'}
+                  </p>
+                  <div className="flex items-center justify-center gap-4 mt-2">
+                    <span className="flex items-center gap-1.5"><Mail className="h-3 w-3 opacity-50" /> {selectedTemplate?.companyEmail || 'contact@uniapplyhub.com'}</span>
+                    <span className="flex items-center gap-1.5"><Phone className="h-3 w-3 opacity-50" /> {selectedTemplate?.companyPhone || '+965 [Agency Phone]'}</span>
+                  </div>
+                </div>
+
+                <p className="text-[9px] text-slate-300 font-bold italic">© {new Date().getFullYear()} {selectedTemplate?.companyName || 'UniApply Hub'}. Generated electronically.</p>
               </div>
             </div>
           </div>
