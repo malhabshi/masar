@@ -85,6 +85,18 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
                   </FormItem>
                 )} />
               )}
+
+              <Separator className="my-2" />
+
+              <FormField control={form.control} name="specialConfig.allowPortalReferenceSelection" render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-xs font-bold text-accent">Allow Portal Reference Selection</FormLabel>
+                    <FormDescription className="text-[10px]">Employee can optionally pick a saved portal login (e.g. MOHE, UCAS) from the profile.</FormDescription>
+                  </div>
+                </FormItem>
+              )} />
             </CardContent>
           </Card>
         </div>

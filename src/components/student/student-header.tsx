@@ -241,7 +241,12 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                   </TooltipProvider>
               )}
               {canEdit && <EditStudentDialog student={student} />}
-              {isAssignedEmployee && <CreateStudentTaskDialog student={student} currentUser={currentUser} />}
+              
+              {/* RESTORED TASK BUTTON: Available to assigned agent and management */}
+              {(isAssignedEmployee || canManage) && (
+                <CreateStudentTaskDialog student={student} currentUser={currentUser} />
+              )}
+
               {canRequestTransfer && <RequestTransferDialog student={student} currentUser={currentUser} />}
               {canRequestDeletion && <RequestDeletionDialog student={student} currentUser={currentUser} />}
               

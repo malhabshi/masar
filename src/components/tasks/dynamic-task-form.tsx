@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, RequestType, Application, ApprovedUniversity, Country } from '@/lib/types';
+import type { Student, RequestType, Application, ApprovedUniversity, Country, StudentLogin } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search, Key } from 'lucide-react';
 import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -80,6 +80,10 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     if (config.documents?.allowSelection) {
       schemaFields.selectedDocuments = z.array(z.string()).default([]);
     }
+    if (config.allowPortalReferenceSelection) {
+      schemaFields.selectedPortalId = z.string().optional();
+      schemaFields.selectedPortalDetails = z.any().optional();
+    }
   }
 
   if (config?.requireUniversitySelection) {
@@ -114,6 +118,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
       selectedApplicationId: '',
       selectedGlobalUniversityId: '',
+      selectedPortalId: '',
     },
   });
 
@@ -200,6 +205,74 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             />
           )}
         </div>
+
+        {/* External Portal Reference Selection */}
+        {config?.allowPortalReferenceSelection && (
+          <div className="space-y-4 border-t pt-4">
+            <FormLabel className="text-base font-bold flex items-center gap-2">
+                <Key className="h-5 w-5 text-accent" />
+                Select Portal Reference (Optional)
+            </FormLabel>
+            <FormField
+              control={form.control}
+              name="selectedPortalId"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={(val) => {
+                        field.onChange(val);
+                        const portal = student.studentLogins?.find(p => p.id === val);
+                        if (portal) {
+                          form.setValue('selectedPortalDetails', {
+                            description: portal.description,
+                            username: portal.username,
+                            password: portal.password,
+                            notes: portal.notes
+                          });
+                        } else {
+                          form.setValue('selectedPortalDetails', null);
+                        }
+                      }}
+                      value={field.value}
+                      className="grid grid-cols-1 md:grid-cols-2 gap-3"
+                    >
+                      {student.studentLogins && student.studentLogins.length > 0 ? (
+                        student.studentLogins.map((portal) => (
+                          <FormItem key={portal.id} className="flex items-center space-x-3 space-y-0 border p-3 rounded-lg bg-background hover:bg-muted/20 transition-colors cursor-pointer">
+                            <FormControl>
+                              <RadioGroupItem value={portal.id} />
+                            </FormControl>
+                            <FormLabel className="font-medium cursor-pointer flex-1">
+                              <span className="block text-sm font-bold">{portal.description}</span>
+                              <span className="block text-[10px] text-muted-foreground truncate">{portal.username}</span>
+                            </FormLabel>
+                          </FormItem>
+                        ))
+                      ) : (
+                        <div className="col-span-full text-center py-6 border rounded-lg border-dashed bg-muted/5">
+                            <p className="text-xs text-muted-foreground italic">No portal references saved for this student.</p>
+                        </div>
+                      )}
+                      {field.value && (
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 text-[10px] font-bold text-destructive"
+                          onClick={() => { field.onChange(''); form.setValue('selectedPortalDetails', null); }}
+                        >
+                          Clear Selection
+                        </Button>
+                      )}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
 
         {/* Existing Application Selection */}
         {config?.requireUniversitySelection && (

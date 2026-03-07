@@ -254,6 +254,7 @@ export interface SpecialTaskConfig {
   requireUniversitySelection?: boolean;
   useApprovedUniversitiesList?: boolean; // Toggles selection from Global Approved Universities
   countryFilter?: Country | 'all'; // Filters the selection list by country
+  allowPortalReferenceSelection?: boolean; // NEW: Optional selection of stored student logins
   studentInfo: {
     pullName: boolean;
     pullEmail: boolean;

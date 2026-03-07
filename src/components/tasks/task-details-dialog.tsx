@@ -35,7 +35,8 @@ import {
   BellRing,
   Save,
   Building2,
-  GraduationCap
+  GraduationCap,
+  Key
 } from 'lucide-react';
 import type { Task, TaskStatus, User as UserType, Document as StudentDoc } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
@@ -144,6 +145,7 @@ export function TaskDetailsDialog({
   const hasStatusChanged = localStatus !== task.status;
   const selectedApp = data.selectedApplicationDetails;
   const selectedGlobalUni = data.selectedGlobalUniversityDetails;
+  const selectedPortal = data.selectedPortalDetails;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -203,6 +205,21 @@ export function TaskDetailsDialog({
 
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-5">
           <div className="lg:col-span-3 border-r overflow-y-auto p-6 space-y-8">
+            {selectedPortal && (
+                <section className="space-y-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2 text-accent">
+                        <Key className="h-5 w-5" /> 
+                        Attached Portal Reference
+                    </h3>
+                    <div className="bg-accent/5 p-4 rounded-lg border border-accent/20 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderDataField('Portal', selectedPortal.description)}
+                        {renderDataField('Username', selectedPortal.username, User)}
+                        {renderDataField('Password', selectedPortal.password, ShieldCheck)}
+                        {renderDataField('Portal Notes', selectedPortal.notes)}
+                    </div>
+                </section>
+            )}
+
             {selectedApp && (
                 <section className="space-y-4">
                     <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
