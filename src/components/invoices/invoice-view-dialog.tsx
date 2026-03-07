@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileDown, GraduationCap, Printer, MapPin, Phone, Mail } from 'lucide-react';
+import { Loader2, FileDown, GraduationCap, Printer, MapPin, Phone, Mail, User } from 'lucide-react';
 import { formatDate } from '@/lib/timestamp-utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -43,7 +43,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       if (selectedTemplate?.logoUrl && isOpen) {
         setIsLogoLoading(true);
         try {
-          // Use the proxy route to avoid CORS issues entirely
           const response = await fetch(`/api/proxy-image?url=${encodeURIComponent(selectedTemplate.logoUrl)}`);
           if (response.ok) {
             const dataUri = await response.text();
@@ -53,7 +52,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
           }
         } catch (error) {
           console.error('Failed to proxy logo:', error);
-          // Fallback to original URL if proxy fails (might still fail in PDF but better than nothing)
           setLogoDataUri(selectedTemplate.logoUrl);
         } finally {
           setIsLogoLoading(false);
@@ -79,7 +77,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       const element = document.getElementById('invoice-render-area');
       if (!element) return;
 
-      // Ensure all images inside are loaded
       const images = element.getElementsByTagName('img');
       const loadPromises = Array.from(images).map(img => {
         if (img.complete) return Promise.resolve();
@@ -90,7 +87,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       });
       await Promise.all(loadPromises);
 
-      // Wait a moment for layout stability
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const canvas = await html2canvas(element, {
@@ -99,7 +95,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
         allowTaint: true,
         logging: false,
         backgroundColor: '#ffffff',
-        imageTimeout: 15000, // Increase timeout
+        imageTimeout: 15000,
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -146,9 +142,9 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
         <div className="flex-1 overflow-y-auto bg-slate-100 p-8 flex justify-center">
           <div id="invoice-render-area" className="bg-white w-[210mm] min-h-[297mm] shadow-xl p-12 flex flex-col font-sans">
             {/* Invoice Header */}
-            <div className="flex justify-between items-start border-b-2 border-primary pb-8 mb-8">
-              <div className="flex items-center gap-3">
-                <div className="bg-primary text-primary-foreground p-2 rounded-xl h-16 w-16 flex items-center justify-center overflow-hidden">
+            <div className="flex justify-between items-center border-b-2 border-slate-900 pb-8 mb-12">
+              <div className="flex items-center">
+                <div className="h-32 w-48 flex items-center justify-start overflow-hidden">
                   {logoDataUri ? (
                     <img 
                       src={logoDataUri} 
@@ -164,49 +160,43 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                       crossOrigin="anonymous"
                     />
                   ) : (
-                    <GraduationCap className="h-10 w-10" />
+                    <GraduationCap className="h-16 w-16 text-slate-300" />
                   )}
-                </div>
-                <div>
-                  <h1 className="text-3xl font-black tracking-tighter text-primary">
-                    {selectedTemplate?.companyName || 'UniApply Hub'}
-                  </h1>
-                  <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Premium Educational Agency</p>
                 </div>
               </div>
               <div className="text-right">
-                <h2 className="text-4xl font-black text-slate-200 uppercase tracking-tighter leading-none mb-2">INVOICE</h2>
+                <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-4">INVOICE</h2>
                 <div className="space-y-1">
-                  <p className="text-sm font-bold text-slate-700">{invoice.invoiceNumber}</p>
-                  <p className="text-xs text-muted-foreground">{isClient ? formatDate(invoice.createdAt) : '...'}</p>
-                  <div className="flex justify-end pt-1">
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
-                      invoice.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200'
-                    }`}>
-                      {invoice.status}
-                    </span>
-                  </div>
+                  <p className="text-lg font-black text-slate-900">{invoice.invoiceNumber}</p>
+                  <p className="text-sm font-black text-black">
+                    DATE: {isClient ? formatDate(invoice.createdAt) : '...'}
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Information Grid */}
-            <div className="grid grid-cols-2 gap-16 mb-12">
+            <div className="grid grid-cols-2 gap-16 mb-16">
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-[10px] font-black uppercase text-primary mb-2 tracking-widest border-b pb-1">Bill To</h3>
-                  <p className="text-xl font-bold text-slate-800">{invoice.studentName}</p>
-                  <div className="mt-2 space-y-1 text-xs text-slate-600 font-medium">
-                    <p className="flex items-center gap-2"><Phone className="h-3 w-3 opacity-50" /> {invoice.studentPhone}</p>
-                    {invoice.studentEmail && <p className="flex items-center gap-2"><Mail className="h-3 w-3 opacity-50" /> {invoice.studentEmail}</p>}
+                  <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1">Bill To</h3>
+                  <div className="flex gap-2 items-baseline mt-2">
+                    <span className="text-xs font-black uppercase text-slate-400 shrink-0">Name:</span>
+                    <p className="text-2xl font-black text-black underline decoration-slate-900 decoration-2 underline-offset-4">
+                      {invoice.studentName}
+                    </p>
+                  </div>
+                  <div className="mt-4 space-y-1 text-sm text-slate-700 font-bold">
+                    <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 opacity-50" /> {invoice.studentPhone}</p>
+                    {invoice.studentEmail && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 opacity-50" /> {invoice.studentEmail}</p>}
                   </div>
                 </div>
               </div>
               <div className="text-right space-y-4">
                 <div>
-                  <h3 className="text-[10px] font-black uppercase text-primary mb-2 tracking-widest border-b pb-1">Agency Details</h3>
+                  <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1">Agency Details</h3>
                   <div className="space-y-1.5 text-xs text-slate-600 font-medium">
-                    <p className="font-bold text-slate-800 text-sm">
+                    <p className="font-bold text-slate-900 text-sm">
                       {selectedTemplate?.companyName || 'UniApply Hub Management'}
                     </p>
                     <p className="flex items-center justify-end gap-2 whitespace-pre-wrap max-w-[200px] ml-auto">
@@ -230,24 +220,24 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             <div className="flex-1">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-y border-slate-200">
-                    <th className="py-4 px-4 text-[10px] font-black uppercase text-slate-500 tracking-widest w-12">#</th>
-                    <th className="py-4 px-2 text-[10px] font-black uppercase text-slate-500 tracking-widest">Description</th>
-                    <th className="py-4 px-2 text-[10px] font-black uppercase text-slate-500 tracking-widest text-center">Qty</th>
-                    <th className="py-4 px-2 text-[10px] font-black uppercase text-slate-500 tracking-widest text-right">Unit Price</th>
-                    <th className="py-4 px-4 text-[10px] font-black uppercase text-slate-500 tracking-widest text-right">Amount</th>
+                  <tr className="bg-slate-900 text-white">
+                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest w-12">#</th>
+                    <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest">Description</th>
+                    <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-center">Qty</th>
+                    <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-right">Unit Price</th>
+                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {invoice.items.map((item, index) => (
                     <tr key={item.id} className="group">
                       <td className="py-5 px-4 text-xs font-mono text-slate-400">{index + 1}</td>
                       <td className="py-5 px-2">
-                        <p className="font-bold text-slate-800 text-sm">{item.description}</p>
+                        <p className="font-black text-slate-900 text-sm uppercase">{item.description}</p>
                       </td>
-                      <td className="py-5 px-2 text-center text-slate-600 font-medium text-sm">{item.quantity}</td>
-                      <td className="py-5 px-2 text-right text-slate-600 font-medium text-sm">{item.amount.toFixed(2)} KWD</td>
-                      <td className="py-5 px-4 text-right font-bold text-slate-800 text-sm">{(item.amount * item.quantity).toFixed(2)} KWD</td>
+                      <td className="py-5 px-2 text-center text-slate-700 font-bold text-sm">{item.quantity}</td>
+                      <td className="py-5 px-2 text-right text-slate-700 font-bold text-sm">{item.amount.toFixed(2)} KWD</td>
+                      <td className="py-5 px-4 text-right font-black text-slate-900 text-sm">{(item.amount * item.quantity).toFixed(2)} KWD</td>
                     </tr>
                   ))}
                 </tbody>
@@ -255,22 +245,22 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             </div>
 
             {/* Financial Summary */}
-            <div className="mt-8 pt-8 border-t-2 border-slate-100 flex justify-end">
-              <div className="w-72 space-y-3">
+            <div className="mt-8 pt-8 border-t-2 border-slate-900 flex justify-end">
+              <div className="w-80 space-y-3">
                 <div className="flex justify-between text-xs font-bold px-4">
                   <span className="text-slate-400 uppercase tracking-widest">Subtotal</span>
-                  <span className="text-slate-800">{invoice.totalAmount.toFixed(2)} KWD</span>
+                  <span className="text-slate-900">{invoice.totalAmount.toFixed(2)} KWD</span>
                 </div>
                 <div className="flex justify-between text-xs font-bold px-4">
                   <span className="text-slate-400 uppercase tracking-widest">Service Tax (0%)</span>
-                  <span className="text-slate-800">0.00 KWD</span>
+                  <span className="text-slate-900">0.00 KWD</span>
                 </div>
-                <div className="flex items-center justify-between bg-primary text-primary-foreground p-5 rounded-2xl shadow-lg shadow-primary/20">
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-900 p-6 rounded-xl mt-4">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Total Due</span>
-                    <span className="text-xs italic opacity-60">Kuwaiti Dinar</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Due</span>
+                    <span className="text-[10px] italic font-bold text-slate-400">Kuwaiti Dinar</span>
                   </div>
-                  <span className="text-3xl font-black">{invoice.totalAmount.toFixed(2)}</span>
+                  <span className="text-4xl font-black text-slate-900">{invoice.totalAmount.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -278,17 +268,17 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             {/* Footer Notes */}
             <div className="mt-auto pt-16">
               {invoice.notes && (
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-8">
-                  <h4 className="text-[10px] font-black uppercase text-primary mb-3 tracking-widest flex items-center gap-2">
+                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
+                  <h4 className="text-[10px] font-black uppercase text-slate-900 mb-3 tracking-widest flex items-center gap-2">
                     <MapPin className="h-3 w-3" />
                     Payment Instructions & Terms
                   </h4>
-                  <p className="text-xs text-slate-600 italic leading-relaxed whitespace-pre-wrap">{invoice.notes}</p>
+                  <p className="text-xs text-slate-700 italic font-medium leading-relaxed whitespace-pre-wrap">{invoice.notes}</p>
                 </div>
               )}
               <div className="text-center border-t pt-8">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Thank you for your business</p>
-                <p className="text-[9px] text-slate-300 mt-2">© {new Date().getFullYear()} {selectedTemplate?.companyName || 'UniApply Hub'}. Generated electronically.</p>
+                <p className="text-[9px] text-slate-300 mt-2 font-bold italic">© {new Date().getFullYear()} {selectedTemplate?.companyName || 'UniApply Hub'}. Generated electronically.</p>
               </div>
             </div>
           </div>
