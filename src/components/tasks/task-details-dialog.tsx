@@ -165,10 +165,10 @@ export function TaskDetailsDialog({
               <DialogTitle className="text-xs text-muted-foreground font-mono mt-1">
                 By: {task.authorName || author?.name || 'Employee'}
               </DialogTitle>
-              <DialogDescription className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> {task.studentPhone}</span>
-                <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {data.studentEmail || 'No email'}</span>
-              </DialogDescription>
+              <DialogTitle className="flex items-center gap-4 mt-1">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-normal"><Phone className="h-3.5 w-3.5" /> {task.studentPhone}</span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-normal"><Mail className="h-3.5 w-3.5" /> {data.studentEmail || 'No email'}</span>
+              </DialogTitle>
             </div>
             <div className="flex flex-col items-end gap-3 shrink-0">
               <Link href={`/student/${task.studentId}`} className="text-xs text-primary font-bold underline flex items-center gap-1">
