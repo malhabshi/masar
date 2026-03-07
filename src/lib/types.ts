@@ -371,6 +371,7 @@ export interface ApprovedUniversity {
   ieltsScore: number;
   isAvailable: boolean;
   notes?: string;
+  importantNote?: string; // High-priority red note
   category?: UniversityCategory;
   entryLevels?: string[]; // Added: Foundation, First Year, Bachelor Degree
 }

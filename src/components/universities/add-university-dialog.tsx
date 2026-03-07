@@ -42,6 +42,7 @@ const formSchema = z.object({
   ieltsScore: z.coerce.number().min(0).max(9),
   isAvailable: z.boolean().default(false),
   notes: z.string().optional(),
+  importantNote: z.string().optional(),
 });
 
 interface AddUniversityDialogProps {
@@ -64,6 +65,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
       ieltsScore: 6.5,
       isAvailable: true,
       notes: '',
+      importantNote: '',
     },
   });
 
@@ -231,10 +233,24 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
 
             <FormField
                 control={form.control}
+                name="importantNote"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-red-600 font-bold">IMPORTANT Note (Red Visibility)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Only for science background students" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+            />
+
+            <FormField
+                control={form.control}
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Internal Notes</FormLabel>
+                    <FormLabel>Internal Notes (Muted)</FormLabel>
                     <FormControl>
                       <Textarea placeholder="Add any specific requirements or details..." {...field} className="min-h-[80px]" />
                     </FormControl>

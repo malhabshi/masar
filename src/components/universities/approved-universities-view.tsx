@@ -67,12 +67,14 @@ export function ApprovedUniversitiesView() {
       const uniMajor = (uni.major || '').toLowerCase();
       const uniCountry = (uni.country || '').toLowerCase();
       const uniCategory = (uni.category || '').toLowerCase();
+      const uniImportant = (uni.importantNote || '').toLowerCase();
 
       const matchesSearch = searchWords.every(word => 
         uniName.includes(word) || 
         uniMajor.includes(word) || 
         uniCountry.includes(word) || 
-        uniCategory.includes(word)
+        uniCategory.includes(word) ||
+        uniImportant.includes(word)
       );
 
       const matchesCountry = countryFilter === 'all' || uni.country === countryFilter;

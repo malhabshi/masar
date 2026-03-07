@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { ApprovedUniversity } from '@/lib/types';
-import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck, GraduationCap } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck, GraduationCap, AlertCircle } from 'lucide-react';
 import { EditUniversityDialog } from './edit-university-dialog';
 import { Skeleton } from '../ui/skeleton';
 import {
@@ -80,10 +80,20 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
           {universities.length > 0 ? (
             universities.map((uni) => (
               <TableRow key={uni.id}>
-                <TableCell className="font-bold">
-                  {uni.name}
+                <TableCell className="font-bold align-top">
+                  <div className="flex flex-col gap-1">
+                    <span>{uni.name}</span>
+                    {uni.importantNote && (
+                      <div className="flex items-center gap-1.5 text-red-600 animate-pulse">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        <span className="text-[10px] font-black uppercase tracking-tight leading-none">
+                          IMPORTANT: {uni.importantNote}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
                         <span className="font-medium text-sm">{uni.major}</span>
@@ -105,10 +115,10 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <Badge variant="outline" className="font-mono text-[10px]">{uni.country}</Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <div className="flex flex-wrap gap-1">
                     {(uni.entryLevels || []).length > 0 ? (
                       uni.entryLevels?.map(level => (
@@ -121,12 +131,12 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                     <Badge variant="secondary" className="font-mono">
                         {uni.ieltsScore.toFixed(1)}
                     </Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   {uni.isAvailable ? (
                     <CheckCircle className="h-5 w-5 text-success" />
                   ) : (
@@ -134,7 +144,7 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                   )}
                 </TableCell>
                 {onUpdateUniversity && (
-                    <TableCell className="text-right">
+                    <TableCell className="text-right align-top">
                         <div className="flex items-center justify-end gap-1">
                           <EditUniversityDialog university={uni} onUpdateUniversity={onUpdateUniversity} />
                           {onDeleteUniversity && (
