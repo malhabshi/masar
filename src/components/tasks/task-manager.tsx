@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import type { Task, TaskStatus, User } from '@/lib/types';
+import type { Task, TaskStatus } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { addReplyToTask, updateTaskStatus, markTaskAsSeen, sendTaskNotification, markMultipleTasksAsSeen } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';

@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState } from 'react';
-import type { Student, StudentLogin } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { deleteStudentLogin } from '@/lib/actions';
 

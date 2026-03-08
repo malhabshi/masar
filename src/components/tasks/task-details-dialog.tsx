@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -39,7 +38,7 @@ import {
   GraduationCap,
   Key
 } from 'lucide-react';
-import type { Task, TaskStatus, User as UserType, Document as StudentDoc } from '@/lib/types';
+import type { Task, TaskStatus, User as UserType } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { formatDateTime, formatRelativeTime } from '@/lib/timestamp-utils';
 import Link from 'next/link';

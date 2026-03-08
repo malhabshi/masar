@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { Invoice, InvoiceStatus, AppUser, InvoiceTemplate, Student } from '@/lib/types';
+import type { Invoice, InvoiceStatus, InvoiceTemplate, Student } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import {
   Table,
   TableBody,

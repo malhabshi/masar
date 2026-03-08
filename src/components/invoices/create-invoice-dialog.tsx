@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, AppUser, InvoiceItem, InvoiceTemplate, InvoiceSavedItem, InvoiceCurrency } from '@/lib/types';
+import type { Student, InvoiceItem, InvoiceTemplate, InvoiceSavedItem, InvoiceCurrency } from '@/lib/types';
+import type { AppUser } from '@/hooks/use-user';
 import { createInvoice } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import {
