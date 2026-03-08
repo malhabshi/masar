@@ -978,26 +978,6 @@ export async function getReportStats(dateRange: { from: string; to: string; }): 
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function addEvent(authorId: string, title: string, description: string, date: string) {
-    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-    try {
-        const author = await getUser(authorId);
-        if (!author || !['admin', 'department'].includes(author.role)) return { success: false, message: 'Unauthorized.' };
-        await adminDb!.collection('upcoming_events').add({ authorId, title, description, date, createdAt: new Date().toISOString() });
-        return { success: true, message: 'Event added.' };
-    } catch (error: any) { return { success: false, message: error.message }; }
-}
-
-export async function deleteEvent(eventId: string, userId: string) {
-    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-    try {
-        const user = await getUser(userId);
-        if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
-        await adminDb!.collection('upcoming_events').doc(eventId).delete();
-        return { success: true, message: 'Event deleted.' };
-    } catch (e: any) { return { success: false, message: e.message }; }
-}
-
 export async function getEmployeeStudentStats(): Promise<{ success: boolean; data?: EmployeeStats[]; message?: string; }> {
     if (!checkAdminServices()) return { success: false, message: "Server not available" };
     try {
@@ -1191,7 +1171,7 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
             for (const mDoc of managementSnap.docs) {
               const mData = mDoc.data() as User;
               if (mData.id === adminId) continue;
-              if (mData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: mData.name, studentName: studentName, employeeName: assignedEmployeeName, messageContent: taskContent, studentUrl: studentUrl }, mData.phone);
+              if (mData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: mData.name, studentName: studentData.name, employeeName: assignedEmployeeName, messageContent: taskContent, studentUrl: studentUrl }, mData.phone);
             }
         }
         return { success: true, message: status ? 'Enabled.' : 'Removed.' };
