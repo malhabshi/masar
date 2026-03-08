@@ -20,7 +20,8 @@ import {
   Trash2, 
   Loader2,
   Clock,
-  Pencil
+  Pencil,
+  LayoutTemplate
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -94,6 +95,7 @@ export function InvoiceTable({ invoices, templates, currentUser }: InvoiceTableP
               <TableHead>Invoice #</TableHead>
               <TableHead>Student</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead>Template</TableHead>
               <TableHead>Total Amount</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -101,66 +103,75 @@ export function InvoiceTable({ invoices, templates, currentUser }: InvoiceTableP
           </TableHeader>
           <TableBody>
             {invoices.length > 0 ? (
-              invoices.map((inv) => (
-                <TableRow key={inv.id}>
-                  <TableCell className="font-mono font-bold text-xs">{inv.invoiceNumber}</TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{inv.studentName}</div>
-                      <div className="text-[10px] text-muted-foreground">{inv.studentPhone}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs">{formatDate(inv.createdAt)}</TableCell>
-                  <TableCell className="font-bold">
-                    {inv.totalAmount.toFixed(2)} {inv.currency || 'KWD'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={statusVariants[inv.status]}>
-                      {isProcessing === inv.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                      {inv.status.toUpperCase()}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => setViewingInvoice(inv)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setViewingInvoice(inv)}>
-                            <Eye className="h-4 w-4 mr-2" /> View PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setEditingInvoice(inv)}>
-                            <Pencil className="h-4 w-4 mr-2" /> Edit Invoice
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'paid')} disabled={inv.status === 'paid'}>
-                            <CheckCircle className="h-4 w-4 mr-2 text-green-600" /> Mark as Paid
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'unpaid')} disabled={inv.status === 'unpaid'}>
-                            <Clock className="h-4 w-4 mr-2 text-orange-600" /> Mark as Unpaid
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'cancelled')} disabled={inv.status === 'cancelled'}>
-                            <XCircle className="h-4 w-4 mr-2 text-muted-foreground" /> Cancel Invoice
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => setDeletingId(inv.id)}>
-                            <Trash2 className="h-4 w-4 mr-2" /> Delete Record
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              invoices.map((inv) => {
+                const template = templates.find(t => t.id === inv.templateId);
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell className="font-mono font-bold text-xs">{inv.invoiceNumber}</TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{inv.studentName}</div>
+                        <div className="text-[10px] text-muted-foreground">{inv.studentPhone}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs">{formatDate(inv.createdAt)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <LayoutTemplate className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs font-medium">{template?.name || 'Default'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-bold">
+                      {inv.totalAmount.toFixed(2)} {inv.currency || 'KWD'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={statusVariants[inv.status]}>
+                        {isProcessing === inv.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        {inv.status.toUpperCase()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => setViewingInvoice(inv)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setViewingInvoice(inv)}>
+                              <Eye className="h-4 w-4 mr-2" /> View PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingInvoice(inv)}>
+                              <Pencil className="h-4 w-4 mr-2" /> Edit Invoice
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'paid')} disabled={inv.status === 'paid'}>
+                              <CheckCircle className="h-4 w-4 mr-2 text-green-600" /> Mark as Paid
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'unpaid')} disabled={inv.status === 'unpaid'}>
+                              <Clock className="h-4 w-4 mr-2 text-orange-600" /> Mark as Unpaid
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'cancelled')} disabled={inv.status === 'cancelled'}>
+                              <XCircle className="h-4 w-4 mr-2 text-muted-foreground" /> Cancel Invoice
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => setDeletingId(inv.id)}>
+                              <Trash2 className="h-4 w-4 mr-2" /> Delete Record
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No invoices found.</TableCell>
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No invoices found.</TableCell>
               </TableRow>
             )}
           </TableBody>
