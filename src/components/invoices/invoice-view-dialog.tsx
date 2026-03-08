@@ -181,7 +181,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             <div className="mb-16">
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1 w-32">Bill To</h3>
                   <div className="flex gap-2 items-baseline mt-2">
                     <span className="text-xs font-black uppercase text-slate-400 shrink-0">Name:</span>
                     <p className="text-sm font-black text-black">
@@ -204,7 +203,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                     <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest w-12">#</th>
                     <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest">Description</th>
                     <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-center">Qty</th>
-                    <th className="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-right">Unit Price</th>
                     <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-right">Amount</th>
                   </tr>
                 </thead>
@@ -221,7 +219,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                         )}
                       </td>
                       <td className="py-5 px-2 text-center text-slate-700 font-bold text-sm align-top">{item.quantity}</td>
-                      <td className="py-5 px-2 text-right text-slate-700 font-bold text-sm align-top">{item.amount.toFixed(2)} KWD</td>
                       <td className="py-5 px-4 text-right font-black text-slate-900 text-sm align-top">{(item.amount * item.quantity).toFixed(2)} KWD</td>
                     </tr>
                   ))}
