@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1067,7 +1066,7 @@ export async function updateStudentAcademicIntake(studentId: string, semester: s
 export async function seedAcademicTerms(authorId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    const terms = [ 'FALL (8/9) 2025', 'SPRING (1/2) 2026', 'MARCH (3) 2026', 'SUMMER (6/7) 2026', 'FALL (8/9) 2026', 'SPRING (1/2) 2027', 'MARCH (3) 2027', 'SUMMER (6/7) 2027' ];
+    const terms = [ 'FALL (8/9) 2025', 'SPRING (1/2) 2026', 'MARCH (3) 2026', 'SUMMER (6/7) 2026', 'FALL (8/9) 2025', 'SPRING (1/2) 2026', 'MARCH (3) 2026', 'SUMMER (6/7) 2026' ];
     const batch = adminDb!.batch();
     for (const name of terms) batch.set(adminDb!.collection('academic_terms').doc(), { name, authorId, createdAt: new Date().toISOString() });
     await batch.commit();
@@ -1415,7 +1414,9 @@ export async function createInvoice(adminId: string, data: Omit<Invoice, 'id' | 
       return { id: invoiceRef.id, invoiceNumber };
     });
 
-    await refreshStudentActivity(data.studentId);
+    if (data.studentId) {
+      await refreshStudentActivity(data.studentId);
+    }
 
     return { 
       success: true, 

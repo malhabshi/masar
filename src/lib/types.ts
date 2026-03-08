@@ -424,7 +424,7 @@ export interface Invoice {
   id: string;
   invoiceNumber: string;
   templateId?: string;
-  studentId: string;
+  studentId?: string;
   studentName: string;
   studentEmail?: string;
   studentPhone?: string;

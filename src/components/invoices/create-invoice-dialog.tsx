@@ -22,7 +22,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag, Library, Coins, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag, Library, Coins, RefreshCw, User, UserPlus } from 'lucide-react';
 import { useCollection } from '@/firebase/client';
 import {
   DropdownMenu,
@@ -32,9 +32,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const invoiceSchema = z.object({
-  studentId: z.string().min(1, 'Please select a student.'),
+  studentId: z.string().optional(),
+  manualStudentName: z.string().optional(),
+  manualStudentPhone: z.string().optional(),
   templateId: z.string().min(1, 'Please select a branding template.'),
   currency: z.literal('KWD').default('KWD'),
   secondaryCurrency: z.enum(['NONE', 'USD', 'GBP']).default('NONE'),
@@ -47,6 +50,9 @@ const invoiceSchema = z.object({
     amount: z.coerce.number().min(0.01, 'Amount must be greater than 0.'),
     quantity: z.coerce.number().min(1, 'Quantity must be at least 1.'),
   })).min(1, 'Add at least one item.'),
+}).refine(data => data.studentId || (data.manualStudentName && data.manualStudentPhone), {
+  message: "Select a student or enter name and phone.",
+  path: ["studentId"]
 });
 
 interface CreateInvoiceDialogProps {
@@ -59,6 +65,7 @@ interface CreateInvoiceDialogProps {
 export function CreateInvoiceDialog({ currentUser, students, templates, children }: CreateInvoiceDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [recipientType, setRecipientIdType] = useState<'system' | 'manual'>('system');
   const { toast } = useToast();
 
   const { data: catalogItems } = useCollection<InvoiceSavedItem>(isOpen ? 'invoice_saved_items' : '');
@@ -67,6 +74,8 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       studentId: '',
+      manualStudentName: '',
+      manualStudentPhone: '',
       templateId: templates.length === 1 ? templates[0].id : '',
       currency: 'KWD',
       secondaryCurrency: 'NONE',
@@ -109,20 +118,32 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
 
   const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
     setIsSubmitting(true);
-    const selectedStudent = students.find(s => s.id === values.studentId);
     
-    if (!selectedStudent) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Student not found.' });
-      setIsSubmitting(false);
-      return;
+    let studentName = '';
+    let studentPhone = '';
+    let studentEmail = '';
+
+    if (recipientType === 'system') {
+      const selectedStudent = students.find(s => s.id === values.studentId);
+      if (!selectedStudent) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Student not found.' });
+        setIsSubmitting(false);
+        return;
+      }
+      studentName = selectedStudent.name;
+      studentPhone = selectedStudent.phone;
+      studentEmail = selectedStudent.email;
+    } else {
+      studentName = values.manualStudentName || '';
+      studentPhone = values.manualStudentPhone || '';
     }
 
     const invoiceData = {
-      studentId: values.studentId,
+      studentId: recipientType === 'system' ? values.studentId : undefined,
       templateId: values.templateId,
-      studentName: selectedStudent.name,
-      studentEmail: selectedStudent.email,
-      studentPhone: selectedStudent.phone,
+      studentName,
+      studentEmail,
+      studentPhone,
       currency: 'KWD' as const,
       secondaryCurrency: values.secondaryCurrency === 'NONE' ? undefined : values.secondaryCurrency,
       conversionRate: values.secondaryCurrency !== 'NONE' ? Number(values.conversionRate) : undefined,
@@ -161,55 +182,127 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <FormField
-                control={form.control}
-                name="studentId"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Select Student</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Search students..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {students.map(s => (
-                          <SelectItem key={s.id} value={s.id}>{s.name} ({s.phone})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="templateId"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel className="flex items-center gap-2">
-                      <LayoutTemplate className="h-3 w-3" />
-                      Select Branding
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose a template" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {templates.map(t => (
-                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            
+            <div className="space-y-4">
+              <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Invoice Recipient</Label>
+              <Tabs value={recipientType} onValueChange={(v) => setRecipientIdType(v as any)} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="system" className="gap-2">
+                    <User className="h-4 w-4" />
+                    System Student
+                  </TabsTrigger>
+                  <TabsTrigger value="manual" className="gap-2">
+                    <UserPlus className="h-4 w-4" />
+                    Manual Entry
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="system" className="pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="studentId"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Select Student</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Search students..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {students.map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.name} ({s.phone})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="templateId"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel className="flex items-center gap-2">
+                            <LayoutTemplate className="h-3 w-3" />
+                            Select Branding
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Choose a template" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {templates.map(t => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </TabsContent>
+                <TabsContent value="manual" className="pt-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="manualStudentName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payer Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Parent Name or Sponsor" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="manualStudentPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payer Phone</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., 55123456" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="templateId"
+                    render={({ field }) => (
+                      <FormItem className="w-full">
+                        <FormLabel className="flex items-center gap-2">
+                          <LayoutTemplate className="h-3 w-3" />
+                          Select Branding
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choose a template" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {templates.map(t => (
+                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-primary/5 border-primary/20">
