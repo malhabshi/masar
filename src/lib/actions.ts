@@ -1429,6 +1429,29 @@ export async function createInvoice(adminId: string, data: Omit<Invoice, 'id' | 
   }
 }
 
+export async function updateInvoice(adminId: string, invoiceId: string, data: Partial<Invoice>) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    const now = new Date().toISOString();
+    await adminDb!.collection('invoices').doc(invoiceId).update({
+      ...data,
+      updatedAt: now,
+    });
+
+    if (data.studentId) {
+      await refreshStudentActivity(data.studentId);
+    }
+
+    return { success: true, message: 'Invoice updated successfully.' };
+  } catch (error: any) {
+    console.error('Invoice Update Error:', error);
+    return { success: false, message: error.message };
+  }
+}
+
 export async function updateInvoiceStatus(invoiceId: string, status: InvoiceStatus, adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {

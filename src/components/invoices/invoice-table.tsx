@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Invoice, InvoiceStatus, AppUser, InvoiceTemplate } from '@/lib/types';
+import type { Invoice, InvoiceStatus, AppUser, InvoiceTemplate, Student } from '@/lib/types';
 import {
   Table,
   TableBody,
@@ -19,7 +19,8 @@ import {
   XCircle, 
   Trash2, 
   Loader2,
-  Clock
+  Clock,
+  Pencil
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -42,6 +43,8 @@ import {
   AlertDialogTitle 
 } from '@/components/ui/alert-dialog';
 import { InvoiceViewDialog } from './invoice-view-dialog';
+import { EditInvoiceDialog } from './edit-invoice-dialog';
+import { useCollection } from '@/firebase/client';
 
 interface InvoiceTableProps {
   invoices: Invoice[];
@@ -60,6 +63,9 @@ export function InvoiceTable({ invoices, templates, currentUser }: InvoiceTableP
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+
+  const { data: students } = useCollection<Student>(currentUser ? 'students' : '');
 
   const handleStatusChange = async (invoiceId: string, status: InvoiceStatus) => {
     setIsProcessing(invoiceId);
@@ -126,6 +132,13 @@ export function InvoiceTable({ invoices, templates, currentUser }: InvoiceTableP
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setViewingInvoice(inv)}>
+                            <Eye className="h-4 w-4 mr-2" /> View PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setEditingInvoice(inv)}>
+                            <Pencil className="h-4 w-4 mr-2" /> Edit Invoice
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleStatusChange(inv.id, 'paid')} disabled={inv.status === 'paid'}>
                             <CheckCircle className="h-4 w-4 mr-2 text-green-600" /> Mark as Paid
                           </DropdownMenuItem>
@@ -160,6 +173,17 @@ export function InvoiceTable({ invoices, templates, currentUser }: InvoiceTableP
           templates={templates}
           isOpen={!!viewingInvoice} 
           onOpenChange={(open) => !open && setViewingInvoice(null)} 
+        />
+      )}
+
+      {editingInvoice && (
+        <EditInvoiceDialog
+          currentUser={currentUser}
+          invoice={editingInvoice}
+          students={students || []}
+          templates={templates}
+          isOpen={!!editingInvoice}
+          onOpenChange={(open) => !open && setEditingInvoice(null)}
         />
       )}
 
