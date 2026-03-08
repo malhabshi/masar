@@ -170,21 +170,19 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-      allow read, write: if isPrivileged();
+      allow read, write: if isAdmin();
     }
 
     match /invoice_templates/{templateId} {
-      allow read: if isSignedIn();
-      allow write: if isPrivileged();
+      allow read, write: if isAdmin();
     }
 
     match /invoice_saved_items/{itemId} {
-      allow read: if isSignedIn();
-      allow write: if isPrivileged();
+      allow read, write: if isAdmin();
     }
 
     match /system_metadata/{docId} {
-      allow read, write: if isPrivileged();
+      allow read, write: if isAdmin();
     }
   }
 }

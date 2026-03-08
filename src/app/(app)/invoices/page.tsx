@@ -16,9 +16,9 @@ export default function InvoicesPage() {
   const { user: currentUser, isUserLoading } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
   
-  const { data: invoices, isLoading: invoicesLoading } = useCollection<Invoice>(currentUser ? 'invoices' : '');
-  const { data: students } = useCollection<Student>(currentUser ? 'students' : '');
-  const { data: templates, isLoading: templatesLoading } = useCollection<InvoiceTemplate>(currentUser ? 'invoice_templates' : '');
+  const { data: invoices, isLoading: invoicesLoading } = useCollection<Invoice>(currentUser?.role === 'admin' ? 'invoices' : '');
+  const { data: students } = useCollection<Student>(currentUser?.role === 'admin' ? 'students' : '');
+  const { data: templates, isLoading: templatesLoading } = useCollection<InvoiceTemplate>(currentUser?.role === 'admin' ? 'invoice_templates' : '');
 
   const filteredInvoices = useMemo(() => {
     if (!invoices) return [];
@@ -37,8 +37,8 @@ export default function InvoicesPage() {
     );
   }
 
-  if (!currentUser || !['admin', 'department'].includes(currentUser.role)) {
-    return <p className="p-8 text-center text-muted-foreground">Access Denied. Only management can view invoices.</p>;
+  if (!currentUser || currentUser.role !== 'admin') {
+    return <p className="p-8 text-center text-muted-foreground">Access Denied. Only administrators can view and manage invoices.</p>;
   }
 
   return (
@@ -49,7 +49,7 @@ export default function InvoicesPage() {
             <ReceiptText className="h-8 w-8 text-primary" />
             Invoice Management
           </h1>
-          <p className="text-muted-foreground mt-1">Generate and track student billing records.</p>
+          <p className="text-muted-foreground mt-1">Generate and track student billing records (Admin Only).</p>
         </div>
         <div className="flex gap-2">
           <InvoiceSettingsDialog currentUser={currentUser} templates={templates || []}>

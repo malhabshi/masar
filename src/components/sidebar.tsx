@@ -163,7 +163,7 @@ export function AppSidebar() {
     
     const managementNav = [
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
-        { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin', 'department'] },
+        { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin'] },
         { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'], badge: unreadIeltsCourseCount },
         { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'], badge: unreadChatCount },
     ];

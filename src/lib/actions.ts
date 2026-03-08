@@ -1387,7 +1387,7 @@ export async function createInvoice(adminId: string, data: Omit<Invoice, 'id' | 
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can create invoices.' };
 
     const now = new Date().toISOString();
     
@@ -1442,7 +1442,7 @@ export async function updateInvoice(adminId: string, invoiceId: string, data: Pa
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can update invoices.' };
 
     const now = new Date().toISOString();
     await adminDb!.collection('invoices').doc(invoiceId).update({
@@ -1465,7 +1465,7 @@ export async function updateInvoiceStatus(invoiceId: string, status: InvoiceStat
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can update invoice status.' };
 
     await adminDb!.collection('invoices').doc(invoiceId).update({
       status,
@@ -1482,7 +1482,7 @@ export async function deleteInvoice(invoiceId: string, adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can delete invoices.' };
 
     await adminDb!.collection('invoices').doc(invoiceId).delete();
     return { success: true, message: 'Invoice deleted.' };
@@ -1495,7 +1495,7 @@ export async function saveInvoiceTemplate(adminId: string, data: Omit<InvoiceTem
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can manage templates.' };
 
     const now = new Date().toISOString();
     if (id) {
@@ -1526,7 +1526,7 @@ export async function saveInvoiceSavedItem(adminId: string, data: Omit<InvoiceSa
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
 
     const now = new Date().toISOString();
     if (id) {
