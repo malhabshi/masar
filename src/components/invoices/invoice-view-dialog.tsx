@@ -119,7 +119,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
     window.print();
   };
 
-  const subtotal = invoice.items.reduce((acc, item) => acc + (item.amount * item.quantity), 0);
+  const subtotal = (invoice.items || []).reduce((acc, item) => acc + (item.amount * item.quantity), 0);
   const discount = invoice.discountAmount || 0;
 
   return (
@@ -184,7 +184,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest border-b pb-1 w-32">Bill To</h3>
                   <div className="flex gap-2 items-baseline mt-2">
                     <span className="text-xs font-black uppercase text-slate-400 shrink-0">Name:</span>
-                    <p className="text-xs font-black text-black">
+                    <p className="text-sm font-black text-black">
                       {invoice.studentName}
                     </p>
                   </div>
@@ -209,15 +209,20 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {invoice.items.map((item, index) => (
+                  {(invoice.items || []).map((item, index) => (
                     <tr key={item.id} className="group">
-                      <td className="py-5 px-4 text-xs font-mono text-slate-400">{index + 1}</td>
-                      <td className="py-5 px-2">
+                      <td className="py-5 px-4 text-xs font-mono text-slate-400 align-top">{index + 1}</td>
+                      <td className="py-5 px-2 align-top">
                         <p className="font-black text-slate-900 text-sm uppercase">{item.description}</p>
+                        {item.details && (
+                          <p className="text-[10px] text-slate-500 italic mt-1 font-medium whitespace-pre-wrap leading-tight">
+                            {item.details}
+                          </p>
+                        )}
                       </td>
-                      <td className="py-5 px-2 text-center text-slate-700 font-bold text-sm">{item.quantity}</td>
-                      <td className="py-5 px-2 text-right text-slate-700 font-bold text-sm">{item.amount.toFixed(2)} KWD</td>
-                      <td className="py-5 px-4 text-right font-black text-slate-900 text-sm">{(item.amount * item.quantity).toFixed(2)} KWD</td>
+                      <td className="py-5 px-2 text-center text-slate-700 font-bold text-sm align-top">{item.quantity}</td>
+                      <td className="py-5 px-2 text-right text-slate-700 font-bold text-sm align-top">{item.amount.toFixed(2)} KWD</td>
+                      <td className="py-5 px-4 text-right font-black text-slate-900 text-sm align-top">{(item.amount * item.quantity).toFixed(2)} KWD</td>
                     </tr>
                   ))}
                 </tbody>

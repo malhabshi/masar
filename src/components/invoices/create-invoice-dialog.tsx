@@ -31,6 +31,7 @@ const invoiceSchema = z.object({
   discountAmount: z.coerce.number().min(0, 'Discount cannot be negative.').default(0),
   items: z.array(z.object({
     description: z.string().min(1, 'Description required.'),
+    details: z.string().optional(),
     amount: z.coerce.number().min(0.01, 'Amount must be greater than 0.'),
     quantity: z.coerce.number().min(1, 'Quantity must be at least 1.'),
   })).min(1, 'Add at least one item.'),
@@ -55,7 +56,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       templateId: templates.length === 1 ? templates[0].id : '',
       notes: '',
       discountAmount: 0,
-      items: [{ description: '', amount: 0, quantity: 1 }],
+      items: [{ description: '', details: '', amount: 0, quantity: 1 }],
     },
   });
 
@@ -69,7 +70,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   
   // Ensure we treat values as numbers during the calculation phase
   const discountValue = Number(watchDiscount) || 0;
-  const subtotal = watchItems.reduce((acc, item) => {
+  const subtotal = (watchItems || []).reduce((acc, item) => {
     const amount = Number(item.amount) || 0;
     const quantity = Number(item.quantity) || 0;
     return acc + (amount * quantity);
@@ -96,6 +97,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       items: values.items.map((item, idx) => ({ 
         id: `item-${idx}-${Date.now()}`,
         description: item.description,
+        details: item.details,
         amount: Number(item.amount),
         quantity: Number(item.quantity)
       })),
@@ -120,7 +122,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Invoice</DialogTitle>
           <DialogDescription>Bill a student for agency services or exam registrations.</DialogDescription>
@@ -184,47 +186,63 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <FormLabel className="text-base font-bold">Line Items</FormLabel>
-                <Button type="button" variant="outline" size="sm" onClick={() => append({ description: '', amount: 0, quantity: 1 })}>
+                <Button type="button" variant="outline" size="sm" onClick={() => append({ description: '', details: '', amount: 0, quantity: 1 })}>
                   <Plus className="h-4 w-4 mr-1" /> Add Item
                 </Button>
               </div>
               
-              <div className="space-y-3">
+              <div className="space-y-6">
                 {fields.map((field, index) => (
-                  <div key={field.id} className="flex gap-3 items-start animate-in fade-in slide-in-from-top-1">
+                  <div key={field.id} className="p-4 border rounded-lg bg-muted/10 space-y-3 animate-in fade-in slide-in-from-top-1">
+                    <div className="flex gap-3 items-start">
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.description`}
+                        render={({ field }) => (
+                          <FormItem className="flex-[3]">
+                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Item Name</FormLabel>
+                            <FormControl><Input placeholder="e.g., Application Fee" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.amount`}
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Rate (KWD)</FormLabel>
+                            <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.quantity`}
+                        render={({ field }) => (
+                          <FormItem className="w-20">
+                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Qty</FormLabel>
+                            <FormControl><Input type="number" min="1" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button type="button" variant="ghost" size="icon" className="text-destructive mt-6" onClick={() => remove(index)} disabled={fields.length === 1}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <FormField
                       control={form.control}
-                      name={`items.${index}.description`}
+                      name={`items.${index}.details`}
                       render={({ field }) => (
-                        <FormItem className="flex-[3]">
-                          <FormControl><Input placeholder="Service description..." {...field} /></FormControl>
+                        <FormItem>
+                          <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Additional Details (Appears under item name)</FormLabel>
+                          <FormControl><Input placeholder="e.g. University of Manchester - Fall 2025" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.amount`}
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormControl><Input type="number" step="0.01" placeholder="Amount" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.quantity`}
-                      render={({ field }) => (
-                        <FormItem className="w-20">
-                          <FormControl><Input type="number" min="1" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="button" variant="ghost" size="icon" className="text-destructive mt-0.5" onClick={() => remove(index)} disabled={fields.length === 1}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   </div>
                 ))}
               </div>

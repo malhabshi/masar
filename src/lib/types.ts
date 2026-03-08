@@ -393,6 +393,7 @@ export type InvoiceStatus = 'paid' | 'unpaid' | 'cancelled';
 export interface InvoiceItem {
   id: string;
   description: string;
+  details?: string;
   amount: number;
   quantity: number;
 }
