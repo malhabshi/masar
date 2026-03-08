@@ -110,7 +110,8 @@ export default function SettingsPage() {
     setIsBackingUp(true);
     const result = await getFullSystemBackup(user.id);
     
-    if (result.success && result.data) {
+    // Check if it's the success type with data
+    if (result.success && 'data' in result && result.data) {
       const dataStr = JSON.stringify(result.data, null, 2);
       const blob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -122,8 +123,14 @@ export default function SettingsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       toast({ title: 'Backup Successful', description: 'The complete system data has been downloaded.' });
-    } else {
-      toast({ variant: 'destructive', title: 'Backup Failed', description: result.message });
+    } 
+    // Handle error case
+    else if ('message' in result) {
+      toast({
+        variant: 'destructive',
+        title: 'Backup Failed',
+        description: result.message
+      });
     }
     setIsBackingUp(false);
   };
