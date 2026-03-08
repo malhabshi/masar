@@ -1153,9 +1153,10 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
         const studentDoc = await studentRef.get();
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
         const studentData = studentDoc.data() as Student;
+        const studentName = studentData.name || 'A student';
         await studentRef.update({ changeAgentRequired: status, lastActivityAt: new Date().toISOString() });
         if (status) {
-            const taskContent = `🚨 URGENT: Change Agent status for ${studentData.name}.`;
+            const taskContent = `🚨 URGENT: Change Agent status for ${studentName}.`;
             const studentUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`;
             if (studentData.employeeId) {
                 const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
@@ -1163,7 +1164,7 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
                     const employeeDoc = employeeQuery.docs[0];
                     const employeeData = employeeDoc.data() as User;
                     await adminDb!.collection('tasks').add({ authorId: adminId, createdBy: adminId, recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: taskContent, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
-                    if (employeeData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: employeeData.name, studentName: studentData.name, employeeName: employeeData.name, messageContent: taskContent, studentUrl: studentUrl }, employeeData.phone);
+                    if (employeeData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: employeeData.name, studentName: studentName, employeeName: employeeData.name, messageContent: taskContent, studentUrl: studentUrl }, employeeData.phone);
                 }
             }
             const managementSnap = await adminDb!.collection('users').where('role', 'in', ['admin', 'department']).get();
@@ -1171,7 +1172,7 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
             for (const mDoc of managementSnap.docs) {
               const mData = mDoc.data() as User;
               if (mData.id === adminId) continue;
-              if (mData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: mData.name, studentName: studentData.name, employeeName: assignedEmployeeName, messageContent: taskContent, studentUrl: studentUrl }, mData.phone);
+              if (mData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: mData.name, studentName: studentName, employeeName: assignedEmployeeName, messageContent: taskContent, studentUrl: studentUrl }, mData.phone);
             }
         }
         return { success: true, message: status ? 'Enabled.' : 'Removed.' };
@@ -1316,6 +1317,34 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
     } catch (error: any) {
         return { success: false, message: error.message };
     }
+}
+
+export async function addEvent(authorId: string, title: string, description: string, date: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const docRef = await adminDb!.collection('upcoming_events').add({
+      authorId,
+      title,
+      description,
+      date,
+      createdAt: new Date().toISOString(),
+    });
+    return { success: true, message: 'Event added.', id: docRef.id };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
+
+export async function deleteEvent(eventId: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    await adminDb!.collection('upcoming_events').doc(eventId).delete();
+    return { success: true, message: 'Event deleted.' };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
 }
 
 /**
