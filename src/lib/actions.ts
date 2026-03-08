@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -506,8 +507,8 @@ export async function createStudentTask(authorId: string, studentId: string, req
           const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
           adminsSnap.forEach(doc => { const u = { id: doc.id, ...doc.data() } as User; usersToNotify.set(u.id, u); });
         }
-        const deptGroups = recipientGroups.filter(g => g.startsWith('dept:'));
-        for (const dg of deptGroups) {
+        const recipientDeptGroups = recipientGroups.filter(g => g.startsWith('dept:'));
+        for (const dg of recipientDeptGroups) {
           const deptName = dg.replace('dept:', '');
           const deptSnap = await adminDb!.collection('users').where('department', '==', deptName).get();
           deptSnap.forEach(doc => { const u = { id: doc.id, ...doc.data() } as User; usersToNotify.set(u.id, u); });
@@ -609,7 +610,7 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
             }
         }
         return { success: true, message: 'Status updated.' };
-    } catch(error: any) { error.message; return { success: false, message: error.message }; }
+    } catch(error: any) { return { success: false, message: error.message }; }
 }
 
 export async function toggleTaskPriority(taskId: string, isPrioritized: boolean) {
@@ -1191,7 +1192,7 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
             for (const mDoc of managementSnap.docs) {
               const mData = mDoc.data() as User;
               if (mData.id === adminId) continue;
-              if (mData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: mData.name, studentName: studentData.name, employeeName: assignedEmployeeName, messageContent: taskContent, studentUrl: studentUrl }, mData.phone);
+              if (mData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: mData.name, studentName: studentName, employeeName: assignedEmployeeName, messageContent: taskContent, studentUrl: studentUrl }, mData.phone);
             }
         }
         return { success: true, message: status ? 'Enabled.' : 'Removed.' };
@@ -1381,20 +1382,48 @@ export async function createInvoice(adminId: string, data: Omit<Invoice, 'id' | 
     if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
 
     const now = new Date().toISOString();
-    const invoiceNumber = `INV-${Date.now()}`;
-    const invoiceRef = await adminDb!.collection('invoices').add({
-      ...data,
-      invoiceNumber,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: adminId,
-      authorName: admin.name,
+    
+    // Use a transaction to ensure sequential numbering (n+1)
+    const counterRef = adminDb!.collection('system_metadata').doc('invoice_counter');
+    
+    const result = await adminDb!.runTransaction(async (transaction) => {
+      const counterDoc = await transaction.get(counterRef);
+      let nextNumber = 1001; // Default start
+      
+      if (counterDoc.exists) {
+        const lastNum = counterDoc.data()?.lastNumber;
+        if (typeof lastNum === 'number') {
+          nextNumber = lastNum + 1;
+        }
+      }
+      
+      const invoiceNumber = `INV-${nextNumber}`;
+      const invoiceRef = adminDb!.collection('invoices').doc();
+      
+      const newInvoiceData = {
+        ...data,
+        invoiceNumber,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: adminId,
+        authorName: admin.name,
+      };
+      
+      transaction.set(invoiceRef, newInvoiceData);
+      transaction.set(counterRef, { lastNumber: nextNumber }, { merge: true });
+      
+      return { id: invoiceRef.id, invoiceNumber };
     });
 
     await refreshStudentActivity(data.studentId);
 
-    return { success: true, id: invoiceRef.id, message: 'Invoice created successfully.' };
+    return { 
+      success: true, 
+      id: result.id, 
+      message: `Invoice ${result.invoiceNumber} created successfully.` 
+    };
   } catch (error: any) {
+    console.error('Invoice Creation Error:', error);
     return { success: false, message: error.message };
   }
 }
