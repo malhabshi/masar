@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Library, Coins, RefreshCw, User, UserPlus } from 'lucide-react';
+import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Library, Coins, RefreshCw, User, UserPlus, Tag } from 'lucide-react';
 import { useCollection } from '@/firebase/client';
 import {
   DropdownMenu,
