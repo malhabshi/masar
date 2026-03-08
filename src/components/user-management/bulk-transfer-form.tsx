@@ -58,7 +58,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
 
     const result = await bulkTransferStudents(values.fromEmployeeId, values.toEmployeeId, currentUser.id);
 
-    if (result.success && result.studentIds) {
+    if (result.success && 'studentIds' in result && result.studentIds) {
       const oldEmployee = employeeOptions.find(e => e.id === values.fromEmployeeId);
       const studentIds = result.studentIds;
       const taskContent = `You have received ${studentIds.length} students from ${oldEmployee?.name || 'an employee'}`;
@@ -102,7 +102,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
         description: result.message,
       });
       form.reset();
-    } else {
+    } else if ('message' in result) {
       toast({
         variant: 'destructive',
         title: 'Bulk Transfer Failed',
