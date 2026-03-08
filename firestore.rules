@@ -182,5 +182,9 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
     }
+
+    match /system_metadata/{docId} {
+      allow read, write: if isPrivileged();
+    }
   }
 }

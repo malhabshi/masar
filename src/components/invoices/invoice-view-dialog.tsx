@@ -52,7 +52,8 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
           }
         } catch (error) {
           console.error('Failed to proxy logo:', error);
-          setLogoDataUri(selectedTemplate.logoUrl);
+          // Fallback to original URL if proxy fails, though capturing might fail
+          setLogoDataUri(null);
         } finally {
           setIsLogoLoading(false);
         }
@@ -77,6 +78,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       const element = document.getElementById('invoice-render-area');
       if (!element) return;
 
+      // Ensure all images in the render area are loaded before capturing
       const images = element.getElementsByTagName('img');
       const loadPromises = Array.from(images).map(img => {
         if (img.complete) return Promise.resolve();
@@ -87,6 +89,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
       });
       await Promise.all(loadPromises);
 
+      // Brief pause to ensure rendering is stable
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const canvas = await html2canvas(element, {
@@ -151,7 +154,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
 
         <div className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-8 flex justify-center">
           <div id="invoice-render-area" className="bg-white w-[210mm] min-h-[297mm] shadow-xl p-8 flex flex-col font-sans">
-            {/* Invoice Header - Optimized Spacing */}
+            {/* Invoice Header */}
             <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-6">
               <div className="flex items-center">
                 <div className="h-40 w-80 flex items-center justify-start overflow-hidden">
@@ -160,7 +163,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                       src={logoDataUri} 
                       alt="Logo" 
                       style={{ width: 'auto', height: '100%', maxWidth: '100%' }}
-                      crossOrigin="anonymous"
                     />
                   ) : selectedTemplate?.logoUrl ? (
                     <img 
@@ -185,7 +187,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               </div>
             </div>
 
-            {/* Information Grid - Highlighted Name */}
+            {/* Information Grid */}
             <div className="mb-6">
               <div className="space-y-3 bg-slate-50/50 p-4 rounded-lg border border-dashed border-slate-200">
                 <div className="flex gap-2 items-baseline">
@@ -201,7 +203,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               </div>
             </div>
 
-            {/* Items Table - Dual Currency Layout */}
+            {/* Items Table */}
             <div className="flex-1">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -241,7 +243,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               </table>
             </div>
 
-            {/* Financial Summary - Compact */}
+            {/* Financial Summary */}
             <div className="mt-4 pt-4 flex justify-end">
               <div className="w-72 space-y-1.5">
                 <div className="flex justify-between text-[10px] font-bold px-3">
@@ -288,7 +290,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               </div>
             </div>
 
-            {/* Footer Notes & Agency Details - Compact */}
+            {/* Footer */}
             <div className="mt-auto pt-6">
               {invoice.notes && (
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4">
@@ -313,7 +315,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   </div>
                 </div>
 
-                <p className="text-[8px] text-slate-300 font-bold italic">© {new Date().getFullYear()}. Generated electronically.</p>
+                <p className="text-[8px] text-slate-300 font-bold italic">© {isClient ? new Date().getFullYear() : ''}. Generated electronically.</p>
               </div>
             </div>
           </div>
