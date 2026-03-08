@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileDown, GraduationCap, Printer, MapPin, Phone, Mail, User, Tag } from 'lucide-react';
+import { Loader2, FileDown, GraduationCap, Printer, MapPin, Phone, Mail, User, Tag, RefreshCw } from 'lucide-react';
 import { formatDate } from '@/lib/timestamp-utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -119,9 +119,17 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
     window.print();
   };
 
-  const subtotal = (invoice.items || []).reduce((acc, item) => acc + (item.amount * item.quantity), 0);
-  const discount = invoice.discountAmount || 0;
-  const currencySymbol = invoice.currency === 'USD' ? '$' : invoice.currency === 'GBP' ? '£' : invoice.currency;
+  const hasSecondary = !!(invoice.secondaryCurrency && invoice.conversionRate);
+  const rate = Number(invoice.conversionRate) || 1;
+  
+  const subtotalKWD = (invoice.items || []).reduce((acc, item) => acc + (item.amount * item.quantity), 0);
+  const discountKWD = invoice.discountAmount || 0;
+  
+  const subtotalSec = subtotalKWD * rate;
+  const discountSec = discountKWD * rate;
+  const totalSec = invoice.totalAmount * rate;
+
+  const secondarySymbol = invoice.secondaryCurrency === 'USD' ? '$' : invoice.secondaryCurrency === 'GBP' ? '£' : invoice.secondaryCurrency;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -147,7 +155,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             {/* Invoice Header */}
             <div className="flex justify-between items-center border-b-2 border-slate-900 pb-8 mb-12">
               <div className="flex items-center">
-                <div className="h-40 w-64 flex items-center justify-start overflow-hidden">
+                <div className="h-48 w-80 flex items-center justify-start overflow-hidden">
                   {logoDataUri ? (
                     <img 
                       src={logoDataUri} 
@@ -181,17 +189,15 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             {/* Information Grid */}
             <div className="mb-16">
               <div className="space-y-4">
-                <div>
-                  <div className="flex gap-2 items-baseline mt-2">
-                    <span className="text-xs font-black uppercase text-slate-400 shrink-0">Name:</span>
-                    <p className="text-sm font-black text-black">
-                      {invoice.studentName}
-                    </p>
-                  </div>
-                  <div className="mt-4 space-y-1 text-sm text-slate-700 font-bold">
-                    <p>Phone Number: {invoice.studentPhone}</p>
-                    {invoice.studentEmail && <p>Email: {invoice.studentEmail}</p>}
-                  </div>
+                <div className="flex gap-2 items-baseline">
+                  <span className="text-xs font-black uppercase text-slate-400 shrink-0">Name:</span>
+                  <p className="text-sm font-black text-black">
+                    {invoice.studentName}
+                  </p>
+                </div>
+                <div className="mt-4 space-y-1 text-sm text-slate-700 font-bold">
+                  <p>Phone Number: {invoice.studentPhone}</p>
+                  {invoice.studentEmail && <p>Email: {invoice.studentEmail}</p>}
                 </div>
               </div>
             </div>
@@ -208,50 +214,78 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {(invoice.items || []).map((item, index) => (
-                    <tr key={item.id} className="group">
-                      <td className="py-5 px-4 text-xs font-mono text-slate-400 align-top">{index + 1}</td>
-                      <td className="py-5 px-2 align-top">
-                        <p className="font-black text-slate-900 text-sm uppercase">{item.description}</p>
-                        {item.details && (
-                          <p className="text-[10px] text-slate-500 italic mt-1 font-medium whitespace-pre-wrap leading-tight">
-                            {item.details}
-                          </p>
-                        )}
-                      </td>
-                      <td className="py-5 px-2 text-center text-slate-700 font-bold text-sm align-top">{item.quantity}</td>
-                      <td className="py-5 px-4 text-right font-black text-slate-900 text-sm align-top">{(item.amount * item.quantity).toFixed(2)} {currencySymbol}</td>
-                    </tr>
-                  ))}
+                  {(invoice.items || []).map((item, index) => {
+                    const lineKWD = item.amount * item.quantity;
+                    const lineSec = lineKWD * rate;
+                    return (
+                      <tr key={item.id} className="group">
+                        <td className="py-5 px-4 text-xs font-mono text-slate-400 align-top">{index + 1}</td>
+                        <td className="py-5 px-2 align-top">
+                          <p className="font-black text-slate-900 text-sm uppercase">{item.description}</p>
+                          {item.details && (
+                            <p className="text-[10px] text-slate-500 italic mt-1 font-medium whitespace-pre-wrap leading-tight">
+                              {item.details}
+                            </p>
+                          )}
+                        </td>
+                        <td className="py-5 px-2 text-center text-slate-700 font-bold text-sm align-top">{item.quantity}</td>
+                        <td className="py-5 px-4 text-right align-top">
+                          <div className="text-sm font-black text-slate-900">{lineKWD.toFixed(2)} KWD</div>
+                          {hasSecondary && (
+                            <div className="text-[10px] font-bold text-slate-500">{lineSec.toFixed(2)} {invoice.secondaryCurrency}</div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Financial Summary */}
             <div className="mt-8 pt-8 border-t-2 border-slate-900 flex justify-end">
-              <div className="w-80 space-y-3">
+              <div className="w-96 space-y-3">
                 <div className="flex justify-between text-xs font-bold px-4">
                   <span className="text-slate-400 uppercase tracking-widest">Subtotal</span>
-                  <span className="text-slate-900">{subtotal.toFixed(2)} {currencySymbol}</span>
+                  <div className="text-right">
+                    <div className="text-slate-900">{subtotalKWD.toFixed(2)} KWD</div>
+                    {hasSecondary && <div className="text-slate-400 text-[10px]">{subtotalSec.toFixed(2)} {invoice.secondaryCurrency}</div>}
+                  </div>
                 </div>
                 
-                {discount > 0 && (
+                {discountKWD > 0 && (
                   <div className="flex justify-between text-xs font-bold px-4 text-red-600">
                     <div className="flex items-center gap-1">
                       <Tag className="h-3 w-3" />
                       <span className="uppercase tracking-widest">Discount</span>
                     </div>
-                    <span>-{discount.toFixed(2)} {currencySymbol}</span>
+                    <div className="text-right">
+                      <div>-{discountKWD.toFixed(2)} KWD</div>
+                      {hasSecondary && <div className="text-[10px]">-{discountSec.toFixed(2)} {invoice.secondaryCurrency}</div>}
+                    </div>
                   </div>
                 )}
 
                 <div className="flex items-center justify-between bg-slate-50 border border-slate-900 p-6 rounded-xl mt-4">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Due</span>
-                    <span className="text-[10px] italic font-bold text-slate-400">{invoice.currency}</span>
+                    {hasSecondary && <span className="text-[10px] italic font-bold text-slate-400">Conversion Applied</span>}
                   </div>
-                  <span className="text-4xl font-black text-slate-900">{invoice.totalAmount.toFixed(2)}</span>
+                  <div className="text-right">
+                    <div className="text-4xl font-black text-slate-900 leading-none">{invoice.totalAmount.toFixed(2)} <span className="text-sm">KWD</span></div>
+                    {hasSecondary && (
+                      <div className="text-lg font-black text-slate-500 mt-1">
+                        {totalSec.toFixed(2)} <span className="text-xs">{invoice.secondaryCurrency}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
+                
+                {hasSecondary && (
+                  <p className="text-[9px] text-slate-400 italic text-right px-4">
+                    Exchange Rate: 1 KWD = {rate.toFixed(4)} {invoice.secondaryCurrency}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -270,7 +304,6 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               <div className="text-center border-t pt-8">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-4">Thank you for your business</p>
                 
-                {/* Agency Details relocated to footer */}
                 <div className="space-y-1 text-xs text-slate-600 font-medium mb-6">
                   <p className="whitespace-pre-wrap">
                     {selectedTemplate?.companyAddress || 'Kuwait City, State of Kuwait'}

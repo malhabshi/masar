@@ -432,6 +432,8 @@ export interface Invoice {
   totalAmount: number;
   discountAmount?: number;
   currency: InvoiceCurrency;
+  secondaryCurrency?: 'USD' | 'GBP';
+  conversionRate?: number;
   status: InvoiceStatus;
   notes?: string;
   createdAt: string;

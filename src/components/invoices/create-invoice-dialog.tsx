@@ -18,11 +18,11 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag, Library, Coins } from 'lucide-react';
+import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag, Library, Coins, RefreshCw } from 'lucide-react';
 import { useCollection } from '@/firebase/client';
 import {
   DropdownMenu,
@@ -36,7 +36,9 @@ import {
 const invoiceSchema = z.object({
   studentId: z.string().min(1, 'Please select a student.'),
   templateId: z.string().min(1, 'Please select a branding template.'),
-  currency: z.enum(['KWD', 'USD', 'GBP']).default('KWD'),
+  currency: z.literal('KWD').default('KWD'),
+  secondaryCurrency: z.enum(['NONE', 'USD', 'GBP']).default('NONE'),
+  conversionRate: z.coerce.number().min(0, 'Rate must be positive.').optional(),
   notes: z.string().optional(),
   discountAmount: z.coerce.number().min(0, 'Discount cannot be negative.').default(0),
   items: z.array(z.object({
@@ -67,6 +69,8 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       studentId: '',
       templateId: templates.length === 1 ? templates[0].id : '',
       currency: 'KWD',
+      secondaryCurrency: 'NONE',
+      conversionRate: undefined,
       notes: '',
       discountAmount: 0,
       items: [{ description: '', details: '', amount: 0, quantity: 1 }],
@@ -80,7 +84,8 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
 
   const watchItems = form.watch('items');
   const watchDiscount = form.watch('discountAmount');
-  const watchCurrency = form.watch('currency');
+  const watchSecondary = form.watch('secondaryCurrency');
+  const watchRate = form.watch('conversionRate');
   
   const discountValue = Number(watchDiscount) || 0;
   const subtotal = (watchItems || []).reduce((acc, item) => {
@@ -90,6 +95,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   }, 0);
   
   const total = Math.max(0, subtotal - discountValue);
+  const secondaryTotal = watchSecondary !== 'NONE' && watchRate ? total * Number(watchRate) : null;
 
   const handleLoadFromCatalog = (index: number, savedItem: InvoiceSavedItem) => {
     update(index, {
@@ -117,7 +123,9 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       studentName: selectedStudent.name,
       studentEmail: selectedStudent.email,
       studentPhone: selectedStudent.phone,
-      currency: values.currency as InvoiceCurrency,
+      currency: 'KWD' as const,
+      secondaryCurrency: values.secondaryCurrency === 'NONE' ? undefined : values.secondaryCurrency,
+      conversionRate: values.secondaryCurrency !== 'NONE' ? Number(values.conversionRate) : undefined,
       items: values.items.map((item, idx) => ({ 
         id: `item-${idx}-${Date.now()}`,
         description: item.description,
@@ -148,17 +156,17 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Invoice</DialogTitle>
-          <DialogDescription>Bill a student for agency services. Select your branding and currency.</DialogDescription>
+          <DialogTitle>Create New Dual-Currency Invoice</DialogTitle>
+          <DialogDescription>Bill a student in KWD with an optional secondary currency conversion.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <FormField
                 control={form.control}
                 name="studentId"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="md:col-span-2">
                     <FormLabel>Select Student</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
@@ -181,7 +189,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                 control={form.control}
                 name="templateId"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="md:col-span-2">
                     <FormLabel className="flex items-center gap-2">
                       <LayoutTemplate className="h-3 w-3" />
                       Select Branding
@@ -202,32 +210,72 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                   </FormItem>
                 )}
               />
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-primary/5 border-primary/20">
               <FormField
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2 text-primary font-bold">
+                    <FormLabel className="flex items-center gap-2 font-bold">
                       <Coins className="h-3 w-3" />
-                      Currency
+                      Base Currency
                     </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select disabled defaultValue="KWD">
                       <FormControl>
-                        <SelectTrigger className="font-bold border-primary/20 bg-primary/5">
-                          <SelectValue placeholder="Select currency" />
+                        <SelectTrigger className="font-bold">
+                          <SelectValue placeholder="KWD" />
+                        </SelectTrigger>
+                      </FormControl>
+                    </Select>
+                    <FormDescription>Invoices are generated in KWD.</FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="secondaryCurrency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2 text-accent font-bold">
+                      <RefreshCw className="h-3 w-3" />
+                      Add Secondary Currency
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="font-bold border-accent/20">
+                          <SelectValue placeholder="None" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="KWD">KWD (Kuwaiti Dinar)</SelectItem>
-                        <SelectItem value="USD">USD (US Dollar)</SelectItem>
-                        <SelectItem value="GBP">GBP (British Pound)</SelectItem>
+                        <SelectItem value="NONE">No conversion</SelectItem>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="GBP">GBP (£)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {watchSecondary !== 'NONE' && (
+                <FormField
+                  control={form.control}
+                  name="conversionRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-bold">Conversion Rate (1 KWD = ?)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.0001" placeholder="e.g. 3.25" {...field} />
+                      </FormControl>
+                      <FormDescription>Rate from KWD to {watchSecondary}.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <div className="space-y-4">
@@ -262,7 +310,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                                     {catalogItems.map(item => (
                                       <DropdownMenuItem key={item.id} onClick={() => handleLoadFromCatalog(index, item)} className="flex justify-between items-center cursor-pointer">
                                         <span className="font-bold truncate mr-2">{item.name}</span>
-                                        <span className="text-[9px] font-mono opacity-60 shrink-0">{item.defaultAmount} {watchCurrency}</span>
+                                        <span className="text-[9px] font-mono opacity-60 shrink-0">{item.defaultAmount} KWD</span>
                                       </DropdownMenuItem>
                                     ))}
                                   </DropdownMenuContent>
@@ -279,7 +327,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                         name={`items.${index}.amount`}
                         render={({ field }) => (
                           <FormItem className="flex-1">
-                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Rate ({watchCurrency})</FormLabel>
+                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Rate (KWD)</FormLabel>
                             <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
@@ -324,7 +372,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <Tag className="h-3 w-3" />
-                      Discount Amount ({watchCurrency})
+                      Discount Amount (KWD)
                     </FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" placeholder="0.00" {...field} />
@@ -337,12 +385,12 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
               <div className="bg-muted/50 p-4 rounded-lg flex flex-col gap-2">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Subtotal</span>
-                  <span>{subtotal.toFixed(2)} {watchCurrency}</span>
+                  <span>{subtotal.toFixed(2)} KWD</span>
                 </div>
                 {discountValue > 0 && (
                   <div className="flex justify-between text-xs text-destructive">
                     <span>Discount</span>
-                    <span>-{discountValue.toFixed(2)} {watchCurrency}</span>
+                    <span>-{discountValue.toFixed(2)} KWD</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t pt-2 mt-1">
@@ -350,7 +398,14 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                     <Calculator className="h-4 w-4" />
                     <span className="text-sm font-bold uppercase tracking-widest">Total</span>
                   </div>
-                  <div className="text-2xl font-black text-primary">{total.toFixed(2)} {watchCurrency}</div>
+                  <div className="text-right">
+                    <div className="text-2xl font-black text-primary">{total.toFixed(2)} KWD</div>
+                    {secondaryTotal !== null && (
+                      <div className="text-sm font-bold text-accent">
+                        ≈ {secondaryTotal.toFixed(2)} {watchSecondary}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
