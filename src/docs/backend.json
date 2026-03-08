@@ -81,6 +81,18 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["notificationType", "templateName", "message", "isActive"]
+    },
+    "InvoiceSavedItem": {
+      "title": "Invoice Saved Item",
+      "type": "object",
+      "description": "Standard service or product catalog items for recurring use in invoices.",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "defaultAmount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "defaultAmount"]
     }
   },
   "firestore": {
@@ -99,6 +111,10 @@
     "/notification_templates/{templateId}": {
       "schema": { "$ref": "#/entities/NotificationTemplate" },
       "description": "Stores WhatsApp message templates with their unique webhook URLs."
+    },
+    "/invoice_saved_items/{itemId}": {
+      "schema": { "$ref": "#/entities/InvoiceSavedItem" },
+      "description": "Catalog of reusable invoice items."
     }
   }
 }

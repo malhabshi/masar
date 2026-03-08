@@ -2,7 +2,7 @@
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1455,6 +1455,37 @@ export async function deleteInvoiceTemplate(adminId: string, templateId: string)
 
     await adminDb!.collection('invoice_templates').doc(templateId).delete();
     return { success: true, message: 'Template removed.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function saveInvoiceSavedItem(adminId: string, data: Omit<InvoiceSavedItem, 'id' | 'createdAt' | 'updatedAt'>, id?: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    const now = new Date().toISOString();
+    if (id) {
+      await adminDb!.collection('invoice_saved_items').doc(id).update({ ...data, updatedAt: now });
+    } else {
+      await adminDb!.collection('invoice_saved_items').add({ ...data, createdAt: now, updatedAt: now });
+    }
+    return { success: true, message: 'Saved item updated.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export async function deleteInvoiceSavedItem(adminId: string, itemId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+
+    await adminDb!.collection('invoice_saved_items').doc(itemId).delete();
+    return { success: true, message: 'Item removed from library.' };
   } catch (error: any) {
     return { success: false, message: error.message };
   }

@@ -80,7 +80,7 @@ service cloud.firestore {
     match /universityApplications/{applicationId} {
       allow read: if isSignedIn();
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().get('civilId', ''));
-      allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == request.resource.data.assignedToEmployeeId);
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == resource.data.assignedToEmployeeId);
       allow delete: if isAdmin();
     }
 
@@ -91,7 +91,6 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Abdullah Fix: Ensure admins and department users can list and get tasks reliably.
       allow list: if isSignedIn();
       
       allow get: if isSignedIn() && (
@@ -175,6 +174,11 @@ service cloud.firestore {
     }
 
     match /invoice_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+
+    match /invoice_saved_items/{itemId} {
       allow read: if isSignedIn();
       allow write: if isPrivileged();
     }

@@ -410,6 +410,15 @@ export interface InvoiceTemplate {
   updatedAt: string;
 }
 
+export interface InvoiceSavedItem {
+  id: string;
+  name: string;
+  description?: string;
+  defaultAmount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;

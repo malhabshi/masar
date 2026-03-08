@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, AppUser, InvoiceItem, InvoiceTemplate } from '@/lib/types';
+import type { Student, AppUser, InvoiceItem, InvoiceTemplate, InvoiceSavedItem } from '@/lib/types';
 import { createInvoice } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -22,7 +22,16 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag } from 'lucide-react';
+import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag, Library } from 'lucide-react';
+import { useCollection } from '@/firebase/client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const invoiceSchema = z.object({
   studentId: z.string().min(1, 'Please select a student.'),
@@ -49,6 +58,8 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
+  const { data: catalogItems } = useCollection<InvoiceSavedItem>(isOpen ? 'invoice_saved_items' : '');
+
   const form = useForm<z.infer<typeof invoiceSchema>>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
@@ -60,7 +71,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "items",
   });
@@ -68,7 +79,6 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   const watchItems = form.watch('items');
   const watchDiscount = form.watch('discountAmount');
   
-  // Ensure we treat values as numbers during the calculation phase
   const discountValue = Number(watchDiscount) || 0;
   const subtotal = (watchItems || []).reduce((acc, item) => {
     const amount = Number(item.amount) || 0;
@@ -77,6 +87,16 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
   }, 0);
   
   const total = Math.max(0, subtotal - discountValue);
+
+  const handleLoadFromCatalog = (index: number, savedItem: InvoiceSavedItem) => {
+    update(index, {
+      description: savedItem.name,
+      details: savedItem.description || '',
+      amount: savedItem.defaultAmount,
+      quantity: 1,
+    });
+    toast({ title: 'Item Loaded', description: `Applied "${savedItem.name}" from catalog.` });
+  };
 
   const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
     setIsSubmitting(true);
@@ -125,7 +145,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Invoice</DialogTitle>
-          <DialogDescription>Bill a student for agency services or exam registrations.</DialogDescription>
+          <DialogDescription>Bill a student for agency services. Use the Item Library for quick entry.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
@@ -172,9 +192,6 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                         {templates.map(t => (
                           <SelectItem key={t.id} value={t.id}>{t.name} ({t.companyName})</SelectItem>
                         ))}
-                        {templates.length === 0 && (
-                          <SelectItem value="none" disabled>No templates found. Go to Settings.</SelectItem>
-                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -187,20 +204,41 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
               <div className="flex items-center justify-between">
                 <FormLabel className="text-base font-bold">Line Items</FormLabel>
                 <Button type="button" variant="outline" size="sm" onClick={() => append({ description: '', details: '', amount: 0, quantity: 1 })}>
-                  <Plus className="h-4 w-4 mr-1" /> Add Item
+                  <Plus className="h-4 w-4 mr-1" /> Add Custom Item
                 </Button>
               </div>
               
               <div className="space-y-6">
                 {fields.map((field, index) => (
-                  <div key={field.id} className="p-4 border rounded-lg bg-muted/10 space-y-3 animate-in fade-in slide-in-from-top-1">
+                  <div key={field.id} className="p-4 border rounded-lg bg-muted/10 space-y-3 relative group">
                     <div className="flex gap-3 items-start">
                       <FormField
                         control={form.control}
                         name={`items.${index}.description`}
                         render={({ field }) => (
                           <FormItem className="flex-[3]">
-                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Item Name</FormLabel>
+                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground flex items-center justify-between">
+                              Item Name
+                              {catalogItems && catalogItems.length > 0 && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] font-black bg-primary/10 text-primary hover:bg-primary/20">
+                                      <Library className="h-2 w-2 mr-1" /> Quick Load
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel className="text-[10px] uppercase">Service Catalog</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {catalogItems.map(item => (
+                                      <DropdownMenuItem key={item.id} onClick={() => handleLoadFromCatalog(index, item)} className="flex justify-between items-center cursor-pointer">
+                                        <span className="font-bold truncate mr-2">{item.name}</span>
+                                        <span className="text-[9px] font-mono opacity-60 shrink-0">{item.defaultAmount} KWD</span>
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </FormLabel>
                             <FormControl><Input placeholder="e.g., Application Fee" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
@@ -237,7 +275,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                       name={`items.${index}.details`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Additional Details (Appears under item name)</FormLabel>
+                          <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Additional Details</FormLabel>
                           <FormControl><Input placeholder="e.g. University of Manchester - Fall 2025" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
