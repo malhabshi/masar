@@ -121,6 +121,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
 
   const subtotal = (invoice.items || []).reduce((acc, item) => acc + (item.amount * item.quantity), 0);
   const discount = invoice.discountAmount || 0;
+  const currencySymbol = invoice.currency === 'USD' ? '$' : invoice.currency === 'GBP' ? '£' : invoice.currency;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -219,7 +220,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                         )}
                       </td>
                       <td className="py-5 px-2 text-center text-slate-700 font-bold text-sm align-top">{item.quantity}</td>
-                      <td className="py-5 px-4 text-right font-black text-slate-900 text-sm align-top">{(item.amount * item.quantity).toFixed(2)} KWD</td>
+                      <td className="py-5 px-4 text-right font-black text-slate-900 text-sm align-top">{(item.amount * item.quantity).toFixed(2)} {currencySymbol}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -231,7 +232,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               <div className="w-80 space-y-3">
                 <div className="flex justify-between text-xs font-bold px-4">
                   <span className="text-slate-400 uppercase tracking-widest">Subtotal</span>
-                  <span className="text-slate-900">{subtotal.toFixed(2)} KWD</span>
+                  <span className="text-slate-900">{subtotal.toFixed(2)} {currencySymbol}</span>
                 </div>
                 
                 {discount > 0 && (
@@ -240,14 +241,14 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                       <Tag className="h-3 w-3" />
                       <span className="uppercase tracking-widest">Discount</span>
                     </div>
-                    <span>-{discount.toFixed(2)} KWD</span>
+                    <span>-{discount.toFixed(2)} {currencySymbol}</span>
                   </div>
                 )}
 
                 <div className="flex items-center justify-between bg-slate-50 border border-slate-900 p-6 rounded-xl mt-4">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Due</span>
-                    <span className="text-[10px] italic font-bold text-slate-400">Kuwaiti Dinar</span>
+                    <span className="text-[10px] italic font-bold text-slate-400">{invoice.currency}</span>
                   </div>
                   <span className="text-4xl font-black text-slate-900">{invoice.totalAmount.toFixed(2)}</span>
                 </div>

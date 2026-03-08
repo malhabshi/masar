@@ -389,6 +389,7 @@ export interface AcademicTerm {
 }
 
 export type InvoiceStatus = 'paid' | 'unpaid' | 'cancelled';
+export type InvoiceCurrency = 'KWD' | 'USD' | 'GBP';
 
 export interface InvoiceItem {
   id: string;
@@ -430,6 +431,7 @@ export interface Invoice {
   items: InvoiceItem[];
   totalAmount: number;
   discountAmount?: number;
+  currency: InvoiceCurrency;
   status: InvoiceStatus;
   notes?: string;
   createdAt: string;

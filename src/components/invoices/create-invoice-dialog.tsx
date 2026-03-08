@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, AppUser, InvoiceItem, InvoiceTemplate, InvoiceSavedItem } from '@/lib/types';
+import type { Student, AppUser, InvoiceItem, InvoiceTemplate, InvoiceSavedItem, InvoiceCurrency } from '@/lib/types';
 import { createInvoice } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -22,7 +22,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag, Library } from 'lucide-react';
+import { Plus, Trash2, Loader2, Calculator, LayoutTemplate, Tag, Library, Coins } from 'lucide-react';
 import { useCollection } from '@/firebase/client';
 import {
   DropdownMenu,
@@ -36,6 +36,7 @@ import {
 const invoiceSchema = z.object({
   studentId: z.string().min(1, 'Please select a student.'),
   templateId: z.string().min(1, 'Please select a branding template.'),
+  currency: z.enum(['KWD', 'USD', 'GBP']).default('KWD'),
   notes: z.string().optional(),
   discountAmount: z.coerce.number().min(0, 'Discount cannot be negative.').default(0),
   items: z.array(z.object({
@@ -65,6 +66,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
     defaultValues: {
       studentId: '',
       templateId: templates.length === 1 ? templates[0].id : '',
+      currency: 'KWD',
       notes: '',
       discountAmount: 0,
       items: [{ description: '', details: '', amount: 0, quantity: 1 }],
@@ -78,6 +80,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
 
   const watchItems = form.watch('items');
   const watchDiscount = form.watch('discountAmount');
+  const watchCurrency = form.watch('currency');
   
   const discountValue = Number(watchDiscount) || 0;
   const subtotal = (watchItems || []).reduce((acc, item) => {
@@ -114,6 +117,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       studentName: selectedStudent.name,
       studentEmail: selectedStudent.email,
       studentPhone: selectedStudent.phone,
+      currency: values.currency as InvoiceCurrency,
       items: values.items.map((item, idx) => ({ 
         id: `item-${idx}-${Date.now()}`,
         description: item.description,
@@ -130,7 +134,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
     const result = await createInvoice(currentUser.id, invoiceData);
 
     if (result.success) {
-      toast({ title: 'Invoice Created', description: result.message });
+      toast({ title: 'Invoice Generated', description: result.message });
       setIsOpen(false);
       form.reset();
     } else {
@@ -145,11 +149,11 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Invoice</DialogTitle>
-          <DialogDescription>Bill a student for agency services. Use the Item Library for quick entry.</DialogDescription>
+          <DialogDescription>Bill a student for agency services. Select your branding and currency.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="studentId"
@@ -185,13 +189,39 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Choose a template (Masar/Mostajed)" />
+                          <SelectValue placeholder="Choose a template" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {templates.map(t => (
-                          <SelectItem key={t.id} value={t.id}>{t.name} ({t.companyName})</SelectItem>
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="currency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2 text-primary font-bold">
+                      <Coins className="h-3 w-3" />
+                      Currency
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="font-bold border-primary/20 bg-primary/5">
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="KWD">KWD (Kuwaiti Dinar)</SelectItem>
+                        <SelectItem value="USD">USD (US Dollar)</SelectItem>
+                        <SelectItem value="GBP">GBP (British Pound)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -232,7 +262,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                                     {catalogItems.map(item => (
                                       <DropdownMenuItem key={item.id} onClick={() => handleLoadFromCatalog(index, item)} className="flex justify-between items-center cursor-pointer">
                                         <span className="font-bold truncate mr-2">{item.name}</span>
-                                        <span className="text-[9px] font-mono opacity-60 shrink-0">{item.defaultAmount} KWD</span>
+                                        <span className="text-[9px] font-mono opacity-60 shrink-0">{item.defaultAmount} {watchCurrency}</span>
                                       </DropdownMenuItem>
                                     ))}
                                   </DropdownMenuContent>
@@ -249,7 +279,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                         name={`items.${index}.amount`}
                         render={({ field }) => (
                           <FormItem className="flex-1">
-                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Rate (KWD)</FormLabel>
+                            <FormLabel className="text-[10px] font-bold uppercase text-muted-foreground">Rate ({watchCurrency})</FormLabel>
                             <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
                             <FormMessage />
                           </FormItem>
@@ -294,7 +324,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <Tag className="h-3 w-3" />
-                      Discount Amount (KWD)
+                      Discount Amount ({watchCurrency})
                     </FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" placeholder="0.00" {...field} />
@@ -307,12 +337,12 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
               <div className="bg-muted/50 p-4 rounded-lg flex flex-col gap-2">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Subtotal</span>
-                  <span>{subtotal.toFixed(2)} KWD</span>
+                  <span>{subtotal.toFixed(2)} {watchCurrency}</span>
                 </div>
                 {discountValue > 0 && (
                   <div className="flex justify-between text-xs text-destructive">
                     <span>Discount</span>
-                    <span>-{discountValue.toFixed(2)} KWD</span>
+                    <span>-{discountValue.toFixed(2)} {watchCurrency}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t pt-2 mt-1">
@@ -320,7 +350,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                     <Calculator className="h-4 w-4" />
                     <span className="text-sm font-bold uppercase tracking-widest">Total</span>
                   </div>
-                  <div className="text-2xl font-black text-primary">{total.toFixed(2)} KWD</div>
+                  <div className="text-2xl font-black text-primary">{total.toFixed(2)} {watchCurrency}</div>
                 </div>
               </div>
             </div>

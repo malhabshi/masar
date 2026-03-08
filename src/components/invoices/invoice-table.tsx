@@ -105,7 +105,9 @@ export function InvoiceTable({ invoices, templates, currentUser }: InvoiceTableP
                     </div>
                   </TableCell>
                   <TableCell className="text-xs">{formatDate(inv.createdAt)}</TableCell>
-                  <TableCell className="font-bold">{inv.totalAmount.toFixed(2)} KWD</TableCell>
+                  <TableCell className="font-bold">
+                    {inv.totalAmount.toFixed(2)} {inv.currency || 'KWD'}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={statusVariants[inv.status]}>
                       {isProcessing === inv.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
