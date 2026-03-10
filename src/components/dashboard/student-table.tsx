@@ -14,8 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar } from 'lucide-react';
-import type { Student, PipelineStatus, User } from '@/lib/types';
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote } from 'lucide-react';
+import type { Student, PipelineStatus, User, Note } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import {
   DropdownMenu,
@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { formatRelativeTime } from '@/lib/timestamp-utils';
+import { formatRelativeTime, toDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { TransferStudentDialog } from '@/components/student/transfer-student-dialog';
 
@@ -197,7 +197,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     }
   }
 
-  const numColumns = 8; 
+  const numColumns = 9; 
 
   const currentEmptyStateMessage = displayedStudents.length === 0 && isFiltered 
       ? 'No students match your current filters.' 
@@ -267,6 +267,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
               <TableHead>Apps</TableHead>
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Employee</TableHead>
+              <TableHead>Latest Note</TableHead>
               <TableHead>IELTS Overall</TableHead>
               <TableHead>Intake Term</TableHead>
               <TableHead>App. Countries</TableHead>
@@ -282,6 +283,15 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const requester = student.deletionRequested?.requestedBy ? deletionRequesterMap.get(student.deletionRequested.requestedBy) : null;
                 const canAssign = isAdminOrDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
+
+                // Get the latest employee note
+                const latestNote = (student.employeeNotes || [])
+                  .slice()
+                  .sort((a, b) => {
+                    const dateA = toDate(a.createdAt)?.getTime() || 0;
+                    const dateB = toDate(b.createdAt)?.getTime() || 0;
+                    return dateB - dateA;
+                  })[0];
 
                 return (
                 <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20")}>
@@ -386,6 +396,31 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                     </Badge>
                   </TableCell>
                   <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
+                  <TableCell>
+                    {latestNote ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-start gap-1.5 max-w-[150px] cursor-help group">
+                              <StickyNote className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0 opacity-50 group-hover:opacity-100 transition-opacity" />
+                              <span className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">
+                                {latestNote.content}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-[300px] p-3">
+                            <p className="font-bold text-[10px] uppercase mb-1 text-primary">Latest Employee Note:</p>
+                            <p className="text-xs whitespace-pre-wrap">{latestNote.content}</p>
+                            <p className="text-[9px] text-muted-foreground mt-2 border-t pt-1">
+                              Added {isClient ? formatRelativeTime(latestNote.createdAt) : '...'}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic opacity-50">No notes</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={student.ieltsOverall ? 'secondary' : 'outline'}>
                         {(student.ieltsOverall ?? 0).toFixed(1)}
