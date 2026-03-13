@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -51,6 +52,7 @@ import { useCollection, addDocumentNonBlocking, deleteDocumentNonBlocking } from
 import { firestore } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { AddLinkDialog } from '@/components/resources/add-link-dialog';
+import { EditLinkDialog } from '@/components/resources/edit-link-dialog';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 
 
@@ -232,27 +234,30 @@ export default function ResourcesPage() {
                           <h3 className="font-semibold">{resource.title}</h3>
                           <p className="text-sm text-muted-foreground">{resource.description}</p>
                       </div>
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-1">
                           {canManage && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This will permanently delete the link "{resource.title}".
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteLink(resource.id)}>Delete</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
+                              <>
+                                <EditLinkDialog link={resource} />
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This will permanently delete the link "{resource.title}".
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleDeleteLink(resource.id)}>Delete</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                              </>
                           )}
                           <Button variant="ghost" size="icon" asChild>
                               <a href={resource.url} target="_blank" rel="noopener noreferrer">
