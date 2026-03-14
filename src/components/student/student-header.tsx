@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
@@ -242,8 +243,8 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               )}
               {canEdit && <EditStudentDialog student={student} />}
               
-              {/* Restored "New Task" Button */}
-              {(isAssignedEmployee || canManage) && (
+              {/* Restored "New Task" Button - Now restricted to assigned employee only per user request */}
+              {isAssignedEmployee && (
                 <CreateStudentTaskDialog student={student} currentUser={currentUser} />
               )}
 
