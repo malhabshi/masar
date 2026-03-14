@@ -491,7 +491,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
         const taskRef = await adminDb!.collection('tasks').add({
             authorId, createdBy: authorId, authorName: creator?.name || 'Staff',
             recipientId: recipientIdsForTask[0] || 'all',
-            recipientIds: recipientIdsForTask.length > 0 ? recipientIdsForTask : ['all'],
+            recipientIds: recipientIdsForTask[0] === 'all' ? ['all'] : recipientIdsForTask,
             content: description, createdAt: new Date().toISOString(), status: 'new', category: 'request', replies: [],
             studentId, studentName: studentData.name, studentPhone: studentData.phone,
             taskType: requestTypeData.name, requestTypeId: requestTypeId,
@@ -631,7 +631,7 @@ export async function createNewUser(userData: { name: string; email: string; pas
     const batch = adminDb!.batch();
     batch.set(adminDb!.collection('users').doc(authUser.uid), newUserForDb);
     if (userData.role === 'admin') batch.set(adminDb!.collection('admins').doc(authUser.uid), { role: 'admin', syncAt: new Date().toISOString(), userEmail: userData.email });
-    else if (userData.role === 'department') batch.set(adminDb!.collection('departmentUsers').doc(authUser.uid), { role: 'department', syncAt: new Date().toISOString(), department: userData.department || 'General' });
+    else if (userData.role === 'department') batch.set(adminDb!.collection('departmentUsers').doc(authUser.uid), { role: 'department', syncAt: new Date().toISOString(), department: userData.department || 'UK' });
     await batch.commit();
     return { success: true, message: `${userData.name} added.` };
   } catch (error: any) { return { success: false, message: error.message }; }

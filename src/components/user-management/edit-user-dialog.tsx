@@ -26,7 +26,7 @@ import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
-const DEPARTMENTS = ['UK', 'Finance', 'Document'];
+const DEPARTMENTS = ['UK', 'USA', 'AU/NZ'];
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
