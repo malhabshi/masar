@@ -72,11 +72,16 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     setIsClient(true);
   }, []);
 
-  const deletionRequesters = useMemo(() => {
-      return [...new Set(students.map(s => s.deletionRequested?.requestedBy).filter(Boolean) as string[])];
+  const requesters = useMemo(() => {
+      const ids = new Set<string>();
+      students.forEach(s => {
+          if (s.deletionRequested?.requestedBy) ids.add(s.deletionRequested.requestedBy);
+          if (s.transferRequest?.requestedBy) ids.add(s.transferRequest.requestedBy);
+      });
+      return Array.from(ids);
   }, [students]);
 
-  const { userMap: deletionRequesterMap } = useUserCacheById(deletionRequesters);
+  const { userMap: requesterMap } = useUserCacheById(requesters);
 
 
   useEffect(() => {
@@ -142,6 +147,8 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 score += (s.newDocumentsForAdmin || 0);
                 // Also prioritize deletion requests as they require immediate attention
                 if (s.deletionRequested?.status === 'pending') score += 100;
+                // And transfer requests
+                if (s.transferRequested) score += 80;
             } else if (currentUser.role === 'employee') {
                 // Employee: Count messages from admins + new documents from admins + new missing items
                 score += (s.employeeUnreadMessages || 0);
@@ -280,7 +287,8 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
                 const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
                 const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
-                const requester = student.deletionRequested?.requestedBy ? deletionRequesterMap.get(student.deletionRequested.requestedBy) : null;
+                const requester = student.deletionRequested?.requestedBy ? requesterMap.get(student.deletionRequested.requestedBy) : null;
+                const transferRequester = student.transferRequest?.requestedBy ? requesterMap.get(student.transferRequest.requestedBy) : null;
                 const canAssign = isAdminOrDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
@@ -347,10 +355,20 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                               </Badge>
                           )}
                           {student.transferRequested && (
-                              <Badge variant="outline" className="border-yellow-500 text-yellow-600">
-                                  <ArrowRightLeft className="mr-1 h-3 w-3" />
-                                  Transfer Requested
-                              </Badge>
+                              <TooltipProvider>
+                                  <Tooltip>
+                                      <TooltipTrigger asChild>
+                                          <Badge variant="outline" className="border-yellow-500 text-yellow-600 cursor-help">
+                                              <ArrowRightLeft className="mr-1 h-3 w-3" />
+                                              Transfer Requested
+                                          </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-[250px]">
+                                          <p className="text-xs">Reason: "{student.transferRequest?.reason || '...'}"</p>
+                                          <p className="text-[10px] text-muted-foreground mt-1">Requested by {transferRequester?.name || 'employee'}</p>
+                                      </TooltipContent>
+                                  </Tooltip>
+                              </TooltipProvider>
                           )}
                           {student.deletionRequested?.status === 'pending' && isAdminOrDept && (
                             <TooltipProvider>

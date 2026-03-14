@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
@@ -74,8 +73,15 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   }, []);
 
   const requesterId = student?.deletionRequested?.requestedBy;
-  const { userMap } = useUserCacheById(requesterId ? [requesterId] : []);
+  const transferRequesterId = student?.transferRequest?.requestedBy;
+  
+  const { userMap } = useUserCacheById([
+    ...(requesterId ? [requesterId] : []),
+    ...(transferRequesterId ? [transferRequesterId] : [])
+  ]);
+
   const requester = requesterId ? userMap.get(requesterId) : null;
+  const transferRequester = transferRequesterId ? userMap.get(transferRequesterId) : null;
 
   if (isLoading || !student || !currentUser || usersLoading) {
     return <StudentHeaderSkeleton />;
@@ -220,11 +226,26 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 Download PDF
               </Button>
 
-              {student.transferRequested && !canApproveTransfer && (
-                  <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3">
-                      <ArrowRightLeft className="mr-2 h-4 w-4" />
-                      Transfer Requested
-                  </BadgeComponent>
+              {student.transferRequested && (
+                  <TooltipProvider>
+                      <Tooltip>
+                          <TooltipTrigger asChild>
+                              <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3 cursor-help">
+                                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                                  Transfer Requested
+                              </BadgeComponent>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-[300px] p-3 space-y-2">
+                              <p className="font-bold text-xs uppercase text-yellow-600">Transfer Request Details:</p>
+                              <p className="text-xs text-muted-foreground font-medium italic">
+                                "{student.transferRequest?.reason || 'No reason provided.'}"
+                              </p>
+                              <div className="text-[10px] text-muted-foreground border-t pt-1.5 mt-1.5">
+                                  By {transferRequester?.name || '...'} {isClient && student.transferRequest ? formatRelativeTime(student.transferRequest.requestedAt) : '...'}
+                              </div>
+                          </TooltipContent>
+                      </Tooltip>
+                  </TooltipProvider>
               )}
               {student.deletionRequested?.status === 'pending' && (
                   <TooltipProvider>
@@ -286,7 +307,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           </div>
           {student.finalChoiceUniversity && (
             <div className="flex items-center gap-2 mt-2 text-lg font-semibold text-success">
-              <GraduationCap className="h-5 w-5" />
+              < GraduationCap className="h-5 w-5" />
               <span>{student.finalChoiceUniversity}</span>
             </div>
           )}

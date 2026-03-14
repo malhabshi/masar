@@ -10,7 +10,7 @@ export interface User {
   civilId?: string;
   employeeId?: string;
   studentId?: string; // Links a student user to a student profile
-  department?: string; // UK, Finance, Document, etc.
+  department?: string; // UK, USA, AU/NZ, etc.
 }
 
 export type ApplicationStatus = 'Pending' | 'Submitted' | 'In Review' | 'Accepted' | 'Rejected';
@@ -101,6 +101,11 @@ export interface Student {
   ieltsOverall?: number;
   profileCompletionStatus?: ProfileCompletionStatus;
   transferRequested?: boolean;
+  transferRequest?: {
+    requestedBy: string;
+    reason: string;
+    requestedAt: string;
+  };
   deletionRequested?: {
     requestedBy: string;
     reason: string;

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -686,7 +685,15 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
         const studentDoc = await studentRef.get();
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
         const studentData = studentDoc.data() as Student;
-        const updates = { employeeId: newEmployee.civilId, transferRequested: false, isNewForEmployee: true, lastActivityAt: new Date().toISOString(), transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId, toEmployeeId: newEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }], adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-${Date.now()}`, authorId: adminId, content: `Transferred from ${fromEmployeeName || 'Unassigned'} to ${newEmployee.name}.`, createdAt: new Date().toISOString() }] };
+        const updates = { 
+          employeeId: newEmployee.civilId, 
+          transferRequested: false, 
+          transferRequest: FieldValue.delete(),
+          isNewForEmployee: true, 
+          lastActivityAt: new Date().toISOString(), 
+          transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId, toEmployeeId: newEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }], 
+          adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-${Date.now()}`, authorId: adminId, content: `Transferred from ${fromEmployeeName || 'Unassigned'} to ${newEmployee.name}.`, createdAt: new Date().toISOString() }] 
+        };
         await studentRef.update(updates);
         if (newEmployee.id) {
             const admin = await getUser(adminId);
@@ -705,14 +712,24 @@ export async function requestTransfer(studentId: string, reason: string, request
     if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
     const employee = await getUser(requestingEmployeeId);
     if (!employee) return { success: false, message: 'Employee not found.' };
-    await studentRef.update({ transferRequested: true, lastActivityAt: new Date().toISOString() });
+    
+    const now = new Date().toISOString();
+    await studentRef.update({ 
+      transferRequested: true, 
+      transferRequest: {
+        requestedBy: requestingEmployeeId,
+        reason: reason,
+        requestedAt: now
+      },
+      lastActivityAt: now 
+    });
     const studentData = studentDoc.data() as Student;
-    await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-req-${Date.now()}`, authorId: requestingEmployeeId, content: `Transfer requested: ${reason}`, createdAt: new Date().toISOString() }] });
+    await studentRef.update({ adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-req-${Date.now()}`, authorId: requestingEmployeeId, content: `Transfer requested: ${reason}`, createdAt: now }] });
     const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
     if (!adminsSnapshot.empty) {
         const batch = adminDb!.batch();
         adminsSnapshot.forEach(adminDoc => {
-            batch.set(adminDb!.collection('tasks').doc(), { authorId: requestingEmployeeId, createdBy: requestingEmployeeId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `Transfer request for ${studentName}: ${reason}`, createdAt: new Date().toISOString(), status: 'new', category: 'request', replies: [] });
+            batch.set(adminDb!.collection('tasks').doc(), { authorId: requestingEmployeeId, createdBy: requestingEmployeeId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `Transfer request for ${studentName}: ${reason}`, createdAt: now, status: 'new', category: 'request', replies: [] });
         });
         await batch.commit();
     }
