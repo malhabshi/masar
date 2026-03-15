@@ -69,10 +69,11 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      // Basic read (get/list) allowed for all staff
-      allow get, list: if isSignedIn();
+      // Basic read allowed for all staff
+      allow read: if isSignedIn();
       
-      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().get('civilId', ''));
+      // Management and creators can write
+      allow create: if isPrivileged() || isSignedIn();
       allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == resource.data.employeeId);
       allow delete: if isAdmin();
     }

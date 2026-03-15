@@ -1,9 +1,9 @@
+
 'use client';
 
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
-import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { orderBy } from 'firebase/firestore';
+import { useCollection } from '@/firebase/client';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
   Card,
@@ -31,12 +31,8 @@ export function AdminApplicantsPage() {
   const studentsPath = (isMounted && isAdmin) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 
-  const studentsConstraints = useMemoFirebase(() => {
-    if (!studentsPath) return [];
-    return [orderBy('createdAt', 'desc')];
-  }, [studentsPath]);
-
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
+  // Fetch students (Ordering handled client-side in StudentTable to avoid index requirement issues)
+  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath);
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
 
   const employeeMap = useMemo(() => {

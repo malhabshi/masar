@@ -92,9 +92,12 @@ export async function repairPermissions(adminId: string) {
           'lZr1zv5ePQbObKNVXS4xGjERmE62'
         ];
         
+        console.log('Repairing permissions for Admin ID:', adminId);
+        
         const usersSnap = await adminDb!.collection('users').get();
         const batch = adminDb!.batch();
 
+        // Clear existing permissions
         const adminsSnap = await adminDb!.collection('admins').get();
         const deptsSnap = await adminDb!.collection('departmentUsers').get();
         
@@ -103,6 +106,7 @@ export async function repairPermissions(adminId: string) {
 
         const now = new Date().toISOString();
 
+        // Rebuild permissions based on current roles
         usersSnap.docs.forEach(userDoc => {
             const userData = userDoc.data();
             const uid = userDoc.id;
@@ -127,6 +131,7 @@ export async function repairPermissions(adminId: string) {
         });
 
         await batch.commit();
+        console.log('Permission repair complete.');
         return { success: true, message: `Successfully repaired permissions and synchronized ${usersSnap.size} users.` };
     } catch (e: any) {
         console.error('Permission repair failed:', e);
@@ -1016,7 +1021,7 @@ export async function getReportStats(dateRange: { from: string; to: string; }): 
     const allTimeLogs = timeLogsSnap.docs.map(doc => doc.data() as TimeLog);
     const studentsInRange = allStudents.filter(s => s.createdAt && isWithinInterval(parseISO(s.createdAt), interval));
     const appsInRange = allStudents.flatMap(s => s.applications || []).filter(app => app.updatedAt && isWithinInterval(parseISO(app.updatedAt), interval));
-    const stats: ReportStats = { totalStudents: allStudents.length, totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), totalEmployees: allUsers.filter(u => u.role === 'employee').length, applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + (s.applications?.length || 0); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentGrowthData: Object.entries(studentsInRange.reduce((acc, s) => { const d = format(parseISO(s.createdAt), 'yyyy-MM-dd'); acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)), applicationCountryData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.country] = (acc[app.country] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), employeeHoursData: Object.entries(allTimeLogs.filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval)).reduce((acc, log) => { const user = allUsers.find(u => u.id === log.employeeId); if (user) acc[user.name] = (acc[user.name] || 0) + (differenceInMinutes(parseISO(log.clockOut!), parseISO(log.clockIn)) / 60); return acc; }, {} as Record<string, number>)).map(([name, hours]) => ({ name, hours: parseFloat(hours.toFixed(1))})) };
+    const stats: ReportStats = { totalStudents: allStudents.length, totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), totalEmployees: allUsers.filter(u => u.role === 'employee').length, applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + (s.applications?.length || 0); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentGrowthData: Object.entries(studentsInRange.reduce((acc, s) => { const d = format(parseISO(s.createdAt), 'yyyy-MM-dd'); acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)), applicationCountryData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.country] = (acc[app.country] || 0) + (1); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), employeeHoursData: Object.entries(allTimeLogs.filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval)).reduce((acc, log) => { const user = allUsers.find(u => u.id === log.employeeId); if (user) acc[user.name] = (acc[user.name] || 0) + (differenceInMinutes(parseISO(log.clockOut!), parseISO(log.clockIn)) / 60); return acc; }, {} as Record<string, number>)).map(([name, hours]) => ({ name, hours: parseFloat(hours.toFixed(1))})) };
     return scrub({ success: true, data: stats });
   } catch (error: any) { return { success: false, message: error.message }; }
 }

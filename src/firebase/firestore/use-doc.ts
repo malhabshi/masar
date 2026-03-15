@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -115,15 +116,18 @@ export function useDoc<T = any>(
         (err) => {
           console.error(`[useDoc] subscription error:`, err);
           
-          const contextualError = new FirestorePermissionError({
-            operation: 'get',
-            path: getPathFromTarget(target, pathSegments),
-          });
-
-          setError(contextualError);
+          if (err.code === 'permission-denied') {
+            const contextualError = new FirestorePermissionError({
+              operation: 'get',
+              path: getPathFromTarget(target, pathSegments),
+            });
+            setError(contextualError);
+            errorEmitter.emit('permission-error', contextualError);
+          } else {
+            setError(err);
+          }
           setData(null);
           setIsLoading(false);
-          errorEmitter.emit('permission-error', contextualError);
         }
       );
     } catch (e: any) {

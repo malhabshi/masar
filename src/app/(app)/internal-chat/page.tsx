@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { orderBy, query, collection, where } from 'firebase/firestore';
+import { collection, where, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2, MessageSquare, User as UserIcon, Clock } from 'lucide-react';
@@ -34,16 +35,12 @@ export default function InternalChatPage() {
     if (isEmployee && currentUser.civilId) {
       return query(
         baseQuery,
-        where('employeeId', '==', currentUser.civilId),
-        orderBy('createdAt', 'desc')
+        where('employeeId', '==', currentUser.civilId)
       );
     }
     
-    // Management view: Load all
-    return query(
-      baseQuery,
-      orderBy('createdAt', 'desc')
-    );
+    // Management view: Load all (Sorting handled on client to avoid index requirements)
+    return baseQuery;
   }, [isMounted, currentUser?.id, currentUser?.civilId, isEmployee]);
 
   const { data: rawStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsQuery);
@@ -72,7 +69,7 @@ export default function InternalChatPage() {
       });
     }
 
-    // 2. Client-side sort: SMS Style
+    // 2. Client-side sort: SMS Style (Stack from new to old)
     return [...filtered].sort((a, b) => {
       const timeA = new Date(a.lastChatMessageTimestamp || a.lastActivityAt || a.createdAt).getTime();
       const timeB = new Date(b.lastChatMessageTimestamp || b.lastActivityAt || b.createdAt).getTime();

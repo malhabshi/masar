@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -50,7 +51,7 @@ function getPathFromTarget(target: any): string {
   if (typeof target === 'string') return target;
   if (!target) return 'unknown';
   
-  // Try to get path from CollectionReference or DocumentReference
+  // Try to get path from CollectionReference or Query
   if (target.path) return target.path;
   
   // Try to get path from internal Query structure if available
@@ -124,14 +125,17 @@ export function useCollection<T = any>(
         (err) => {
           console.error(`[useCollection] subscription error:`, err);
           
-          const contextualError = new FirestorePermissionError({
-            operation: 'list',
-            path: getPathFromTarget(target),
-          });
-
-          setError(contextualError);
+          if (err.code === 'permission-denied') {
+            const contextualError = new FirestorePermissionError({
+              operation: 'list',
+              path: getPathFromTarget(target),
+            });
+            setError(contextualError);
+            errorEmitter.emit('permission-error', contextualError);
+          } else {
+            setError(err);
+          }
           setIsLoading(false);
-          errorEmitter.emit('permission-error', contextualError);
         }
       );
     } catch (e: any) {
