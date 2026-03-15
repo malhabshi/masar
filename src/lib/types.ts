@@ -86,6 +86,8 @@ export interface Student {
   missingItems?: string[];
   pipelineStatus?: PipelineStatus;
   statusNote?: string; // Persistent editable status note for Applicants table
+  lastChatMessageText?: string; // For Inbox preview
+  lastChatMessageTimestamp?: string; // For Inbox sorting
   transferHistory?: {
     fromEmployeeId: string | null;
     toEmployeeId: string;

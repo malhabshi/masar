@@ -1136,7 +1136,11 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     await adminDb!.collection('chats').doc(studentId).collection('messages').add({ authorId, content, timestamp: now, ...(documentPayload && { document: documentPayload }) });
     
     const isAdminDept = ['admin', 'department'].includes(author.role);
-    const updates: any = { lastActivityAt: now };
+    const updates: any = { 
+      lastActivityAt: now,
+      lastChatMessageText: content || (documentPayload ? `Shared file: ${documentPayload.name}` : ''),
+      lastChatMessageTimestamp: now
+    };
     
     if (isAdminDept) {
       updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
@@ -1183,9 +1187,10 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
   try {
     const author = await getUser(authorId);
     if (!author) return;
-    const studentDoc = await adminDb!.collection('students').doc(studentId).get();
-    if (!studentDoc.exists) return;
-    const studentData = studentDoc.data() as Student;
+    const studentDoc = await adminDb!.collection('students').get();
+    const docItem = studentDoc.docs.find(d => d.id === studentId);
+    if (!docItem) return;
+    const studentData = docItem.data() as Student;
     const isAdminDept = ['admin', 'department'].includes(author.role);
     
     if (isAdminDept) {
