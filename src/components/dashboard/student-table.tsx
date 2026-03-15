@@ -71,8 +71,11 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   const [showAllStudents, setShowAllStudents] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     setIsClient(true);
   }, []);
+
+  const [isMounted, setIsMounted] = useState(false);
 
   const requesters = useMemo(() => {
       const ids = new Set<string>();
@@ -312,22 +315,12 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                   <TableCell><Badge variant="secondary" className="font-mono">{student.applications?.length || 0}</Badge></TableCell>
                   <TableCell><Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>{pipelineStatusLabels[student.pipelineStatus || 'none']}</Badge></TableCell>
                   <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
-                  <TableCell>
+                  <TableCell className="max-w-[250px]">
                     {student.statusNote ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-start gap-1.5 max-w-[150px] cursor-help group">
-                              <StickyNote className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0 opacity-50 group-hover:opacity-100" />
-                              <span className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">{student.statusNote}</span>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-[300px] p-3">
-                            <p className="font-bold text-[10px] uppercase mb-1 text-primary">Current Status Note:</p>
-                            <p className="text-xs whitespace-pre-wrap">{student.statusNote}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <div className="flex items-start gap-1.5 py-1">
+                        <StickyNote className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0 opacity-70" />
+                        <span className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-tight font-medium">{student.statusNote}</span>
+                      </div>
                     ) : (
                       <span className="text-[10px] text-muted-foreground italic opacity-50">No status set</span>
                     )}
