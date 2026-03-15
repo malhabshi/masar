@@ -15,25 +15,22 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export default function InternalChatPage() {
-  const { user: currentUser, isUserLoading } = useUser();
+  const { user: currentUser, isUserLoading, effectiveRole } = useUser();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const isAdminDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
-  const isEmployee = currentUser?.role === 'employee';
+  const isAdminDept = effectiveRole === 'admin' || effectiveRole === 'department';
+  const isEmployee = effectiveRole === 'employee';
 
-  /**
-   * FIX: We query by createdAt (which all students have) instead of lastChatMessageTimestamp.
-   * This ensures legacy students with unread messages are NOT filtered out by Firestore.
-   */
   const studentsQuery = useMemoFirebase(() => {
     if (!isMounted || !currentUser) return null;
     
     const baseQuery = collection(firestore, 'students');
     
+    // In Employee view (even for admins), filter by their portfolio
     if (isEmployee && currentUser.civilId) {
       return query(
         baseQuery,
@@ -42,6 +39,7 @@ export default function InternalChatPage() {
       );
     }
     
+    // Management view: Load all
     return query(
       baseQuery,
       orderBy('createdAt', 'desc')
@@ -59,9 +57,9 @@ export default function InternalChatPage() {
   const displayedStudents = useMemo(() => {
     if (!rawStudents) return [];
     
-    // 1. Filter for department regions if applicable
+    // 1. Filter for department regions if applicable (Only in management mode)
     let filtered = rawStudents;
-    if (currentUser?.role === 'department' && currentUser.department) {
+    if (effectiveRole === 'department' && currentUser?.department) {
       const dept = currentUser.department;
       filtered = rawStudents.filter(student => {
         const appCountries = (student.applications || []).map(a => a.country);
@@ -69,19 +67,18 @@ export default function InternalChatPage() {
                         (dept === 'USA' && appCountries.includes('USA')) || 
                         (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
         
-        // Lead leads/active chats visible to all depts if no apps yet
         if (appCountries.length === 0) return true;
         return isMatch;
       });
     }
 
-    // 2. Client-side sort: SMS Style (Newest message/activity at top)
+    // 2. Client-side sort: SMS Style
     return [...filtered].sort((a, b) => {
       const timeA = new Date(a.lastChatMessageTimestamp || a.lastActivityAt || a.createdAt).getTime();
       const timeB = new Date(b.lastChatMessageTimestamp || b.lastActivityAt || b.createdAt).getTime();
       return timeB - timeA;
     });
-  }, [rawStudents, currentUser]);
+  }, [rawStudents, currentUser, effectiveRole]);
   
   const isLoading = isUserLoading || !isMounted || studentsAreLoading;
 

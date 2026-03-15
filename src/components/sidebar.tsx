@@ -9,6 +9,8 @@ import {
   SidebarFooter,
   SidebarSeparator,
   SidebarMenuBadge,
+  SidebarGroup,
+  SidebarGroupLabel,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { UserSwitcher } from '@/components/user-switcher';
@@ -30,6 +32,8 @@ import {
   BookOpenCheck,
   BellRing,
   ReceiptText,
+  UserCog,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -38,6 +42,7 @@ import { useCollection, useMemoFirebase } from '@/firebase';
 import { where, orderBy, collection, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { Student, Task } from '@/lib/types';
+import { Button } from './ui/button';
 
 export function AppSidebar() {
     const [isClient, setIsClient] = useState(false);
@@ -46,41 +51,41 @@ export function AppSidebar() {
       setIsClient(true);
     }, []);
 
-    const { user } = useUser();
+    const { user, effectiveRole, viewMode, toggleViewMode } = useUser();
     const pathname = usePathname();
 
-    const isAdminDept = user?.role === 'admin' || user?.role === 'department';
+    const isManagementRole = user?.role === 'admin' || user?.role === 'department';
+    const isEmployeeView = effectiveRole === 'employee';
     
     // 1. Memoize constraints for real-time student monitoring
     const studentQuery = useMemoFirebase(() => {
       if (!user) return null;
-      const isAdminDeptRole = user.role === 'admin' || user.role === 'department';
-      const isEmployeeRole = user.role === 'employee';
-      const hasCivilId = !!user.civilId;
-
-      if (isAdminDeptRole) {
-          return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
-      }
       
-      if (isEmployeeRole && hasCivilId) {
+      // In Employee view, we monitor the assigned portfolio
+      if (isEmployeeView && user.civilId) {
           return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
       }
       
+      // In Management view, monitor everything for badges
+      if (isManagementRole) {
+          return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
+      }
+      
       return null;
-    }, [user?.civilId, user?.role, user?.id]);
+    }, [user?.civilId, user?.role, effectiveRole, isManagementRole, isEmployeeView]);
 
     const { data: students } = useCollection<Student>(studentQuery);
 
     // 2. Listen to tasks targeted at the user or their department
     const taskQuery = useMemoFirebase(() => {
-        if (!user || !isAdminDept) return null;
+        if (!user) return null;
         
         // Admins see all tasks for global badge
-        if (user.role === 'admin') {
+        if (user.role === 'admin' && viewMode === 'management') {
             return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
         }
 
-        // Department users: Badge logic matches Dashboard logic (ID, dept group, and 'all')
+        // Employee View or Department View: Match targeting logic
         const groups = [user.id, 'all'];
         if (user.department) {
             groups.push(`dept:${user.department}`);
@@ -90,33 +95,32 @@ export function AppSidebar() {
             collection(firestore, 'tasks'), 
             where('recipientIds', 'array-contains-any', groups)
         );
-    }, [user?.id, user?.role, user?.department, isAdminDept]);
+    }, [user?.id, user?.role, user?.department, viewMode]);
 
     const { data: tasks } = useCollection<Task>(taskQuery);
 
-    // 3. Aggregate notification counts based on user role (Student profile updates)
+    // 3. Aggregate notification counts based on active view
     const studentNotificationCount = useMemo(() => {
       if (!students || !user) return 0;
       
       return students.reduce((acc, student) => {
-        if (user.role === 'admin' || user.role === 'department') {
+        if (!isEmployeeView) {
           return acc + (student.unreadUpdates || 0) + (student.newDocumentsForAdmin || 0);
-        } else if (user.role === 'employee') {
+        } else {
           return acc + (student.employeeUnreadMessages || 0) + (student.newDocumentsForEmployee || 0) + (student.newMissingItemsForEmployee || 0);
         }
-        return acc;
       }, 0);
-    }, [students, user]);
+    }, [students, user, isEmployeeView]);
 
     // 4. Aggregated unread chats for "Chats" link
     const unreadChatCount = useMemo(() => {
-      if (!students || !user || !['admin', 'department'].includes(user.role)) return 0;
+      if (!students || !user || !isManagementRole || isEmployeeView) return 0;
       return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
-    }, [students, user]);
+    }, [students, user, isManagementRole, isEmployeeView]);
 
-    // 5. Tasks notification count (Real-time tracking of 'new' tasks)
+    // 5. Tasks notification count
     const unreadTaskCount = useMemo(() => {
-        if (!tasks || !isAdminDept || !user) return 0;
+        if (!tasks || !user) return 0;
         return tasks.filter(t => {
             if (t.status !== 'new' || t.category !== 'request') return false;
             
@@ -130,27 +134,9 @@ export function AppSidebar() {
 
             return !isIeltsCourse;
         }).length;
-    }, [tasks, isAdminDept, user]);
-
-    // 6. IELTS Courses notification count
-    const unreadIeltsCourseCount = useMemo(() => {
-        if (!tasks || !user || user.role !== 'admin') return 0;
-        return tasks.filter(t => {
-            if (t.status !== 'new' || t.category !== 'request') return false;
-
-            const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
-            if (hasSeen) return false;
-
-            const isIeltsCourse = 
-              t.data?.examType === 'ielts_course' || 
-              t.requestTypeId === 'ielts_course' ||
-              t.taskType?.toLowerCase() === 'ielts course';
-
-            return isIeltsCourse;
-        }).length;
     }, [tasks, user]);
 
-    const userHasRole = (roles: string[]) => user && roles.includes(user.role);
+    const userHasRole = (roles: string[]) => roles.includes(effectiveRole);
     
     const mainNav = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
@@ -164,7 +150,7 @@ export function AppSidebar() {
     const managementNav = [
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
         { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin'] },
-        { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'], badge: unreadIeltsCourseCount },
+        { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'] },
         { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'], badge: unreadChatCount },
     ];
 
@@ -204,9 +190,9 @@ export function AppSidebar() {
                 </SidebarMenuItem>
             ))}
 
-            {(userHasRole(['admin', 'department'])) && <SidebarSeparator />}
+            {!isEmployeeView && isManagementRole && <SidebarSeparator />}
             
-            {managementNav.map((item) => ( userHasRole(item.roles) &&
+            {!isEmployeeView && managementNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)}>
                         <Link href={item.href}>
@@ -221,9 +207,9 @@ export function AppSidebar() {
                 </SidebarMenuItem>
             ))}
 
-            {userHasRole(['admin']) && <SidebarSeparator />}
+            {!isEmployeeView && user?.role === 'admin' && <SidebarSeparator />}
             
-            {adminNav.map((item) => ( userHasRole(item.roles) &&
+            {!isEmployeeView && adminNav.map((item) => ( userHasRole(item.roles) &&
                 <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)}>
                         <Link href={item.href}>
@@ -233,6 +219,26 @@ export function AppSidebar() {
                 </SidebarMenuItem>
             ))}
             </SidebarMenu>
+
+            {isManagementRole && (
+              <SidebarGroup className="mt-auto">
+                <SidebarGroupLabel>Switch View</SidebarGroupLabel>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      onClick={toggleViewMode}
+                      className={cn(
+                        "font-bold transition-all",
+                        isEmployeeView ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : "bg-primary/10 text-primary hover:bg-primary/20"
+                      )}
+                    >
+                      {isEmployeeView ? <UserCog /> : <RefreshCw />}
+                      <span>{isEmployeeView ? "Management View" : "Employee View"}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
         </SidebarContent>
         <SidebarFooter>
             <SidebarSeparator />

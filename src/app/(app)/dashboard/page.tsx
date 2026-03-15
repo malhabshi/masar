@@ -3,13 +3,13 @@
 import { useUser } from '@/hooks/use-user';
 import { Loader2 } from 'lucide-react';
 
-// Import the new role-specific dashboard components
+// Import the role-specific dashboard components
 import AdminDashboard from '@/components/dashboard/admin-dashboard';
 import EmployeeDashboard from '@/components/dashboard/employee-dashboard';
 import DepartmentDashboard from '@/components/dashboard/department-dashboard';
 
 function DashboardPageContent() {
-    const { user: currentUser, isUserLoading: isCurrentUserLoading } = useUser();
+    const { user: currentUser, isUserLoading: isCurrentUserLoading, effectiveRole } = useUser();
 
     // The initial spinner only waits for the user to be identified.
     if (isCurrentUserLoading) {
@@ -22,8 +22,8 @@ function DashboardPageContent() {
     
     if (!currentUser) return <p>You must be logged in to view the dashboard.</p>;
     
-    // Render the appropriate dashboard based on the user's role.
-    switch (currentUser.role) {
+    // Render the appropriate dashboard based on the effective role (handles view mode toggling)
+    switch (effectiveRole) {
         case 'admin':
             return <AdminDashboard currentUser={currentUser} />;
         case 'employee':

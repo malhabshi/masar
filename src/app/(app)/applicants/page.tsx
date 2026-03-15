@@ -9,12 +9,10 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 
 export default function ApplicantsPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const { user, isUserLoading } = useUser();
+  const { user, isUserLoading, effectiveRole } = useUser();
 
   useEffect(() => {
-    console.log('✅ Component mounted:', 'ApplicantsPage');
     setIsMounted(true);
-    return () => console.log('❌ Component unmounted:', 'ApplicantsPage');
   }, []);
 
   // Server and initial client render a generic loading state.
@@ -39,11 +37,12 @@ export default function ApplicantsPage() {
   }
 
   // ONLY after mounting and confirming the user, render the role-specific page.
-  if (user.role === 'employee') {
+  // Respects effectiveRole for view mode switching
+  if (effectiveRole === 'employee') {
     return <EmployeeApplicantsPage />;
   }
 
-  if (user.role === 'admin' || user.role === 'department') {
+  if (effectiveRole === 'admin' || effectiveRole === 'department') {
     return <AdminApplicantsPage />;
   }
 
