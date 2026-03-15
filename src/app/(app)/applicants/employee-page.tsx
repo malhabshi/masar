@@ -21,16 +21,17 @@ import { format } from 'date-fns';
 
 export function EmployeeApplicantsPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const { user: currentUser, isUserLoading } = useUser();
+  const { user: currentUser, isUserLoading, effectiveRole } = useUser();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const isEmployee = currentUser?.role === 'employee';
+  // Use effectiveRole to allow access even for admins in employee view mode
+  const isEmployeeMode = effectiveRole === 'employee';
   
   // Guard the path strictly: path is empty until user is identified and has a Civil ID
-  const studentsPath = (isMounted && isEmployee && currentUser?.civilId) ? 'students' : '';
+  const studentsPath = (isMounted && isEmployeeMode && currentUser?.civilId) ? 'students' : '';
   
   const myStudentsQuery = useMemoFirebase(() => {
     if (!studentsPath || !currentUser?.civilId) return [];
@@ -114,12 +115,12 @@ export function EmployeeApplicantsPage() {
     );
   }
 
-  if (!currentUser || !isEmployee) {
+  if (!currentUser || !isEmployeeMode) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Access Denied</CardTitle>
-          <CardDescription>This page is intended for employee accounts.</CardDescription>
+          <CardDescription>This page is intended for employee accounts or management in employee view mode.</CardDescription>
         </CardHeader>
       </Card>
     );

@@ -25,12 +25,12 @@ export function AdminApplicantsPage() {
     setIsMounted(true);
   }, []);
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const isManagementMode = effectiveRole === 'admin' || effectiveRole === 'department';
   
-  const studentsPath = (isMounted && isAdmin) ? 'students' : '';
+  const studentsPath = (isMounted && isManagementMode) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 
-  // Fetch students (Ordering handled client-side in StudentTable to avoid index requirement issues)
+  // Fetch students
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath);
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
 
@@ -109,12 +109,12 @@ export function AdminApplicantsPage() {
     );
   }
   
-  if (!currentUser || !isAdmin) {
+  if (!currentUser || !isManagementMode) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Access Denied</CardTitle>
-          <CardDescription>You do not have permission to view the master applicants list.</CardDescription>
+          <CardDescription>You do not have permission to view the master applicants list in this view mode.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -141,7 +141,6 @@ export function AdminApplicantsPage() {
               <FileSpreadsheet className="h-4 w-4" />
               Download Excel
             </Button>
-            {/* Show Add button based on effective role logic (supports role-switching mode) */}
             {['admin', 'employee', 'department'].includes(effectiveRole) && <AddStudentDialog source="applicants" />}
           </div>
         </CardHeader>
