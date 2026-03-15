@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection, useMemoFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import type { Task, UpcomingEvent, Student } from '@/lib/types';
+import type { Task, UpcomingEvent, Student, Country } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { ToastAction } from '@/components/ui/toast';
 import { useUserCacheById } from '@/hooks/use-user-cache';
@@ -14,23 +13,28 @@ import { firestore } from '@/firebase';
 
 function playNotificationSound(frequency = 800) {
   if (typeof window === 'undefined' || !window.AudioContext) return;
-  
   const audioContext = new window.AudioContext();
   const oscillator = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
-
   oscillator.connect(gainNode);
   gainNode.connect(audioContext.destination);
-
   oscillator.type = 'sine';
   oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
   gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
   gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.5);
-
   oscillator.start(audioContext.currentTime);
   oscillator.stop(audioContext.currentTime + 0.5);
 }
 
+// Helper to check if a student is assigned to a department based on their applications
+function isStudentInUserDepartment(student: Student, userDept?: string): boolean {
+  if (!userDept) return false;
+  const countries = (student.applications || []).map(a => a.country);
+  if (userDept === 'UK') return countries.includes('UK');
+  if (userDept === 'USA') return countries.includes('USA');
+  if (userDept === 'AU/NZ') return countries.includes('Australia') || countries.includes('New Zealand');
+  return false;
+}
 
 export function NotificationListener() {
   const { user, isUserLoading } = useUser();
@@ -43,25 +47,11 @@ export function NotificationListener() {
   
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
-    
-    // Admins see all tasks for real-time alerting
-    if (user.role === 'admin') {
-      return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
-    }
-
-    // Employees only listen to tasks they authored
-    if (user.role === 'employee') {
-        return query(collection(firestore, 'tasks'), where('authorId', '==', user.id));
-    }
-
-    // Department users: Real-time alerts for tasks assigned to them, their dept, or 'all'
+    if (user.role === 'admin') return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+    if (user.role === 'employee') return query(collection(firestore, 'tasks'), where('authorId', '==', user.id));
     const groups = [user.id, 'all'];
     if (user.department) groups.push(`dept:${user.department}`);
-
-    return query(
-        collection(firestore, 'tasks'), 
-        where('recipientIds', 'array-contains-any', groups)
-    );
+    return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', groups));
   }, [user]);
 
   const { data: tasks } = useCollection<Task>(tasksQuery);
@@ -77,18 +67,10 @@ export function NotificationListener() {
     if (!user) return null;
     const isAdminDept = user.role === 'admin' || user.role === 'department';
     const isEmployee = user.role === 'employee';
-    const hasCivilId = !!user.civilId;
-
-    if (isAdminDept) {
-        return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
-    }
-    
-    if (isEmployee && hasCivilId) {
-        return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
-    }
-    
+    if (isAdminDept) return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
+    if (isEmployee && user.civilId) return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
     return null; 
-  }, [user?.civilId, user?.role, user?.id]);
+  }, [user?.civilId, user?.role]);
 
   const { data: students } = useCollection<Student>(studentQuery);
 
@@ -102,9 +84,7 @@ export function NotificationListener() {
     (students || []).forEach(student => {
       if (student.createdBy) ids.add(student.createdBy);
       student.documents?.forEach(doc => ids.add(doc.authorId));
-      if (student.deletionRequested?.requestedBy) {
-        ids.add(student.deletionRequested.requestedBy);
-      }
+      if (student.deletionRequested?.requestedBy) ids.add(student.deletionRequested.requestedBy);
     });
     return Array.from(ids);
   }, [tasks, events, students]);
@@ -119,6 +99,12 @@ export function NotificationListener() {
     const prevTaskIds = new Set(prevTasksRef.current.map(t => t.id));
     tasks.forEach(task => {
         if (!prevTaskIds.has(task.id) && task.authorId !== user.id) {
+            // Task precision filtering for departments
+            if (user.role === 'department' && task.studentId && students) {
+              const student = students.find(s => s.id === task.studentId);
+              if (student && !isStudentInUserDepartment(student, user.department)) return;
+            }
+            
             playNotificationSound();
             toast({
                 title: 'New Task/Update Received',
@@ -128,7 +114,7 @@ export function NotificationListener() {
         }
     });
     prevTasksRef.current = tasks;
-  }, [tasks, user, toast, router]);
+  }, [tasks, user, toast, router, students]);
 
   useEffect(() => {
     if (!events || !user || !prevEventsRef.current) {
@@ -150,9 +136,7 @@ export function NotificationListener() {
   }, [events, user, toast, router]);
 
   useEffect(() => {
-    if (!students || !user || !userMap.size || isUserLoading) {
-        return;
-    }
+    if (!students || !user || !userMap.size || isUserLoading) return;
     if (!prevStudentsRef.current) {
         prevStudentsRef.current = students;
         return;
@@ -162,28 +146,29 @@ export function NotificationListener() {
     
     students.forEach(currentStudent => {
         const prevStudent = prevStudentsMap.get(currentStudent.id);
+        const isMyDept = user.role === 'admin' || isStudentInUserDepartment(currentStudent, user.department);
 
         if (!prevStudent) {
-            const isAdmin = user.role === 'admin';
-            const creator = userMap.get(currentStudent.createdBy);
-            
-            if (isAdmin && creator && creator.id !== user.id) {
+            if (user.role === 'admin' && currentStudent.createdBy !== user.id) {
+                const creator = userMap.get(currentStudent.createdBy);
                 playNotificationSound(1200);
                 toast({
                     title: 'New Unassigned Student',
-                    description: `'${currentStudent.name}' was added by ${creator.name}.`,
+                    description: `'${currentStudent.name}' was added by ${creator?.name || 'Staff'}.`,
                     action: <ToastAction altText="View" onClick={() => router.push(`/unassigned-students`)}>View</ToastAction>,
                 });
             }
             return;
         }
 
+        // Filtering toasts for departments: Only show if relevant to user's country
+        if (!isMyDept) return;
+
         const prevDocIds = new Set((prevStudent.documents || []).map(d => d.id));
         const newDocs = (currentStudent.documents || []).filter(d => !prevDocIds.has(d.id));
         if (newDocs.length > 0) {
             const newDoc = newDocs[newDocs.length - 1]; 
             const uploader = userMap.get(newDoc.authorId);
-            
             if (uploader && uploader.id !== user.id) {
                 playNotificationSound();
                 toast({
@@ -201,7 +186,7 @@ export function NotificationListener() {
                 playNotificationSound(1400);
                 toast({
                     title: 'Deletion Request',
-                    description: `${requester.name} has requested to delete student: ${currentStudent.name}`,
+                    description: `${requester.name} requested to delete: ${currentStudent.name}`,
                     action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
                     variant: 'destructive',
                     duration: 10000,
@@ -212,7 +197,6 @@ export function NotificationListener() {
 
     prevStudentsRef.current = students;
   }, [students, user, userMap, toast, router, isUserLoading]);
-
 
   return null;
 }

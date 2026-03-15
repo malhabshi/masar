@@ -28,7 +28,6 @@ export function AdminApplicantsPage() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'department';
   
-  // Guard the path: only query if user role is confirmed as Admin/Dept
   const studentsPath = (isMounted && isAdmin) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 
@@ -40,7 +39,6 @@ export function AdminApplicantsPage() {
   const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
 
-  // Helper to map employee IDs to names for the Excel export
   const employeeMap = useMemo(() => {
     const map = new Map<string, string>();
     allUsers?.forEach(u => {
@@ -49,7 +47,6 @@ export function AdminApplicantsPage() {
     return map;
   }, [allUsers]);
 
-  // Requirement: Admins/Dept see ALL students (assigned and unassigned)
   const displayedStudents = useMemo(() => {
     return allStudents || [];
   }, [allStudents]);
@@ -57,7 +54,6 @@ export function AdminApplicantsPage() {
   const handleDownloadExcel = () => {
     if (displayedStudents.length === 0) return;
 
-    // Excel/CSV Headers
     const headers = [
       "Student Name", 
       "Phone", 
@@ -75,7 +71,6 @@ export function AdminApplicantsPage() {
       "Created Date"
     ];
     
-    // Excel/CSV Rows
     const rows = displayedStudents.map(s => [
       s.name || '',
       s.phone || '',
@@ -137,7 +132,9 @@ export function AdminApplicantsPage() {
           <div>
             <CardTitle>Applicants</CardTitle>
             <CardDescription>
-              A comprehensive list of all student records in the system.
+              {currentUser.role === 'department' 
+                ? `Students relevant to the ${currentUser.department} department.`
+                : 'A comprehensive list of all student records in the system.'}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">

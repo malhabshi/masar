@@ -26,7 +26,6 @@ function checkAdminServices() {
 
 /**
  * SCRUBBER: Ensures data is a plain object for Server-to-Client boundaries.
- * This prevents the "Classes or null prototypes are not supported" error.
  */
 function scrub<T>(data: T): T {
   if (data === undefined) return data;
@@ -41,6 +40,18 @@ async function getUser(userId: string): Promise<User | null> {
     return { id: doc.id, ...doc.data() } as User;
 }
 
+// Map application countries to department names
+function getDepartmentsForStudent(student: Student): string[] {
+  const countries = new Set((student.applications || []).map(app => app.country));
+  const depts = new Set<string>();
+  
+  if (countries.has('UK')) depts.add('UK');
+  if (countries.has('USA')) depts.add('USA');
+  if (countries.has('Australia') || countries.has('New Zealand')) depts.add('AU/NZ');
+  
+  return Array.from(depts);
+}
+
 async function refreshStudentActivity(studentId: string) {
   if (!checkAdminServices()) return;
   try {
@@ -52,10 +63,6 @@ async function refreshStudentActivity(studentId: string) {
   }
 }
 
-/**
- * REPAIR UTILITY: Rebuilds the DBAC collections (/admins and /departmentUsers)
- * based on the current state of the main /users collection.
- */
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     
@@ -70,7 +77,6 @@ export async function repairPermissions(adminId: string) {
         const usersSnap = await adminDb!.collection('users').get();
         const batch = adminDb!.batch();
 
-        // Clear existing indexes to start fresh
         const adminsSnap = await adminDb!.collection('admins').get();
         const deptsSnap = await adminDb!.collection('departmentUsers').get();
         
@@ -93,10 +99,6 @@ export async function repairPermissions(adminId: string) {
             
             if (userData.role === 'department') {
                 const dept = userData.department || 'UK'; 
-                if (!userData.department) {
-                    batch.update(userDoc.ref, { department: dept });
-                }
-                
                 batch.set(adminDb!.collection('departmentUsers').doc(uid), { 
                   role: 'department', 
                   lastSync: now, 
@@ -132,24 +134,16 @@ async function sendWhatsAppViaWebhook(webhookUrl: string, phone: string, variabl
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: fullPhone,
-        ...payloadVariables,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: fullPhone, ...payloadVariables }),
     });
 
     if (!response.ok) {
-      const errData = await response.json();
-      console.error('WANotifier Webhook Error:', errData);
-      return { success: false, message: errData.message || 'Failed to trigger WANotifier webhook' };
+      return { success: false, message: 'Failed to trigger WANotifier webhook' };
     }
 
     return { success: true };
   } catch (e: any) {
-    console.error('WhatsApp Webhook fetch error:', e);
     return { success: false, message: e.message };
   }
 }
@@ -320,7 +314,7 @@ export async function changeUserRole(userId: string, newRole: UserRole, adminId:
         if (newRole === 'admin') {
           batch.set(adminDBACRef, { role: 'admin', syncAt: now, userEmail: targetUser.email });
         } else if (newRole === 'department') {
-          batch.set(deptDBACRef, { role: 'department', syncAt: now, department: targetUser.department || 'General' });
+          batch.set(deptDBACRef, { role: 'department', syncAt: now, department: targetUser.department || 'UK' });
         }
         
         await batch.commit();
@@ -1064,7 +1058,7 @@ export async function updateStudentAcademicIntake(studentId: string, semester: s
 export async function seedAcademicTerms(authorId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    const terms = [ 'FALL (8/9) 2025', 'SPRING (1/2) 2026', 'MARCH (3) 2026', 'SUMMER (6/7) 2026', 'FALL (8/9) 2025', 'SPRING (1/2) 2026', 'MARCH (3) 2026', 'SUMMER (6/7) 2026' ];
+    const terms = [ 'FALL (8/9) 2025', 'SPRING (1/2) 2026', 'MARCH (3) 2026', 'SUMMER (6/7) 2026' ];
     const batch = adminDb!.batch();
     for (const name of terms) batch.set(adminDb!.collection('academic_terms').doc(), { name, authorId, createdAt: new Date().toISOString() });
     await batch.commit();
@@ -1110,8 +1104,10 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     const studentData = studentDoc.data() as Student;
     const now = new Date().toISOString();
     await adminDb!.collection('chats').doc(studentId).collection('messages').add({ authorId, content, timestamp: now, ...(documentPayload && { document: documentPayload }) });
+    
     const isAdminDept = ['admin', 'department'].includes(author.role);
     const updates: any = { lastActivityAt: now };
+    
     if (isAdminDept) {
       updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
       await studentRef.update(updates);
@@ -1125,10 +1121,27 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     } else {
       updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
       await studentRef.update(updates);
-      const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
-      for (const adminDoc of adminsSnap.docs) {
-        const adminData = adminDoc.data() as User;
-        await triggerWhatsAppNotification('admin_update', { employeeName: adminData.name, studentName: studentData.name, messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/internal-chat` }, adminData.phone);
+      
+      // Precision Routing: Only notify admins and the relevant departments
+      const relevantDepts = getDepartmentsForStudent(studentData);
+      const staffToNotifySnap = await adminDb!.collection('users')
+        .where('role', 'in', ['admin', 'department'])
+        .get();
+        
+      for (const staffDoc of staffToNotifySnap.docs) {
+        const staffData = staffDoc.data() as User;
+        const isTargetDept = staffData.role === 'department' && staffData.department && relevantDepts.includes(staffData.department);
+        
+        if (staffData.role === 'admin' || isTargetDept) {
+          if (staffData.phone) {
+            await triggerWhatsAppNotification('admin_update', { 
+              employeeName: staffData.name, 
+              studentName: studentData.name, 
+              messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`, 
+              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/internal-chat` 
+            }, staffData.phone);
+          }
+        }
       }
     }
     return { success: true };
@@ -1144,6 +1157,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
     if (!studentDoc.exists) return;
     const studentData = studentDoc.data() as Student;
     const isAdminDept = ['admin', 'department'].includes(author.role);
+    
     if (isAdminDept) {
       if (studentData.employeeId) {
         const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
@@ -1153,10 +1167,26 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
         }
       }
     } else {
-      const adminsSnap = await adminDb!.collection('users').where('role', '==', 'admin').get();
-      for (const adminDoc of adminsSnap.docs) {
-        const adminData = adminDoc.data() as User;
-        await triggerWhatsAppNotification('document_uploaded_employee', { adminName: adminData.name, studentName: studentData.name, documentName: documentName, employeeName: author.name, uploadedBy: author.name, studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` }, adminData.phone);
+      // Precision Routing: Notify admins and matching departments
+      const relevantDepts = getDepartmentsForStudent(studentData);
+      const staffSnap = await adminDb!.collection('users').where('role', 'in', ['admin', 'department']).get();
+      
+      for (const staffDoc of staffSnap.docs) {
+        const staffData = staffDoc.data() as User;
+        const isTargetDept = staffData.role === 'department' && staffData.department && relevantDepts.includes(staffData.department);
+        
+        if (staffData.role === 'admin' || isTargetDept) {
+          if (staffData.phone) {
+            await triggerWhatsAppNotification('document_uploaded_employee', { 
+              adminName: staffData.name, 
+              studentName: studentData.name, 
+              documentName: documentName, 
+              employeeName: author.name, 
+              uploadedBy: author.name, 
+              studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` 
+            }, staffData.phone);
+          }
+        }
       }
     }
   } catch (e) { console.error('Notification failed:', e); }
@@ -1226,21 +1256,15 @@ export async function processInactivityReminders() {
     await cooldownRef.set({ lastRunAt: now.toISOString() }, { merge: true });
 
     const tenDaysAgo = subDays(new Date(), 10).toISOString();
-    const threeHoursAgo = subMinutes(new Date(), 180).toISOString();
-    
-    const snapshot = await adminDb!.collection('students')
-      .where('lastActivityAt', '<', tenDaysAgo)
-      .get();
+    const snapshot = await adminDb!.collection('students').where('lastActivityAt', '<', tenDaysAgo).get();
       
     if (snapshot.empty) return { success: true };
 
     for (const doc of snapshot.docs) {
       const student = doc.data() as Student;
       if (student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel || !student.employeeId) continue;
-      if (student.lastInactivityReminderSentAt && student.lastInactivityReminderSentAt > threeHoursAgo) continue;
       
       const reminderContent = "Please contact the student, and give me a report why there is no activities\n\nتواصل مع الطالب و عطني تقرير عن الطالب ليش ماكو اي شي يديد عنه ؟";
-      
       await adminDb!.collection('chats').doc(doc.id).collection('messages').add({ authorId: 'system', content: reminderContent, timestamp: new Date().toISOString() });
       await doc.ref.update({ lastInactivityReminderSentAt: new Date().toISOString(), employeeUnreadMessages: (student.employeeUnreadMessages || 0) + 1, unreadUpdates: (student.unreadUpdates || 0) + 1 });
 
@@ -1288,10 +1312,7 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
 
         const assignedSnap = await adminDb!.collection('students').where('employeeId', '==', fromUser.civilId).get();
         const assignedLegacySnap = await adminDb!.collection('students').where('employeeId', '==', fromUser.id).get();
-        const leadsSnap = await adminDb!.collection('students')
-            .where('employeeId', '==', null)
-            .where('createdBy', '==', fromUser.id)
-            .get();
+        const leadsSnap = await adminDb!.collection('students').where('employeeId', '==', null).where('createdBy', '==', fromUser.id).get();
 
         const allRelevantDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
         assignedSnap.docs.forEach(d => allRelevantDocs.set(d.id, d));
@@ -1305,52 +1326,24 @@ export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId:
             studentIds.push(id);
             batch.update(doc.ref, {
                 employeeId: toUser.civilId,
-                transferHistory: [...(data.transferHistory || []), {
-                    fromEmployeeId: data.employeeId || null,
-                    toEmployeeId: toUser.civilId,
-                    date: now,
-                    transferredBy: adminId
-                }],
-                adminNotes: [...(data.adminNotes || []), {
-                    id: `note-bulk-${Date.now()}`,
-                    authorId: adminId,
-                    content: `Bulk transfer from ${fromUser.name} to ${toUser.name}.`,
-                    createdAt: now
-                }],
+                transferHistory: [...(data.transferHistory || []), { fromEmployeeId: data.employeeId || null, toEmployeeId: toUser.civilId, date: now, transferredBy: adminId }],
+                adminNotes: [...(data.adminNotes || []), { id: `note-bulk-${Date.now()}`, authorId: adminId, content: `Bulk transfer from ${fromUser.name} to ${toUser.name}.`, createdAt: now }],
                 lastActivityAt: now,
                 isNewForEmployee: true
             });
         });
 
         await batch.commit();
-        
-        return scrub({ 
-          success: true, 
-          message: `Transferred ${allRelevantDocs.size} students to ${toUser.name}.`, 
-          studentIds, 
-          fromEmployeeName: fromUser.name,
-          toEmployeeName: toUser.name,
-          toEmployeePhone: toUser.phone 
-        });
-    } catch (error: any) {
-        return { success: false, message: error.message };
-    }
+        return scrub({ success: true, message: `Transferred ${allRelevantDocs.size} students.`, studentIds, toEmployeeName: toUser.name, toEmployeePhone: toUser.phone });
+    } catch (error: any) { return { success: false, message: error.message }; }
 }
 
 export async function addEvent(authorId: string, title: string, description: string, date: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    const docRef = await adminDb!.collection('upcoming_events').add({
-      authorId,
-      title,
-      description,
-      date,
-      createdAt: new Date().toISOString(),
-    });
+    const docRef = await adminDb!.collection('upcoming_events').add({ authorId, title, description, date, createdAt: new Date().toISOString() });
     return { success: true, message: 'Event added.', id: docRef.id };
-  } catch (e: any) {
-    return { success: false, message: e.message };
-  }
+  } catch (e: any) { return { success: false, message: e.message }; }
 }
 
 export async function deleteEvent(eventId: string, adminId: string) {
@@ -1360,171 +1353,86 @@ export async function deleteEvent(eventId: string, adminId: string) {
     if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
     await adminDb!.collection('upcoming_events').doc(eventId).delete();
     return { success: true, message: 'Event deleted.' };
-  } catch (e: any) {
-    return { success: false, message: e.message };
-  }
+  } catch (e: any) { return { success: false, message: e.message }; }
 }
 
-/**
- * EXPORT UTILITY: Fetches entire data tables for manual system backup.
- */
 export async function getFullSystemBackup(adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
     if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized access.' };
-
-    const collections = [
-      'users', 
-      'students', 
-      'tasks', 
-      'approved_universities', 
-      'request_types', 
-      'notification_templates', 
-      'upcoming_events'
-    ];
-
+    const collections = ['users', 'students', 'tasks', 'approved_universities', 'request_types', 'notification_templates', 'upcoming_events'];
     const backupData: Record<string, any[]> = {};
-
     for (const col of collections) {
       const snap = await adminDb!.collection(col).get();
       backupData[col] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
-
-    return scrub({ 
-      success: true, 
-      data: backupData,
-      filename: `UniApply_Hub_System_Backup_${format(new Date(), 'yyyy-MM-dd_HHmm')}.json`
-    });
-  } catch (e: any) {
-    return { success: false, message: e.message };
-  }
+    return scrub({ success: true, data: backupData, filename: `UniApply_Hub_Backup_${format(new Date(), 'yyyy-MM-dd')}.json` });
+  } catch (e: any) { return { success: false, message: e.message }; }
 }
 
-export async function createInvoice(adminId: string, data: Omit<Invoice, 'id' | 'invoiceNumber' | 'createdAt' | 'updatedAt' | 'createdBy' | 'authorName'>) {
+export async function createInvoice(adminId: string, data: any) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can create invoices.' };
-
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
     const now = new Date().toISOString();
-    
-    // Use a transaction to ensure sequential numbering (n+1)
     const counterRef = adminDb!.collection('system_metadata').doc('invoice_counter');
-    
     const result = await adminDb!.runTransaction(async (transaction) => {
       const counterDoc = await transaction.get(counterRef);
-      let nextNumber = 1001; // Default start
-      
-      if (counterDoc.exists) {
-        const lastNum = counterDoc.data()?.lastNumber;
-        if (typeof lastNum === 'number') {
-          nextNumber = lastNum + 1;
-        }
-      }
-      
+      let nextNumber = 1001;
+      if (counterDoc.exists) nextNumber = (counterDoc.data()?.lastNumber || 1000) + 1;
       const invoiceNumber = `INV-${nextNumber}`;
       const invoiceRef = adminDb!.collection('invoices').doc();
-      
-      const newInvoiceData = {
-        ...data,
-        invoiceNumber,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: adminId,
-        authorName: admin.name,
-      };
-      
-      transaction.set(invoiceRef, newInvoiceData);
+      transaction.set(invoiceRef, { ...data, invoiceNumber, createdAt: now, updatedAt: now, createdBy: adminId, authorName: admin.name });
       transaction.set(counterRef, { lastNumber: nextNumber }, { merge: true });
-      
       return { id: invoiceRef.id, invoiceNumber };
     });
-
-    if (data.studentId) {
-      await refreshStudentActivity(data.studentId);
-    }
-
-    return { 
-      success: true, 
-      id: result.id, 
-      message: `Invoice ${result.invoiceNumber} created successfully.` 
-    };
-  } catch (error: any) {
-    console.error('Invoice Creation Error:', error);
-    return { success: false, message: error.message };
-  }
+    if (data.studentId) await refreshStudentActivity(data.studentId);
+    return { success: true, id: result.id, message: `Invoice ${result.invoiceNumber} created.` };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function updateInvoice(adminId: string, invoiceId: string, data: Partial<Invoice>) {
+export async function updateInvoice(adminId: string, invoiceId: string, data: any) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can update invoices.' };
-
-    const now = new Date().toISOString();
-    await adminDb!.collection('invoices').doc(invoiceId).update({
-      ...data,
-      updatedAt: now,
-    });
-
-    if (data.studentId) {
-      await refreshStudentActivity(data.studentId);
-    }
-
-    return { success: true, message: 'Invoice updated successfully.' };
-  } catch (error: any) {
-    console.error('Invoice Update Error:', error);
-    return { success: false, message: error.message };
-  }
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+    await adminDb!.collection('invoices').doc(invoiceId).update({ ...data, updatedAt: new Date().toISOString() });
+    return { success: true, message: 'Invoice updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
 export async function updateInvoiceStatus(invoiceId: string, status: InvoiceStatus, adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can update invoice status.' };
-
-    await adminDb!.collection('invoices').doc(invoiceId).update({
-      status,
-      updatedAt: new Date().toISOString(),
-    });
-
-    return { success: true, message: `Invoice status updated to ${status}.` };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+    await adminDb!.collection('invoices').doc(invoiceId).update({ status, updatedAt: new Date().toISOString() });
+    return { success: true, message: 'Status updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
 export async function deleteInvoice(invoiceId: string, adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can delete invoices.' };
-
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
     await adminDb!.collection('invoices').doc(invoiceId).delete();
     return { success: true, message: 'Invoice deleted.' };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function saveInvoiceTemplate(adminId: string, data: Omit<InvoiceTemplate, 'id' | 'createdAt' | 'updatedAt'>, id?: string) {
+export async function saveInvoiceTemplate(adminId: string, data: any, id?: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
-    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized. Only admins can manage templates.' };
-
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
     const now = new Date().toISOString();
-    if (id) {
-      await adminDb!.collection('invoice_templates').doc(id).update({ ...data, updatedAt: now });
-    } else {
-      await adminDb!.collection('invoice_templates').add({ ...data, createdAt: now, updatedAt: now });
-    }
-    return { success: true, message: 'Branding template saved.' };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
+    if (id) await adminDb!.collection('invoice_templates').doc(id).update({ ...data, updatedAt: now });
+    else await adminDb!.collection('invoice_templates').add({ ...data, createdAt: now, updatedAt: now });
+    return { success: true, message: 'Template saved.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
 export async function deleteInvoiceTemplate(adminId: string, templateId: string) {
@@ -1532,30 +1440,21 @@ export async function deleteInvoiceTemplate(adminId: string, templateId: string)
   try {
     const admin = await getUser(adminId);
     if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
-
     await adminDb!.collection('invoice_templates').doc(templateId).delete();
-    return { success: true, message: 'Template removed.' };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
+    return { success: true, message: 'Template deleted.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function saveInvoiceSavedItem(adminId: string, data: Omit<InvoiceSavedItem, 'id' | 'createdAt' | 'updatedAt'>, id?: string) {
+export async function saveInvoiceSavedItem(adminId: string, data: any, id?: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const admin = await getUser(adminId);
     if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
-
     const now = new Date().toISOString();
-    if (id) {
-      await adminDb!.collection('invoice_saved_items').doc(id).update({ ...data, updatedAt: now });
-    } else {
-      await adminDb!.collection('invoice_saved_items').add({ ...data, createdAt: now, updatedAt: now });
-    }
-    return { success: true, message: 'Saved item updated.' };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
+    if (id) await adminDb!.collection('invoice_saved_items').doc(id).update({ ...data, updatedAt: now });
+    else await adminDb!.collection('invoice_saved_items').add({ ...data, createdAt: now, updatedAt: now });
+    return { success: true, message: 'Item saved.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
 export async function deleteInvoiceSavedItem(adminId: string, itemId: string) {
@@ -1563,12 +1462,9 @@ export async function deleteInvoiceSavedItem(adminId: string, itemId: string) {
   try {
     const admin = await getUser(adminId);
     if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
-
     await adminDb!.collection('invoice_saved_items').doc(itemId).delete();
-    return { success: true, message: 'Item removed from library.' };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
+    return { success: true, message: 'Item deleted.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
 
 export async function updateResourceLink(adminId: string, linkId: string, data: Partial<ResourceLink>) {
@@ -1576,13 +1472,7 @@ export async function updateResourceLink(adminId: string, linkId: string, data: 
   try {
     const admin = await getUser(adminId);
     if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
-
-    await adminDb!.collection('resource_links').doc(linkId).update({
-      ...data,
-    });
-
-    return { success: true, message: 'Link updated successfully.' };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
+    await adminDb!.collection('resource_links').doc(linkId).update(data);
+    return { success: true, message: 'Link updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
 }
