@@ -16,17 +16,18 @@ service cloud.firestore {
 
     /** 
      * @description Checks if user is an admin using indexed DBAC collection. 
-     * Includes hardcoded bypass for specific maintenance UIDs to prevent lockout.
+     * Optimized: Checks maintenance UID list first to avoid exists() calls for system admins.
      */
     function isAdmin() {
+      let maintenanceUids = [
+        'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
+        'IZr1zv5ePQb0bKNVXS4xGjERmE62', 
+        'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
+        'lZr1zv5ePQbObKNVXS4xGjERmE62'
+      ];
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
-        request.auth.uid in [
-          'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
-          'IZr1zv5ePQb0bKNVXS4xGjERmE62', 
-          'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
-          'lZr1zv5ePQbObKNVXS4xGjERmE62'
-        ]
+        request.auth.uid in maintenanceUids ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
 

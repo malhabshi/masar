@@ -44,6 +44,14 @@ function isDocumentReference(obj: any): obj is DocumentReference {
   return obj && typeof obj === 'object' && obj.type === 'document';
 }
 
+function getPathFromTarget(target: any, pathSegments: string[]): string {
+  if (typeof target === 'string') {
+    return [target, ...pathSegments].join('/');
+  }
+  if (target && target.path) return target.path;
+  return 'unknown';
+}
+
 /**
  * Robust hook to subscribe to a single Firestore document in real-time.
  */
@@ -109,7 +117,7 @@ export function useDoc<T = any>(
           
           const contextualError = new FirestorePermissionError({
             operation: 'get',
-            path: docRef.path,
+            path: getPathFromTarget(target, pathSegments),
           });
 
           setError(contextualError);

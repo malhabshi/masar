@@ -46,6 +46,23 @@ function isValidQueryOrRef(obj: any): obj is CollectionReference | Query {
   return obj && typeof obj === 'object' && (obj.type === 'collection' || obj.type === 'query');
 }
 
+function getPathFromTarget(target: any): string {
+  if (typeof target === 'string') return target;
+  if (!target) return 'unknown';
+  
+  // Try to get path from CollectionReference or DocumentReference
+  if (target.path) return target.path;
+  
+  // Try to get path from internal Query structure if available
+  try {
+    if (target._query && target._query.path) {
+      return target._query.path.segments.join('/');
+    }
+  } catch (e) {}
+  
+  return 'unknown';
+}
+
 /**
  * Unified hook to subscribe to a Firestore collection or query in real-time.
  */
@@ -107,15 +124,9 @@ export function useCollection<T = any>(
         (err) => {
           console.error(`[useCollection] subscription error:`, err);
           
-          let path = 'unknown';
-          try {
-            if (typeof target === 'string') path = target;
-            else if ((target as any).path) path = (target as any).path;
-          } catch (e) {}
-
           const contextualError = new FirestorePermissionError({
             operation: 'list',
-            path: path,
+            path: getPathFromTarget(target),
           });
 
           setError(contextualError);
@@ -130,10 +141,6 @@ export function useCollection<T = any>(
     }
 
     return () => unsubscribe();
-  /**
-   * FIX: We use target directly if it's a memoized object.
-   * If it's a string, we stringify it.
-   */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthReady, target, constraints.length]);
 
