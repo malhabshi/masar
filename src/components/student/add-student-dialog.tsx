@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -51,7 +50,7 @@ interface AddStudentDialogProps {
 }
 
 export function AddStudentDialog({ source }: AddStudentDialogProps) {
-    const { user: currentUser } = useUser();
+    const { user: currentUser, effectiveRole } = useUser();
     const router = useRouter();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,8 +82,8 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
         }
 
         try {
-            // Logic for auto-assignment based on source
-            const assignedEmployeeId = source === 'applicants' && currentUser.role === 'employee' ? currentUser.civilId : null;
+            // Logic for auto-assignment based on effective role (supports Admin in Employee View)
+            const assignedEmployeeId = source === 'applicants' && effectiveRole === 'employee' ? currentUser.civilId : null;
 
             const result = await createStudent(
                 values,

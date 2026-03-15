@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useUser } from '@/hooks/use-user';
@@ -20,7 +19,7 @@ import { format } from 'date-fns';
 
 export function AdminApplicantsPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const { user: currentUser, isUserLoading } = useUser();
+  const { user: currentUser, isUserLoading, effectiveRole } = useUser();
 
   useEffect(() => {
     setIsMounted(true);
@@ -142,7 +141,8 @@ export function AdminApplicantsPage() {
               <FileSpreadsheet className="h-4 w-4" />
               Download Excel
             </Button>
-            {['admin', 'employee'].includes(currentUser.role) && <AddStudentDialog source="applicants" />}
+            {/* Show Add button based on effective role logic (supports role-switching mode) */}
+            {['admin', 'employee', 'department'].includes(effectiveRole) && <AddStudentDialog source="applicants" />}
           </div>
         </CardHeader>
         <CardContent>

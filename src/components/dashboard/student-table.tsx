@@ -92,7 +92,11 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  const employeeOptions = useMemo(() => allUsers.filter(u => u.role === 'employee'), [allUsers]);
+  // Include any user with a Civil ID as a potential agent (Admins/Dept users can also handle cases)
+  const employeeOptions = useMemo(() => {
+    return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
+  }, [allUsers]);
+
   const employeeMapByCivilId = useMemo(() => {
     const map = new Map<string, User>();
     allUsers.forEach(u => { if(u.civilId) map.set(u.civilId, u); });
@@ -229,12 +233,12 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 </Select>
                 {isClient && currentUser.role !== 'employee' && (
                     <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
-                        <SelectTrigger className="w-full flex-1"><SelectValue placeholder="Assigned Employee" /></SelectTrigger>
+                        <SelectTrigger className="w-full flex-1"><SelectValue placeholder="Assigned Agent" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Employees</SelectItem>
+                            <SelectItem value="all">All Agents</SelectItem>
                             <SelectItem value="unassigned">Unassigned</SelectItem>
                             {employeeOptions.map(emp => (
-                                <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                                <SelectItem key={emp.id} value={emp.id}>{emp.name} {emp.role !== 'employee' ? `(${emp.role})` : ''}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
@@ -261,7 +265,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
               <TableHead>Student</TableHead>
               <TableHead>Apps</TableHead>
               <TableHead>Pipeline</TableHead>
-              <TableHead>Assigned Employee</TableHead>
+              <TableHead>Assigned Agent</TableHead>
               <TableHead>Status Note</TableHead>
               <TableHead>IELTS Overall</TableHead>
               <TableHead>Intake Term</TableHead>

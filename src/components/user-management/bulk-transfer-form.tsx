@@ -35,7 +35,10 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { data: usersData, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
-  const employeeOptions = useMemo(() => (usersData || []).filter(u => u.role === 'employee'), [usersData]);
+  // Include any user with a Civil ID as a potential target for portfolio assignment (e.g. Admins can act as agents)
+  const agentOptions = useMemo(() => {
+    return (usersData || []).filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
+  }, [usersData]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -46,7 +49,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
   });
 
   const fromEmployeeId = form.watch('fromEmployeeId');
-  const toEmployeeOptions = employeeOptions.filter(e => e.id !== fromEmployeeId);
+  const toEmployeeOptions = agentOptions.filter(e => e.id !== fromEmployeeId);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -59,7 +62,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
     const result = await bulkTransferStudents(values.fromEmployeeId, values.toEmployeeId, currentUser.id);
 
     if (result.success && 'studentIds' in result && result.studentIds) {
-      const oldEmployee = employeeOptions.find(e => e.id === values.fromEmployeeId);
+      const oldEmployee = agentOptions.find(e => e.id === values.fromEmployeeId);
       const studentIds = result.studentIds;
       const taskContent = `You have received ${studentIds.length} students from ${oldEmployee?.name || 'an employee'}`;
 
@@ -142,7 +145,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
               name="fromEmployeeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Offboarding Employee</FormLabel>
+                  <FormLabel>Offboarding Agent</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -150,8 +153,8 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {employeeOptions.map(emp => (
-                          <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                      {agentOptions.map(emp => (
+                          <SelectItem key={emp.id} value={emp.id}>{emp.name} {emp.role !== 'employee' ? `(${emp.role})` : ''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -164,7 +167,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
               name="toEmployeeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>New Responsible Employee</FormLabel>
+                  <FormLabel>New Responsible Agent</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={!fromEmployeeId}>
                     <FormControl>
                       <SelectTrigger>
@@ -173,7 +176,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
                     </FormControl>
                     <SelectContent>
                       {toEmployeeOptions.map(emp => (
-                          <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                          <SelectItem key={emp.id} value={emp.id}>{emp.name} {emp.role !== 'employee' ? `(${emp.role})` : ''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
