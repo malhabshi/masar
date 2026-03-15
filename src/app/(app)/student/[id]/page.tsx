@@ -223,9 +223,11 @@ export default function StudentDetailPage() {
           </div>
 
           <div className="space-y-6">
-              <div className="pdf-hide">
-                <AssignmentCard student={student} />
-              </div>
+              {currentUser.role === 'admin' && (
+                <div className="pdf-hide">
+                  <AssignmentCard student={student} />
+                </div>
+              )}
               <div className="pdf-hide">
                 <TaskStatsCard tasks={tasks || []} />
               </div>
