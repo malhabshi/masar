@@ -1133,12 +1133,20 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
     const studentData = studentDoc.data() as Student;
     const now = new Date().toISOString();
-    await adminDb!.collection('chats').doc(studentId).collection('messages').add({ authorId, content, timestamp: now, ...(documentPayload && { document: documentPayload }) });
     
+    // 1. Add the message to the subcollection
+    await adminDb!.collection('chats').doc(studentId).collection('messages').add({ 
+      authorId, 
+      content, 
+      timestamp: now, 
+      ...(documentPayload && { document: documentPayload }) 
+    });
+    
+    // 2. Update the student profile with modern metadata for SMS-style sorting
     const isAdminDept = ['admin', 'department'].includes(author.role);
     const updates: any = { 
       lastActivityAt: now,
-      lastChatMessageText: content || (documentPayload ? `Shared file: ${documentPayload.name}` : ''),
+      lastChatMessageText: content || (documentPayload ? `Shared file: ${documentPayload.name}` : 'Sent a file'),
       lastChatMessageTimestamp: now
     };
     
@@ -1187,10 +1195,10 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
   try {
     const author = await getUser(authorId);
     if (!author) return;
-    const studentDoc = await adminDb!.collection('students').get();
-    const docItem = studentDoc.docs.find(d => d.id === studentId);
-    if (!docItem) return;
-    const studentData = docItem.data() as Student;
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return;
+    const studentData = studentDoc.data() as Student;
     const isAdminDept = ['admin', 'department'].includes(author.role);
     
     if (isAdminDept) {

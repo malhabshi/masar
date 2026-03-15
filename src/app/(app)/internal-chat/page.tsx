@@ -3,7 +3,8 @@
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where, orderBy } from 'firebase/firestore';
+import { where, orderBy, query, collection } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2, MessageSquare, User as UserIcon, Clock } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
@@ -26,33 +27,27 @@ export default function InternalChatPage() {
 
   // Fetch students who have chat history, sorted by most recent message
   const studentsQuery = useMemoFirebase(() => {
-    if (!isMounted || !currentUser) return [];
+    if (!isMounted || !currentUser) return null;
     
-    // Base constraints: must have at least one message and sort by time
-    const constraints = [
-      where('lastChatMessageTimestamp', '!=', null),
-      orderBy('lastChatMessageTimestamp', 'desc')
-    ];
-
+    // We order by lastChatMessageTimestamp to get the SMS-style ranking
+    // Documents without this field (old students) are hidden until they receive a new message
+    const baseQuery = collection(firestore, 'students');
+    
     if (isEmployee && currentUser.civilId) {
-      constraints.push(where('employeeId', '==', currentUser.civilId));
+      return query(
+        baseQuery,
+        where('employeeId', '==', currentUser.civilId),
+        orderBy('lastChatMessageTimestamp', 'desc')
+      );
     }
     
-    // NOTE: Department users see all students with chat history by default here,
-    // they can toggle "Show All" or rely on the same routing logic as Applicants if needed.
-    // For now, mirroring Applicants logic:
-    if (currentUser.role === 'department' && currentUser.department) {
-        // We'll filter department-relevance on the client to maintain the SMS-style order
-        // without complex composite indexes for every department.
-    }
-
-    return constraints;
+    return query(
+      baseQuery,
+      orderBy('lastChatMessageTimestamp', 'desc')
+    );
   }, [isMounted, currentUser, isEmployee]);
 
-  const { data: studentsWithChat, isLoading: studentsAreLoading } = useCollection<Student>(
-    (isMounted && currentUser) ? 'students' : '', 
-    ...studentsQuery
-  );
+  const { data: studentsWithChat, isLoading: studentsAreLoading } = useCollection<Student>(studentsQuery);
 
   const employeeCivilIds = useMemo(() => {
     return [...new Set((studentsWithChat || []).map(s => s.employeeId).filter((id): id is string => !!id))];
@@ -63,14 +58,20 @@ export default function InternalChatPage() {
   const displayedStudents = useMemo(() => {
     if (!studentsWithChat) return [];
     
-    // Department filtering
+    // Department filtering: Only show students with applications in the user's specific region
     if (currentUser?.role === 'department' && currentUser.department) {
       const dept = currentUser.department;
       return studentsWithChat.filter(student => {
         const appCountries = (student.applications || []).map(a => a.country);
-        return (dept === 'UK' && appCountries.includes('UK')) || 
-               (dept === 'USA' && appCountries.includes('USA')) || 
-               (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
+        const isMatch = (dept === 'UK' && appCountries.includes('UK')) || 
+                        (dept === 'USA' && appCountries.includes('USA')) || 
+                        (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
+        
+        // If a student has no applications yet but has a chat, we show them to all depts 
+        // to ensure new leads aren't missed in the inbox.
+        if (appCountries.length === 0) return true;
+        
+        return isMatch;
       });
     }
 
@@ -80,7 +81,7 @@ export default function InternalChatPage() {
   const isLoading = isUserLoading || !isMounted || studentsAreLoading;
 
   if (isLoading) {
-    return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
+    return <div className="flex h-full w-full items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin" /></div>
   }
 
   if (!currentUser) {
@@ -121,7 +122,7 @@ export default function InternalChatPage() {
                 <Link key={student.id} href={`/student/${student.id}`}>
                   <div className={cn(
                     "group flex items-center gap-4 p-4 rounded-xl border bg-card hover:bg-muted/50 transition-all cursor-pointer shadow-sm",
-                    unreadCount > 0 && "border-primary/50 bg-primary/5"
+                    unreadCount > 0 && "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
                   )}>
                     <div className="relative">
                       <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg border">
@@ -152,12 +153,12 @@ export default function InternalChatPage() {
                         "text-sm line-clamp-1 italic",
                         unreadCount > 0 ? "text-foreground font-semibold" : "text-muted-foreground"
                       )}>
-                        {student.lastChatMessageText || "No message content"}
+                        {student.lastChatMessageText || "Shared a file"}
                       </p>
                     </div>
 
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase">View Chat</Badge>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase bg-background">View Chat</Badge>
                     </div>
                   </div>
                 </Link>

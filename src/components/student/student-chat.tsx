@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -18,9 +17,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, updateDocumentNonBlocking } from '@/firebase/client';
+import { useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 import { useUserCacheById } from '@/hooks/use-user-cache';
@@ -39,28 +38,34 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const [newMessage, setNewMessage] = useState('');
   const [recipientId, setRecipientId] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const messagesPath = `chats/${studentId}/messages`;
-  const { data: messagesData } = useCollection<ChatMessage>(messagesPath);
+  // Stable query for messages
+  const messagesQuery = useMemoFirebase(() => {
+    if (!studentId) return null;
+    return query(
+      collection(firestore, 'chats', studentId, 'messages'),
+      orderBy('timestamp', 'asc')
+    );
+  }, [studentId]);
 
-  const messages = useMemo(() => {
-    if (!messagesData) return [];
-    return [...messagesData].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }, [messagesData]);
+  const { data: messages, isLoading: messagesLoading } = useCollection<ChatMessage>(messagesQuery);
   
   const authorIds = useMemo(() => (messages || []).map(m => m.authorId), [messages]);
   const { userMap } = useUserCacheById(authorIds);
 
   const { data: allUsers, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
+  
   const managementUsers = useMemo(() => (allUsers || []).filter(u => ['admin', 'department'].includes(u.role)), [allUsers]);
   const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);
   const hasDepartments = useMemo(() => (allUsers || []).some(u => u.role === 'department'), [allUsers]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages && messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // Management clears employee-sent updates (unreadUpdates) or employee clears management updates
@@ -103,7 +108,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         return;
     }
 
-    setIsLoading(true);
+    setIsSending(true);
     let documentPayload: { name: string; url: string } | undefined = undefined;
 
     try {
@@ -138,7 +143,6 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
             }
         }
 
-        // Migrate to server action for trigger support
         const result = await sendChatMessage(
           student.id,
           currentUser.id,
@@ -158,7 +162,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
-        setIsLoading(false);
+        setIsSending(false);
     }
   };
 
@@ -184,71 +188,77 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
       <CardContent className="flex-1 overflow-hidden pt-0">
         <ScrollArea className="h-[400px] pr-4">
           <div className="space-y-4">
-            {messages.map(message => {
-              const author = userMap.get(message.authorId);
-              const isCurrentUser = author?.id === currentUser.id;
-              return (
-                <div
-                  key={message.id}
-                  className={cn(
-                    'flex items-end gap-2',
-                    isCurrentUser ? 'justify-end' : 'justify-start'
-                  )}
-                >
-                  {!isCurrentUser && (
-                    <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarImage src={author?.avatarUrl} alt={author?.name} />
-                      <AvatarFallback>{author?.name?.charAt(0) || '?'}</AvatarFallback>
-                    </Avatar>
-                  )}
+            {messagesLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-2 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <p className="text-xs">Loading conversation...</p>
+              </div>
+            ) : messages && messages.length > 0 ? (
+              messages.map(message => {
+                const author = userMap.get(message.authorId);
+                const isCurrentUser = author?.id === currentUser.id;
+                return (
                   <div
+                    key={message.id}
                     className={cn(
-                      'max-w-[80%] rounded-lg p-3 text-sm shadow-sm',
-                      isCurrentUser
-                        ? 'bg-primary text-primary-foreground rounded-br-none'
-                        : 'bg-muted text-muted-foreground rounded-bl-none border'
+                      'flex items-end gap-2',
+                      isCurrentUser ? 'justify-end' : 'justify-start'
                     )}
                   >
-                    {!isCurrentUser && author && (
-                        <div className="text-[10px] font-bold opacity-70 mb-1 uppercase">
-                            {author.name} ({author.role})
-                        </div>
+                    {!isCurrentUser && (
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarImage src={author?.avatarUrl} alt={author?.name} />
+                        <AvatarFallback>{author?.name?.charAt(0) || '?'}</AvatarFallback>
+                      </Avatar>
                     )}
-                    {renderMessageContent(message.content)}
-                    {message.document && (
-                      <a
-                        href={message.document.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          'flex items-center gap-2 mt-2 p-2 rounded-md transition-colors',
-                          isCurrentUser
-                            ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
-                            : 'bg-background hover:bg-background/80 border'
-                        )}
-                      >
-                        <FileText className="h-4 w-4 shrink-0" />
-                        <span className="truncate font-medium flex-1">{message.document.name}</span>
-                        <Download className="h-3 w-3 opacity-70" />
-                      </a>
-                    )}
-                    <div className={cn(
-                        "text-[9px] mt-1 text-right opacity-60",
-                        isCurrentUser ? "text-primary-foreground" : "text-muted-foreground"
-                    )}>
-                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <div
+                      className={cn(
+                        'max-w-[80%] rounded-lg p-3 text-sm shadow-sm',
+                        isCurrentUser
+                          ? 'bg-primary text-primary-foreground rounded-br-none'
+                          : 'bg-muted text-muted-foreground rounded-bl-none border'
+                      )}
+                    >
+                      {!isCurrentUser && author && (
+                          <div className="text-[10px] font-bold opacity-70 mb-1 uppercase">
+                              {author.name} ({author.role})
+                          </div>
+                      )}
+                      {renderMessageContent(message.content)}
+                      {message.document && (
+                        <a
+                          href={message.document.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cn(
+                            'flex items-center gap-2 mt-2 p-2 rounded-md transition-colors',
+                            isCurrentUser
+                              ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
+                              : 'bg-background hover:bg-background/80 border'
+                          )}
+                        >
+                          <FileText className="h-4 w-4 shrink-0" />
+                          <span className="truncate font-medium flex-1">{message.document.name}</span>
+                          <Download className="h-3 w-3 opacity-70" />
+                        </a>
+                      )}
+                      <div className={cn(
+                          "text-[9px] mt-1 text-right opacity-60",
+                          isCurrentUser ? "text-primary-foreground" : "text-muted-foreground"
+                      )}>
+                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-            {messages.length === 0 && (
+                );
+              })
+            ) : (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <MessageSquare className="h-12 w-12 mb-2 opacity-20" />
                 <p className="text-sm">Start a conversation about this student.</p>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
       </CardContent>
@@ -256,7 +266,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         <div className="w-full space-y-2">
           {currentUser.role === 'employee' && (
             <Select onValueChange={setRecipientId} value={recipientId}>
-              <SelectTrigger className="bg-background h-8 text-xs border-dashed" disabled={isLoading || usersLoading}>
+              <SelectTrigger className="bg-background h-8 text-xs border-dashed" disabled={isSending || usersLoading}>
                 <SelectValue placeholder="Address message to... (Optional)" />
               </SelectTrigger>
               <SelectContent>
@@ -283,7 +293,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
 
           <div className="flex w-full items-center space-x-2">
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={ALLOWED_FILE_EXTENSIONS} />
-            <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+            <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isSending}>
               <Paperclip className="h-4 w-4" />
             </Button>
             <Input
@@ -292,11 +302,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-              disabled={isLoading}
+              disabled={isSending}
               className="flex-1"
             />
-            <Button type="button" size="icon" onClick={handleSendMessage} disabled={isLoading || (!newMessage.trim() && !file)}>
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            <Button type="button" size="icon" onClick={handleSendMessage} disabled={isSending || (!newMessage.trim() && !file)}>
+              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
         </div>
