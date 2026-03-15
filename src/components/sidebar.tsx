@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sidebar,
@@ -43,6 +44,7 @@ import { where, orderBy, collection, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { Student, Task } from '@/lib/types';
 import { Button } from './ui/button';
+import { cn } from '@/lib/utils';
 
 export function AppSidebar() {
     const [isClient, setIsClient] = useState(false);
