@@ -16,17 +16,14 @@ service cloud.firestore {
 
     /** 
      * @description Checks if user is an admin using indexed DBAC collection. 
-     * Optimized: Checks maintenance UID list first to avoid exists() calls for system admins.
+     * Includes hardcoded bypass for system maintenance.
      */
     function isAdmin() {
-      let maintenanceUids = [
-        'bbkDS193aqcaAJS6M6GkjWFgFTr1', 
-        'IZr1zv5ePQb0bKNVXS4xGjERmE62', 
-        'cYfvOMr5CCY5MACCgYm1DdjaZug1', 
-        'lZr1zv5ePQbObKNVXS4xGjERmE62'
-      ];
       return isSignedIn() && (
-        request.auth.uid in maintenanceUids ||
+        request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1' || 
+        request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' || 
+        request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
+        request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62' ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -72,7 +69,9 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow read: if isSignedIn();
+      // Basic read (get/list) allowed for all staff
+      allow get, list: if isSignedIn();
+      
       allow create: if isPrivileged() || (isSignedIn() && request.resource.data.employeeId == getUserData().get('civilId', ''));
       allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == resource.data.employeeId);
       allow delete: if isAdmin();
