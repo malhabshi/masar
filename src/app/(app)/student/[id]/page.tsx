@@ -29,6 +29,7 @@ import { TargetCountriesCard } from '@/components/student/target-countries-card'
 import { TaskStatsCard } from '@/components/student/task-stats-card';
 import { InactivityReportSection } from '@/components/student/inactivity-report-section';
 import { AssignmentCard } from '@/components/student/assignment-card';
+import { StatusNoteCard } from '@/components/student/status-note-card';
 
 function playLoudAlert() {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -199,12 +200,12 @@ export default function StudentDetailPage() {
         </div>
       )}
       
-      <div className="pdf-hide">
-        <InactivityReportSection student={student} currentUser={currentUser} />
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="lg:col-span-2 space-y-6">
+              <StatusNoteCard student={student} currentUser={currentUser} />
+              <div className="pdf-hide">
+                <InactivityReportSection student={student} currentUser={currentUser} />
+              </div>
               <TargetCountriesCard student={student} currentUser={currentUser} />
               <StudentApplications student={student} />
               <StudentUsersCard student={student} currentUser={currentUser} />

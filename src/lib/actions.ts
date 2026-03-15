@@ -63,6 +63,23 @@ async function refreshStudentActivity(studentId: string) {
   }
 }
 
+export async function updateStudentStatusNote(studentId: string, note: string, authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const now = new Date().toISOString();
+    
+    await studentRef.update({ 
+      statusNote: note,
+      lastActivityAt: now
+    });
+
+    return { success: true, message: 'Status note updated.' };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
+
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     
@@ -1246,7 +1263,11 @@ export async function submitInactivityReport(studentId: string, employeeId: stri
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
     await sendChatMessage(studentId, employeeId, `@Admins: Inactivity Report: ${reportContent}`);
-    await studentRef.update({ lastActivityAt: now, employeeNotes: FieldValue.arrayUnion({ id: `note-inactivity-${Date.now()}`, authorId: employeeId, content: `Contacted student and submitted report: ${reportContent}`, createdAt: now }) });
+    await studentRef.update({ 
+      lastActivityAt: now, 
+      statusNote: reportContent, // Update status note automatically
+      employeeNotes: FieldValue.arrayUnion({ id: `note-inactivity-${Date.now()}`, authorId: employeeId, content: `Contacted student and submitted report: ${reportContent}`, createdAt: now }) 
+    });
     return { success: true, message: 'Report submitted.' };
   } catch (e: any) { return { success: false, message: e.message }; }
 }

@@ -262,7 +262,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
               <TableHead>Apps</TableHead>
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Employee</TableHead>
-              <TableHead>Latest Note</TableHead>
+              <TableHead>Status Note</TableHead>
               <TableHead>IELTS Overall</TableHead>
               <TableHead>Intake Term</TableHead>
               <TableHead>App. Countries</TableHead>
@@ -279,7 +279,6 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const transferRequester = student.transferRequest?.requestedBy ? requesterMap.get(student.transferRequest.requestedBy) : null;
                 const canAssign = isAdminOrDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
-                const latestNote = (student.employeeNotes || []).slice().sort((a, b) => toDate(b.createdAt)!.getTime() - toDate(a.createdAt)!.getTime())[0];
 
                 return (
                 <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20")}>
@@ -309,7 +308,26 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                   <TableCell><Badge variant="secondary" className="font-mono">{student.applications?.length || 0}</Badge></TableCell>
                   <TableCell><Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>{pipelineStatusLabels[student.pipelineStatus || 'none']}</Badge></TableCell>
                   <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
-                  <TableCell>{latestNote ? <TooltipProvider><Tooltip><TooltipTrigger asChild><div className="flex items-start gap-1.5 max-w-[150px] cursor-help group"><StickyNote className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0 opacity-50 group-hover:opacity-100" /><span className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">{latestNote.content}</span></div></TooltipTrigger><TooltipContent className="max-w-[300px] p-3"><p className="font-bold text-[10px] uppercase mb-1 text-primary">Latest Employee Note:</p><p className="text-xs whitespace-pre-wrap">{latestNote.content}</p><p className="text-[9px] text-muted-foreground mt-2 border-t pt-1">Added {isClient ? formatRelativeTime(latestNote.createdAt) : '...'}</p></TooltipContent></Tooltip></TooltipProvider> : <span className="text-[10px] text-muted-foreground italic opacity-50">No notes</span>}</TableCell>
+                  <TableCell>
+                    {student.statusNote ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-start gap-1.5 max-w-[150px] cursor-help group">
+                              <StickyNote className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0 opacity-50 group-hover:opacity-100" />
+                              <span className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">{student.statusNote}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-[300px] p-3">
+                            <p className="font-bold text-[10px] uppercase mb-1 text-primary">Current Status Note:</p>
+                            <p className="text-xs whitespace-pre-wrap">{student.statusNote}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic opacity-50">No status set</span>
+                    )}
+                  </TableCell>
                   <TableCell><Badge variant={student.ieltsOverall ? 'secondary' : 'outline'}>{(student.ieltsOverall ?? 0).toFixed(1)}</Badge></TableCell>
                   <TableCell>{student.academicIntakeSemester ? <div className="flex items-center gap-1.5 whitespace-nowrap"><Calendar className="h-3 w-3 text-primary" /><span className="text-sm font-medium">{student.academicIntakeSemester} {student.academicIntakeYear}</span></div> : <span className="text-xs text-muted-foreground italic">None</span>}</TableCell>
                   <TableCell>{appCountries.length > 0 ? <div className="flex flex-wrap gap-1 max-w-[120px]">{appCountries.map(c => <Badge key={c} variant="outline" className="text-[10px] px-1 h-5">{c}</Badge>)}</div> : <span className="text-xs text-muted-foreground italic">None</span>}</TableCell>

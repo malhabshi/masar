@@ -85,6 +85,7 @@ export interface Student {
   targetCountries?: Country[];
   missingItems?: string[];
   pipelineStatus?: PipelineStatus;
+  statusNote?: string; // Persistent editable status note for Applicants table
   transferHistory?: {
     fromEmployeeId: string | null;
     toEmployeeId: string;
