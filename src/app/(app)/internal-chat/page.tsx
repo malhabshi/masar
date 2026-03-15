@@ -3,7 +3,7 @@
 import { useUser } from '@/hooks/use-user';
 import type { Student, User } from '@/lib/types';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where, orderBy, query, collection } from 'firebase/firestore';
+import { orderBy, query, collection, where } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Loader2, MessageSquare, User as UserIcon, Clock } from 'lucide-react';
@@ -25,58 +25,63 @@ export default function InternalChatPage() {
   const isAdminDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const isEmployee = currentUser?.role === 'employee';
 
-  // Fetch students who have chat history, sorted by most recent message
+  /**
+   * FIX: We query by createdAt (which all students have) instead of lastChatMessageTimestamp.
+   * This ensures legacy students with unread messages are NOT filtered out by Firestore.
+   */
   const studentsQuery = useMemoFirebase(() => {
     if (!isMounted || !currentUser) return null;
     
-    // We order by lastChatMessageTimestamp to get the SMS-style ranking
-    // Documents without this field (old students) are hidden until they receive a new message
     const baseQuery = collection(firestore, 'students');
     
     if (isEmployee && currentUser.civilId) {
       return query(
         baseQuery,
         where('employeeId', '==', currentUser.civilId),
-        orderBy('lastChatMessageTimestamp', 'desc')
+        orderBy('createdAt', 'desc')
       );
     }
     
     return query(
       baseQuery,
-      orderBy('lastChatMessageTimestamp', 'desc')
+      orderBy('createdAt', 'desc')
     );
-  }, [isMounted, currentUser, isEmployee]);
+  }, [isMounted, currentUser?.id, currentUser?.civilId, isEmployee]);
 
-  const { data: studentsWithChat, isLoading: studentsAreLoading } = useCollection<Student>(studentsQuery);
+  const { data: rawStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsQuery);
 
   const employeeCivilIds = useMemo(() => {
-    return [...new Set((studentsWithChat || []).map(s => s.employeeId).filter((id): id is string => !!id))];
-  }, [studentsWithChat]);
+    return [...new Set((rawStudents || []).map(s => s.employeeId).filter((id): id is string => !!id))];
+  }, [rawStudents]);
 
   const { userMap: employeeMap } = useUserCacheByCivilId(employeeCivilIds);
 
   const displayedStudents = useMemo(() => {
-    if (!studentsWithChat) return [];
+    if (!rawStudents) return [];
     
-    // Department filtering: Only show students with applications in the user's specific region
+    // 1. Filter for department regions if applicable
+    let filtered = rawStudents;
     if (currentUser?.role === 'department' && currentUser.department) {
       const dept = currentUser.department;
-      return studentsWithChat.filter(student => {
+      filtered = rawStudents.filter(student => {
         const appCountries = (student.applications || []).map(a => a.country);
         const isMatch = (dept === 'UK' && appCountries.includes('UK')) || 
                         (dept === 'USA' && appCountries.includes('USA')) || 
                         (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
         
-        // If a student has no applications yet but has a chat, we show them to all depts 
-        // to ensure new leads aren't missed in the inbox.
+        // Lead leads/active chats visible to all depts if no apps yet
         if (appCountries.length === 0) return true;
-        
         return isMatch;
       });
     }
 
-    return studentsWithChat;
-  }, [studentsWithChat, currentUser]);
+    // 2. Client-side sort: SMS Style (Newest message/activity at top)
+    return [...filtered].sort((a, b) => {
+      const timeA = new Date(a.lastChatMessageTimestamp || a.lastActivityAt || a.createdAt).getTime();
+      const timeB = new Date(b.lastChatMessageTimestamp || b.lastActivityAt || b.createdAt).getTime();
+      return timeB - timeA;
+    });
+  }, [rawStudents, currentUser]);
   
   const isLoading = isUserLoading || !isMounted || studentsAreLoading;
 
@@ -117,6 +122,7 @@ export default function InternalChatPage() {
             displayedStudents.map((student) => {
               const employee = student.employeeId ? employeeMap.get(student.employeeId) : null;
               const unreadCount = isAdminDept ? (student.unreadUpdates || 0) : (student.employeeUnreadMessages || 0);
+              const lastTime = student.lastChatMessageTimestamp || student.lastActivityAt || student.createdAt;
               
               return (
                 <Link key={student.id} href={`/student/${student.id}`}>
@@ -140,7 +146,7 @@ export default function InternalChatPage() {
                         <h3 className="font-bold text-base truncate">{student.name}</h3>
                         <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {isMounted && student.lastChatMessageTimestamp ? formatRelativeTime(student.lastChatMessageTimestamp) : '...'}
+                          {isMounted && lastTime ? formatRelativeTime(lastTime) : '...'}
                         </span>
                       </div>
                       
@@ -153,7 +159,7 @@ export default function InternalChatPage() {
                         "text-sm line-clamp-1 italic",
                         unreadCount > 0 ? "text-foreground font-semibold" : "text-muted-foreground"
                       )}>
-                        {student.lastChatMessageText || "Shared a file"}
+                        {student.lastChatMessageText || "Open profile to view history"}
                       </p>
                     </div>
 
@@ -167,7 +173,7 @@ export default function InternalChatPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-20 bg-card rounded-xl border border-dashed text-muted-foreground">
               <MessageSquare className="h-12 w-12 mb-4 opacity-20" />
-              <p className="text-sm font-medium">No recent conversations found.</p>
+              <p className="text-sm font-medium">No active conversations found.</p>
               <p className="text-xs">Active threads with messages will appear here.</p>
             </div>
           )}

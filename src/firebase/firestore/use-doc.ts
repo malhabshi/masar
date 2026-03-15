@@ -126,7 +126,7 @@ export function useDoc<T = any>(
 
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthReady, JSON.stringify(typeof target === 'string' ? [target, ...pathSegments] : null), (target as any)?.__memo]);
+  }, [isAuthReady, target, JSON.stringify(pathSegments)]);
 
   return { data, isLoading, error };
 }

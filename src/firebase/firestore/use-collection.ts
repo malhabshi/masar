@@ -58,7 +58,6 @@ export function useCollection<T = any>(
   const [error, setError] = useState<FirestoreError | Error | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Guard against race conditions where query runs before auth is determined
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(() => {
       setIsAuthReady(true);
@@ -112,12 +111,6 @@ export function useCollection<T = any>(
           try {
             if (typeof target === 'string') path = target;
             else if ((target as any).path) path = (target as any).path;
-            else {
-              const internalQuery = (target as any)._query || (target as any).query;
-              if (internalQuery?.path?.canonicalString) {
-                path = internalQuery.path.canonicalString();
-              }
-            }
           } catch (e) {}
 
           const contextualError = new FirestorePermissionError({
@@ -137,8 +130,12 @@ export function useCollection<T = any>(
     }
 
     return () => unsubscribe();
+  /**
+   * FIX: We use target directly if it's a memoized object.
+   * If it's a string, we stringify it.
+   */
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthReady, JSON.stringify(typeof target === 'string' ? target : null), constraints.length, (target as any)?.__memo]);
+  }, [isAuthReady, target, constraints.length]);
 
   return { data, isLoading, error };
 }
