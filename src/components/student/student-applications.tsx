@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useCallback, useState } from 'react';
@@ -14,7 +13,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -45,6 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 
 interface StudentApplicationsProps {
@@ -70,18 +70,24 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   const [newMajor, setNewMajor] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Rejection Reason state
+  const [rejectionDialog, setRejectionDialog] = useState<{ university: string; major: string } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+
 
   const isAdminDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const canAddApplications = isAdminDept;
   const canSetFinalChoice = currentUser?.role === 'employee' && currentUser.civilId === student.employeeId;
 
-  const handleStatusUpdate = useCallback(async (university: string, major: string, newStatus: ApplicationStatus) => {
-    const result = await updateApplicationStatus(student.id, university, major, newStatus, student.name, student.employeeId);
+  const handleStatusUpdate = useCallback(async (university: string, major: string, newStatus: ApplicationStatus, reason?: string) => {
+    const result = await updateApplicationStatus(student.id, university, major, newStatus, student.name, student.employeeId, reason);
     if (result.success) {
       toast({
         title: 'Status Updated',
         description: `Application for ${university} is now ${newStatus}.`
       });
+      setRejectionDialog(null);
+      setRejectionReason('');
     } else {
       toast({
         variant: 'destructive',
@@ -163,16 +169,28 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                   const isFinalChoice = student.finalChoiceUniversity === app.university;
                   return (
                     <TableRow key={index} className={cn(isFinalChoice && 'bg-green-500/10 hover:bg-green-500/10')}>
-                      <TableCell className="font-medium flex items-center">
-                          {isFinalChoice && <CheckCircle className="h-4 w-4 text-green-600 mr-2" />}
-                          {app.university}
+                      <TableCell className="font-medium align-top">
+                          <div className="flex flex-col">
+                            <div className="flex items-center">
+                                {isFinalChoice && <CheckCircle className="h-4 w-4 text-green-600 mr-2" />}
+                                {app.university}
+                            </div>
+                            {app.status === 'Rejected' && app.rejectionReason && (
+                                <div className="mt-1 flex items-start gap-1.5 text-red-600">
+                                    <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                    <span className="text-[10px] italic font-medium leading-tight">
+                                        Reason: {app.rejectionReason}
+                                    </span>
+                                </div>
+                            )}
+                          </div>
                       </TableCell>
-                      <TableCell>{app.major}</TableCell>
-                      <TableCell>{app.country}</TableCell>
-                      <TableCell>
+                      <TableCell className="align-top">{app.major}</TableCell>
+                      <TableCell className="align-top">{app.country}</TableCell>
+                      <TableCell className="align-top">
                         <Badge className={`${statusColors[app.status]} text-white`}>{app.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right align-top">
                           <div className="flex items-center justify-end gap-2">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -186,7 +204,13 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                                         {(['Pending', 'Submitted', 'In Review', 'Accepted', 'Rejected'] as ApplicationStatus[]).map(status => (
                                             <DropdownMenuItem 
                                             key={status} 
-                                            onClick={() => handleStatusUpdate(app.university, app.major, status)}
+                                            onClick={() => {
+                                                if (status === 'Rejected') {
+                                                    setRejectionDialog({ university: app.university, major: app.major });
+                                                } else {
+                                                    handleStatusUpdate(app.university, app.major, status);
+                                                }
+                                            }}
                                             disabled={app.status === status}
                                             >
                                             Set as {status}
@@ -194,7 +218,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                                         ))}
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem onClick={() => { setEditingApp(app); setNewMajor(app.major); }}>
-                                            <Pencil className="mr-2 h-4 w-4" />
+                                            < Pencil className="mr-2 h-4 w-4" />
                                             Change Major
                                         </DropdownMenuItem>
                                         <DropdownMenuItem className="text-destructive" onClick={() => setDeletingApp(app)}>
@@ -242,6 +266,39 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
           </CardFooter>
         )}
       </Card>
+
+      {/* Rejection Reason Dialog */}
+      <Dialog open={!!rejectionDialog} onOpenChange={(open) => !open && setRejectionDialog(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Reason for Rejection</DialogTitle>
+                <DialogDescription>
+                    Please provide a reason for the rejection of <strong>{rejectionDialog?.university}</strong>. This will be visible to the assigned employee.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="rejection-reason">Reason</Label>
+                    <Textarea 
+                        id="rejection-reason"
+                        placeholder="e.g., Missing documents, below minimum entry requirements..."
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setRejectionDialog(null)}>Cancel</Button>
+                <Button 
+                    variant="destructive" 
+                    disabled={!rejectionReason.trim()}
+                    onClick={() => rejectionDialog && handleStatusUpdate(rejectionDialog.university, rejectionDialog.major, 'Rejected', rejectionReason.trim())}
+                >
+                    Confirm Rejection
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation for switching Final Choice */}
       <AlertDialog open={!!confirmation} onOpenChange={(open) => !open && setConfirmation(null)}>

@@ -350,7 +350,7 @@ export async function addApplication(studentId: string, universityName: string, 
   }
 }
 
-export async function updateApplicationStatus(studentId: string, universityName: string, major: string, newStatus: ApplicationStatus, studentName: string, employeeId: string | null) {
+export async function updateApplicationStatus(studentId: string, universityName: string, major: string, newStatus: ApplicationStatus, studentName: string, employeeId: string | null, rejectionReason?: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -359,16 +359,29 @@ export async function updateApplicationStatus(studentId: string, universityName:
     const studentData = studentDoc.data() as Student;
     const appIndex = studentData.applications.findIndex(app => app.university === universityName && app.major === major);
     if (appIndex === -1) return { success: false, message: 'Application not found.' };
+    
     const updatedApplications = [...studentData.applications];
     updatedApplications[appIndex].status = newStatus;
     updatedApplications[appIndex].updatedAt = new Date().toISOString();
+    
+    if (newStatus === 'Rejected' && rejectionReason) {
+      updatedApplications[appIndex].rejectionReason = rejectionReason;
+    } else if (newStatus !== 'Rejected') {
+      delete updatedApplications[appIndex].rejectionReason;
+    }
+
     await studentRef.update({ applications: updatedApplications, lastActivityAt: new Date().toISOString() });
+    
     if (employeeId) {
         const employeeQuery = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
         if (!employeeQuery.empty) {
             const employeeDoc = employeeQuery.docs[0];
             const employeeData = employeeDoc.data() as User;
-            const message = `Status update for ${studentName}: ${universityName} is now ${newStatus}.`;
+            let message = `Status update for ${studentName}: ${universityName} is now ${newStatus}.`;
+            if (newStatus === 'Rejected' && rejectionReason) {
+              message += ` Reason: ${rejectionReason}`;
+            }
+            
             await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: message, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
             let notifType: NotificationType = 'admin_update';
             if (newStatus === 'Accepted') notifType = 'scholarship_approved';

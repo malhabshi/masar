@@ -22,6 +22,7 @@ export interface Application {
   country: Country;
   status: ApplicationStatus;
   updatedAt: string;
+  rejectionReason?: string;
 }
 
 export interface Note {
