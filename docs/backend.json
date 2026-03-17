@@ -3,7 +3,7 @@
     "User": {
       "title": "User",
       "type": "object",
-      "description": "Represents an individual user within the UniApply Hub system. Can be an admin, employee, department, or student.",
+      "description": "Represents an individual user within the Masar system. Can be an admin, employee, department, or student.",
       "properties": {
         "name": { "type": "string", "description": "The full name of the user." },
         "email": { "type": "string", "description": "The email address of the user, used for identification and communication.", "format": "email" },
@@ -19,7 +19,7 @@
     "Student": {
       "title": "Student",
       "type": "object",
-      "description": "Represents a student whose university applications are being managed through the UniApply Hub.",
+      "description": "Represents a student whose university applications are being managed through Masar.",
       "properties": {
         "id": { "type": "string", "description": "Unique identifier for the Student entity." },
         "name": { "type": "string", "description": "The full name of the student." },
@@ -65,20 +65,33 @@
       },
       "required": ["id", "name", "phone", "createdAt", "createdBy"]
     },
-    "Invoice": {
-      "title": "Invoice",
+    "NotificationTemplate": {
+      "title": "Notification Template",
       "type": "object",
-      "description": "Financial records for services provided to students.",
+      "description": "Configuration for automated WhatsApp messages via specific WANotifier webhook URLs.",
       "properties": {
-        "invoiceNumber": { "type": "string" },
-        "studentId": { "type": "string" },
-        "studentName": { "type": "string" },
-        "items": { "type": "array", "items": { "type": "object", "properties": { "description": { "type": "string" }, "amount": { "type": "number" }, "quantity": { "type": "number" } } } },
-        "totalAmount": { "type": "number" },
-        "status": { "type": "string", "enum": ["paid", "unpaid", "cancelled"] },
+        "notificationType": { "type": "string" },
+        "templateName": { "type": "string" },
+        "message": { "type": "string" },
+        "webhookUrl": { "type": "string", "format": "uri" },
+        "isActive": { "type": "boolean" },
+        "variables": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["notificationType", "templateName", "message", "isActive"]
+    },
+    "InvoiceSavedItem": {
+      "title": "Invoice Saved Item",
+      "type": "object",
+      "description": "Standard service or product catalog items for recurring use in invoices.",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "defaultAmount": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["invoiceNumber", "studentId", "totalAmount", "status"]
+      "required": ["name", "defaultAmount"]
     }
   },
   "firestore": {
@@ -94,13 +107,13 @@
       "schema": { "$ref": "#/entities/Task" },
       "description": "Stores tasks and their replies."
     },
-    "/invoices/{invoiceId}": {
-      "schema": { "$ref": "#/entities/Invoice" },
-      "description": "Stores billing information."
-    },
     "/notification_templates/{templateId}": {
       "schema": { "$ref": "#/entities/NotificationTemplate" },
       "description": "Stores WhatsApp message templates with their unique webhook URLs."
+    },
+    "/invoice_saved_items/{itemId}": {
+      "schema": { "$ref": "#/entities/InvoiceSavedItem" },
+      "description": "Catalog of reusable invoice items."
     }
   }
 }

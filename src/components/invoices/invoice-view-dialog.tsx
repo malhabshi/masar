@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -310,7 +309,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                     {selectedTemplate?.companyAddress || 'Kuwait City, State of Kuwait'}
                   </p>
                   <div className="flex items-center justify-center gap-4 mt-1">
-                    <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5 opacity-50" /> {selectedTemplate?.companyEmail || 'contact@uniapplyhub.com'}</span>
+                    <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5 opacity-50" /> {selectedTemplate?.companyEmail || 'contact@masar.com'}</span>
                     <span className="flex items-center gap-1"><span className="opacity-50 text-[8px] font-bold">Phone Number:</span> {selectedTemplate?.companyPhone || '+965 [Agency Phone]'}</span>
                   </div>
                 </div>

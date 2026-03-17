@@ -100,7 +100,7 @@ export function LoginForm() {
             <div className="bg-primary text-primary-foreground p-2 rounded-lg">
               <GraduationCap className="h-7 w-7" />
             </div>
-            <span>UniApply Hub</span>
+            <span>Masar</span>
           </div>
         </div>
         <CardTitle className="text-xl">Sign In to Your Account</CardTitle>

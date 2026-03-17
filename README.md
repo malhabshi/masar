@@ -1,8 +1,8 @@
-# UniApply Hub: Comprehensive Application Management System
+# Masar: Comprehensive Application Management System
 
 ## 1. Project Overview
 
-UniApply Hub is a web-based platform designed for educational agencies to manage the university application process for students. It provides a collaborative environment for different user roles (admins, employees, and departments) to track student progress, manage applications, handle documentation, and communicate effectively.
+Masar is a web-based platform designed for educational agencies to manage the university application process for students. It provides a collaborative environment for different user roles (admins, employees, and departments) to track student progress, manage applications, handle documentation, and communicate effectively.
 
 The system is built on a modern tech stack including Next.js, React, TypeScript, and Firebase (for database, authentication, and security).
 

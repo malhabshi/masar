@@ -41,7 +41,7 @@ export function Logo() {
           <div className="bg-sidebar-primary text-sidebar-primary-foreground p-2 rounded-lg flex items-center justify-center h-10 w-10">
             <GraduationCap className="h-6 w-6" />
           </div>
-          <span className="hidden group-data-[collapsible=icon]:hidden">UniApply Hub</span>
+          <span className="hidden group-data-[collapsible=icon]:hidden">Masar</span>
         </div>
       )
   }
@@ -55,7 +55,7 @@ export function Logo() {
             <GraduationCap className="h-6 w-6" />
         )}
       </div>
-      <span className="hidden group-data-[collapsible=icon]:hidden">UniApply Hub</span>
+      <span className="hidden group-data-[collapsible=icon]:hidden">Masar</span>
     </div>
   );
 }

@@ -34,7 +34,7 @@ export async function GET() {
   // Simple health check for the webhook endpoint
   return NextResponse.json({ 
     status: 'active', 
-    service: 'UniApply Hub WhatsApp Gateway',
+    service: 'Masar WhatsApp Gateway',
     timestamp: new Date().toISOString()
   });
 }
