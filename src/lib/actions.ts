@@ -650,6 +650,18 @@ export async function toggleTaskPriority(taskId: string, isPrioritized: boolean)
     } catch (e) { return { success: false }; }
 }
 
+export async function deleteTask(taskId: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+    await adminDb!.collection('tasks').doc(taskId).delete();
+    return { success: true, message: 'Update removed from feed.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
 export async function createNewUser(userData: { name: string; email: string; password: string; civilId: string; phone: string; role: 'admin' | 'employee' | 'department'; department?: string; }) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {

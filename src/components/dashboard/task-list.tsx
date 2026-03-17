@@ -8,13 +8,24 @@ import { useToast } from '@/hooks/use-toast';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, Send, Trash2 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import type { Task, TaskReply } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { addReplyToTask } from '@/lib/actions';
+import { addReplyToTask, deleteTask } from '@/lib/actions';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface TaskListProps {
   tasks: Task[];
@@ -25,6 +36,7 @@ interface TaskListProps {
 export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({});
+  const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
   
   const [newItems, setNewItems] = useState(new Set<string>());
@@ -132,8 +144,23 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
 
     setIsReplying(prev => ({ ...prev, [taskId]: false }));
   };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (currentUser.role !== 'admin') return;
+    
+    setIsDeleting(prev => ({ ...prev, [taskId]: true }));
+    const result = await deleteTask(taskId, currentUser.id);
+    
+    if (result.success) {
+      toast({ title: 'Update removed' });
+    } else {
+      toast({ variant: 'destructive', title: 'Delete failed', description: result.message });
+    }
+    setIsDeleting(prev => ({ ...prev, [taskId]: false }));
+  };
   
   const canCreateOrReply = currentUser.role === 'admin' || currentUser.role === 'department';
+  const isAdmin = currentUser.role === 'admin';
 
   if (isLoading) {
     return (
@@ -161,10 +188,40 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
         ) : (
           filteredTasks.map((task) => (
             <div key={task.id} className={cn(
-                "space-y-4 border-b pb-4 last:border-0 transition-colors duration-500 p-4 rounded-lg",
+                "space-y-4 border-b pb-4 last:border-0 transition-colors duration-500 p-4 rounded-lg group relative",
                 newItems.has(task.id) && "bg-blue-500/10"
               )}>
-              <div className="flex items-start justify-between">
+              
+              {isAdmin && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+                      disabled={isDeleting[task.id]}
+                    >
+                      {isDeleting[task.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remove Update?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete this update from everyone's feed.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => handleDeleteTask(task.id)} className="bg-destructive text-white hover:bg-destructive/90">
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+
+              <div className="flex items-start justify-between pr-8">
                 <div>
                   <p className="font-medium">{task.content}</p>
                   <p className="text-sm text-muted-foreground">
