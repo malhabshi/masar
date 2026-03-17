@@ -1,9 +1,8 @@
-
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -254,8 +253,9 @@ export async function saveNotificationTemplate(data: Omit<NotificationTemplate, 
       await adminDb!.collection('notification_templates').add({ ...data, createdAt: now, updatedAt: now });
     }
     return { success: true, message: 'Template saved.' };
-  } catch (e: any) {
-    return { success: false, message: e.message };
+  } catch (error: any) {
+    console.error('Error in saveNotificationTemplate:', error);
+    return { success: false, message: error.message };
   }
 }
 
@@ -1527,5 +1527,15 @@ export async function updateResourceLink(adminId: string, linkId: string, data: 
     if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
     await adminDb!.collection('resource_links').doc(linkId).update(data);
     return { success: true, message: 'Link updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+export async function updateSharedDocument(adminId: string, docId: string, data: Partial<SharedDocument>) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    await adminDb!.collection('shared_documents').doc(docId).update(data);
+    return { success: true, message: 'Document updated successfully.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
