@@ -107,12 +107,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const handleReply = async (taskId: string) => {
     if (!replyContent[taskId]?.trim()) return;
     
-    const canReply = currentUser.role === 'admin' || currentUser.role === 'department';
-    if (!canReply) {
-        toast({ variant: 'destructive', title: 'Error', description: 'You do not have permission to reply.' });
-        return;
-    }
-
+    // Allow everyone to reply back to updates
     setIsReplying(prev => ({ ...prev, [taskId]: true }));
     
     const task = tasks.find(t => t.id === taskId);
@@ -159,7 +154,6 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
     setIsDeleting(prev => ({ ...prev, [taskId]: false }));
   };
   
-  const canCreateOrReply = currentUser.role === 'admin' || currentUser.role === 'department';
   const isAdmin = currentUser.role === 'admin';
 
   if (isLoading) {
@@ -186,64 +180,73 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
         {filteredTasks.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">No recent updates.</p>
         ) : (
-          filteredTasks.map((task) => (
-            <div key={task.id} className={cn(
-                "space-y-4 border-b pb-4 last:border-0 transition-colors duration-500 p-4 rounded-lg group relative",
-                newItems.has(task.id) && "bg-blue-500/10"
-              )}>
-              
-              {isAdmin && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
-                      disabled={isDeleting[task.id]}
-                    >
-                      {isDeleting[task.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remove Update?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will permanently delete this update from everyone's feed.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDeleteTask(task.id)} className="bg-destructive text-white hover:bg-destructive/90">
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
+          filteredTasks.map((task) => {
+            // Filter replies based on private visibility rule:
+            // Only visible to Admin, Original Task Author (Management), and the Reply Author.
+            const visibleReplies = (task.replies || []).filter(reply => {
+              if (currentUser.role === 'admin') return true;
+              if (reply.authorId === currentUser.id) return true;
+              if (task.authorId === currentUser.id) return true;
+              return false;
+            });
 
-              <div className="flex items-start justify-between pr-8">
-                <div>
-                  <p className="font-medium">{task.content}</p>
-                  <p className="text-sm text-muted-foreground">
-                    From: {getUserName(task.authorId)} • {isClient ? formatRelativeTime(task.createdAt) : '...'}
-                  </p>
+            return (
+              <div key={task.id} className={cn(
+                  "space-y-4 border-b pb-4 last:border-0 transition-colors duration-500 p-4 rounded-lg group relative",
+                  newItems.has(task.id) && "bg-blue-500/10"
+                )}>
+                
+                {isAdmin && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+                        disabled={isDeleting[task.id]}
+                      >
+                        {isDeleting[task.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove Update?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete this update from everyone's feed.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeleteTask(task.id)} className="bg-destructive text-white hover:bg-destructive/90">
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+
+                <div className="flex items-start justify-between pr-8">
+                  <div>
+                    <p className="font-medium">{task.content}</p>
+                    <p className="text-sm text-muted-foreground">
+                      From: {getUserName(task.authorId)} • {isClient ? formatRelativeTime(task.createdAt) : '...'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              
-              {task.replies && task.replies.length > 0 && (
-                <div className="ml-4 space-y-2 border-l-2 pl-4">
-                  {task.replies.map((reply) => (
-                    <div key={reply.id} className="text-sm">
-                      <p>{reply.content}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {getUserName(reply.authorId)} • {isClient ? formatRelativeTime(reply.createdAt) : '...'}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {canCreateOrReply && (
+                
+                {visibleReplies.length > 0 && (
+                  <div className="ml-4 space-y-2 border-l-2 pl-4">
+                    {visibleReplies.map((reply) => (
+                      <div key={reply.id} className="text-sm bg-muted/30 p-2 rounded">
+                        <p>{reply.content}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase">
+                          {getUserName(reply.authorId)} • {isClient ? formatRelativeTime(reply.createdAt) : '...'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
                 <div className="flex gap-2">
                   <Input
                     placeholder="Write a reply..."
@@ -259,9 +262,9 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
                     {isReplying[task.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
-              )}
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </CardContent>
     </Card>
