@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Send, Paperclip, FileText, X, Loader2, Download, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -40,7 +39,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Stable query for messages
   const messagesQuery = useMemoFirebase(() => {
@@ -62,9 +61,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);
   const hasDepartments = useMemo(() => (allUsers || []).some(u => u.role === 'department'), [allUsers]);
 
+  // USE INTERNAL SCROLL ONLY - Avoids page-level jumps
   useEffect(() => {
-    if (messages && messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      container.scrollTop = container.scrollHeight;
     }
   }, [messages]);
 
@@ -186,8 +187,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   return (
     <>
       <CardContent className="flex-1 overflow-hidden pt-0">
-        <ScrollArea className="h-[400px] pr-4">
-          <div className="space-y-4">
+        <div 
+          ref={scrollContainerRef}
+          className="h-[400px] overflow-y-auto pr-4 scroll-smooth"
+        >
+          <div className="space-y-4 py-4">
             {messagesLoading ? (
               <div className="flex flex-col items-center justify-center py-20 gap-2 text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -258,9 +262,8 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                 <p className="text-sm">Start a conversation about this student.</p>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
       </CardContent>
       <CardFooter className="border-t pt-4 bg-muted/10">
         <div className="w-full space-y-2">
