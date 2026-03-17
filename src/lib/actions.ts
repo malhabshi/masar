@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
@@ -1028,12 +1029,32 @@ export async function getReportStats(dateRange: { from: string; to: string; }): 
   try {
     const interval = { start: parseISO(dateRange.from), end: parseISO(dateRange.to) };
     const [studentsSnap, usersSnap, timeLogsSnap] = await Promise.all([ adminDb!.collection('students').get(), adminDb!.collection('users').get(), adminDb!.collection('time_logs').get() ]);
-    const allStudents = studentsSnap.docs.map(doc => doc.data() as Student);
+    
     const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+    const allStudentsRaw = studentsSnap.docs.map(doc => doc.data() as Student);
     const allTimeLogs = timeLogsSnap.docs.map(doc => doc.data() as TimeLog);
+
+    // Exclusion logic: Filter out students assigned to deleted employee IDs (Ghost students)
+    const validCivilIds = new Set(allUsers.map(u => u.civilId).filter(Boolean));
+    const validUserIds = new Set(allUsers.map(u => u.id));
+    const allStudents = allStudentsRaw.filter(s => {
+        if (!s.employeeId) return true; // Unassigned is valid
+        return validCivilIds.has(s.employeeId) || validUserIds.has(s.employeeId);
+    });
+
     const studentsInRange = allStudents.filter(s => s.createdAt && isWithinInterval(parseISO(s.createdAt), interval));
     const appsInRange = allStudents.flatMap(s => s.applications || []).filter(app => app.updatedAt && isWithinInterval(parseISO(app.updatedAt), interval));
-    const stats: ReportStats = { totalStudents: allStudents.length, totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), totalEmployees: allUsers.filter(u => u.role === 'employee').length, applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + (s.applications?.length || 0); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), studentGrowthData: Object.entries(studentsInRange.reduce((acc, s) => { const d = format(parseISO(s.createdAt), 'yyyy-MM-dd'); acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)), applicationCountryData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.country] = (acc[app.country] || 0) + (1); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), employeeHoursData: Object.entries(allTimeLogs.filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval)).reduce((acc, log) => { const user = allUsers.find(u => u.id === log.employeeId); if (user) acc[user.name] = (acc[user.name] || 0) + (differenceInMinutes(parseISO(log.clockOut!), parseISO(log.clockIn)) / 60); return acc; }, {} as Record<string, number>)).map(([name, hours]) => ({ name, hours: parseFloat(hours.toFixed(1))})) };
+    
+    const stats: ReportStats = { 
+        totalStudents: allStudents.length, 
+        totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), 
+        totalEmployees: allUsers.filter(u => u.role === 'employee').length, 
+        applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), 
+        studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + (s.applications?.length || 0); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), 
+        studentGrowthData: Object.entries(studentsInRange.reduce((acc, s) => { const d = format(parseISO(s.createdAt), 'yyyy-MM-dd'); acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)), 
+        applicationCountryData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.country] = (acc[app.country] || 0) + (1); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), 
+        employeeHoursData: Object.entries(allTimeLogs.filter(log => log.clockOut && isWithinInterval(parseISO(log.date), interval)).reduce((acc, log) => { const user = allUsers.find(u => u.id === log.employeeId); if (user) acc[user.name] = (acc[user.name] || 0) + (differenceInMinutes(parseISO(log.clockOut!), parseISO(log.clockIn)) / 60); return acc; }, {} as Record<string, number>)).map(([name, hours]) => ({ name, hours: parseFloat(hours.toFixed(1))})) 
+    };
     return scrub({ success: true, data: stats });
   } catch (error: any) { return { success: false, message: error.message }; }
 }

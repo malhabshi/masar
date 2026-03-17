@@ -64,9 +64,17 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
       }
     });
 
-    const totalApps = students.reduce((acc, s) => acc + (s.applications?.length || 0), 0);
+    const totalApps = students.reduce((acc, s) => {
+      // Only count apps for valid (non-ghost) students
+      const isGhost = s.employeeId && !validCivilIds.has(s.employeeId) && !validUserIds.has(s.employeeId);
+      if (isGhost) return acc;
+      return acc + (s.applications?.length || 0);
+    }, 0);
     
-    return { total: students.length, assigned, unassigned, ghost, totalApps };
+    // Total Registered excludes "Ghost" students who were assigned to employees that no longer exist
+    const total = assigned + unassigned;
+    
+    return { total, assigned, unassigned, ghost, totalApps };
   }, [students, users]);
 
   if (!isAdmin) return null;
@@ -79,7 +87,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
             <div className="flex-1">
               <AlertTitle className="font-black uppercase tracking-tighter">🚨 DATA INTEGRITY WARNING</AlertTitle>
               <AlertDescription className="text-red-800 font-medium">
-                Found <strong>{stats.ghost}</strong> students assigned to invalid or deleted IDs. These students are hidden from all employees.
+                Found <strong>{stats.ghost}</strong> students assigned to invalid or deleted IDs. These students are excluded from active totals and hidden from all employees.
                 <Link href="/user-management" className="ml-2 underline font-bold">Fix using Bulk Transfer &rarr;</Link>
               </AlertDescription>
             </div>
@@ -122,7 +130,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                 <CardContent>
                     <div className="text-3xl font-black">{isLoading ? '...' : stats.total}</div>
                     <div className="flex items-center gap-1 mt-1">
-                      <Badge variant="outline" className="text-[9px] h-4 bg-primary/5 text-primary border-primary/20">All Time</Badge>
+                      <Badge variant="outline" className="text-[9px] h-4 bg-primary/5 text-primary border-primary/20">Active Students</Badge>
                     </div>
                 </CardContent>
             </Card>
@@ -155,8 +163,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                     <div className="text-3xl font-black text-blue-700">{isLoading ? '...' : stats.totalApps}</div>
                     <p className="text-[10px] text-blue-600 font-medium mt-1">Active university requests.</p>
                 </CardContent>
-            </Card>
-        </div>
+            </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             <div className="lg:col-span-2 space-y-6">

@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { orderBy, where, collection, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
-import type { Student, Task } from '@/lib/types';
+import type { Student, Task, User } from '@/lib/types';
 import { Users, FileText, AlertCircle, ArrowRight, UserPlus } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 import type { AppUser } from '@/hooks/use-user';
@@ -24,6 +24,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
      const isAdmin = currentUser?.role === 'admin';
      
      const studentsPath = isDept ? 'students' : '';
+     const usersPath = isDept ? 'users' : '';
 
      const studentsConstraints = useMemoFirebase(() => {
         if (!studentsPath) return [];
@@ -31,6 +32,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
      }, [studentsPath]);
 
      const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
+     const { data: usersData, isLoading: usersLoading } = useCollection<User>(usersPath);
 
      const taskQuery = useMemoFirebase(() => {
         if (!currentUser || !isDept) return null;
@@ -57,8 +59,9 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
      
      const students = useMemo(() => studentsData || [], [studentsData]);
      const tasks = useMemo(() => tasksData || [], [tasksData]);
+     const users = useMemo(() => usersData || [], [usersData]);
 
-     const isLoading = studentsLoading || tasksLoading;
+     const isLoading = studentsLoading || tasksLoading || usersLoading;
 
      const changeAgentStudents = useMemo(() => {
         return students.filter(s => s.changeAgentRequired);
@@ -71,11 +74,22 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
 
      const stats = useMemo(() => {
         if(!students) return { totalStudents: 0, unassignedStudents: 0, totalApplications: 0 };
-        const totalStudents = students.length;
-        const unassignedStudents = students.filter(s => !s.employeeId).length;
-        const totalApplications = students.reduce((acc, s) => acc + (s.applications?.length || 0), 0);
+        
+        // Filter out students whose assigned employee no longer exists
+        const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
+        const validUserIds = new Set(users.map(u => u.id));
+        
+        const activeStudents = students.filter(s => {
+            if (!s.employeeId) return true; // Unassigned is valid
+            return validCivilIds.has(s.employeeId) || validUserIds.has(s.employeeId);
+        });
+
+        const totalStudents = activeStudents.length;
+        const unassignedStudents = activeStudents.filter(s => !s.employeeId).length;
+        const totalApplications = activeStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0);
+        
         return { totalStudents, unassignedStudents, totalApplications };
-    }, [students]);
+    }, [students, users]);
 
     if (!isDept) return null;
 
