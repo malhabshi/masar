@@ -48,7 +48,6 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
 
     const newlyAdded = new Set<string>();
     tasks.forEach(task => {
-      // ✅ MODERN CHECK: Use recipientIds array instead of legacy singular recipientId
       const targets = task.recipientIds || (task.recipientId ? [task.recipientId] : []);
       const isForCurrentUser = targets.some(id => userGroups.includes(id));
 
@@ -61,9 +60,8 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
       setNewItems(newlyAdded);
     }
     
-    return () => {
-      localStorage.setItem(storageKey, new Date().toISOString());
-    };
+    // Proactively update last viewed time once loaded
+    localStorage.setItem(storageKey, new Date().toISOString());
   }, [tasks, currentUser]);
 
 

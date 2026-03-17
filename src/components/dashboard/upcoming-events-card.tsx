@@ -40,8 +40,10 @@ export function UpcomingEventsCard() {
     setIsClient(true);
   }, []);
 
+  // Update last viewed timestamp as soon as the card is viewed
   useEffect(() => {
     if (!events || events.length === 0 || !user) return;
+    
     const storageKey = `lastViewedEvents_${user.id}`;
     const lastViewed = localStorage.getItem(storageKey);
 
@@ -56,9 +58,9 @@ export function UpcomingEventsCard() {
       setNewItems(newlyAdded);
     }
     
-    return () => {
-      localStorage.setItem(storageKey, new Date().toISOString());
-    };
+    // Proactively mark everything as seen once loaded
+    const now = new Date().toISOString();
+    localStorage.setItem(storageKey, now);
   }, [events, user]);
 
   const form = useForm<z.infer<typeof eventSchema>>({

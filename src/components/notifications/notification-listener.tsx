@@ -45,6 +45,9 @@ export function NotificationListener() {
   const prevEventsRef = useRef<UpcomingEvent[]>();
   const prevStudentsRef = useRef<Student[]>();
   
+  // Use a session marker to ignore everything older than the page load on the very first snapshot
+  const sessionStartTime = useRef(new Date().toISOString());
+
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
     if (user.role === 'admin') return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
@@ -91,15 +94,23 @@ export function NotificationListener() {
 
   const { userMap } = useUserCacheById(allUserIds);
 
+  // 1. Task Notifications
   useEffect(() => {
-    if (!tasks || !user || !prevTasksRef.current) {
-        prevTasksRef.current = tasks || [];
+    if (!tasks || !user) return;
+
+    const storageKey = `lastViewedTasks_${user.id}`;
+    const lastViewed = localStorage.getItem(storageKey);
+    const cutOffTime = lastViewed || sessionStartTime.current;
+
+    if (!prevTasksRef.current) {
+        prevTasksRef.current = tasks;
         return;
     }
+
     const prevTaskIds = new Set(prevTasksRef.current.map(t => t.id));
     tasks.forEach(task => {
-        if (!prevTaskIds.has(task.id) && task.authorId !== user.id) {
-            // Task precision filtering for departments
+        // Only toast if item is genuinely new AND created after the last time we viewed the list
+        if (!prevTaskIds.has(task.id) && task.authorId !== user.id && task.createdAt > cutOffTime) {
             if (user.role === 'department' && task.studentId && students) {
               const student = students.find(s => s.id === task.studentId);
               if (student && !isStudentInUserDepartment(student, user.department)) return;
@@ -116,14 +127,23 @@ export function NotificationListener() {
     prevTasksRef.current = tasks;
   }, [tasks, user, toast, router, students]);
 
+  // 2. Event Notifications
   useEffect(() => {
-    if (!events || !user || !prevEventsRef.current) {
-        prevEventsRef.current = events || [];
+    if (!events || !user) return;
+
+    const storageKey = `lastViewedEvents_${user.id}`;
+    const lastViewed = localStorage.getItem(storageKey);
+    const cutOffTime = lastViewed || sessionStartTime.current;
+
+    if (!prevEventsRef.current) {
+        prevEventsRef.current = events;
         return;
     }
+
     const prevEventIds = new Set(prevEventsRef.current.map(e => e.id));
     events.forEach(event => {
-        if (!prevEventIds.has(event.id)) {
+        // Only toast if created after last session/view
+        if (!prevEventIds.has(event.id) && event.createdAt > cutOffTime) {
             playNotificationSound();
             toast({
                 title: 'New Event Scheduled',
@@ -135,6 +155,7 @@ export function NotificationListener() {
     prevEventsRef.current = events;
   }, [events, user, toast, router]);
 
+  // 3. Student/Document Notifications
   useEffect(() => {
     if (!students || !user || !userMap.size || isUserLoading) return;
     if (!prevStudentsRef.current) {
@@ -149,7 +170,8 @@ export function NotificationListener() {
         const isMyDept = user.role === 'admin' || isStudentInUserDepartment(currentStudent, user.department);
 
         if (!prevStudent) {
-            if (user.role === 'admin' && currentStudent.createdBy !== user.id) {
+            // Only toast for truly new students added since we started the session
+            if (user.role === 'admin' && currentStudent.createdBy !== user.id && currentStudent.createdAt > sessionStartTime.current) {
                 const creator = userMap.get(currentStudent.createdBy);
                 playNotificationSound(1200);
                 toast({
@@ -161,15 +183,16 @@ export function NotificationListener() {
             return;
         }
 
-        // Filtering toasts for departments: Only show if relevant to user's country
         if (!isMyDept) return;
 
         const prevDocIds = new Set((prevStudent.documents || []).map(d => d.id));
         const newDocs = (currentStudent.documents || []).filter(d => !prevDocIds.has(d.id));
+        
         if (newDocs.length > 0) {
             const newDoc = newDocs[newDocs.length - 1]; 
             const uploader = userMap.get(newDoc.authorId);
-            if (uploader && uploader.id !== user.id) {
+            // Only toast if document was uploaded after we loaded the page
+            if (uploader && uploader.id !== user.id && newDoc.uploadedAt > sessionStartTime.current) {
                 playNotificationSound();
                 toast({
                     title: 'New Document Received',
@@ -182,7 +205,8 @@ export function NotificationListener() {
         if (!prevStudent.deletionRequested && currentStudent.deletionRequested?.status === 'pending') {
             const isAdminOrDept = ['admin', 'department'].includes(user.role);
             const requester = userMap.get(currentStudent.deletionRequested.requestedBy);
-            if (isAdminOrDept && requester) {
+            // Only toast if the request happened after session start
+            if (isAdminOrDept && requester && currentStudent.deletionRequested.requestedAt > sessionStartTime.current) {
                 playNotificationSound(1400);
                 toast({
                     title: 'Deletion Request',
