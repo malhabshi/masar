@@ -13,7 +13,7 @@ export interface User {
   department?: string; // UK, USA, AU/NZ, etc.
 }
 
-export type ApplicationStatus = 'Pending' | 'Submitted' | 'In Review' | 'Accepted' | 'Rejected';
+export type ApplicationStatus = 'Pending' | 'Submitted' | 'Missing Items' | 'Accepted' | 'Rejected';
 export type Country = 'UK' | 'USA' | 'Australia' | 'New Zealand';
 
 export interface Application {

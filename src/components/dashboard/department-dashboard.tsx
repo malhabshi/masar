@@ -71,13 +71,13 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         if(!students || !users) return { 
           totalStudents: 0, 
           unassignedStudents: 0, 
-          apps: { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 } 
+          apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 } 
         };
         
         const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
         const validUserIds = new Set(users.map(u => u.id));
         
-        const apps = { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 };
+        const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
         let totalStudents = 0;
         let unassignedStudents = 0;
 
@@ -95,7 +95,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                 const status = app.status;
                 if (status === 'Pending') apps.pending++;
                 else if (status === 'Submitted') apps.submitted++;
-                else if (status === 'In Review') apps.inReview++;
+                else if (status === 'Missing Items') apps.missingItems++;
                 else if (status === 'Accepted') apps.accepted++;
                 else if (status === 'Rejected') apps.rejected++;
             });
@@ -171,8 +171,8 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                             <span className="font-black text-blue-600">{stats.apps.submitted}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
-                            <span className="text-muted-foreground uppercase font-bold">In Review</span>
-                            <span className="font-black text-purple-600">{stats.apps.inReview}</span>
+                            <span className="text-muted-foreground uppercase font-bold">Missing Items</span>
+                            <span className="font-black text-purple-600">{stats.apps.missingItems}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
                             <span className="text-red-700 uppercase font-bold">Accepted</span>

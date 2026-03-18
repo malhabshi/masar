@@ -46,12 +46,12 @@ interface FlattenedApplication {
 const statusColors: Record<string, string> = {
   Pending: 'bg-yellow-500',
   Submitted: 'bg-blue-500',
-  'In Review': 'bg-purple-500',
+  'Missing Items': 'bg-purple-500',
   Accepted: 'bg-green-500',
   Rejected: 'bg-red-500',
 };
 
-const ALL_STATUSES: ApplicationStatus[] = ['Pending', 'Submitted', 'In Review', 'Accepted', 'Rejected'];
+const ALL_STATUSES: ApplicationStatus[] = ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'];
 
 export function AllApplicationsView() {
   const { user: currentUser, effectiveRole } = useUser();

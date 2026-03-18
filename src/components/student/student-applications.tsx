@@ -54,7 +54,7 @@ interface StudentApplicationsProps {
 const statusColors: Record<ApplicationStatus, string> = {
   Pending: 'bg-yellow-500',
   Submitted: 'bg-blue-500',
-  'In Review': 'bg-purple-500',
+  'Missing Items': 'bg-purple-500',
   Accepted: 'bg-green-500',
   Rejected: 'bg-red-500',
 };
@@ -201,7 +201,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                                 <DropdownMenuContent align="end">
                                 {isAdminDept && (
                                     <>
-                                        {(['Pending', 'Submitted', 'In Review', 'Accepted', 'Rejected'] as ApplicationStatus[]).map(status => (
+                                        {(['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'] as ApplicationStatus[]).map(status => (
                                             <DropdownMenuItem 
                                             key={status} 
                                             onClick={() => {
