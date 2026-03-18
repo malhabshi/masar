@@ -100,16 +100,16 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     return { total, assigned, unassigned, apps, pipeline };
   }, [students, users]);
 
-  // Per-User Portfolio Breakdown
+  // Per-User Portfolio Breakdown - Includes all staff who have students assigned
   const agentBreakdown = useMemo(() => {
     if (!isClient || !users || !students) return [];
 
-    const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
-    const statsMap = new Map<string, { id: string, name: string, total: number, green: number, orange: number, red: number, none: number }>();
+    const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, orange: number, red: number, none: number }>();
     
+    // Initialize map with all users who have a Civil ID (potential agents)
     users.forEach(u => {
       if (u.civilId) {
-        statsMap.set(u.civilId, { id: u.id, name: u.name, total: 0, green: 0, orange: 0, red: 0, none: 0 });
+        statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, orange: 0, red: number = 0, none: 0 });
       }
     });
 
@@ -261,7 +261,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30">
-                      <TableHead className="text-[10px] font-black uppercase">Employee</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase">Staff Member</TableHead>
                       <TableHead className="text-[10px] font-black uppercase text-center">Total</TableHead>
                       <TableHead className="text-[10px] font-black uppercase text-center text-green-700">Green</TableHead>
                       <TableHead className="text-[10px] font-black uppercase text-center text-orange-700">Orange</TableHead>
@@ -272,7 +272,12 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                   <TableBody>
                     {agentBreakdown.map((agent) => (
                       <TableRow key={agent.id}>
-                        <TableCell className="font-bold text-xs">{agent.name}</TableCell>
+                        <TableCell className="font-bold text-xs">
+                          {agent.name}
+                          {agent.role !== 'employee' && (
+                            <Badge variant="outline" className="ml-2 text-[8px] uppercase h-4 px-1">{agent.role}</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-center"><Badge variant="outline" className="font-mono text-[10px]">{agent.total}</Badge></TableCell>
                         <TableCell className="text-center font-black text-green-700 text-xs">{agent.green}</TableCell>
                         <TableCell className="text-center font-black text-orange-700 text-xs">{agent.orange}</TableCell>
@@ -282,7 +287,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                     ))}
                     {agentBreakdown.length === 0 && !isLoading && (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-20 text-center text-xs text-muted-foreground italic">No students assigned to any active agents yet.</TableCell>
+                        <TableCell colSpan={6} className="h-20 text-center text-xs text-muted-foreground italic">No students assigned to any active staff yet.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>

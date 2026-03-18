@@ -329,7 +329,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-[250px]">
                                   <p className="text-xs">Reason: "{student.transferRequest?.reason || '...'}"</p>
-                                  <p className="text-[10px] text-muted-foreground mt-1">Requested by {transferRequester?.name || 'employee'}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-1">Requested by {transferRequester?.name || 'staff'}</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>

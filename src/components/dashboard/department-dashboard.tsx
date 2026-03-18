@@ -130,15 +130,15 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         return { totalStudents, unassignedStudents, apps, pipeline };
     }, [students, users]);
 
-    // Per-User Portfolio Breakdown (Filtered by Department)
+    // Per-User Portfolio Breakdown (Filtered by Department) - Includes all staff roles
     const agentBreakdown = useMemo(() => {
         if (!isClient || !users || !students) return [];
 
-        const statsMap = new Map<string, { id: string, name: string, total: number, green: number, orange: number, red: number, none: number }>();
+        const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, orange: number, red: number, none: number }>();
         
         users.forEach(u => {
             if (u.civilId) {
-                statsMap.set(u.civilId, { id: u.id, name: u.name, total: 0, green: 0, orange: 0, red: 0, none: 0 });
+                statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, orange: 0, red: number = 0, none: 0 });
             }
         });
 
@@ -266,7 +266,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                         <CardHeader className="pb-3 border-b bg-muted/5">
                             <div className="flex items-center gap-2">
                                 <LayoutGrid className="h-4 w-4 text-primary" />
-                                <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Portfolio Performance ({currentUser.department || 'Region'})</CardTitle>
+                                <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Staff Portfolio Performance ({currentUser.department || 'Region'})</CardTitle>
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
@@ -274,7 +274,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-muted/30">
-                                            <TableHead className="text-[10px] font-black uppercase">Employee</TableHead>
+                                            <TableHead className="text-[10px] font-black uppercase">Staff Member</TableHead>
                                             <TableHead className="text-[10px] font-black uppercase text-center">Total</TableHead>
                                             <TableHead className="text-[10px] font-black uppercase text-center text-green-700">Green</TableHead>
                                             <TableHead className="text-[10px] font-black uppercase text-center text-orange-700">Orange</TableHead>
@@ -285,7 +285,12 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                                     <TableBody>
                                         {agentBreakdown.map((agent) => (
                                             <TableRow key={agent.id}>
-                                                <TableCell className="font-bold text-xs">{agent.name}</TableCell>
+                                                <TableCell className="font-bold text-xs">
+                                                  {agent.name}
+                                                  {agent.role !== 'employee' && (
+                                                    <Badge variant="outline" className="ml-2 text-[8px] uppercase h-4 px-1">{agent.role}</Badge>
+                                                  )}
+                                                </TableCell>
                                                 <TableCell className="text-center"><Badge variant="outline" className="font-mono text-[10px]">{agent.total}</Badge></TableCell>
                                                 <TableCell className="text-center font-black text-green-700 text-xs">{agent.green}</TableCell>
                                                 <TableCell className="text-center font-black text-orange-700 text-xs">{agent.orange}</TableCell>

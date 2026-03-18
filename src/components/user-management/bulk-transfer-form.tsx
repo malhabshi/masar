@@ -126,7 +126,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
         </CardContent>
-        <CardFooter><Button disabled className="w-full">Loading employees...</Button></CardFooter>
+        <CardFooter><Button disabled className="w-full">Loading staff...</Button></CardFooter>
       </Card>
     );
   }
@@ -145,7 +145,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
               name="fromEmployeeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Offboarding Agent</FormLabel>
+                  <FormLabel>Offboarding Staff Member</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -167,7 +167,7 @@ export function BulkTransferForm({ currentUser }: BulkTransferFormProps) {
               name="toEmployeeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>New Responsible Agent</FormLabel>
+                  <FormLabel>New Responsible Staff</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={!fromEmployeeId}>
                     <FormControl>
                       <SelectTrigger>
