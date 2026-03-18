@@ -139,23 +139,28 @@ export function AppSidebar() {
         }).length;
     }, [tasks, user]);
 
-    // 6. Change Agent Count for Management
+    // 6. Change Agent Count for Management (With Precision Regional Routing)
     const changeAgentCount = useMemo(() => {
       if (!students || isEmployeeView) return 0;
       
-      let filtered = students.filter(s => s.changeAgentRequired);
+      let flaggedStudents = students.filter(s => s.changeAgentRequired);
       
       if (effectiveRole === 'department' && user?.department) {
         const dept = user.department;
-        filtered = filtered.filter(student => {
-          const appCountries = (student.applications || []).map(a => a.country);
-          return (dept === 'UK' && appCountries.includes('UK')) || 
-                 (dept === 'USA' && appCountries.includes('USA')) || 
-                 (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
+        flaggedStudents = flaggedStudents.filter(student => {
+          // PRECISION: Only count if flagged universities are in this department's region
+          const flaggedUnis = student.changeAgentUniversities || [];
+          const flaggedCountries = (student.applications || [])
+            .filter(app => flaggedUnis.includes(app.university))
+            .map(a => a.country);
+
+          return (dept === 'UK' && flaggedCountries.includes('UK')) || 
+                 (dept === 'USA' && flaggedCountries.includes('USA')) || 
+                 (dept === 'AU/NZ' && (flaggedCountries.includes('Australia') || flaggedCountries.includes('New Zealand')));
         });
       }
       
-      return filtered.length;
+      return flaggedStudents.length;
     }, [students, isEmployeeView, effectiveRole, user?.department]);
 
     const userHasRole = (roles: string[]) => roles.includes(effectiveRole);

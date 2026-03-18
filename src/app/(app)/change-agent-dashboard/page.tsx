@@ -13,6 +13,7 @@ import { Loader2, UserRoundX, ExternalLink, ShieldAlert, User as UserIcon } from
 import Link from 'next/link';
 import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 export default function ChangeAgentDashboard() {
   const { user: currentUser, isUserLoading, effectiveRole } = useUser();
@@ -34,24 +35,29 @@ export default function ChangeAgentDashboard() {
     );
   }, [isMounted, currentUser]);
 
-  const { data: students, isLoading: studentsLoading } = useCollection<Student>(changeAgentQuery);
+  const { data: rawStudents, isLoading: studentsLoading } = useCollection<Student>(changeAgentQuery);
 
   const filteredStudents = useMemo(() => {
-    if (!students) return [];
+    if (!rawStudents) return [];
     
     // Regional Filtering for Departments
+    // PRECISION ROUTING: Only show students if one of their FLAGGED universities belongs to this region
     if (effectiveRole === 'department' && currentUser?.department) {
       const dept = currentUser.department;
-      return students.filter(student => {
-        const appCountries = (student.applications || []).map(a => a.country);
-        return (dept === 'UK' && appCountries.includes('UK')) || 
-               (dept === 'USA' && appCountries.includes('USA')) || 
-               (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
+      return rawStudents.filter(student => {
+        const flaggedUnis = student.changeAgentUniversities || [];
+        const flaggedApps = (student.applications || []).filter(app => flaggedUnis.includes(app.university));
+        
+        const flaggedCountries = flaggedApps.map(a => a.country);
+        
+        return (dept === 'UK' && flaggedCountries.includes('UK')) || 
+               (dept === 'USA' && flaggedCountries.includes('USA')) || 
+               (dept === 'AU/NZ' && (flaggedCountries.includes('Australia') || flaggedCountries.includes('New Zealand')));
       });
     }
 
-    return students;
-  }, [students, currentUser, effectiveRole]);
+    return rawStudents;
+  }, [rawStudents, currentUser, effectiveRole]);
 
   // Fetch unique employee IDs for name mapping
   const employeeCivilIds = useMemo(() => {
