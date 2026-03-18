@@ -395,6 +395,11 @@ export async function addApplication(studentId: string, universityName: string, 
   }
 }
 
+function buildAppSummary(applications: Application[]): string {
+  if (!applications || applications.length === 0) return "No applications listed.";
+  return applications.map(a => `- ${a.university}: *${a.status}*`).join('\n');
+}
+
 export async function updateApplicationStatus(studentId: string, universityName: string, major: string, newStatus: ApplicationStatus, studentName: string, employeeId: string | null, rejectionReason?: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
@@ -422,20 +427,88 @@ export async function updateApplicationStatus(studentId: string, universityName:
         if (!employeeQuery.empty) {
             const employeeDoc = employeeQuery.docs[0];
             const employeeData = employeeDoc.data() as User;
-            let message = `Status update for ${studentName}: ${universityName} is now ${newStatus}.`;
-            if (newStatus === 'Rejected' && rejectionReason) {
-              message += ` Reason: ${rejectionReason}`;
-            }
             
-            await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: message, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
-            let notifType: NotificationType = 'admin_update';
-            if (newStatus === 'Accepted') notifType = 'scholarship_approved';
-            await triggerWhatsAppNotification(notifType, { employeeName: employeeData.name, studentName: studentName, messageContent: message, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` }, employeeData.phone);
+            const summary = buildAppSummary(updatedApplications);
+            const taskContent = `Status update for ${studentName}: ${universityName} is now ${newStatus}.\n\nFull Summary:\n${summary}`;
+            
+            await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: taskContent, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
+            
+            await triggerWhatsAppNotification('application_status_update', { 
+              employeeName: employeeData.name, 
+              studentName: studentName, 
+              messageContent: taskContent, 
+              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` 
+            }, employeeData.phone);
         }
     }
     return { success: true, message: 'Status updated.' };
   } catch (error: any) {
     return { success: false, message: error.message };
+  }
+}
+
+export async function bulkUpdateApplicationStatuses(
+  studentId: string, 
+  updates: { university: string; major: string; status: ApplicationStatus; rejectionReason?: string }[], 
+  adminId: string
+) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+    
+    const updatedApplications = [...(studentData.applications || [])];
+    const now = new Date().toISOString();
+    
+    for (const update of updates) {
+      const idx = updatedApplications.findIndex(a => a.university === update.university && a.major === update.major);
+      if (idx !== -1) {
+        updatedApplications[idx].status = update.status;
+        updatedApplications[idx].updatedAt = now;
+        if (update.status === 'Rejected' && update.rejectionReason) {
+          updatedApplications[idx].rejectionReason = update.rejectionReason;
+        } else if (update.status !== 'Rejected') {
+          delete updatedApplications[idx].rejectionReason;
+        }
+      }
+    }
+
+    await studentRef.update({ applications: updatedApplications, lastActivityAt: now });
+
+    if (studentData.employeeId) {
+      const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+      if (!employeeQuery.empty) {
+        const employeeDoc = employeeQuery.docs[0];
+        const employeeData = employeeDoc.data() as User;
+        
+        const summary = buildAppSummary(updatedApplications);
+        const taskContent = `Bulk status update for ${studentData.name}. ${updates.length} application(s) changed.\n\nFull Summary:\n${summary}`;
+        
+        await adminDb!.collection('tasks').add({
+          authorId: 'system',
+          recipientId: employeeDoc.id,
+          recipientIds: [employeeDoc.id],
+          content: taskContent,
+          createdAt: now,
+          status: 'new',
+          category: 'system',
+          replies: []
+        });
+
+        await triggerWhatsAppNotification('application_status_update', {
+          employeeName: employeeData.name,
+          studentName: studentData.name,
+          messageContent: taskContent,
+          dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
+        }, employeeData.phone);
+      }
+    }
+
+    return { success: true, message: `Successfully updated ${updates.length} applications.` };
+  } catch (e: any) {
+    return { success: false, message: e.message };
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import type { Student, Application, ApplicationStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,14 +13,15 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle, Checkbox as CheckboxIcon, Layers } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
 import { 
   updateApplicationStatus, 
   setStudentFinalChoice, 
   deleteApplication, 
-  updateApplicationMajor 
+  updateApplicationMajor,
+  bulkUpdateApplicationStatuses
 } from '@/lib/actions';
 import { AddApplicationDialog } from './add-application-dialog';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 
 interface StudentApplicationsProps {
@@ -59,6 +61,8 @@ const statusColors: Record<ApplicationStatus, string> = {
   Rejected: 'bg-red-500',
 };
 
+const ALL_STATUSES: ApplicationStatus[] = ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'];
+
 export function StudentApplications({ student }: StudentApplicationsProps) {
   const { user: currentUser } = useUser();
   const { toast } = useToast();
@@ -70,6 +74,11 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   const [newMajor, setNewMajor] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Selection state
+  const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
+  const [bulkStatusDialog, setBulkStatusDialog] = useState<ApplicationStatus | null>(null);
+  const [bulkRejectionReason, setBulkRejectionReason] = useState('');
+
   // Rejection Reason state
   const [rejectionDialog, setRejectionDialog] = useState<{ university: string; major: string } | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -79,7 +88,24 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   const canAddApplications = isAdminDept;
   const canSetFinalChoice = currentUser?.role === 'employee' && currentUser.civilId === student.employeeId;
 
+  const toggleSelect = (university: string, major: string) => {
+    const key = `${university}|${major}`;
+    const newSelected = new Set(selectedApps);
+    if (newSelected.has(key)) newSelected.delete(key);
+    else newSelected.add(key);
+    setSelectedApps(newSelected);
+  };
+
+  const toggleAll = () => {
+    if (selectedApps.size === student.applications.length) {
+      setSelectedApps(new Set());
+    } else {
+      setSelectedApps(new Set(student.applications.map(a => `${a.university}|${a.major}`)));
+    }
+  };
+
   const handleStatusUpdate = useCallback(async (university: string, major: string, newStatus: ApplicationStatus, reason?: string) => {
+    setIsProcessing(true);
     const result = await updateApplicationStatus(student.id, university, major, newStatus, student.name, student.employeeId, reason);
     if (result.success) {
       toast({
@@ -95,7 +121,34 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
         description: result.message
       });
     }
+    setIsProcessing(false);
   }, [student, toast]);
+
+  const handleBulkStatusUpdate = async () => {
+    if (!bulkStatusDialog || selectedApps.size === 0 || !currentUser) return;
+    
+    setIsProcessing(true);
+    const updates = Array.from(selectedApps).map(key => {
+      const [uni, major] = key.split('|');
+      return { 
+        university: uni, 
+        major, 
+        status: bulkStatusDialog,
+        rejectionReason: bulkStatusDialog === 'Rejected' ? bulkRejectionReason : undefined
+      };
+    });
+
+    const result = await bulkUpdateApplicationStatuses(student.id, updates, currentUser.id);
+    if (result.success) {
+      toast({ title: 'Bulk Update Success', description: result.message });
+      setSelectedApps(new Set());
+      setBulkStatusDialog(null);
+      setBulkRejectionReason('');
+    } else {
+      toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
+    }
+    setIsProcessing(false);
+  };
 
   const confirmAndSetFinal = useCallback(async (app: Application) => {
     if (!currentUser) return;
@@ -149,14 +202,44 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>University Applications</CardTitle>
+          {selectedApps.size > 0 && isAdminDept && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+              <span className="text-[10px] font-black uppercase text-muted-foreground mr-2">
+                {selectedApps.size} Selected
+              </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="h-8 gap-2 bg-primary text-white font-bold">
+                    <Layers className="h-3.5 w-3.5" />
+                    Bulk Actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {ALL_STATUSES.map(s => (
+                    <DropdownMenuItem key={s} onClick={() => setBulkStatusDialog(s)}>
+                      Set all to {s}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {student.applications && student.applications.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
+                  {isAdminDept && (
+                    <TableHead className="w-10">
+                      <Checkbox 
+                        checked={selectedApps.size === student.applications.length && student.applications.length > 0} 
+                        onCheckedChange={toggleAll}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>University</TableHead>
                   <TableHead>Major</TableHead>
                   <TableHead>Country</TableHead>
@@ -167,8 +250,17 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
               <TableBody>
                 {student.applications.map((app, index) => {
                   const isFinalChoice = student.finalChoiceUniversity === app.university;
+                  const key = `${app.university}|${app.major}`;
                   return (
                     <TableRow key={index} className={cn(isFinalChoice && 'bg-green-500/10 hover:bg-green-500/10')}>
+                      {isAdminDept && (
+                        <TableCell>
+                          <Checkbox 
+                            checked={selectedApps.has(key)} 
+                            onCheckedChange={() => toggleSelect(app.university, app.major)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="font-medium align-top">
                           <div className="flex flex-col">
                             <div className="flex items-center">
@@ -291,12 +383,45 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                 <Button variant="outline" onClick={() => setRejectionDialog(null)}>Cancel</Button>
                 <Button 
                     variant="destructive" 
-                    disabled={!rejectionReason.trim()}
+                    disabled={!rejectionReason.trim() || isProcessing}
                     onClick={() => rejectionDialog && handleStatusUpdate(rejectionDialog.university, rejectionDialog.major, 'Rejected', rejectionReason.trim())}
                 >
+                    {isProcessing && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                     Confirm Rejection
                 </Button>
             </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Status Dialog */}
+      <Dialog open={!!bulkStatusDialog} onOpenChange={(open) => !open && setBulkStatusDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk Status Update</DialogTitle>
+            <DialogDescription>
+              Set <strong>{selectedApps.size}</strong> applications to <strong>{bulkStatusDialog?.toUpperCase()}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          {bulkStatusDialog === 'Rejected' && (
+            <div className="space-y-2 py-4">
+              <Label>Common Rejection Reason</Label>
+              <Textarea 
+                placeholder="Reason for all selected rejections..."
+                value={bulkRejectionReason}
+                onChange={(e) => setBulkRejectionReason(e.target.value)}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkStatusDialog(null)}>Cancel</Button>
+            <Button 
+              onClick={handleBulkStatusUpdate} 
+              disabled={isProcessing || (bulkStatusDialog === 'Rejected' && !bulkRejectionReason.trim())}
+            >
+              {isProcessing && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Update {selectedApps.size} Applications
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

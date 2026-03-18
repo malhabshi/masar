@@ -137,6 +137,12 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     label: 'Visa Status Update',
     variables: ['employeeName', 'studentName', 'messageContent', 'studentUrl'],
     exampleMessage: "🛂 *Visa Update*\n\nHello {{employeeName}},\n\nThere is an update on the visa status for {{studentName}}.\n\nCheck status: {{studentUrl}}"
+  },
+  {
+    type: 'application_status_update',
+    label: 'Combined Application Summary',
+    variables: ['employeeName', 'studentName', 'messageContent', 'studentUrl'],
+    exampleMessage: "📋 *Application Summary Update*\n\nHello {{employeeName}},\n\nStatuses have been updated for *{{studentName}}*.\n\n{{messageContent}}\n\nProfile: {{studentUrl}}"
   }
 ];
 

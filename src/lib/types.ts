@@ -378,7 +378,8 @@ export type NotificationType =
   | 'scholarship_approved'
   | 'visa_update'
   | 'inactivity_reminder'
-  | 'change_agent_enabled';
+  | 'change_agent_enabled'
+  | 'application_status_update';
 
 export interface NotificationTemplate {
   id: string;
