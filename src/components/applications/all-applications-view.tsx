@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/client';
 import { useUser } from '@/hooks/use-user';
-import type { Student, Application, Country, User } from '@/lib/types';
+import type { Student, Application, Country, User, ApplicationStatus } from '@/lib/types';
 import {
   Card,
   CardContent,
@@ -51,10 +51,13 @@ const statusColors: Record<string, string> = {
   Rejected: 'bg-red-500',
 };
 
+const ALL_STATUSES: ApplicationStatus[] = ['Pending', 'Submitted', 'In Review', 'Accepted', 'Rejected'];
+
 export function AllApplicationsView() {
   const { user: currentUser, effectiveRole } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [countryFilter, setCountryFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -104,9 +107,12 @@ export function AllApplicationsView() {
       // 3. UI Country Filter (Only for Admins, Departments are already filtered)
       const matchesCountry = countryFilter === 'all' || item.application.country === countryFilter;
 
-      return matchesSearch && matchesCountry;
+      // 4. UI Status Filter
+      const matchesStatus = statusFilter === 'all' || item.application.status === statusFilter;
+
+      return matchesSearch && matchesCountry && matchesStatus;
     }).sort((a, b) => new Date(b.application.updatedAt).getTime() - new Date(a.application.updatedAt).getTime());
-  }, [allFlattened, currentUser, effectiveRole, searchQuery, countryFilter]);
+  }, [allFlattened, currentUser, effectiveRole, searchQuery, countryFilter, statusFilter]);
 
   // Fetch unique employee IDs for name mapping
   const employeeCivilIds = useMemo(() => {
@@ -117,12 +123,12 @@ export function AllApplicationsView() {
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
 
-  const isFiltered = searchQuery !== '' || (effectiveRole === 'admin' && countryFilter !== 'all');
+  const isFiltered = searchQuery !== '' || (effectiveRole === 'admin' && countryFilter !== 'all') || statusFilter !== 'all';
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <CardHeader className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-3">
               <Globe className="h-6 w-6 text-primary" />
@@ -139,7 +145,7 @@ export function AllApplicationsView() {
                 : 'A comprehensive log of every university application across all regions.'}
             </CardDescription>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div className="relative flex-1 sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -149,6 +155,19 @@ export function AllApplicationsView() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {ALL_STATUSES.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {effectiveRole === 'admin' && (
               <Select value={countryFilter} onValueChange={setCountryFilter}>
                 <SelectTrigger className="w-full sm:w-40">
