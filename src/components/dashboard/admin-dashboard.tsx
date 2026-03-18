@@ -109,7 +109,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     // Initialize map with all users who have a Civil ID (potential agents)
     users.forEach(u => {
       if (u.civilId) {
-        statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, orange: 0, red: number = 0, none: 0 });
+        statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, orange: 0, red: 0, none: 0 });
       }
     });
 
