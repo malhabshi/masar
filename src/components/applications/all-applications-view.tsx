@@ -89,6 +89,10 @@ export function AllApplicationsView() {
     
     const flattened: FlattenedApplication[] = [];
     students.forEach(student => {
+      // ONLY show applications for students who have an assigned agent.
+      // Leads pending assignment stay in the unassigned pool.
+      if (!student.employeeId || student.employeeId.trim() === "") return;
+
       (student.applications || []).forEach((app, idx) => {
         flattened.push({
           id: `${student.id}-${idx}`,

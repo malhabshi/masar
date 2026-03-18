@@ -43,9 +43,12 @@ export function AdminApplicantsPage() {
   }, [allUsers]);
 
   const displayedStudents = useMemo(() => {
-    // Only show students who have an assigned employee in the master Applicants list.
-    // Unassigned students (leads) are handled in the "Unassigned Students" page.
-    return (allStudents || []).filter(s => !!s.employeeId);
+    // Only show students who have a valid assigned employee.
+    // Unassigned students (leads) are handled exclusively in the "Unassigned Students" page.
+    return (allStudents || []).filter(s => {
+      const hasAgent = s.employeeId && s.employeeId.trim() !== "";
+      return hasAgent;
+    });
   }, [allStudents]);
 
   const handleDownloadExcel = () => {
