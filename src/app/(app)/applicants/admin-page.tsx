@@ -43,7 +43,9 @@ export function AdminApplicantsPage() {
   }, [allUsers]);
 
   const displayedStudents = useMemo(() => {
-    return allStudents || [];
+    // Only show students who have an assigned employee in the master Applicants list.
+    // Unassigned students (leads) are handled in the "Unassigned Students" page.
+    return (allStudents || []).filter(s => !!s.employeeId);
   }, [allStudents]);
 
   const handleDownloadExcel = () => {
@@ -129,7 +131,7 @@ export function AdminApplicantsPage() {
             <CardDescription>
               {currentUser.role === 'department' 
                 ? `Students relevant to the ${currentUser.department} department.`
-                : 'A comprehensive list of all student records in the system.'}
+                : 'A comprehensive list of all assigned student records in the system.'}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
