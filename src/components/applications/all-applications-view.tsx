@@ -117,14 +117,21 @@ export function AllApplicationsView() {
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
 
+  const isFiltered = searchQuery !== '' || (effectiveRole === 'admin' && countryFilter !== 'all');
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-3">
               <Globe className="h-6 w-6 text-primary" />
               University Applications List
+              {!studentsLoading && (
+                <Badge variant="secondary" className="font-mono text-sm bg-primary/10 text-primary border-primary/20">
+                  {filteredApplications.length} {isFiltered ? 'Found' : 'Total'}
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription>
               {effectiveRole === 'department' 
