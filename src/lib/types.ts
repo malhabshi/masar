@@ -85,7 +85,8 @@ export interface Student {
   targetCountries?: Country[];
   missingItems?: string[];
   pipelineStatus?: PipelineStatus;
-  statusNote?: string; // Persistent editable status note for Applicants table
+  statusNote?: string; // Persistent editable status note for Applicants table (Employee)
+  adminStatusNote?: string; // Persistent editable status note for Applicants table (Admin only)
   lastChatMessageText?: string; // For Inbox preview
   lastChatMessageTimestamp?: string; // For Inbox sorting
   transferHistory?: {

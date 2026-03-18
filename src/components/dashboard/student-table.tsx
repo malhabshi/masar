@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe } from 'lucide-react';
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck } from 'lucide-react';
 import type { Student, PipelineStatus, User, Note } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
 import {
@@ -210,10 +210,13 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     const result = await updateStudentPipelineStatus(studentId, status, currentUser.name, student.name);
     if (result.success) {
         const studentDocRef = doc(firestore, 'students', studentId);
-        updateDocumentNonBlocking(studentDocRef, { pipelineStatus: status });
+        const updates: Partial<Student> = { pipelineStatus: status };
+        updateDocumentNonBlocking(studentDocRef, updates);
         toast({ title: 'Status Updated', description: result.message });
     }
   }
+
+  const isAdminOrDept = ['admin', 'department'].includes(currentUser?.role);
 
   return (
     <div>
@@ -291,6 +294,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Agent</TableHead>
               <TableHead>Status Note</TableHead>
+              {isAdminOrDept && <TableHead>Admin Status</TableHead>}
               <TableHead>IELTS Overall</TableHead>
               <TableHead>Intake Term</TableHead>
               <TableHead>App. Countries</TableHead>
@@ -302,10 +306,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
               displayedStudents.map((student) => {
                 const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
                 const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
-                const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+                const isAdminDept = ['admin', 'department'].includes(currentUser.role);
                 const requester = student.deletionRequested?.requestedBy ? requesterMap.get(student.deletionRequested.requestedBy) : null;
                 const transferRequester = student.transferRequest?.requestedBy ? requesterMap.get(student.transferRequest.requestedBy) : null;
-                const canAssign = isAdminOrDept && !student.employeeId;
+                const canAssign = isAdminDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
                 const isDuplicate = duplicatePhoneSet.has(student.phone);
 
@@ -319,8 +323,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           <span>{student.name || 'Unknown Student'}</span>
                           {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border animate-pulse uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
                           {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
-                          {isAdminOrDept && student.unreadUpdates ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.unreadUpdates}</span></Badge> : null}
-                          {isAdminOrDept && student.newDocumentsForAdmin ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
+                          {isAdminDept && student.unreadUpdates ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.unreadUpdates}</span></Badge> : null}
+                          {isAdminDept && student.newDocumentsForAdmin ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
                           {isCurrentUserAssigned && student.employeeUnreadMessages ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.employeeUnreadMessages}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newDocumentsForEmployee ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newMissingItemsForEmployee ? <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 text-black"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
@@ -340,7 +344,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                               </Tooltip>
                             </TooltipProvider>
                           )}
-                          {student.deletionRequested?.status === 'pending' && isAdminOrDept && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="destructive" className="flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Deletion Requested</Badge></TooltipTrigger><TooltipContent><p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : ''}</p></TooltipContent></Tooltip></TooltipProvider>}
+                          {student.deletionRequested?.status === 'pending' && isAdminDept && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="destructive" className="flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Deletion Requested</Badge></TooltipTrigger><TooltipContent><p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : ''}</p></TooltipContent></Tooltip></TooltipProvider>}
                           {wasTransferred && <Badge variant="outline" className="border-blue-500 text-blue-600"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
                         </div>
                       </Link>
@@ -360,7 +364,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                   <TableCell><Badge variant="secondary" className="font-mono">{student.applications?.length || 0}</Badge></TableCell>
                   <TableCell><Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>{pipelineStatusLabels[student.pipelineStatus || 'none']}</Badge></TableCell>
                   <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
-                  <TableCell className="max-w-[250px]">
+                  <TableCell className="max-w-[200px]">
                     {student.statusNote ? (
                       <div className="flex items-start gap-1.5 py-1">
                         <StickyNote className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0 opacity-70" />
@@ -370,6 +374,18 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       <span className="text-[10px] text-muted-foreground italic opacity-50">No status set</span>
                     )}
                   </TableCell>
+                  {isAdminOrDept && (
+                    <TableCell className="max-w-[200px]">
+                      {student.adminStatusNote ? (
+                        <div className="flex items-start gap-1.5 py-1">
+                          <ShieldCheck className="h-3.5 w-3.5 mt-0.5 text-accent shrink-0" />
+                          <span className="text-[11px] text-accent whitespace-pre-wrap leading-tight font-bold">{student.adminStatusNote}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground italic opacity-30">No admin note</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell><Badge variant={student.ieltsOverall ? 'secondary' : 'outline'}>{(student.ieltsOverall ?? 0).toFixed(1)}</Badge></TableCell>
                   <TableCell>{student.academicIntakeSemester ? <div className="flex items-center gap-1.5 whitespace-nowrap"><Calendar className="h-3 w-3 text-primary" /><span className="text-sm font-medium">{student.academicIntakeSemester} {student.academicIntakeYear}</span></div> : <span className="text-xs text-muted-foreground italic">None</span>}</TableCell>
                   <TableCell>{appCountries.length > 0 ? <div className="flex flex-wrap gap-1 max-w-[120px]">{appCountries.map(c => <Badge key={c} variant="outline" className="text-[10px] px-1 h-5">{c}</Badge>)}</div> : <span className="text-xs text-muted-foreground italic">None</span>}</TableCell>
@@ -380,7 +396,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem asChild><Link href={`/student/${student.id}`}>View Details</Link></DropdownMenuItem>
-                                {(currentUser?.role === 'employee' || isAdminOrDept) && (
+                                {(currentUser?.role === 'employee' || isAdminDept) && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'green')}>Move to Green</DropdownMenuItem>
@@ -395,7 +411,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 </TableRow>
               )})
             ) : (
-              <TableRow><TableCell colSpan={9} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={isAdminOrDept ? 10 : 9} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

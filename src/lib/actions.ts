@@ -80,6 +80,28 @@ export async function updateStudentStatusNote(studentId: string, note: string, a
   }
 }
 
+export async function updateStudentAdminStatusNote(studentId: string, note: string, authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const updater = await getUser(authorId);
+    if (!updater || !['admin', 'department'].includes(updater.role)) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const now = new Date().toISOString();
+    
+    await studentRef.update({ 
+      adminStatusNote: note,
+      lastActivityAt: now
+    });
+
+    return { success: true, message: 'Admin status note updated.' };
+  } catch (e: any) {
+    return { success: false, message: e.message };
+  }
+}
+
 export async function repairPermissions(adminId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     
