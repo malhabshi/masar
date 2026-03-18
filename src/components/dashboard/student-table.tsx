@@ -302,7 +302,22 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                           {isCurrentUserAssigned && student.employeeUnreadMessages ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.employeeUnreadMessages}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newDocumentsForEmployee ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newMissingItemsForEmployee ? <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 text-black"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
-                          {student.transferRequested && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="outline" className="border-yellow-500 text-yellow-600 cursor-help"><ArrowRightLeft className="mr-1 h-3 w-3" />Transfer Requested</Badge></TooltipTrigger><TooltipContent className="max-w-[250px]"><p className="text-xs">Reason: "{student.transferRequest?.reason || '...'}"</p><p className="text-[10px] text-muted-foreground mt-1">Requested by {transferRequester?.name || 'employee'}</p></TooltipContent></Tooltip></TooltipProvider>}
+                          {student.transferRequested && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="border-yellow-500 text-yellow-600 cursor-help">
+                                    <ArrowRightLeft className="mr-1 h-3 w-3" />
+                                    Transfer Requested
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[250px]">
+                                  <p className="text-xs">Reason: "{student.transferRequest?.reason || '...'}"</p>
+                                  <p className="text-[10px] text-muted-foreground mt-1">Requested by {transferRequester?.name || 'employee'}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                           {student.deletionRequested?.status === 'pending' && isAdminOrDept && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="destructive" className="flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Deletion Requested</Badge></TooltipTrigger><TooltipContent><p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : ''}</p></TooltipContent></Tooltip></TooltipProvider>}
                           {wasTransferred && <Badge variant="outline" className="border-blue-500 text-blue-600"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
                         </div>
