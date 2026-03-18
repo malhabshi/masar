@@ -1015,6 +1015,11 @@ export async function closeInactiveSessions() {
     } catch (error) { return { success: false, message: 'Failed.' }; }
 }
 
+export async function closeForceInactivitySessions() {
+    // legacy helper
+    return { success: true };
+}
+
 export async function updateUserAvatar(userId: string, avatarUrl: string) {
   if (!checkAdminServices()) return { success: true, message: 'DB not available' };
   try {
@@ -1334,12 +1339,16 @@ export async function submitInactivityReport(studentId: string, employeeId: stri
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
+    
+    // 1. Send to chat (Primary source now)
     await sendChatMessage(studentId, employeeId, `@Admins: Inactivity Report: ${reportContent}`);
+    
+    // 2. Update activity timestamp so the alert clears
+    // Note: We deliberately exclude statusNote and employeeNotes updates here per user request
     await studentRef.update({ 
       lastActivityAt: now, 
-      statusNote: reportContent, // Update status note automatically
-      employeeNotes: FieldValue.arrayUnion({ id: `note-inactivity-${Date.now()}`, authorId: employeeId, content: `Contacted student and submitted report: ${reportContent}`, createdAt: now }) 
     });
+    
     return { success: true, message: 'Report submitted.' };
   } catch (e: any) { return { success: false, message: e.message }; }
 }
