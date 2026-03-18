@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/client';
 import type { Student, Task, User } from '@/lib/types';
-import { Users, FileText, UserPlus, AlertCircle, ArrowRight, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Users, FileText, UserPlus, AlertCircle, ArrowRight, ShieldAlert, CheckCircle2, Clock, Send, Search, CheckCircle, XCircle } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 import Link from 'next/link';
 
@@ -43,7 +43,13 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
   }, [tasks]);
 
   const stats = useMemo(() => {
-    if (!students) return { total: 0, assigned: 0, unassigned: 0, ghost: 0, totalApps: 0 };
+    if (!students) return { 
+      total: 0, 
+      assigned: 0, 
+      unassigned: 0, 
+      ghost: 0, 
+      apps: { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 } 
+    };
     
     const validCivilIds = new Set(users.filter(u => u.role === 'employee' || u.role === 'department').map(u => u.civilId).filter(Boolean));
     const validUserIds = new Set(users.map(u => u.id));
@@ -51,28 +57,36 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     let assigned = 0;
     let unassigned = 0;
     let ghost = 0;
+    const apps = { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 };
 
     students.forEach(s => {
+      const isGhost = s.employeeId && !validCivilIds.has(s.employeeId) && !validUserIds.has(s.employeeId);
+      
       if (!s.employeeId) {
         unassigned++;
-      } else if (s.employeeId && (validCivilIds.has(s.employeeId) || validUserIds.has(s.employeeId))) {
+      } else if (!isGhost) {
         assigned++;
-      } else if (s.employeeId) {
+      } else {
         ghost++;
       }
-    });
 
-    const totalApps = students.reduce((acc, s) => {
-      // Only count apps for valid (non-ghost) students
-      const isGhost = s.employeeId && !validCivilIds.has(s.employeeId) && !validUserIds.has(s.employeeId);
-      if (isGhost) return acc;
-      return acc + (s.applications?.length || 0);
-    }, 0);
+      if (!isGhost) {
+        (s.applications || []).forEach(app => {
+          apps.total++;
+          const status = app.status;
+          if (status === 'Pending') apps.pending++;
+          else if (status === 'Submitted') apps.submitted++;
+          else if (status === 'In Review') apps.inReview++;
+          else if (status === 'Accepted') apps.accepted++;
+          else if (status === 'Rejected') apps.rejected++;
+        });
+      }
+    });
     
     // Total Registered excludes "Ghost" students who were assigned to employees that no longer exist
     const total = assigned + unassigned;
     
-    return { total, assigned, unassigned, ghost, totalApps };
+    return { total, assigned, unassigned, ghost, apps };
   }, [students, users]);
 
   if (!isAdmin) return null;
@@ -161,8 +175,25 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
             <FileText className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-blue-700">{isLoading ? '...' : stats.totalApps}</div>
-            <p className="text-[10px] text-blue-600 font-medium mt-1">Active university requests.</p>
+            <div className="text-3xl font-black text-blue-700 mb-2">{isLoading ? '...' : stats.apps.total}</div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+              <div className="flex items-center justify-between text-[9px] bg-muted/50 px-1.5 py-0.5 rounded">
+                <span className="text-muted-foreground uppercase font-bold">Sub</span>
+                <span className="font-black text-blue-600">{stats.apps.submitted}</span>
+              </div>
+              <div className="flex items-center justify-between text-[9px] bg-muted/50 px-1.5 py-0.5 rounded">
+                <span className="text-muted-foreground uppercase font-bold">Rev</span>
+                <span className="font-black text-purple-600">{stats.apps.inReview}</span>
+              </div>
+              <div className="flex items-center justify-between text-[9px] bg-green-50 px-1.5 py-0.5 rounded">
+                <span className="text-green-700 uppercase font-bold">Acc</span>
+                <span className="font-black text-green-700">{stats.apps.accepted}</span>
+              </div>
+              <div className="flex items-center justify-between text-[9px] bg-red-50 px-1.5 py-0.5 rounded">
+                <span className="text-red-700 uppercase font-bold">Rej</span>
+                <span className="font-black text-red-700">{stats.apps.rejected}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

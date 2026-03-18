@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -73,7 +72,11 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
     }, [tasks]);
 
      const stats = useMemo(() => {
-        if(!students) return { totalStudents: 0, unassignedStudents: 0, totalApplications: 0 };
+        if(!students) return { 
+          totalStudents: 0, 
+          unassignedStudents: 0, 
+          apps: { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 } 
+        };
         
         // Filter out students whose assigned employee no longer exists
         const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
@@ -86,9 +89,21 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
 
         const totalStudents = activeStudents.length;
         const unassignedStudents = activeStudents.filter(s => !s.employeeId).length;
-        const totalApplications = activeStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0);
         
-        return { totalStudents, unassignedStudents, totalApplications };
+        const apps = { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 };
+        activeStudents.forEach(s => {
+          (s.applications || []).forEach(app => {
+            apps.total++;
+            const status = app.status;
+            if (status === 'Pending') apps.pending++;
+            else if (status === 'Submitted') apps.submitted++;
+            else if (status === 'In Review') apps.inReview++;
+            else if (status === 'Accepted') apps.accepted++;
+            else if (status === 'Rejected') apps.rejected++;
+          });
+        });
+        
+        return { totalStudents, unassignedStudents, apps };
     }, [students, users]);
 
     if (!isDept) return null;
@@ -141,13 +156,31 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                         <div className="text-2xl font-bold">{isLoading ? '...' : stats.unassignedStudents}</div>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-blue-200">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
-                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <FileText className="h-4 w-4 text-blue-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{isLoading ? '...' : stats.totalApplications}</div>
+                        <div className="text-2xl font-bold text-blue-700 mb-2">{isLoading ? '...' : stats.apps.total}</div>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                          <div className="flex items-center justify-between text-[9px] bg-muted/50 px-1.5 py-0.5 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">Sub</span>
+                            <span className="font-black text-blue-600">{stats.apps.submitted}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[9px] bg-muted/50 px-1.5 py-0.5 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">Rev</span>
+                            <span className="font-black text-purple-600">{stats.apps.inReview}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[9px] bg-green-50 px-1.5 py-0.5 rounded">
+                            <span className="text-green-700 uppercase font-bold">Acc</span>
+                            <span className="font-black text-green-700">{stats.apps.accepted}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[9px] bg-red-50 px-1.5 py-0.5 rounded">
+                            <span className="text-red-700 uppercase font-bold">Rej</span>
+                            <span className="font-black text-red-700">{stats.apps.rejected}</span>
+                          </div>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
