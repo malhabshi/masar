@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useCollection } from '@/firebase/client';
 import type { Student, Task, User } from '@/lib/types';
 import { Users, FileText, UserPlus, AlertCircle, ArrowRight, ShieldAlert, CheckCircle2, Clock, Send, Search, CheckCircle, XCircle } from 'lucide-react';
@@ -19,9 +19,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
   const isAdmin = currentUser?.role === 'admin';
-  const studentsPath = isAdmin ? 'students' : '';
-  const tasksPath = currentUser ? 'tasks' : '';
-  const usersPath = isAdmin ? 'users' : '';
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const studentsPath = (isClient && isAdmin) ? 'students' : '';
+  const tasksPath = (isClient && currentUser) ? 'tasks' : '';
+  const usersPath = (isClient && isAdmin) ? 'users' : '';
 
   const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath);
   const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksPath);
@@ -43,7 +49,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
   }, [tasks]);
 
   const stats = useMemo(() => {
-    if (!students) return { 
+    if (!students || !users) return { 
       total: 0, 
       assigned: 0, 
       unassigned: 0, 
@@ -51,7 +57,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
       apps: { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 } 
     };
     
-    const validCivilIds = new Set(users.filter(u => u.role === 'employee' || u.role === 'department').map(u => u.civilId).filter(Boolean));
+    const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
     const validUserIds = new Set(users.map(u => u.id));
 
     let assigned = 0;
@@ -60,9 +66,10 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     const apps = { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 };
 
     students.forEach(s => {
-      const isGhost = s.employeeId && !validCivilIds.has(s.employeeId) && !validUserIds.has(s.employeeId);
+      const hasAgent = !!s.employeeId;
+      const isGhost = hasAgent && !validCivilIds.has(s.employeeId!) && !validUserIds.has(s.employeeId!);
       
-      if (!s.employeeId) {
+      if (!hasAgent) {
         unassigned++;
       } else if (!isGhost) {
         assigned++;
@@ -70,6 +77,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
         ghost++;
       }
 
+      // Stats Breakdown (Exclude ghosts from official metrics)
       if (!isGhost) {
         (s.applications || []).forEach(app => {
           apps.total++;
@@ -83,9 +91,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
       }
     });
     
-    // Total Registered excludes "Ghost" students who were assigned to employees that no longer exist
     const total = assigned + unassigned;
-    
     return { total, assigned, unassigned, ghost, apps };
   }, [students, users]);
 
@@ -99,7 +105,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           <div className="flex-1">
             <AlertTitle className="font-black uppercase tracking-tighter">🚨 DATA INTEGRITY WARNING</AlertTitle>
             <AlertDescription className="text-red-800 font-medium">
-              Found <strong>{stats.ghost}</strong> students assigned to invalid or deleted IDs. These students are excluded from active totals and hidden from all employees.
+              Found <strong>{stats.ghost}</strong> students assigned to invalid or deleted IDs. These students are excluded from active totals.
               <Link href="/user-management" className="ml-2 underline font-bold">Fix using Bulk Transfer &rarr;</Link>
             </AlertDescription>
           </div>
@@ -154,7 +160,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-black text-green-700">{isLoading ? '...' : stats.assigned}</div>
-            <p className="text-[10px] text-green-600 font-medium mt-1">Active in employee portfolios.</p>
+            <p className="text-[10px] text-green-600 font-medium mt-1">In employee portfolios.</p>
           </CardContent>
         </Card>
 
@@ -165,7 +171,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-black text-orange-700">{isLoading ? '...' : stats.unassigned}</div>
-            <p className="text-[10px] text-orange-600 font-medium mt-1">Pending official assignment.</p>
+            <p className="text-[10px] text-orange-600 font-medium mt-1">Pending assignment.</p>
           </CardContent>
         </Card>
 

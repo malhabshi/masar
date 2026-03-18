@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { orderBy, where, collection, query } from 'firebase/firestore';
+import { where, collection, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { Student, Task, User } from '@/lib/types';
 import { Users, FileText, AlertCircle, ArrowRight, UserPlus } from 'lucide-react';
@@ -21,27 +21,25 @@ import { Badge } from '@/components/ui/badge';
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
      const isDept = currentUser?.role === 'department' || currentUser?.role === 'admin';
      const isAdmin = currentUser?.role === 'admin';
+     const [isClient, setIsClient] = useState(false);
+
+     useEffect(() => {
+       setIsClient(true);
+     }, []);
      
-     const studentsPath = isDept ? 'students' : '';
-     const usersPath = isDept ? 'users' : '';
+     const studentsPath = (isClient && isDept) ? 'students' : '';
+     const usersPath = (isClient && isDept) ? 'users' : '';
 
-     const studentsConstraints = useMemoFirebase(() => {
-        if (!studentsPath) return [];
-        return [orderBy('createdAt', 'desc')];
-     }, [studentsPath]);
-
-     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath, ...studentsConstraints);
+     const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath);
      const { data: usersData, isLoading: usersLoading } = useCollection<User>(usersPath);
 
      const taskQuery = useMemoFirebase(() => {
-        if (!currentUser || !isDept) return null;
+        if (!currentUser || !isDept || !isClient) return null;
         
-        // Admins see all tasks for oversight
         if (isAdmin) {
-            return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+            return query(collection(firestore, 'tasks'));
         }
 
-        // Dashboard logic: Look for tasks targeting the user ID OR their specific department OR 'all'
         const groups = [currentUser.id, 'all'];
         if (currentUser.department) {
             groups.push(`dept:${currentUser.department}`);
@@ -49,10 +47,9 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
 
         return query(
             collection(firestore, 'tasks'), 
-            where('recipientIds', 'array-contains-any', groups),
-            orderBy('createdAt', 'desc')
+            where('recipientIds', 'array-contains-any', groups)
         );
-     }, [currentUser, isDept, isAdmin]);
+     }, [currentUser, isDept, isAdmin, isClient]);
 
      const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(taskQuery);
      
@@ -67,40 +64,41 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
      }, [students]);
 
      const sortedTasks = useMemo(() => {
-        if (!tasks) return [];
         return [...tasks].sort((a,b) => sortByDate(a,b));
     }, [tasks]);
 
      const stats = useMemo(() => {
-        if(!students) return { 
+        if(!students || !users) return { 
           totalStudents: 0, 
           unassignedStudents: 0, 
           apps: { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 } 
         };
         
-        // Filter out students whose assigned employee no longer exists
         const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
         const validUserIds = new Set(users.map(u => u.id));
         
-        const activeStudents = students.filter(s => {
-            if (!s.employeeId) return true; // Unassigned is valid
-            return validCivilIds.has(s.employeeId) || validUserIds.has(s.employeeId);
-        });
-
-        const totalStudents = activeStudents.length;
-        const unassignedStudents = activeStudents.filter(s => !s.employeeId).length;
-        
         const apps = { total: 0, pending: 0, submitted: 0, inReview: 0, accepted: 0, rejected: 0 };
-        activeStudents.forEach(s => {
-          (s.applications || []).forEach(app => {
-            apps.total++;
-            const status = app.status;
-            if (status === 'Pending') apps.pending++;
-            else if (status === 'Submitted') apps.submitted++;
-            else if (status === 'In Review') apps.inReview++;
-            else if (status === 'Accepted') apps.accepted++;
-            else if (status === 'Rejected') apps.rejected++;
-          });
+        let totalStudents = 0;
+        let unassignedStudents = 0;
+
+        students.forEach(s => {
+            const hasAgent = !!s.employeeId;
+            const isGhost = hasAgent && !validCivilIds.has(s.employeeId!) && !validUserIds.has(s.employeeId!);
+            
+            if (isGhost) return;
+
+            totalStudents++;
+            if (!hasAgent) unassignedStudents++;
+
+            (s.applications || []).forEach(app => {
+                apps.total++;
+                const status = app.status;
+                if (status === 'Pending') apps.pending++;
+                else if (status === 'Submitted') apps.submitted++;
+                else if (status === 'In Review') apps.inReview++;
+                else if (status === 'Accepted') apps.accepted++;
+                else if (status === 'Rejected') apps.rejected++;
+            });
         });
         
         return { totalStudents, unassignedStudents, apps };
