@@ -216,7 +216,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     }
   }
 
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser?.role);
+  const isAdminDept = ['admin', 'department'].includes(currentUser?.role);
+  const isAdminOnly = currentUser?.role === 'admin';
 
   return (
     <div>
@@ -294,7 +295,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Agent</TableHead>
               <TableHead>Status Note</TableHead>
-              {isAdminOrDept && <TableHead>Admin Status</TableHead>}
+              {isAdminOnly && <TableHead>Admin Status</TableHead>}
               <TableHead>IELTS Overall</TableHead>
               <TableHead>Intake Term</TableHead>
               <TableHead>App. Countries</TableHead>
@@ -374,7 +375,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       <span className="text-[10px] text-muted-foreground italic opacity-50">No status set</span>
                     )}
                   </TableCell>
-                  {isAdminOrDept && (
+                  {isAdminOnly && (
                     <TableCell className="max-w-[200px]">
                       {student.adminStatusNote ? (
                         <div className="flex items-start gap-1.5 py-1">
@@ -411,7 +412,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 </TableRow>
               )})
             ) : (
-              <TableRow><TableCell colSpan={isAdminOrDept ? 10 : 9} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={isAdminOnly ? 10 : 9} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

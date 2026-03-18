@@ -180,6 +180,7 @@ export default function StudentDetailPage() {
   
   const isAssignedEmployee = student.employeeId === currentUser.civilId;
   const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const isAdminOnly = currentUser.role === 'admin';
   
   const handleAddEmployeeNote = async (content: string) => {
     if (!student || !currentUser) return { success: false, message: 'Missing context' };
@@ -205,7 +206,7 @@ export default function StudentDetailPage() {
           <div className="lg:col-span-2 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <StatusNoteCard student={student} currentUser={currentUser} />
-                {isAdminOrDept && <AdminStatusNoteCard student={student} currentUser={currentUser} />}
+                {isAdminOnly && <AdminStatusNoteCard student={student} currentUser={currentUser} />}
               </div>
               <div className="pdf-hide">
                 <InactivityReportSection student={student} currentUser={currentUser} />

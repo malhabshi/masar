@@ -22,7 +22,7 @@ export function AdminStatusNoteCard({ student, currentUser }: AdminStatusNoteCar
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const isAdminOnly = currentUser.role === 'admin';
 
   useEffect(() => {
     setNote(student.adminStatusNote || '');
@@ -35,7 +35,7 @@ export function AdminStatusNoteCard({ student, currentUser }: AdminStatusNoteCar
     if (result.success) {
       toast({
         title: 'Admin Status Note Saved',
-        description: 'This note is now visible to management in the Applicants table.',
+        description: 'This note is now visible to the Admin in the Applicants table.',
       });
       setIsEditing(false);
     } else {
@@ -48,7 +48,7 @@ export function AdminStatusNoteCard({ student, currentUser }: AdminStatusNoteCar
     setIsLoading(false);
   };
 
-  if (!isAdminOrDept) return null;
+  if (!isAdminOnly) return null;
 
   return (
     <Card className="border-accent/20 bg-accent/5 shadow-sm">
@@ -69,7 +69,7 @@ export function AdminStatusNoteCard({ student, currentUser }: AdminStatusNoteCar
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Enter a status update only visible to management..."
+              placeholder="Enter a status update only visible to administrators..."
               className="bg-white text-sm"
               rows={3}
             />

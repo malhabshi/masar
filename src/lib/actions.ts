@@ -84,8 +84,8 @@ export async function updateStudentAdminStatusNote(studentId: string, note: stri
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const updater = await getUser(authorId);
-    if (!updater || !['admin', 'department'].includes(updater.role)) {
-      return { success: false, message: 'Unauthorized.' };
+    if (!updater || updater.role !== 'admin') {
+      return { success: false, message: 'Unauthorized. Only Admins can set Management Status Notes.' };
     }
 
     const studentRef = adminDb!.collection('students').doc(studentId);
@@ -1178,7 +1178,7 @@ export async function getReportStats(dateRange: { from: string; to: string; }): 
         totalStudents: allStudents.length, 
         totalApplications: allStudents.reduce((acc, s) => acc + (s.applications?.length || 0), 0), 
         totalEmployees: allUsers.filter(u => u.role === 'employee').length, 
-        applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), 
+        applicationStatusData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.status] = (acc[app.status] || 0) + (1); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), 
         studentEmployeeData: Object.entries(allStudents.reduce((acc, s) => { const name = s.employeeId ? allUsers.find(u => u.civilId === s.employeeId)?.name || 'Unassigned' : 'Unassigned'; acc[name] = (acc[name] || 0) + (s.applications?.length || 0); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), 
         studentGrowthData: Object.entries(studentsInRange.reduce((acc, s) => { const d = format(parseISO(s.createdAt), 'yyyy-MM-dd'); acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)), 
         applicationCountryData: Object.entries(appsInRange.reduce((acc, app) => { acc[app.country] = (acc[app.country] || 0) + (1); return acc; }, {} as Record<string, number>)).map(([name, count]) => ({ name, count })), 
