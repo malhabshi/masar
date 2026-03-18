@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
 import type { Student } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
@@ -73,7 +72,6 @@ export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarnin
               <>
                 ⚠️ Another student profile uses the same phone number: <strong>{conflicts[0].name}</strong>. 
                 They are currently assigned to <strong>{conflicts[0].employeeName}</strong>.
-                <Link href={`/student/${conflicts[0].id}`} className="ml-2 underline font-bold hover:text-red-900">View Duplicate Profile →</Link>
               </>
             ) : (
               <>
@@ -84,7 +82,6 @@ export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarnin
                       <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
                       <span className="text-xs">
                         <strong>{c.name}</strong> (Agent: <strong>{c.employeeName}</strong>)
-                        <Link href={`/student/${c.id}`} className="ml-2 underline font-bold hover:text-red-900">View Duplicate Profile →</Link>
                       </span>
                     </div>
                   ))}
