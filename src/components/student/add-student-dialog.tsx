@@ -35,6 +35,7 @@ const formSchema = z.object({
     message: 'Please enter a valid phone number.',
   }),
   internalNumber: z.string().optional(),
+  highSchoolGrade: z.string().optional(),
   targetCountries: z.array(z.string()).default([]),
   otherCountry: z.string().optional(),
   notes: z.string().optional(),
@@ -65,6 +66,7 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
             studentEmail: '',
             phone: '',
             internalNumber: '',
+            highSchoolGrade: '',
             notes: '',
             targetCountries: [],
             otherCountry: '',
@@ -179,19 +181,34 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
                                 />
                             </div>
                             
-                            <FormField
-                                control={form.control}
-                                name="studentEmail"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Student Email Address (Optional)</FormLabel>
-                                    <FormControl>
-                                        <Input type="email" placeholder="jane.doe@example.com" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="studentEmail"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Student Email Address (Optional)</FormLabel>
+                                        <FormControl>
+                                            <Input type="email" placeholder="jane.doe@example.com" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="highSchoolGrade"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>High School % or GPA</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="e.g., 95% or 3.8" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
 
                             <FormField
                             control={form.control}

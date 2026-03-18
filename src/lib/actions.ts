@@ -700,9 +700,9 @@ export async function createNewUser(userData: { name: string; email: string; pas
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; internalNumber?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
+export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; internalNumber?: string; highSchoolGrade?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-  const { studentName, studentEmail, phone, internalNumber, targetCountries, otherCountry, notes } = values;
+  const { studentName, studentEmail, phone, internalNumber, highSchoolGrade, targetCountries, otherCountry, notes } = values;
   let finalTargetCountries = targetCountries;
   if (otherCountry && otherCountry.trim()) finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
   try {
@@ -714,7 +714,7 @@ export async function createStudent(values: { studentName: string; studentEmail?
     const studentId = `${idPrefix}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
-    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, internalNumber: internalNumber || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
     if (!assignedEmployeeId) {
         const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
         if (!adminsSnapshot.empty) {
@@ -1133,6 +1133,15 @@ export async function updateStudentIELTS(studentId: string, overallScore: number
     const studentRef = adminDb!.collection('students').doc(studentId);
     await studentRef.update({ ieltsOverall: overallScore, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-ielts-${Date.now()}`, authorId, content: `IELTS updated to ${overallScore.toFixed(1)}.`, createdAt: new Date().toISOString() }) });
     return { success: true, message: 'IELTS updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+export async function updateStudentGrade(studentId: string, grade: string, authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    await studentRef.update({ highSchoolGrade: grade, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-grade-${Date.now()}`, authorId, content: `High School Grade/GPA updated to: ${grade}`, createdAt: new Date().toISOString() }) });
+    return { success: true, message: 'Grade updated.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 

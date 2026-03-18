@@ -22,6 +22,7 @@ import { StudentChat } from '@/components/student/student-chat';
 import { MissingItemsSection } from '@/components/student/missing-items-section';
 import { ReadinessChecklist } from '@/components/student/readiness-checklist';
 import { IeltsCard } from '@/components/student/ielts-card';
+import { GradeCard } from '@/components/student/grade-card';
 import { StudentUsersCard } from '@/components/student/student-users-card';
 import { DuplicateWarningBanner } from '@/components/student/duplicate-warning-banner';
 import { AcademicIntakeCard } from '@/components/student/academic-intake-card';
@@ -238,6 +239,7 @@ export default function StudentDetailPage() {
               <ReadinessChecklist student={student} currentUser={currentUser} />
               <MissingItemsSection student={student} currentUser={currentUser} />
               <AcademicIntakeCard student={student} currentUser={currentUser} />
+              <GradeCard student={student} currentUser={currentUser} />
               <IeltsCard student={student} currentUser={currentUser} />
               
               <NotesSection
