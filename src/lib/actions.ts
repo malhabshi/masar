@@ -1330,7 +1330,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
   } catch (e) { console.error('Notification failed:', e); }
 }
 
-export async function toggleChangeAgentStatus(studentId: string, status: boolean, adminId: string) {
+export async function toggleChangeAgentStatus(studentId: string, status: boolean, adminId: string, universities?: string[]) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
         const admin = await getUser(adminId);
@@ -1340,9 +1340,23 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
         if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
         const studentData = studentDoc.data() as Student;
         const studentName = studentData.name || 'A student';
-        await studentRef.update({ changeAgentRequired: status, lastActivityAt: new Date().toISOString() });
+        
+        const updates: any = { 
+          changeAgentRequired: status, 
+          lastActivityAt: new Date().toISOString() 
+        };
+        
         if (status) {
-            const taskContent = `🚨 URGENT: Change Agent status for ${studentName}.`;
+          updates.changeAgentUniversities = universities || [];
+        } else {
+          updates.changeAgentUniversities = FieldValue.delete();
+        }
+
+        await studentRef.update(updates);
+        
+        if (status) {
+            const uniString = universities && universities.length > 0 ? ` (${universities.join(', ')})` : '';
+            const taskContent = `🚨 URGENT: Change Agent status for ${studentName}${uniString}.`;
             const studentUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`;
             if (studentData.employeeId) {
                 const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();

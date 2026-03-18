@@ -125,6 +125,7 @@ export interface Student {
   academicIntakeSemester?: string;
   academicIntakeYear?: number;
   changeAgentRequired?: boolean;
+  changeAgentUniversities?: string[];
   term?: string;
 }
 

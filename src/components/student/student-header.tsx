@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -20,6 +20,18 @@ import { CreateStudentTaskDialog } from '../tasks/create-student-task-dialog';
 import { Button } from '@/components/ui/button';
 import { toggleChangeAgentStatus, forceInactivity } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 
 interface StudentHeaderProps {
@@ -60,9 +72,109 @@ function StudentHeaderSkeleton() {
     )
 }
 
+function ChangeAgentDialog({ 
+  student, 
+  onConfirm, 
+  isOpen, 
+  onOpenChange, 
+  isLoading 
+}: { 
+  student: Student; 
+  onConfirm: (universities: string[]) => void; 
+  isOpen: boolean; 
+  onOpenChange: (open: boolean) => void;
+  isLoading: boolean;
+}) {
+  const [selectedUnis, setSelectedUnis] = useState<string[]>([]);
+  const [manualUni, setManualUni] = useState('');
+
+  const studentUnis = useMemo(() => {
+    return Array.from(new Set((student.applications || []).map(a => a.university)));
+  }, [student.applications]);
+
+  const handleToggle = (uni: string) => {
+    setSelectedUnis(prev => prev.includes(uni) ? prev.filter(u => u !== uni) : [...prev, uni]);
+  };
+
+  const handleAddManual = () => {
+    if (manualUni.trim() && !selectedUnis.includes(manualUni.trim())) {
+      setSelectedUnis(prev => [...prev, manualUni.trim()]);
+      setManualUni('');
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Enable Change Agent Status</DialogTitle>
+          <DialogDescription>
+            Specify which universities or schools this urgent request is for.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Select from student's universities</Label>
+            <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-2">
+              {studentUnis.length > 0 ? studentUnis.map(uni => (
+                <div key={uni} className="flex items-center space-x-2 p-2 rounded border bg-muted/10">
+                  <Checkbox 
+                    id={`uni-${uni}`} 
+                    checked={selectedUnis.includes(uni)} 
+                    onCheckedChange={() => handleToggle(uni)} 
+                  />
+                  <Label htmlFor={`uni-${uni}`} className="text-sm font-medium cursor-pointer">{uni}</Label>
+                </div>
+              )) : <p className="text-xs italic text-muted-foreground">No applications found.</p>}
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Or add school name manually</Label>
+            <div className="flex gap-2">
+              <Input 
+                placeholder="e.g. University of Bristol" 
+                value={manualUni} 
+                onChange={(e) => setManualUni(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddManual()}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={handleAddManual}>Add</Button>
+            </div>
+          </div>
+
+          {selectedUnis.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {selectedUnis.map(uni => (
+                <BadgeComponent key={uni} variant="secondary" className="gap-1 px-2 py-1 bg-red-50 text-red-700 border-red-200">
+                  {uni}
+                  <X className="h-3 w-3 cursor-pointer" onClick={() => handleToggle(uni)} />
+                </BadgeComponent>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+          <Button 
+            disabled={selectedUnis.length === 0 || isLoading} 
+            onClick={() => onConfirm(selectedUnis)}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold"
+          >
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Enable Status
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function StudentHeader({ student, currentUser, isLoading }: StudentHeaderProps) {
   const { toast } = useToast();
   const [isTogglingAgent, setIsTogglingAgent] = useState(false);
+  const [isChangeAgentDialogOpen, setIsChangeAgentDialogOpen] = useState(false);
   const [isForcingInactivity, setIsForcingInactivity] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -108,13 +220,17 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     'New Zealand': '🇳🇿',
   };
 
-  const handleToggleChangeAgent = async () => {
+  const handleToggleChangeAgent = async (universities?: string[]) => {
     if (!canManage) return;
     setIsTogglingAgent(true);
+    
+    // If we're turning it OFF, we don't need a dialog
     const newVal = !student.changeAgentRequired;
-    const result = await toggleChangeAgentStatus(student.id, newVal, currentUser.id);
+    
+    const result = await toggleChangeAgentStatus(student.id, newVal, currentUser.id, universities);
     if (result.success) {
       toast({ title: result.message });
+      setIsChangeAgentDialogOpen(false);
     } else {
       toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
     }
@@ -179,17 +295,37 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
 
   return (
     <div className="mb-6 relative" id="student-header">
-      {allCountries.length > 0 && (
-        <div className="absolute top-0 right-0 flex gap-2" title={allCountries.join(', ')}>
-            {allCountries.map(country => (
-                countryEmojis[country as Country] ? (
-                  <div key={country} className="text-4xl">
-                      {countryEmojis[country as Country]}
-                  </div>
-                ) : null
-            ))}
-        </div>
-      )}
+      <div className="absolute top-0 right-0 flex flex-col items-end gap-3 z-10">
+        {allCountries.length > 0 && (
+          <div className="flex gap-2" title={allCountries.join(', ')}>
+              {allCountries.map(country => (
+                  countryEmojis[country as Country] ? (
+                    <div key={country} className="text-4xl drop-shadow-sm">
+                        {countryEmojis[country as Country]}
+                    </div>
+                  ) : null
+              ))}
+          </div>
+        )}
+        {student.changeAgentRequired && student.changeAgentUniversities && student.changeAgentUniversities.length > 0 && (
+          <div className="flex flex-col items-end gap-1.5 max-w-[300px] animate-in fade-in slide-in-from-right-4">
+            <p className="text-[9px] font-black text-red-600 uppercase tracking-widest bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-red-100">
+              Change Agent Required For:
+            </p>
+            <div className="flex flex-wrap justify-end gap-1">
+              {student.changeAgentUniversities.map((uni, idx) => (
+                <BadgeComponent 
+                  key={idx} 
+                  className="bg-red-600 text-white font-black text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
+                >
+                  {uni}
+                </BadgeComponent>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-col items-start gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -277,9 +413,9 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 <Button 
                   variant={student.changeAgentRequired ? "destructive" : "outline"}
                   size="sm"
-                  onClick={handleToggleChangeAgent}
+                  onClick={() => student.changeAgentRequired ? handleToggleChangeAgent() : setIsChangeAgentDialogOpen(true)}
                   disabled={isTogglingAgent}
-                  className={student.changeAgentRequired ? "bg-black text-red-500 hover:bg-black/90" : ""}
+                  className={student.changeAgentRequired ? "bg-black text-red-50 hover:bg-black/90" : ""}
                 >
                   {isTogglingAgent ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundX className="mr-2 h-4 w-4" />}
                   {student.changeAgentRequired ? 'Remove Change Agent' : 'Change Agent'}
@@ -336,6 +472,14 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           </div>
         </div>
       </div>
+
+      <ChangeAgentDialog 
+        student={student} 
+        isOpen={isChangeAgentDialogOpen} 
+        onOpenChange={setIsChangeAgentDialogOpen} 
+        onConfirm={(unis) => handleToggleChangeAgent(unis)}
+        isLoading={isTogglingAgent}
+      />
     </div>
   );
 }
