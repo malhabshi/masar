@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
 import { useCollection } from '@/firebase/client';
 import type { Student, Task, User } from '@/lib/types';
-import { Users, FileText, UserPlus, AlertCircle, ArrowRight, ShieldAlert, CheckCircle2, Clock, Send, Search, CheckCircle, XCircle } from 'lucide-react';
+import { Users, FileText, UserPlus, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 import Link from 'next/link';
 
@@ -15,7 +16,6 @@ import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card'
 import type { AppUser } from '@/hooks/use-user';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
   const isAdmin = currentUser?.role === 'admin';
@@ -99,19 +99,6 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
 
   return (
     <div className="space-y-6">
-      {stats.ghost > 0 && (
-        <Alert variant="destructive" className="border-2 border-red-600 bg-red-50">
-          <ShieldAlert className="h-5 w-5" />
-          <div className="flex-1">
-            <AlertTitle className="font-black uppercase tracking-tighter">🚨 DATA INTEGRITY WARNING</AlertTitle>
-            <AlertDescription className="text-red-800 font-medium">
-              Found <strong>{stats.ghost}</strong> students assigned to invalid or deleted IDs. These students are excluded from active totals.
-              <Link href="/user-management" className="ml-2 underline font-bold">Fix using Bulk Transfer &rarr;</Link>
-            </AlertDescription>
-          </div>
-        </Alert>
-      )}
-
       {changeAgentStudents.length > 0 && (
         <Card className="border-red-500 bg-red-50/10">
           <CardHeader className="pb-3">
@@ -196,7 +183,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                 <span className="font-black text-green-700">{stats.apps.accepted}</span>
               </div>
               <div className="flex items-center justify-between text-[9px] bg-red-50 px-1.5 py-0.5 rounded">
-                <span className="text-red-700 uppercase font-bold">Rej</span>
+                <span className="text-green-700 uppercase font-bold">Rej</span>
                 <span className="font-black text-red-700">{stats.apps.rejected}</span>
               </div>
             </div>
