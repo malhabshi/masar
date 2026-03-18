@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, Globe, Loader2, User as UserIcon, Building2, Calendar } from 'lucide-react';
+import { Search, Globe, Loader2, User as UserIcon, Building2, Calendar, GraduationCap } from 'lucide-react';
 import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 import Link from 'next/link';
 import { formatDate } from '@/lib/timestamp-utils';
