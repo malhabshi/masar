@@ -194,11 +194,10 @@ export default function StudentDetailPage() {
     <div className="space-y-6" id="student-profile-content">
       <StudentHeader student={student} currentUser={currentUser} isLoading={isLoading} />
       
-      {student.duplicatePhoneWarning && (
-        <div className="pdf-hide">
-          <DuplicateWarningBanner student={student} currentUser={currentUser} />
-        </div>
-      )}
+      {/* Dynamic Duplicate Warning - Unconditional check within component */}
+      <div className="pdf-hide">
+        <DuplicateWarningBanner student={student} currentUser={currentUser} />
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="lg:col-span-2 space-y-6">
