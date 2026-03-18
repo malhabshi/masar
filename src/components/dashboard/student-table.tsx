@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe } from 'lucide-react';
 import type { Student, PipelineStatus, User, Note } from '@/lib/types';
-import type { AppUser } from '@/hooks/use-user';
+import { useUser } from '@/hooks/use-user';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,7 +39,7 @@ import { Label } from '@/components/ui/label';
 
 interface StudentTableProps {
   students: Student[];
-  currentUser: AppUser;
+  currentUser: any; // Using any to avoid complex type intersection issues in render
   allUsers: User[];
   emptyStateMessage?: string;
 }
@@ -57,9 +57,13 @@ const pipelineStatusLabels: { [key: string]: string } = {
     none: 'No Status',
 };
 
-export function StudentTable({ students, currentUser, allUsers, emptyStateMessage = "No students found." }: StudentTableProps) {
+export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found." }: StudentTableProps) {
   const { toast } = useToast();
+  const { user: authUser, effectiveRole } = useUser();
   
+  // Use the user from hook to ensure we have the most reactive effectiveRole context
+  const currentUser = authUser || propUser;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
@@ -71,11 +75,13 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   const [showAllStudents, setShowAllStudents] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
     setIsClient(true);
   }, []);
 
   const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const requesters = useMemo(() => {
       const ids = new Set<string>();
@@ -124,7 +130,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
   const displayedStudents = useMemo(() => {
     const filtered = students.filter(student => {
         // Department Routing Logic
-        if (currentUser.role === 'department' && !showAllStudents && currentUser.department) {
+        if (effectiveRole === 'department' && !showAllStudents && currentUser.department) {
           const appCountries = (student.applications || []).map(a => a.country);
           const dept = currentUser.department;
           const isMatch = (dept === 'UK' && appCountries.includes('UK')) || 
@@ -182,7 +188,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, employeeMapByCivilId, currentUser, showAllStudents]);
+  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
@@ -223,7 +229,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                   />
               </div>
               
-              {currentUser.role === 'department' && (
+              {effectiveRole === 'department' && (
                 <div className="flex items-center space-x-2 shrink-0 bg-muted/50 p-2 rounded-lg border">
                   <Switch 
                     id="show-all" 
@@ -249,7 +255,7 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                         <SelectItem value="red">Red</SelectItem>
                     </SelectContent>
                 </Select>
-                {isClient && currentUser.role !== 'employee' && (
+                {isClient && effectiveRole !== 'employee' && (
                     <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
                         <SelectTrigger className="w-full flex-1"><SelectValue placeholder="Assigned Agent" /></SelectTrigger>
                         <SelectContent>
@@ -374,7 +380,14 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem asChild><Link href={`/student/${student.id}`}>View Details</Link></DropdownMenuItem>
-                                {currentUser?.role === 'employee' && (<><DropdownMenuSeparator /><DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'green')}>Move to Green</DropdownMenuItem><DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'orange')}>Move to Orange</DropdownMenuItem><DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'red')}>Move to Red</DropdownMenuItem></>)}
+                                {(currentUser?.role === 'employee' || isAdminOrDept) && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'green')}>Move to Green</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'orange')}>Move to Orange</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'red')}>Move to Red</DropdownMenuItem>
+                                  </>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
