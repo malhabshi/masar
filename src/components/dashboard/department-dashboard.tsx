@@ -160,22 +160,26 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                         <FileText className="h-4 w-4 text-blue-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-blue-700 mb-2">{isLoading ? '...' : stats.apps.total}</div>
-                        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                          <div className="flex items-center justify-between text-[9px] bg-muted/50 px-1.5 py-0.5 rounded">
-                            <span className="text-muted-foreground uppercase font-bold">Sub</span>
+                        <div className="text-2xl font-bold text-blue-700 mb-3">{isLoading ? '...' : stats.apps.total}</div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">Pending</span>
+                            <span className="font-black text-yellow-600">{stats.apps.pending}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">Submitted</span>
                             <span className="font-black text-blue-600">{stats.apps.submitted}</span>
                           </div>
-                          <div className="flex items-center justify-between text-[9px] bg-muted/50 px-1.5 py-0.5 rounded">
-                            <span className="text-muted-foreground uppercase font-bold">Rev</span>
+                          <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">In Review</span>
                             <span className="font-black text-purple-600">{stats.apps.inReview}</span>
                           </div>
-                          <div className="flex items-center justify-between text-[9px] bg-green-50 px-1.5 py-0.5 rounded">
-                            <span className="text-green-700 uppercase font-bold">Acc</span>
+                          <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
+                            <span className="text-red-700 uppercase font-bold">Accepted</span>
                             <span className="font-black text-green-700">{stats.apps.accepted}</span>
                           </div>
-                          <div className="flex items-center justify-between text-[9px] bg-red-50 px-1.5 py-0.5 rounded">
-                            <span className="text-red-700 uppercase font-bold">Rej</span>
+                          <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
+                            <span className="text-red-700 uppercase font-bold">Rejected</span>
                             <span className="font-black text-red-700">{stats.apps.rejected}</span>
                           </div>
                         </div>
