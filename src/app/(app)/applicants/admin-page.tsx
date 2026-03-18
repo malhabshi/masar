@@ -1,7 +1,7 @@
 'use client';
 
 import { useUser } from '@/hooks/use-user';
-import type { Student, User } from '@/lib/types';
+import type { Student, User, MissingItem } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
@@ -80,7 +80,7 @@ export function AdminApplicantsPage() {
       s.pipelineStatus || 'none',
       (s.targetCountries || []).join('; '),
       (s.applications || []).map(app => `${app.university} (${app.major}) - ${app.status}`).join('; '),
-      (s.missingItems || []).join('; '),
+      (s.missingItems || []).map(item => typeof item === 'string' ? item : `${item.text} (${item.department})`).join('; '),
       s.finalChoiceUniversity || '',
       s.ieltsOverall ? s.ieltsOverall.toFixed(1) : '0.0',
       s.academicIntakeSemester || '',

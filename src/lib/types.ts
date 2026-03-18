@@ -67,6 +67,14 @@ export interface StudentLogin {
     createdAt: string;
 }
 
+export interface MissingItem {
+  id: string;
+  text: string;
+  department: string;
+  addedBy: string;
+  createdAt: string;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -84,7 +92,7 @@ export interface Student {
   lastActivityAt?: string; // Timestamp of the last significant action
   lastInactivityReminderSentAt?: string; // Track recurring 3hr reminders
   targetCountries?: Country[];
-  missingItems?: string[];
+  missingItems?: (string | MissingItem)[]; // Support both legacy strings and new objects
   pipelineStatus?: PipelineStatus;
   statusNote?: string; // Persistent editable status note for Applicants table (Employee)
   adminStatusNote?: string; // Persistent editable status note for Applicants table (Admin only)

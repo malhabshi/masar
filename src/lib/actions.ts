@@ -2,7 +2,7 @@
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -849,26 +849,56 @@ export async function addAdminNote(studentId: string, authorId: string, content:
     } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function addMissingItemToStudent(studentId: string, item: string) {
+export async function addMissingItemToStudent(studentId: string, itemText: string, userId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayUnion(item), newMissingItemsForEmployee: FieldValue.increment(1), lastActivityAt: new Date().toISOString() });
+        const user = await getUser(userId);
+        if (!user) return { success: false, message: 'User not found' };
+        
+        const dept = user.role === 'admin' ? 'Admin' : (user.department || 'General');
+        
+        const newItem: MissingItem = {
+            id: `mi-${Date.now()}`,
+            text: itemText,
+            department: dept,
+            addedBy: userId,
+            createdAt: new Date().toISOString()
+        };
+
+        await adminDb!.collection('students').doc(studentId).update({ 
+            missingItems: FieldValue.arrayUnion(newItem), 
+            newMissingItemsForEmployee: FieldValue.increment(1), 
+            lastActivityAt: new Date().toISOString() 
+        });
         return { success: true, message: 'Missing item added.' };
     } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function removeMissingItemFromStudent(studentId: string, itemToRemove: string) {
+export async function removeMissingItemFromStudent(studentId: string, item: string | MissingItem) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayRemove(itemToRemove), lastActivityAt: new Date().toISOString() });
+    await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayRemove(item), lastActivityAt: new Date().toISOString() });
     return { success: true, message: 'Missing item removed.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function markMissingItemAsReceived(studentId: string, itemReceived: string, userId: string) {
+export async function markMissingItemAsReceived(studentId: string, item: string | MissingItem, userId: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
-        await adminDb!.collection('students').doc(studentId).update({ missingItems: FieldValue.arrayRemove(itemReceived), adminNotes: FieldValue.arrayUnion({ id: `note-item-received-${Date.now()}`, authorId: userId, content: `Marked as received: "${itemReceived}"`, createdAt: new Date().toISOString() }), unreadUpdates: FieldValue.increment(1), lastActivityAt: new Date().toISOString() });
+        const itemText = typeof item === 'string' ? item : item.text;
+        const itemDept = typeof item === 'string' ? 'General' : item.department;
+
+        await adminDb!.collection('students').doc(studentId).update({ 
+            missingItems: FieldValue.arrayRemove(item), 
+            adminNotes: FieldValue.arrayUnion({ 
+                id: `note-item-received-${Date.now()}`, 
+                authorId: userId, 
+                content: `Marked as received: "${itemText}" (Required by: ${itemDept})`, 
+                createdAt: new Date().toISOString() 
+            }), 
+            unreadUpdates: FieldValue.increment(1), 
+            lastActivityAt: new Date().toISOString() 
+        });
         return { success: true, message: 'Item marked as received.' };
     } catch (error: any) { return { success: false, message: error.message }; }
 }
