@@ -1064,17 +1064,38 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
         const employees = (await adminDb!.collection('users').where('role', '==', 'employee').get()).docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
         const allStudents = (await adminDb!.collection('students').get()).docs.map(doc => doc.data() as Student);
         const thirtyDaysAgo = startOfDay(subDays(new Date(), 30));
+        
         const stats: EmployeeStats[] = employees.map(employee => {
+            // Creation stats
             const created = allStudents.filter(s => s.createdBy === employee.id);
             const dailyCountsMap: Record<string, number> = {};
             const monthlyMap: Record<string, number> = {};
+            
             created.forEach(s => {
                 const d = parseISO(s.createdAt);
                 monthlyMap[format(d, 'yyyy-MM')] = (monthlyMap[format(d, 'yyyy-MM')] || 0) + 1;
                 if (d >= thirtyDaysAgo) dailyCountsMap[format(d, 'yyyy-MM-dd')] = (dailyCountsMap[format(d, 'yyyy-MM-dd')] || 0) + 1;
             });
-            return { employeeId: employee.id, employeeName: employee.name, totalStudents: created.length, dailyCounts: Array.from({ length: 30 }, (_, i) => format(subDays(new Date(), i), 'yyyy-MM-dd')).map(date => ({ date, count: dailyCountsMap[date] || 0 })).sort((a,b) => a.date.localeCompare(b.date)), monthlyTotals: Object.entries(monthlyMap).map(([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month)), };
+
+            // Pipeline breakdown based on ASSIGNED portfolio
+            const assigned = allStudents.filter(s => s.employeeId === employee.civilId);
+            const pipelineBreakdown = {
+                green: assigned.filter(s => s.pipelineStatus === 'green').length,
+                orange: assigned.filter(s => s.pipelineStatus === 'orange').length,
+                red: assigned.filter(s => s.pipelineStatus === 'red').length,
+                none: assigned.filter(s => !s.pipelineStatus || s.pipelineStatus === 'none').length,
+            };
+
+            return { 
+                employeeId: employee.id, 
+                employeeName: employee.name, 
+                totalStudents: created.length, 
+                dailyCounts: Array.from({ length: 30 }, (_, i) => format(subDays(new Date(), i), 'yyyy-MM-dd')).map(date => ({ date, count: dailyCountsMap[date] || 0 })).sort((a,b) => a.date.localeCompare(b.date)), 
+                monthlyTotals: Object.entries(monthlyMap).map(([month, count]) => ({ month, count })).sort((a, b) => a.month.localeCompare(b.month)),
+                pipelineBreakdown
+            };
         });
+        
         return scrub({ success: true, data: stats });
     } catch (error: any) { return { success: false, message: error.message }; }
 }

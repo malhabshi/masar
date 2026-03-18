@@ -162,6 +162,12 @@ export interface TaskViewRecord {
   timestamp: string;
 }
 
+export interface TaskViewRecord {
+  userId: string;
+  userName: string;
+  timestamp: string;
+}
+
 export interface TaskNotification {
   fromId: string;
   fromName: string;
@@ -334,6 +340,12 @@ export interface EmployeeStats {
   totalStudents: number;
   dailyCounts: EmployeeDailyCount[];
   monthlyTotals: EmployeeMonthlyTotal[];
+  pipelineBreakdown: {
+    green: number;
+    orange: number;
+    red: number;
+    none: number;
+  };
 }
 
 export type NotificationType = 
