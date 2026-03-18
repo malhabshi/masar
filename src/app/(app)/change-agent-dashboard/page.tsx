@@ -114,7 +114,7 @@ export default function ChangeAgentDashboard() {
               <TableRow className="bg-muted/30">
                 <TableHead>Student Name</TableHead>
                 <TableHead>Assigned Agent</TableHead>
-                <TableHead>Requested Schools</TableHead>
+                <TableHead>Requested Schools (Country)</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -149,11 +149,14 @@ export default function ChangeAgentDashboard() {
                       <TableCell className="max-w-[400px]">
                         <div className="flex flex-wrap gap-1.5">
                           {student.changeAgentUniversities && student.changeAgentUniversities.length > 0 ? (
-                            student.changeAgentUniversities.map((uni, idx) => (
-                              <Badge key={idx} className="bg-black text-red-500 border border-red-500 text-[10px] py-0.5 font-bold uppercase">
-                                {uni}
-                              </Badge>
-                            ))
+                            student.changeAgentUniversities.map((uni, idx) => {
+                              const app = student.applications?.find(a => a.university === uni);
+                              return (
+                                <Badge key={idx} className="bg-black text-red-500 border border-red-500 text-[10px] py-0.5 font-bold uppercase">
+                                  {uni} {app ? `(${app.country})` : ''}
+                                </Badge>
+                              );
+                            })
                           ) : (
                             <span className="text-xs italic text-muted-foreground">General request (No specific schools)</span>
                           )}

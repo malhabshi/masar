@@ -307,6 +307,11 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
 
   const allCountries = [...new Set(student.applications?.map(app => app.country) || [])];
 
+  const getUniCountry = (uniName: string) => {
+    const app = student.applications?.find(a => a.university === uniName);
+    return app?.country;
+  };
+
   return (
     <div className="mb-6 relative" id="student-header">
       <div className="absolute top-0 right-0 flex flex-col items-end gap-3 z-10">
@@ -327,14 +332,17 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               Change Agent Required For:
             </p>
             <div className="flex flex-wrap justify-end gap-1">
-              {student.changeAgentUniversities.map((uni, idx) => (
-                <BadgeComponent 
-                  key={idx} 
-                  className="bg-red-600 text-white font-black text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
-                >
-                  {uni}
-                </BadgeComponent>
-              ))}
+              {student.changeAgentUniversities.map((uni, idx) => {
+                const country = getUniCountry(uni);
+                return (
+                  <BadgeComponent 
+                    key={idx} 
+                    className="bg-red-600 text-white font-black text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
+                  >
+                    {uni} {country ? `(${country})` : ''}
+                  </BadgeComponent>
+                );
+              })}
             </div>
           </div>
         )}
