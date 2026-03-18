@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle } from 'lucide-react';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -105,9 +105,11 @@ function ChangeAgentDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Enable Change Agent Status</DialogTitle>
+          <DialogTitle>{student.changeAgentRequired ? 'Manage Change Agent' : 'Enable Change Agent Status'}</DialogTitle>
           <DialogDescription>
-            Select the existing university applications that require urgent attention from management.
+            {student.changeAgentRequired 
+              ? 'Update the flagged universities or resolve the problem to clear this urgent alert.'
+              : 'Select the existing university applications that require urgent attention from management.'}
           </DialogDescription>
         </DialogHeader>
         
@@ -154,15 +156,27 @@ function ChangeAgentDialog({
           )}
         </div>
 
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+        <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          {student.changeAgentRequired && (
+            <Button 
+              variant="outline" 
+              className="w-full sm:w-auto border-green-600 text-green-700 hover:bg-green-50 font-bold gap-2"
+              onClick={() => onConfirm([])}
+              disabled={isLoading}
+            >
+              <CheckCircle className="h-4 w-4" />
+              Resolve Problem & Clear Alert
+            </Button>
+          )}
+          <div className="flex-1" />
+          <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
           <Button 
             disabled={selectedUnis.length === 0 || isLoading} 
             onClick={() => onConfirm(selectedUnis)}
             className="bg-red-600 hover:bg-red-700 text-white font-bold"
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {student.changeAgentRequired ? 'Update Universities' : 'Enable Status'}
+            {student.changeAgentRequired ? 'Update List' : 'Enable Status'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -223,9 +237,9 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     if (!canManage) return;
     setIsTogglingAgent(true);
     
-    // If we're turning it OFF, we don't need a dialog
+    // If universities is empty, we are disabling the status.
     const isTurningOff = !universities || universities.length === 0;
-    const newVal = isTurningOff ? !student.changeAgentRequired : true;
+    const newVal = !isTurningOff;
     
     const result = await toggleChangeAgentStatus(student.id, newVal, currentUser.id, universities);
     if (result.success) {
