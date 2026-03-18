@@ -95,6 +95,21 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  // Identify duplicate phones across all currently loaded students
+  const duplicatePhoneSet = useMemo(() => {
+    const counts = new Map<string, number>();
+    students.forEach(s => {
+      if (s.phone) {
+        counts.set(s.phone, (counts.get(s.phone) || 0) + 1);
+      }
+    });
+    const duplicates = new Set<string>();
+    counts.forEach((count, phone) => {
+      if (count > 1) duplicates.add(phone);
+    });
+    return duplicates;
+  }, [students]);
+
   // Include any user with a Civil ID as a potential agent (Admins/Dept users can also handle cases)
   const employeeOptions = useMemo(() => {
     return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
@@ -286,11 +301,12 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                 const transferRequester = student.transferRequest?.requestedBy ? requesterMap.get(student.transferRequest.requestedBy) : null;
                 const canAssign = isAdminOrDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
+                const isDuplicate = duplicatePhoneSet.has(student.phone);
 
                 return (
                 <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20")}>
                   <TableCell>
-                    <div>
+                    <div className="flex flex-col gap-1">
                       <Link href={`/student/${student.id}`} className="hover:underline">
                         <div className="font-medium flex items-center gap-2 flex-wrap">
                           {student.internalNumber && <Badge variant="secondary" className="font-bold text-[10px] h-5 px-1 bg-muted">#{student.internalNumber}</Badge>}
@@ -322,6 +338,14 @@ export function StudentTable({ students, currentUser, allUsers, emptyStateMessag
                           {wasTransferred && <Badge variant="outline" className="border-blue-500 text-blue-600"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
                         </div>
                       </Link>
+                      {isDuplicate && (
+                        <div className="flex">
+                          <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-black uppercase tracking-tighter gap-1">
+                            <AlertTriangle className="h-2 w-2" />
+                            Duplicate Profile
+                          </Badge>
+                        </div>
+                      )}
                       <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
                       <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
                       {student.finalChoiceUniversity && <div className="flex items-center gap-1 text-lg text-success font-bold mt-1"><GraduationCap className="h-5 w-5" /><span>{student.finalChoiceUniversity}</span></div>}

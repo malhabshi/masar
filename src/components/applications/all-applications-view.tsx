@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/client';
 import { useUser } from '@/hooks/use-user';
-import type { Student, Application, Country, User, ApplicationStatus } from '@/lib/types';
+import type { Student, Application, Country, ApplicationStatus } from '@/lib/types';
 import {
   Card,
   CardContent,
@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, Globe, Loader2, User as UserIcon, Building2, Calendar, GraduationCap } from 'lucide-react';
+import { Search, Globe, Loader2, User as UserIcon, Building2, Calendar, GraduationCap, AlertTriangle } from 'lucide-react';
 import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 import Link from 'next/link';
 import { formatDate } from '@/lib/timestamp-utils';
@@ -38,6 +38,7 @@ interface FlattenedApplication {
   id: string; // Unique key for row
   studentId: string;
   studentName: string;
+  studentPhone: string;
   internalNumber?: string;
   employeeId: string | null;
   application: Application;
@@ -66,6 +67,22 @@ export function AllApplicationsView() {
 
   const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
 
+  // Identify duplicate phones across all students
+  const duplicatePhoneSet = useMemo(() => {
+    if (!students) return new Set<string>();
+    const counts = new Map<string, number>();
+    students.forEach(s => {
+      if (s.phone) {
+        counts.set(s.phone, (counts.get(s.phone) || 0) + 1);
+      }
+    });
+    const duplicates = new Set<string>();
+    counts.forEach((count, phone) => {
+      if (count > 1) duplicates.add(phone);
+    });
+    return duplicates;
+  }, [students]);
+
   // Flatten students into a list of applications
   const allFlattened = useMemo(() => {
     if (!students) return [];
@@ -77,6 +94,7 @@ export function AllApplicationsView() {
           id: `${student.id}-${idx}`,
           studentId: student.id,
           studentName: student.name,
+          studentPhone: student.phone,
           internalNumber: student.internalNumber,
           employeeId: student.employeeId,
           application: app,
@@ -205,19 +223,31 @@ export function AllApplicationsView() {
                   {filteredApplications.length > 0 ? (
                     filteredApplications.map((item) => {
                       const employee = item.employeeId ? employeeMap.get(item.employeeId) : null;
+                      const isDuplicate = duplicatePhoneSet.has(item.studentPhone);
+                      
                       return (
                         <TableRow key={item.id} className="group">
                           <TableCell>
-                            <Link href={`/student/${item.studentId}`} className="hover:underline">
-                              <div className="flex items-center gap-2">
-                                {item.internalNumber && (
-                                  <Badge variant="outline" className="text-[10px] h-5 bg-muted font-mono">
-                                    #{item.internalNumber}
+                            <div className="flex flex-col">
+                              <Link href={`/student/${item.studentId}`} className="hover:underline">
+                                <div className="flex items-center gap-2">
+                                  {item.internalNumber && (
+                                    <Badge variant="outline" className="text-[10px] h-5 bg-muted font-mono">
+                                      #{item.internalNumber}
+                                    </Badge>
+                                  )}
+                                  <span className="font-bold text-sm">{item.studentName}</span>
+                                </div>
+                              </Link>
+                              {isDuplicate && (
+                                <div className="mt-1">
+                                  <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-black uppercase tracking-tighter gap-1">
+                                    <AlertTriangle className="h-2 w-2" />
+                                    Duplicate Profile
                                   </Badge>
-                                )}
-                                <span className="font-bold text-sm">{item.studentName}</span>
-                              </div>
-                            </Link>
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="space-y-0.5">
