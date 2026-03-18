@@ -98,7 +98,8 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const canApproveTransfer = canManage && student.transferRequested;
   const canApproveDeletion = isAdmin && student.deletionRequested?.status === 'pending';
   
-  const employeeUsers = (users || []).filter(u => u.role === 'employee');
+  // Inclusive filter: Any staff member with a Civil ID can be assigned students
+  const staffOptions = (users || []).filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
 
   const countryEmojis: Record<Country, string> = {
     UK: '🇬🇧',
@@ -298,8 +299,8 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 </Button>
               )}
 
-              {canAssign && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="assign" />}
-              {canApproveTransfer && <TransferStudentDialog student={student} employees={employeeUsers} currentUser={currentUser} actionType="transfer" />}
+              {canAssign && <TransferStudentDialog student={student} employees={staffOptions} currentUser={currentUser} actionType="assign" />}
+              {canApproveTransfer && <TransferStudentDialog student={student} employees={staffOptions} currentUser={currentUser} actionType="transfer" />}
 
               {canApproveDeletion && <ApproveDeletionDialog student={student} currentUser={currentUser} />}
               {isAdmin && !canApproveDeletion && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}

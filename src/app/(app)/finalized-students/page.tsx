@@ -59,9 +59,10 @@ export default function FinalizedStudentsPage() {
     (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'users' : ''
   );
 
-  const employeeOptions = useMemo(() => {
+  const staffOptions = useMemo(() => {
     if (!allUsers) return [];
-    return allUsers.filter(u => u.role === 'employee' && u.civilId);
+    // Inclusive filter: Anyone with a Civil ID can be an agent (Management users acting as agents)
+    return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
   }, [allUsers]);
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
@@ -177,7 +178,7 @@ export default function FinalizedStudentsPage() {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Employees</SelectItem>
-                        {employeeOptions.map(emp => (
+                        {staffOptions.map(emp => (
                             <SelectItem key={emp.id} value={emp.civilId!}>{emp.name}</SelectItem>
                         ))}
                     </SelectContent>
