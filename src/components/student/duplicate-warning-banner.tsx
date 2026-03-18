@@ -84,7 +84,7 @@ export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarnin
                       <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
                       <span className="text-xs">
                         <strong>{c.name}</strong> (Agent: <strong>{c.employeeName}</strong>)
-                        <Link href={`/student/${c.id}`} className="ml-2 underline font-bold">Open View</Link>
+                        <Link href={`/student/${c.id}`} className="ml-2 underline font-bold hover:text-red-900">View Duplicate Profile →</Link>
                       </span>
                     </div>
                   ))}
