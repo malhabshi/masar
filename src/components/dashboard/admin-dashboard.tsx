@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useCollection } from '@/firebase/client';
 import type { Student, Task, User } from '@/lib/types';
-import { Users, FileText, UserPlus, AlertCircle, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
+import { Users, FileText, UserPlus, AlertCircle, ArrowRight, CheckCircle2, LayoutGrid } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 import Link from 'next/link';
 
@@ -15,6 +15,8 @@ import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card'
 import type { AppUser } from '@/hooks/use-user';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
   const isAdmin = currentUser?.role === 'admin';
@@ -52,7 +54,6 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
       total: 0, 
       assigned: 0, 
       unassigned: 0, 
-      ghost: 0, 
       apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
       pipeline: { green: 0, orange: 0, red: 0, none: 0 }
     };
@@ -62,7 +63,6 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
 
     let assigned = 0;
     let unassigned = 0;
-    let ghost = 0;
     const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
     const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
 
@@ -80,8 +80,6 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
         else if (status === 'orange') pipeline.orange++;
         else if (status === 'red') pipeline.red++;
         else pipeline.none++;
-      } else {
-        ghost++;
       }
 
       // Stats Breakdown (Exclude ghosts from official metrics)
@@ -99,8 +97,38 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     });
     
     const total = assigned + unassigned;
-    return { total, assigned, unassigned, ghost, apps, pipeline };
+    return { total, assigned, unassigned, apps, pipeline };
   }, [students, users]);
+
+  // Per-User Portfolio Breakdown
+  const agentBreakdown = useMemo(() => {
+    if (!isClient || !users || !students) return [];
+
+    const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
+    const statsMap = new Map<string, { id: string, name: string, total: number, green: number, orange: number, red: number, none: number }>();
+    
+    users.forEach(u => {
+      if (u.civilId) {
+        statsMap.set(u.civilId, { id: u.id, name: u.name, total: 0, green: 0, orange: 0, red: 0, none: 0 });
+      }
+    });
+
+    students.forEach(s => {
+      if (s.employeeId && statsMap.has(s.employeeId)) {
+        const entry = statsMap.get(s.employeeId)!;
+        entry.total++;
+        const status = s.pipelineStatus || 'none';
+        if (status === 'green') entry.green++;
+        else if (status === 'orange') entry.orange++;
+        else if (status === 'red') entry.red++;
+        else entry.none++;
+      }
+    });
+
+    return Array.from(statsMap.values())
+      .filter(s => s.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [isClient, users, students]);
 
   if (!isAdmin) return null;
 
@@ -221,6 +249,48 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader className="pb-3 border-b bg-muted/5">
+              <div className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4 text-primary" />
+                <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Portfolio Performance Breakdown</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="text-[10px] font-black uppercase">Employee</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase text-center">Total</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase text-center text-green-700">Green</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase text-center text-orange-700">Orange</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase text-center text-red-700">Red</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase text-center text-muted-foreground">None</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {agentBreakdown.map((agent) => (
+                      <TableRow key={agent.id}>
+                        <TableCell className="font-bold text-xs">{agent.name}</TableCell>
+                        <TableCell className="text-center"><Badge variant="outline" className="font-mono text-[10px]">{agent.total}</Badge></TableCell>
+                        <TableCell className="text-center font-black text-green-700 text-xs">{agent.green}</TableCell>
+                        <TableCell className="text-center font-black text-orange-700 text-xs">{agent.orange}</TableCell>
+                        <TableCell className="text-center font-black text-red-700 text-xs">{agent.red}</TableCell>
+                        <TableCell className="text-center font-bold text-muted-foreground text-xs">{agent.none}</TableCell>
+                      </TableRow>
+                    ))}
+                    {agentBreakdown.length === 0 && !isLoading && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-20 text-center text-xs text-muted-foreground italic">No students assigned to any active agents yet.</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
           <SendTaskForm currentUser={currentUser} />
           <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
         </div>

@@ -5,7 +5,7 @@ import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where, collection, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { Student, Task, User } from '@/lib/types';
-import { Users, FileText, AlertCircle, ArrowRight, UserPlus } from 'lucide-react';
+import { Users, FileText, AlertCircle, ArrowRight, UserPlus, LayoutGrid } from 'lucide-react';
 import { sortByDate } from '@/lib/timestamp-utils';
 import type { AppUser } from '@/hooks/use-user';
 import Link from 'next/link';
@@ -17,6 +17,7 @@ import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card'
 import { SendTaskForm } from './send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function DepartmentDashboard({ currentUser }: { currentUser: AppUser }) {
      const isDept = currentUser?.role === 'department' || currentUser?.role === 'admin';
@@ -53,9 +54,23 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
 
      const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(taskQuery);
      
-     const students = useMemo(() => studentsData || [], [studentsData]);
+     const rawStudents = useMemo(() => studentsData || [], [studentsData]);
      const tasks = useMemo(() => tasksData || [], [tasksData]);
      const users = useMemo(() => usersData || [], [usersData]);
+
+     // Filter students based on department region for departmental dashboard
+     const students = useMemo(() => {
+        if (!isDept || isAdmin) return rawStudents;
+        const dept = currentUser.department;
+        if (!dept) return rawStudents;
+
+        return rawStudents.filter(s => {
+            const appCountries = (s.applications || []).map(a => a.country);
+            return (dept === 'UK' && appCountries.includes('UK')) || 
+                   (dept === 'USA' && appCountries.includes('USA')) || 
+                   (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
+        });
+     }, [rawStudents, isDept, isAdmin, currentUser.department]);
 
      const isLoading = studentsLoading || tasksLoading || usersLoading;
 
@@ -114,6 +129,35 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         
         return { totalStudents, unassignedStudents, apps, pipeline };
     }, [students, users]);
+
+    // Per-User Portfolio Breakdown (Filtered by Department)
+    const agentBreakdown = useMemo(() => {
+        if (!isClient || !users || !students) return [];
+
+        const statsMap = new Map<string, { id: string, name: string, total: number, green: number, orange: number, red: number, none: number }>();
+        
+        users.forEach(u => {
+            if (u.civilId) {
+                statsMap.set(u.civilId, { id: u.id, name: u.name, total: 0, green: 0, orange: 0, red: 0, none: 0 });
+            }
+        });
+
+        students.forEach(s => {
+            if (s.employeeId && statsMap.has(s.employeeId)) {
+                const entry = statsMap.get(s.employeeId)!;
+                entry.total++;
+                const status = s.pipelineStatus || 'none';
+                if (status === 'green') entry.green++;
+                else if (status === 'orange') entry.orange++;
+                else if (status === 'red') entry.red++;
+                else entry.none++;
+            }
+        });
+
+        return Array.from(statsMap.values())
+            .filter(s => s.total > 0)
+            .sort((a, b) => b.total - a.total);
+    }, [isClient, users, students]);
 
     if (!isDept) return null;
 
@@ -218,6 +262,48 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                        <CardHeader className="pb-3 border-b bg-muted/5">
+                            <div className="flex items-center gap-2">
+                                <LayoutGrid className="h-4 w-4 text-primary" />
+                                <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Portfolio Performance ({currentUser.department || 'Region'})</CardTitle>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/30">
+                                            <TableHead className="text-[10px] font-black uppercase">Employee</TableHead>
+                                            <TableHead className="text-[10px] font-black uppercase text-center">Total</TableHead>
+                                            <TableHead className="text-[10px] font-black uppercase text-center text-green-700">Green</TableHead>
+                                            <TableHead className="text-[10px] font-black uppercase text-center text-orange-700">Orange</TableHead>
+                                            <TableHead className="text-[10px] font-black uppercase text-center text-red-700">Red</TableHead>
+                                            <TableHead className="text-[10px] font-black uppercase text-center text-muted-foreground">None</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {agentBreakdown.map((agent) => (
+                                            <TableRow key={agent.id}>
+                                                <TableCell className="font-bold text-xs">{agent.name}</TableCell>
+                                                <TableCell className="text-center"><Badge variant="outline" className="font-mono text-[10px]">{agent.total}</Badge></TableCell>
+                                                <TableCell className="text-center font-black text-green-700 text-xs">{agent.green}</TableCell>
+                                                <TableCell className="text-center font-black text-orange-700 text-xs">{agent.orange}</TableCell>
+                                                <TableCell className="text-center font-black text-red-700 text-xs">{agent.red}</TableCell>
+                                                <TableCell className="text-center font-bold text-muted-foreground text-xs">{agent.none}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {agentBreakdown.length === 0 && !isLoading && (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="h-20 text-center text-xs text-muted-foreground italic">No students assigned in this region yet.</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     <SendTaskForm currentUser={currentUser} />
                     <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
                 </div>
