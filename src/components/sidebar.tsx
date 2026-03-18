@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sidebar,
@@ -35,6 +34,7 @@ import {
   ReceiptText,
   UserCog,
   RefreshCw,
+  Globe,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -150,6 +150,7 @@ export function AppSidebar() {
     ];
     
     const managementNav = [
+        { href: '/all-applications', label: 'Applications', icon: Globe, roles: ['admin', 'department'] },
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
         { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin'] },
         { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'] },
