@@ -35,6 +35,7 @@ import {
   UserCog,
   RefreshCw,
   Globe,
+  UserRoundX,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -138,6 +139,25 @@ export function AppSidebar() {
         }).length;
     }, [tasks, user]);
 
+    // 6. Change Agent Count for Management
+    const changeAgentCount = useMemo(() => {
+      if (!students || isEmployeeView) return 0;
+      
+      let filtered = students.filter(s => s.changeAgentRequired);
+      
+      if (effectiveRole === 'department' && user?.department) {
+        const dept = user.department;
+        filtered = filtered.filter(student => {
+          const appCountries = (student.applications || []).map(a => a.country);
+          return (dept === 'UK' && appCountries.includes('UK')) || 
+                 (dept === 'USA' && appCountries.includes('USA')) || 
+                 (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
+        });
+      }
+      
+      return filtered.length;
+    }, [students, isEmployeeView, effectiveRole, user?.department]);
+
     const userHasRole = (roles: string[]) => roles.includes(effectiveRole);
     
     const mainNav = [
@@ -151,6 +171,7 @@ export function AppSidebar() {
     
     const managementNav = [
         { href: '/all-applications', label: 'Applications', icon: Globe, roles: ['admin', 'department'] },
+        { href: '/change-agent-dashboard', label: 'Change Agent', icon: UserRoundX, roles: ['admin', 'department'], badge: changeAgentCount },
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
         { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin'] },
         { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'] },
