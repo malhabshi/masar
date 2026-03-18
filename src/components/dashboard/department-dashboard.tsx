@@ -71,13 +71,15 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         if(!students || !users) return { 
           totalStudents: 0, 
           unassignedStudents: 0, 
-          apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 } 
+          apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
+          pipeline: { green: 0, orange: 0, red: 0, none: 0 }
         };
         
         const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
         const validUserIds = new Set(users.map(u => u.id));
         
         const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
+        const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
         let totalStudents = 0;
         let unassignedStudents = 0;
 
@@ -88,7 +90,16 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
             if (isGhost) return;
 
             totalStudents++;
-            if (!hasAgent) unassignedStudents++;
+            if (!hasAgent) {
+              unassignedStudents++;
+            } else {
+              // Count pipeline status for assigned students
+              const status = s.pipelineStatus || 'none';
+              if (status === 'green') pipeline.green++;
+              else if (status === 'orange') pipeline.orange++;
+              else if (status === 'red') pipeline.red++;
+              else pipeline.none++;
+            }
 
             (s.applications || []).forEach(app => {
                 apps.total++;
@@ -101,7 +112,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
             });
         });
         
-        return { totalStudents, unassignedStudents, apps };
+        return { totalStudents, unassignedStudents, apps, pipeline };
     }, [students, users]);
 
     if (!isDept) return null;
@@ -136,13 +147,31 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
             )}
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <Card>
+                <Card className="border-green-200">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Registered Students</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <Users className="h-4 w-4 text-green-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{isLoading ? '...' : stats.totalStudents}</div>
+                        <div className="text-2xl font-bold text-green-700 mb-3">{isLoading ? '...' : stats.totalStudents}</div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
+                            <span className="text-green-700 uppercase font-bold">Green</span>
+                            <span className="font-black text-green-700">{stats.pipeline.green}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-orange-50 px-2 py-1 rounded">
+                            <span className="text-orange-700 uppercase font-bold">Orange</span>
+                            <span className="font-black text-orange-700">{stats.pipeline.orange}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
+                            <span className="text-red-700 uppercase font-bold">Red</span>
+                            <span className="font-black text-red-700">{stats.pipeline.red}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">No Status</span>
+                            <span className="font-black text-muted-foreground">{stats.pipeline.none}</span>
+                          </div>
+                        </div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -175,7 +204,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                             <span className="font-black text-purple-600">{stats.apps.missingItems}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
-                            <span className="text-red-700 uppercase font-bold">Accepted</span>
+                            <span className="text-green-700 uppercase font-bold">Accepted</span>
                             <span className="font-black text-green-700">{stats.apps.accepted}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">

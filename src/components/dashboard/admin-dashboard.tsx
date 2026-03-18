@@ -53,7 +53,8 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
       assigned: 0, 
       unassigned: 0, 
       ghost: 0, 
-      apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 } 
+      apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
+      pipeline: { green: 0, orange: 0, red: 0, none: 0 }
     };
     
     const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
@@ -63,6 +64,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     let unassigned = 0;
     let ghost = 0;
     const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
+    const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
 
     students.forEach(s => {
       const hasAgent = !!s.employeeId;
@@ -72,6 +74,12 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
         unassigned++;
       } else if (!isGhost) {
         assigned++;
+        // Count pipeline status for assigned students
+        const status = s.pipelineStatus || 'none';
+        if (status === 'green') pipeline.green++;
+        else if (status === 'orange') pipeline.orange++;
+        else if (status === 'red') pipeline.red++;
+        else pipeline.none++;
       } else {
         ghost++;
       }
@@ -91,7 +99,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     });
     
     const total = assigned + unassigned;
-    return { total, assigned, unassigned, ghost, apps };
+    return { total, assigned, unassigned, ghost, apps, pipeline };
   }, [students, users]);
 
   if (!isAdmin) return null;
@@ -145,8 +153,25 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
             <CheckCircle2 className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-green-700">{isLoading ? '...' : stats.assigned}</div>
-            <p className="text-[10px] text-green-600 font-medium mt-1">In employee portfolios.</p>
+            <div className="text-3xl font-black text-green-700 mb-3">{isLoading ? '...' : stats.assigned}</div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
+                <span className="text-green-700 uppercase font-bold">Green</span>
+                <span className="font-black text-green-700">{stats.pipeline.green}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] bg-orange-50 px-2 py-1 rounded">
+                <span className="text-orange-700 uppercase font-bold">Orange</span>
+                <span className="font-black text-orange-700">{stats.pipeline.orange}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
+                <span className="text-red-700 uppercase font-bold">Red</span>
+                <span className="font-black text-red-700">{stats.pipeline.red}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
+                <span className="text-muted-foreground uppercase font-bold">No Status</span>
+                <span className="font-black text-muted-foreground">{stats.pipeline.none}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

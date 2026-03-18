@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -59,7 +58,17 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
         const myPendingApplications = myStudents.reduce((acc, s) => {
             return acc + (s.applications?.filter(a => a.status === 'Pending').length || 0);
         }, 0);
-        return { myTotalAssigned, myPendingApplications };
+
+        const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
+        myStudents.forEach(s => {
+            const status = s.pipelineStatus || 'none';
+            if (status === 'green') pipeline.green++;
+            else if (status === 'orange') pipeline.orange++;
+            else if (status === 'red') pipeline.red++;
+            else pipeline.none++;
+        });
+
+        return { myTotalAssigned, myPendingApplications, pipeline };
     }, [myStudents]);
 
 
@@ -95,14 +104,31 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
             )}
 
             <div className="grid gap-6 md:grid-cols-2">
-                <Card>
+                <Card className="border-green-200">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Assigned Portfolio</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <Users className="h-4 w-4 text-green-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{isLoading ? '...' : stats.myTotalAssigned}</div>
-                        <p className="text-xs text-muted-foreground mt-1">Students officially assigned to you.</p>
+                        <div className="text-2xl font-bold text-green-700 mb-3">{isLoading ? '...' : stats.myTotalAssigned}</div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
+                            <span className="text-green-700 uppercase font-bold">Green</span>
+                            <span className="font-black text-green-700">{stats.pipeline.green}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-orange-50 px-2 py-1 rounded">
+                            <span className="text-orange-700 uppercase font-bold">Orange</span>
+                            <span className="font-black text-orange-700">{stats.pipeline.orange}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
+                            <span className="text-red-700 uppercase font-bold">Red</span>
+                            <span className="font-black text-red-700">{stats.pipeline.red}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">No Status</span>
+                            <span className="font-black text-muted-foreground">{stats.pipeline.none}</span>
+                          </div>
+                        </div>
                     </CardContent>
                 </Card>
                 <Card>
