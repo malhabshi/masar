@@ -14,7 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+<<<<<<< HEAD
 import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2 } from 'lucide-react';
+=======
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck } from 'lucide-react';
+>>>>>>> 701007a114f559efe8528500f3bf4e375ca8240a
 import type { Student, PipelineStatus, User, Note } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
 import {
@@ -292,7 +296,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
             <TableRow>
               <TableHead>Student</TableHead>
               <TableHead>Apps</TableHead>
+<<<<<<< HEAD
               <TableHead>Jotform</TableHead>
+=======
+>>>>>>> 701007a114f559efe8528500f3bf4e375ca8240a
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Agent</TableHead>
               <TableHead>Status Note</TableHead>
@@ -364,6 +371,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                     </div>
                   </TableCell>
                   <TableCell><Badge variant="secondary" className="font-mono">{student.applications?.length || 0}</Badge></TableCell>
+<<<<<<< HEAD
                   <TableCell>
                     {student.jotform ? (
                       <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50 flex items-center gap-1 w-fit whitespace-nowrap">
@@ -374,6 +382,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       <span className="text-muted-foreground text-xs italic">-</span>
                     )}
                   </TableCell>
+=======
+>>>>>>> 701007a114f559efe8528500f3bf4e375ca8240a
                   <TableCell><Badge variant="default" className={cn("capitalize", pipelineStatusStyles[student.pipelineStatus || 'none'])}>{pipelineStatusLabels[student.pipelineStatus || 'none']}</Badge></TableCell>
                   <TableCell>{getEmployeeName(student.employeeId)}</TableCell>
                   <TableCell className="max-w-[200px]">
@@ -423,7 +433,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 </TableRow>
               )})
             ) : (
+<<<<<<< HEAD
               <TableRow><TableCell colSpan={isAdminOnly ? 11 : 10} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
+=======
+              <TableRow><TableCell colSpan={isAdminOnly ? 10 : 9} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
+>>>>>>> 701007a114f559efe8528500f3bf4e375ca8240a
             )}
           </TableBody>
         </Table>

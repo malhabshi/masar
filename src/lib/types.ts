@@ -135,7 +135,10 @@ export interface Student {
   changeAgentRequired?: boolean;
   changeAgentUniversities?: string[];
   term?: string;
+<<<<<<< HEAD
   jotform?: boolean;
+=======
+>>>>>>> 701007a114f559efe8528500f3bf4e375ca8240a
 }
 
 export interface ChatMessage {
