@@ -2,4 +2,7 @@
 echo "Clearing Next.js and module caches..."
 rm -rf .next
 rm -rf node_modules/.cache
-echo "Caches cleared. Please restart the dev server with 'npm run dev'."
+rm -rf out
+echo "Caches cleared. Attempting to build to verify project integrity..."
+npm run build
+echo "Build check complete. If successful, try downloading the zip workspace again."
