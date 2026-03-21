@@ -1,0 +1,4 @@
+[00:14:54.342] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/home/user/studio/uniapply-final/app'
+[00:14:54.379] Server  ERROR   ⨯ "unhandledRejection:" Error: ENOENT: no such file or directory, scandir '/home/user/studio/uniapply-final/app'
+[00:14:54.435] Server  ERROR   ⨯ "unhandledRejection: " Error: ENOENT: no such file or directory, scandir '/home/user/studio/uniapply-final/app'
+[00:14:55.972] Server  LOG     ✓ Compiled in 27.6s

@@ -1,0 +1,189 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * UNIAPPLY HUB SECURITY RULES
+     * Single Source of Truth: /admins and /departmentUsers collections (DBAC)
+     */
+
+    // --- Helper Functions ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** 
+     * @description Checks if user is an admin using indexed DBAC collection. 
+     * Includes hardcoded bypass for system maintenance.
+     */
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == 'bbkDS193aqcaAJS6M6GkjWFgFTr1' || 
+        request.auth.uid == 'IZr1zv5ePQb0bKNVXS4xGjERmE62' || 
+        request.auth.uid == 'cYfvOMr5CCY5MACCgYm1DdjaZug1' || 
+        request.auth.uid == 'lZr1zv5ePQbObKNVXS4xGjERmE62' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    /** @description Checks if user is in a department using indexed DBAC collection. */
+    function isDepartment() {
+      return isSignedIn() && exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid));
+    }
+
+    function isPrivileged() {
+      return isAdmin() || isDepartment();
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** @description Safely retrieves user data without crashing the rule evaluation if missing. */
+    function getUserData() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) ? get(path).data : {};
+    }
+
+    // --- Rules ---
+
+    match /users/{userId} {
+      allow get, list: if isSignedIn();
+      allow create: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
+
+      match /personal_todos/{todoId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /departmentUsers/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /students/{studentId} {
+      // Basic read allowed for all staff
+      allow read: if isSignedIn();
+      
+      // Management and creators can write
+      allow create: if isPrivileged() || isSignedIn();
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == resource.data.employeeId);
+      allow delete: if isAdmin();
+    }
+
+    match /universityApplications/{applicationId} {
+      allow read: if isSignedIn();
+      allow create: if isPrivileged() || (isSignedIn() && request.resource.data.assignedToEmployeeId == getUserData().get('civilId', ''));
+      allow update: if isPrivileged() || (isSignedIn() && getUserData().get('civilId', '') == resource.data.assignedToEmployeeId);
+      allow delete: if isAdmin();
+    }
+
+    match /documents/{documentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isPrivileged() || isOwner(resource.data.authorId);
+    }
+
+    match /tasks/{taskId} {
+      allow list: if isSignedIn();
+      
+      allow get: if isSignedIn() && (
+        isAdmin() ||
+        request.auth.uid == resource.data.authorId ||
+        (resource.data.recipientIds != null && (
+          request.auth.uid in resource.data.recipientIds ||
+          'all' in resource.data.recipientIds ||
+          (isDepartment() && ('dept:' + getUserData().get('department', 'UNKNOWN')) in resource.data.recipientIds)
+        ))
+      );
+      
+      allow create: if isSignedIn();
+      allow update: if isPrivileged() || request.auth.uid == resource.data.authorId;
+      allow delete: if isAdmin();
+    }
+
+    match /chats/{studentId} {
+      allow read, write: if isSignedIn();
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    match /chatThreads/{chatThreadId} {
+      allow read, write: if isSignedIn();
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    match /customApplicationFieldDefinitions/{fieldId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /upcoming_events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /shared_documents/{documentId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /request_types/{typeId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /resource_links/{linkId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /time_logs/{logId} {
+      allow read: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isPrivileged() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+    }
+    
+    match /approved_universities/{uniId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+
+    match /academic_terms/{termId} {
+      allow read: if isSignedIn();
+      allow write: if isPrivileged();
+    }
+    
+    match /notification_templates/{templateId} {
+      allow read, list: if isSignedIn();
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /invoice_templates/{templateId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /invoice_saved_items/{itemId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /system_metadata/{docId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

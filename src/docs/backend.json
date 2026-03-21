@@ -1,0 +1,120 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "type": "object",
+      "description": "Represents an individual user within the UniApply Hub system. Can be an admin, employee, department, or student.",
+      "properties": {
+        "name": { "type": "string", "description": "The full name of the user." },
+        "email": { "type": "string", "description": "The email address of the user, used for identification and communication.", "format": "email" },
+        "phone": { "type": "string", "description": "The phone number of the user." },
+        "role": { "type": "string", "description": "The role of the user within the system.", "enum": ["admin", "employee", "department", "student"] },
+        "civilId": { "type": "string", "description": "The user's 12-digit Civil ID, used for uniquely identifying employees." },
+        "employeeId": { "type": "string", "description": "A short employee ID, often derived from the Civil ID." },
+        "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the user's profile picture." },
+        "studentId": { "type": ["string", "null"], "description": "If the user is a student, this links to their main student profile ID." }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "type": "object",
+      "description": "Represents a student whose university applications are being managed through the UniApply Hub.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the Student entity." },
+        "name": { "type": "string", "description": "The full name of the student." },
+        "email": { "type": "string", "description": "The email address of the student.", "format": "email" },
+        "phone": { "type": "string", "description": "The phone number of the student." },
+        "internalNumber": { "type": "string", "description": "An internal use number assigned to the student." },
+        "employeeId": { "type": ["string", "null"], "description": "Reference to the User's Civil ID for the assigned employee." },
+        "avatarUrl": { "type": "string", "format": "uri", "description": "URL for the student's profile picture." },
+        "applications": { "type": "array", "description": "A list of university applications for the student.", "items": { "$ref": "#/entities/Application" } },
+        "employeeNotes": { "type": "array", "description": "Notes written by the assigned employee.", "items": { "$ref": "#/entities/Note" } },
+        "adminNotes": { "type": "array", "description": "Internal notes for admins and departments.", "items": { "$ref": "#/entities/Note" } },
+        "documents": { "type": "array", "description": "A list of documents uploaded for the student.", "items": { "$ref": "#/entities/StudentDocument" } },
+        "createdAt": { "type": "string", "description": "Timestamp indicating when the student record was created.", "format": "date-time" },
+        "createdBy": { "type": "string", "description": "The ID of the user who created the student record." },
+        "lastActivityAt": { "type": "string", "description": "Timestamp of the last meaningful interaction with the student profile.", "format": "date-time" },
+        "targetCountries": { "type": "array", "description": "List of countries the student is interested in.", "items": { "type": "string" } },
+        "missingItems": { "type": "array", "description": "A list of missing documents or information required from the student.", "items": { "type": "string" } },
+        "pipelineStatus": { "type": "string", "description": "The student's status in the application pipeline.", "enum": ["green", "orange", "red", "none"] },
+        "transferHistory": { "type": "array", "description": "A log of when the student was transferred between employees.", "items": { "$ref": "#/entities/TransferHistoryEntry" } },
+        "unreadUpdates": { "type": "number", "description": "Counter for unread messages/updates for admins." },
+        "employeeUnreadMessages": { "type": "number", "description": "Counter for unread messages for the assigned employee." },
+        "newDocumentsForEmployee": { "type": "number", "description": "Counter for new documents uploaded by admin for the employee." },
+        "newDocumentsForAdmin": { "type": "number", "description": "Counter for new documents uploaded by employee for the admin." },
+        "newMissingItemsForEmployee": { "type": "number", "description": "Counter for new missing items added by admin for the employee." },
+        "finalChoiceUniversity": { "type": "string", "description": "The name of the university the student has finalized." },
+        "ieltsOverall": { "type": "number", "description": "The student's overall IELTS score." },
+        "profileCompletionStatus": { "$ref": "#/entities/ProfileCompletionStatus" },
+        "transferRequested": { "type": "boolean", "description": "Flag indicating if a transfer has been requested for this student." },
+        "deletionRequested": {
+            "type": "object",
+            "description": "Information about a pending, approved, or rejected deletion request.",
+            "properties": {
+                "requestedBy": { "type": "string" },
+                "reason": { "type": "string" },
+                "requestedAt": { "type": "string", "format": "date-time" },
+                "status": { "type": "string", "enum": ["pending", "approved", "rejected"] }
+            }
+        },
+        "isNewForEmployee": { "type": "boolean", "description": "Flag indicating if this student is newly assigned to an employee." },
+        "term": { "type": "string", "description": "The academic term the student is applying for (e.g., 'Fall 2024')." },
+        "studentLogins": { "type": "array", "items": { "$ref": "#/entities/StudentLogin" }, "description": "A list of login accounts associated with this student." },
+        "changeAgentRequired": { "type": "boolean", "description": "Flag indicating if this student requires an urgent agent change or high-priority oversight." }
+      },
+      "required": ["id", "name", "phone", "createdAt", "createdBy"]
+    },
+    "NotificationTemplate": {
+      "title": "Notification Template",
+      "type": "object",
+      "description": "Configuration for automated WhatsApp messages via specific WANotifier webhook URLs.",
+      "properties": {
+        "notificationType": { "type": "string" },
+        "templateName": { "type": "string" },
+        "message": { "type": "string" },
+        "webhookUrl": { "type": "string", "format": "uri" },
+        "isActive": { "type": "boolean" },
+        "variables": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["notificationType", "templateName", "message", "isActive"]
+    },
+    "InvoiceSavedItem": {
+      "title": "Invoice Saved Item",
+      "type": "object",
+      "description": "Standard service or product catalog items for recurring use in invoices.",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "defaultAmount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "defaultAmount"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores individual user profiles."
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Stores all data for a single student."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Stores tasks and their replies."
+    },
+    "/notification_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/NotificationTemplate" },
+      "description": "Stores WhatsApp message templates with their unique webhook URLs."
+    },
+    "/invoice_saved_items/{itemId}": {
+      "schema": { "$ref": "#/entities/InvoiceSavedItem" },
+      "description": "Catalog of reusable invoice items."
+    }
+  }
+}

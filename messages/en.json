@@ -1,0 +1,27 @@
+{
+  "UserSwitcher": {
+    "switchAccount": "Switch Account",
+    "profile": "Profile",
+    "logout": "Log out"
+  },
+  "Sidebar": {
+    "dashboard": "Dashboard",
+    "applicants": "Applicants",
+    "unassignedStudents": "Unassigned Students",
+    "resources": "Resources",
+    "approvedUniversities": "Approved Universities",
+    "finalizedStudents": "Finalized Students",
+    "internalChat": "Internal Chat",
+    "employeeActivity": "Employee Activity",
+    "userManagement": "User Management",
+    "reports": "Reports",
+    "requestSettings": "Request Settings",
+    "tasks": "Tasks",
+    "support": "Support",
+    "settings": "Settings"
+  },
+  "LanguageSwitcher": {
+    "label": "Change language",
+    "en": "English"
+  }
+}

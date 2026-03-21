@@ -1,0 +1,152 @@
+'use client';
+
+import { useMemo } from 'react';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { where } from 'firebase/firestore';
+import type { Student, Task } from '@/lib/types';
+import { Users, FileText, AlertCircle, ArrowRight } from 'lucide-react';
+import { sortByDate } from '@/lib/timestamp-utils';
+import type { AppUser } from '@/hooks/use-user';
+import Link from 'next/link';
+
+// Components
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { TaskList } from '@/components/dashboard/task-list';
+import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
+import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
+import { Badge } from '@/components/ui/badge';
+
+export default function EmployeeDashboard({ currentUser }: { currentUser: AppUser }) {
+    // 1. Query for officially assigned students (Portfolio)
+    const myStudentsConstraints = useMemoFirebase(() => {
+        return currentUser.civilId ? [where('employeeId', '==', currentUser.civilId)] : [];
+    }, [currentUser.civilId]);
+
+    const { data: myStudentsData, isLoading: studentsLoading } = useCollection<Student>(
+        currentUser.civilId ? 'students' : '', 
+        ...myStudentsConstraints
+    );
+    const myStudents = useMemo(() => myStudentsData || [], [myStudentsData]);
+
+    const changeAgentRequiredStudents = useMemo(() => {
+        return myStudents.filter(s => s.changeAgentRequired);
+    }, [myStudents]);
+
+    const relevantTasksConstraints = useMemoFirebase(() => {
+        if (!currentUser) return [];
+        // Query tasks directed to this user specifically, their department, or everyone
+        const groups = [currentUser.id, 'all'];
+        if (currentUser.role === 'admin') groups.push('admins');
+        if (currentUser.department) groups.push(`dept:${currentUser.department}`);
+        
+        return [where('recipientIds', 'array-contains-any', groups)];
+    }, [currentUser]);
+
+    const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(
+        currentUser ? 'tasks' : '', 
+        ...relevantTasksConstraints
+    );
+
+    const isLoading = studentsLoading || tasksLoading;
+
+    const relevantTasks = useMemo(() => {
+        return (tasksData || []).sort((a, b) => sortByDate(a, b));
+    }, [tasksData]);
+
+    const stats = useMemo(() => {
+        const myTotalAssigned = myStudents.length;
+        const myPendingApplications = myStudents.reduce((acc, s) => {
+            return acc + (s.applications?.filter(a => a.status === 'Pending').length || 0);
+        }, 0);
+
+        const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
+        myStudents.forEach(s => {
+            const status = s.pipelineStatus || 'none';
+            if (status === 'green') pipeline.green++;
+            else if (status === 'orange') pipeline.orange++;
+            else if (status === 'red') pipeline.red++;
+            else pipeline.none++;
+        });
+
+        return { myTotalAssigned, myPendingApplications, pipeline };
+    }, [myStudents]);
+
+
+    return (
+        <div className="space-y-6">
+            {changeAgentRequiredStudents.length > 0 && (
+              <Card className="border-red-500 bg-red-50">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2 text-red-600">
+                    <AlertCircle className="h-6 w-6 animate-bounce" />
+                    <CardTitle className="text-xl font-black">🚨 URGENT: Change Agent Required</CardTitle>
+                  </div>
+                  <CardDescription className="text-red-700 font-medium">Management has flagged these students for immediate action.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {changeAgentRequiredStudents.map(student => (
+                      <Link key={student.id} href={`/student/${student.id}`}>
+                        <div className="bg-black p-4 rounded-lg flex items-center justify-between border-2 border-red-500 transition-transform hover:scale-[1.02] shadow-lg shadow-red-500/20 group">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-red-500 font-black truncate block uppercase tracking-tighter text-sm group-hover:animate-pulse">
+                              {student.name}
+                            </span>
+                            <span className="text-[10px] text-red-400/70 font-bold uppercase">Immediate Attention Required</span>
+                          </div>
+                          <ArrowRight className="h-5 w-5 text-red-500 ml-2 shrink-0" />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="grid gap-6 md:grid-cols-2">
+                <Card className="border-green-200">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Assigned Portfolio</CardTitle>
+                        <Users className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-green-700 mb-3">{isLoading ? '...' : stats.myTotalAssigned}</div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
+                            <span className="text-green-700 uppercase font-bold">Green</span>
+                            <span className="font-black text-green-700">{stats.pipeline.green}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-orange-50 px-2 py-1 rounded">
+                            <span className="text-orange-700 uppercase font-bold">Orange</span>
+                            <span className="font-black text-orange-700">{stats.pipeline.orange}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
+                            <span className="text-red-700 uppercase font-bold">Red</span>
+                            <span className="font-black text-red-700">{stats.pipeline.red}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
+                            <span className="text-muted-foreground uppercase font-bold">No Status</span>
+                            <span className="font-black text-muted-foreground">{stats.pipeline.none}</span>
+                          </div>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Pending Applications</CardTitle>
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{isLoading ? '...' : stats.myPendingApplications}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Active tasks in your portfolio.</p>
+                    </CardContent>
+                </Card>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <TaskList tasks={relevantTasks} currentUser={currentUser} isLoading={isLoading} />
+                <UpcomingEventsCard />
+            </div>
+            <PersonalTodoList />
+        </div>
+    );
+}
