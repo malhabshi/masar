@@ -85,7 +85,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     
     // Narrow UserRole to allowed effectiveRole types
     if (appUser.role === 'admin' || appUser.role === 'department') {
-      return appUser.role;
+      return appUser.role as 'admin' | 'department';
     }
     
     return 'employee'; // Fallback
