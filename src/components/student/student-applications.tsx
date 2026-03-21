@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle, Checkbox as CheckboxIcon, Layers } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle, CheckSquare, Layers } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
 import { 

@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Clearing Next.js and module caches..."
+echo "Clearing Next.js and module caches to resolve workspace issues..."
 rm -rf .next
 rm -rf node_modules/.cache
 rm -rf out
