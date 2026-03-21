@@ -32,10 +32,7 @@ import { InactivityReportSection } from '@/components/student/inactivity-report-
 import { AssignmentCard } from '@/components/student/assignment-card';
 import { StatusNoteCard } from '@/components/student/status-note-card';
 import { AdminStatusNoteCard } from '@/components/student/admin-status-note-card';
-<<<<<<< HEAD
 import { JotformCard } from '@/components/student/jotform-card';
-=======
->>>>>>> 701007a114f559efe8528500f3bf4e375ca8240a
 
 function playLoudAlert() {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -243,10 +240,7 @@ export default function StudentDetailPage() {
               </div>
               <ReadinessChecklist student={student} currentUser={currentUser} />
               <MissingItemsSection student={student} currentUser={currentUser} />
-<<<<<<< HEAD
               <JotformCard student={student} currentUser={currentUser} />
-=======
->>>>>>> 701007a114f559efe8528500f3bf4e375ca8240a
               <AcademicIntakeCard student={student} currentUser={currentUser} />
               <GradeCard student={student} currentUser={currentUser} />
               <IeltsCard student={student} currentUser={currentUser} />
