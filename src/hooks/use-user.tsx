@@ -73,11 +73,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('appViewMode', newMode);
   };
 
-  // Determine the role to use for UI rendering
+  // Explicitly type the return value to match UserContextType
   const effectiveRole = React.useMemo((): 'admin' | 'employee' | 'department' => {
-    if (!appUser) return 'employee'; // Fallback
+    if (!appUser) return 'employee'; 
     if (appUser.role === 'employee') return 'employee';
-    return viewMode === 'employee' ? 'employee' : appUser.role;
+    const role = viewMode === 'employee' ? 'employee' : appUser.role;
+    return role as 'admin' | 'employee' | 'department';
   }, [appUser, viewMode]);
 
   const value: UserContextType = {
