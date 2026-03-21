@@ -74,13 +74,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Determine the role to use for UI rendering
-  const effectiveRole = React.useMemo(() => {
+  const effectiveRole = React.useMemo((): 'admin' | 'employee' | 'department' => {
     if (!appUser) return 'employee'; // Fallback
     if (appUser.role === 'employee') return 'employee';
     return viewMode === 'employee' ? 'employee' : appUser.role;
   }, [appUser, viewMode]);
 
-  const value = {
+  const value: UserContextType = {
     user: appUser,
     isUserLoading: isAuthLoading || (!!authUser && isFirestoreLoading),
     userError: authError,
