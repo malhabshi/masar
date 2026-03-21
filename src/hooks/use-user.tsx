@@ -76,9 +76,19 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   // Explicitly type the return value to match UserContextType
   const effectiveRole = React.useMemo((): 'admin' | 'employee' | 'department' => {
     if (!appUser) return 'employee'; 
+    
+    // Core logic: If user is an employee, they are always effectively an employee
     if (appUser.role === 'employee') return 'employee';
-    const role = viewMode === 'employee' ? 'employee' : appUser.role;
-    return role as 'admin' | 'employee' | 'department';
+    
+    // If management role, respect the current viewMode toggle
+    if (viewMode === 'employee') return 'employee';
+    
+    // Narrow UserRole to allowed effectiveRole types
+    if (appUser.role === 'admin' || appUser.role === 'department') {
+      return appUser.role;
+    }
+    
+    return 'employee'; // Fallback
   }, [appUser, viewMode]);
 
   const value: UserContextType = {
