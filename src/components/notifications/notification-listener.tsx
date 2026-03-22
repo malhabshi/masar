@@ -20,7 +20,8 @@ function playNotificationSound(frequency = 800) {
   gainNode.connect(audioContext.destination);
   oscillator.type = 'sine';
   oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-  gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+  // Increased from 0.05 to 0.3 for a more noticeable alert sound
+  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
   gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.5);
   oscillator.start(audioContext.currentTime);
   oscillator.stop(audioContext.currentTime + 0.5);
@@ -51,7 +52,8 @@ export function NotificationListener() {
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
     if (user.role === 'admin') return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
-    if (user.role === 'employee') return query(collection(firestore, 'tasks'), where('authorId', '==', user.id));
+    
+    // Correctly match targeted tasks for employees and departments
     const groups = [user.id, 'all'];
     if (user.department) groups.push(`dept:${user.department}`);
     return query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', groups));
@@ -178,6 +180,14 @@ export function NotificationListener() {
                     title: 'New Unassigned Student',
                     description: `'${currentStudent.name}' was added by ${creator?.name || 'Staff'}.`,
                     action: <ToastAction altText="View" onClick={() => router.push(`/unassigned-students`)}>View</ToastAction>,
+                });
+            } else if (user.role === 'employee' && (currentStudent.lastActivityAt || currentStudent.createdAt) > sessionStartTime.current) {
+                // For employees: Trigger when a student is newly assigned to them
+                playNotificationSound(1000);
+                toast({
+                    title: 'Student Assigned',
+                    description: `You have been assigned a new student: '${currentStudent.name}'`,
+                    action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
                 });
             }
             return;

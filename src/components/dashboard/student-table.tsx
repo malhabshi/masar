@@ -183,7 +183,20 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         };
         const scoreA = getNotificationScore(a);
         const scoreB = getNotificationScore(b);
-        if (scoreA !== scoreB) return scoreB - scoreA;
+        
+        // 1. If both have flags, sort by the newest flag (lastActivityAt)
+        if (scoreA > 0 && scoreB > 0) {
+            const timeA = new Date(a.lastActivityAt || a.createdAt).getTime();
+            const timeB = new Date(b.lastActivityAt || b.createdAt).getTime();
+            if (timeA !== timeB) return timeB - timeA;
+            return scoreB - scoreA; // Tie-breaker by score length
+        }
+        
+        // 2. If one has flags and the other doesn't, the flagged one bubbles up
+        if (scoreA > 0 && scoreB === 0) return -1;
+        if (scoreB > 0 && scoreA === 0) return 1;
+
+        // 3. Otherwise (neither have flags), sort by newly created student (createdAt)
         const dateA = new Date(a.createdAt).getTime() || 0;
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
