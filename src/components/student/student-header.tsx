@@ -18,7 +18,7 @@ import { useUserCacheById } from '@/hooks/use-user-cache';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import { CreateStudentTaskDialog } from '../tasks/create-student-task-dialog';
 import { Button } from '@/components/ui/button';
-import { toggleChangeAgentStatus, forceInactivity } from '@/lib/actions';
+import { toggleChangeAgentStatus, forceInactivity, clearStudentFlagsForEveryone } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -190,6 +190,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const [isChangeAgentDialogOpen, setIsChangeAgentDialogOpen] = useState(false);
   const [isForcingInactivity, setIsForcingInactivity] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isClearingFlags, setIsClearingFlags] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
@@ -249,6 +250,18 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
       toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
     }
     setIsTogglingAgent(false);
+  };
+
+  const handleClearFlags = async () => {
+    if (!canManage) return;
+    setIsClearingFlags(true);
+    const result = await clearStudentFlagsForEveryone(student!.id, currentUser!.id);
+    if (result.success) {
+      toast({ title: 'Flags Cleared', description: 'All notification flags have been cleared for everyone.' });
+    } else {
+      toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
+    }
+    setIsClearingFlags(false);
   };
 
   const handleForceInactivity = async () => {
@@ -384,6 +397,19 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 {isGeneratingPDF ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
                 Download PDF
               </Button>
+
+              {canManage && (
+                <Button 
+                   variant="outline"
+                   size="sm"
+                   onClick={handleClearFlags}
+                   disabled={isClearingFlags}
+                   className="bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100 font-bold"
+                >
+                  {isClearingFlags ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldAlert className="h-4 w-4 mr-2" />}
+                  Clear Flags for All
+                </Button>
+              )}
 
               {student.transferRequested && (
                   <TooltipProvider>

@@ -713,17 +713,27 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
     } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function updateTaskStatus(taskId: string, status: TaskStatus, updaterId: string) {
+export async function updateTaskStatus(taskId: string, status: TaskStatus, updaterId: string, reason?: string) {
     if (!checkAdminServices()) return { success: false, message: 'DB not available' };
     try {
         const updater = await getUser(updaterId);
         if (!updater || !['admin', 'department'].includes(updater.role)) return { success: false, message: 'Unauthorized.' };
         const taskRef = adminDb!.collection('tasks').doc(taskId);
-        await taskRef.update({ status });
+        
+        const updateData: any = { status };
+        if (status === 'denied' && reason) {
+          updateData.denialReason = reason;
+        }
+        await taskRef.update(updateData);
+
         const taskDoc = await taskRef.get();
         const taskData = taskDoc.data() as Task;
         if (taskData.authorId !== updaterId) {
-            const message = `Task "${taskData.taskType}" status updated to '${status}' by ${updater.name}.`;
+            let message = `Task "${taskData.taskType}" status updated to '${status}' by ${updater.name}.`;
+            if (status === 'denied' && reason) {
+              message = `Status updated to 'Denied' by ${updater.name}. Reason: ${reason}`;
+            }
+
             await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: taskData.authorId, recipientIds: [taskData.authorId], content: message, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
             const recipient = await getUser(taskData.authorId);
             if (recipient?.phone) {
@@ -941,6 +951,7 @@ export async function addMissingItemToStudent(studentId: string, itemText: strin
         await adminDb!.collection('students').doc(studentId).update({ 
             missingItems: FieldValue.arrayUnion(newItem), 
             newMissingItemsForEmployee: FieldValue.increment(1), 
+            missingItemsViewedBy: [userId],
             lastActivityAt: new Date().toISOString() 
         });
         return { success: true, message: 'Missing item added.' };
@@ -1024,7 +1035,13 @@ export async function setStudentFinalChoice(studentId: string, university: strin
     if (updater.role === 'employee' && updater.civilId !== studentData.employeeId) {
         if (!['admin', 'department'].includes(updater.role)) return { success: false, message: 'Unauthorized.' };
     }
-    await studentRef.update({ finalChoiceUniversity: university, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-finalize-${Date.now()}`, authorId: updaterId, content: `${updater.name} set final choice to ${university}.`, createdAt: new Date().toISOString() }) });
+    await studentRef.update({ 
+        finalChoiceUniversity: university, 
+        lastActivityAt: new Date().toISOString(), 
+        finalizedAt: new Date().toISOString(),
+        finalizedViewedBy: [updaterId],
+        adminNotes: FieldValue.arrayUnion({ id: `note-finalize-${Date.now()}`, authorId: updaterId, content: `${updater.name} set final choice to ${university}.`, createdAt: new Date().toISOString() }) 
+    });
     if (updater.role === 'employee') {
         const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
         if (!adminsSnapshot.empty) {
@@ -1037,6 +1054,57 @@ export async function setStudentFinalChoice(studentId: string, university: strin
     }
     return { success: true, message: `Final choice set.` };
   } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+export async function markFinalizedAsViewed(studentIds: string[], userId: string) {
+    if (!checkAdminServices()) return { success: false };
+    if (!studentIds || studentIds.length === 0) return { success: true };
+    try {
+        const batch = adminDb!.batch();
+        for (const id of studentIds) {
+            batch.update(adminDb!.collection('students').doc(id), {
+                finalizedViewedBy: FieldValue.arrayUnion(userId)
+            });
+        }
+        await batch.commit();
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, message: e.message };
+    }
+}
+
+export async function clearStudentFlagsForEveryone(studentId: string, userId: string) {
+    if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+    try {
+        const studentRef = adminDb!.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+        if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+        const studentData = studentDoc.data() as Student;
+        const author = await getUser(userId);
+        
+        const updates: any = {
+            unreadUpdates: 0,
+            newDocumentsForAdmin: 0,
+            newDocumentsForEmployee: 0,
+            newMissingItemsForEmployee: 0,
+            employeeUnreadMessages: 0,
+            updatesViewedBy: [],
+            newDocsViewedBy: [],
+            missingItemsViewedBy: [],
+            lastActivityAt: new Date().toISOString(),
+            adminNotes: FieldValue.arrayUnion({ 
+                id: `note-flags-cleared-${Date.now()}`, 
+                authorId: userId, 
+                content: `${author?.name || 'Staff'} cleared all notification flags for everyone.`, 
+                createdAt: new Date().toISOString() 
+            })
+        };
+        
+        await studentRef.update(updates);
+        return { success: true, message: 'Flags cleared for everyone.' };
+    } catch (error: any) { 
+        return { success: false, message: error.message }; 
+    }
 }
 
 export async function deleteStudent(studentId: string, adminId: string) {
@@ -1350,6 +1418,7 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     
     if (isAdminDept) {
       updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
+      updates.updatesViewedBy = [author.id];
       await studentRef.update(updates);
       if (studentData.employeeId) {
         const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
@@ -1360,6 +1429,7 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       }
     } else {
       updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
+      updates.updatesViewedBy = [author.id];
       await studentRef.update(updates);
       
       // Precision Routing: Only notify admins and the relevant departments

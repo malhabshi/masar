@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
 import { formatDate } from '@/lib/timestamp-utils';
-import { doc } from 'firebase/firestore';
+import { doc, arrayUnion } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { useUserCacheById } from '@/hooks/use-user-cache';
@@ -75,11 +75,11 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
     const isEmployee = currentUser.role === 'employee';
     const updates: Partial<Student> = {};
 
-    if (isEmployee && student.newDocumentsForEmployee && student.newDocumentsForEmployee > 0) {
-      updates.newDocumentsForEmployee = 0;
+    if (isEmployee && student.newDocumentsForEmployee && student.newDocumentsForEmployee > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id))) {
+      updates.newDocsViewedBy = arrayUnion(currentUser.id) as any;
     }
-    if (isAdminDept && student.newDocumentsForAdmin && student.newDocumentsForAdmin > 0) {
-      updates.newDocumentsForAdmin = 0;
+    if (isAdminDept && student.newDocumentsForAdmin && student.newDocumentsForAdmin > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id))) {
+      updates.newDocsViewedBy = arrayUnion(currentUser.id) as any;
     }
 
     if (Object.keys(updates).length > 0) {

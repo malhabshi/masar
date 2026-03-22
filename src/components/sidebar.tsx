@@ -108,9 +108,14 @@ export function AppSidebar() {
       
       return students.reduce((acc, student) => {
         if (!isEmployeeView) {
-          return acc + (student.unreadUpdates || 0) + (student.newDocumentsForAdmin || 0);
+          const ud = (student.unreadUpdates || 0) > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(user.id)) ? student.unreadUpdates || 0 : 0;
+          const nd = (student.newDocumentsForAdmin || 0) > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) ? student.newDocumentsForAdmin || 0 : 0;
+          return acc + ud + nd;
         } else {
-          return acc + (student.employeeUnreadMessages || 0) + (student.newDocumentsForEmployee || 0) + (student.newMissingItemsForEmployee || 0);
+          const um = (student.employeeUnreadMessages || 0) > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(user.id)) ? student.employeeUnreadMessages || 0 : 0;
+          const ed = (student.newDocumentsForEmployee || 0) > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) ? student.newDocumentsForEmployee || 0 : 0;
+          const mi = (student.newMissingItemsForEmployee || 0) > 0 && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(user.id)) ? student.newMissingItemsForEmployee || 0 : 0;
+          return acc + um + ed + mi;
         }
       }, 0);
     }, [students, user, isEmployeeView]);
@@ -118,7 +123,10 @@ export function AppSidebar() {
     // 4. Aggregated unread chats for "Chats" link
     const unreadChatCount = useMemo(() => {
       if (!students || !user || !isManagementRole || isEmployeeView) return 0;
-      return students.reduce((acc, student) => acc + (student.unreadUpdates || 0), 0);
+      return students.reduce((acc, student) => {
+          const ud = (student.unreadUpdates || 0) > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(user.id)) ? student.unreadUpdates || 0 : 0;
+          return acc + ud;
+      }, 0);
     }, [students, user, isManagementRole, isEmployeeView]);
 
     // 5. Tasks notification count
@@ -126,6 +134,10 @@ export function AppSidebar() {
         if (!tasks || !user) return 0;
         return tasks.filter(t => {
             if (t.status !== 'new' || t.category !== 'request') return false;
+            
+            // USER PREFERENCE: Only count tasks explicitly assigned to THIS user
+            const isDirectlyForMe = t.recipientIds && t.recipientIds.includes(user.id);
+            if (!isDirectlyForMe) return false;
             
             const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
             if (hasSeen) return false;
@@ -162,15 +174,35 @@ export function AppSidebar() {
       
       return flaggedStudents.length;
     }, [students, isEmployeeView, effectiveRole, user?.department]);
+    
+    // 7. Unread Finalized Students for Admin/Department
+    const unreadFinalizedCount = useMemo(() => {
+        if (!students || !user || !isManagementRole) return 0;
+        
+        return students.filter(s => 
+            s.finalChoiceUniversity && 
+            s.finalChoiceUniversity.length > 0 && 
+            (!s.finalizedViewedBy || !s.finalizedViewedBy.includes(user.id))
+        ).length;
+    }, [students, user, isManagementRole]);
 
     const userHasRole = (roles: string[]) => roles.includes(effectiveRole);
+    
+    // 7. Track background updates for Employee View when staying on Management View
+    const employeeUnreadCount = useMemo(() => {
+      if (!students || !user || !user.civilId || isEmployeeView) return 0;
+      const myStudents = students.filter(s => s.employeeId === user.civilId);
+      return myStudents.reduce((acc, student) => {
+          return acc + (student.employeeUnreadMessages || 0) + (student.newDocumentsForEmployee || 0) + (student.newMissingItemsForEmployee || 0) + (student.isNewForEmployee ? 1 : 0);
+      }, 0);
+    }, [students, user, isEmployeeView]);
     
     const mainNav = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
         { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
         { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'employee', 'department'] },
         { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'employee', 'department'] },
-        { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'employee', 'department'] },
+        { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'employee', 'department'], badge: unreadFinalizedCount },
         { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'employee', 'department'] },
     ];
     
@@ -216,6 +248,11 @@ export function AppSidebar() {
                             {studentNotificationCount}
                         </SidebarMenuBadge>
                     )}
+                    {item.label === 'Finalized' && item.badge !== undefined && item.badge > 0 && (
+                        <SidebarMenuBadge className="bg-yellow-500 text-white animate-pulse">
+                            New
+                        </SidebarMenuBadge>
+                    )}
                 </SidebarMenuItem>
             ))}
 
@@ -257,12 +294,19 @@ export function AppSidebar() {
                     <SidebarMenuButton 
                       onClick={toggleViewMode}
                       className={cn(
-                        "font-bold transition-all",
-                        isEmployeeView ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : "bg-primary/10 text-primary hover:bg-primary/20"
+                        "font-bold transition-all relative",
+                        isEmployeeView ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : "bg-primary/10 text-primary hover:bg-primary/20",
+                        !isEmployeeView && employeeUnreadCount > 0 && "ring-1 ring-yellow-400/50"
                       )}
                     >
-                      {isEmployeeView ? <UserCog /> : <RefreshCw />}
-                      <span>{isEmployeeView ? "Management View" : "Employee View"}</span>
+                      {isEmployeeView ? <UserCog /> : <RefreshCw className={cn(!isEmployeeView && employeeUnreadCount > 0 && "text-yellow-600")} />}
+                      <span className="flex-1 text-left">{isEmployeeView ? "Management View" : "Employee View"}</span>
+                      
+                      {!isEmployeeView && employeeUnreadCount > 0 && (
+                        <span className="flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-yellow-500 text-[10px] font-black text-white shadow-[0_0_10px_rgba(234,179,8,0.5)] animate-pulse">
+                          {employeeUnreadCount}
+                        </span>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>

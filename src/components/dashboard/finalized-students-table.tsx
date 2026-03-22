@@ -22,9 +22,10 @@ interface FinalizedStudent extends Student {
 interface FinalizedStudentsTableProps {
   students: FinalizedStudent[];
   showEmployee?: boolean;
+  currentUserId?: string;
 }
 
-export function FinalizedStudentsTable({ students, showEmployee = true }: FinalizedStudentsTableProps) {
+export function FinalizedStudentsTable({ students, showEmployee = true, currentUserId }: FinalizedStudentsTableProps) {
   const employeeCivilIds = useMemo(() => {
     if (!showEmployee) return [];
     return [...new Set(students.map(s => s.employeeId).filter((id): id is string => !!id))];
@@ -51,6 +52,7 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
             <TableHead>Student</TableHead>
             <TableHead>Final Choice University</TableHead>
             <TableHead>Country</TableHead>
+            <TableHead>Finalized Date</TableHead>
             {showEmployee && <TableHead>Intake Term</TableHead>}
             {showEmployee && <TableHead>Assigned Employee</TableHead>}
           </TableRow>
@@ -68,6 +70,9 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
                         </span>
                       )}
                       <span className="font-medium">{student.name}</span>
+                      {currentUserId && (!student.finalizedViewedBy || !student.finalizedViewedBy.includes(currentUserId)) && (
+                        <Badge className="bg-yellow-500 text-white animate-pulse text-[9px] h-4 px-1">NEW</Badge>
+                      )}
                       {student.profileCompletionStatus?.readyToTravel && (
                           <Badge variant="outline" className="border-success text-success font-normal">
                               <Plane className="mr-1 h-3 w-3" />
@@ -80,6 +85,9 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
                 </TableCell>
                 <TableCell className="font-medium">{student.finalChoiceUniversity}</TableCell>
                 <TableCell>{getUniversityCountry(student)}</TableCell>
+                <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                   {student.finalizedAt ? new Date(student.finalizedAt).toLocaleDateString() : 'N/A'}
+                </TableCell>
                 {showEmployee && (
                   <TableCell>
                     {student.academicIntakeSemester ? (
@@ -97,7 +105,7 @@ export function FinalizedStudentsTable({ students, showEmployee = true }: Finali
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={showEmployee ? 5 : 3} className="h-24 text-center">
+              <TableCell colSpan={showEmployee ? 6 : 4} className="h-24 text-center">
                 No students match your filters.
               </TableCell>
             </TableRow>

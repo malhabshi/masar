@@ -11,6 +11,7 @@ import { FinalizedStudentsTable } from '@/components/dashboard/finalized-student
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { markFinalizedAsViewed } from '@/lib/actions';
 
 interface FinalizedStudent extends Student {
   finalChoiceUniversity: string;
@@ -94,6 +95,19 @@ export default function FinalizedStudentsPage() {
     
     return studentsToFilter;
   }, [fetchedStudents, currentUser?.role, universityFilter, countryFilter, employeeFilter]);
+
+  // Mark students as viewed when they land on the page (Admin/Department only)
+  useEffect(() => {
+    if (currentUser?.id && (currentUser.role === 'admin' || currentUser.role === 'department') && finalizedStudents.length > 0) {
+        const unviewedIds = (finalizedStudents as Student[])
+            .filter(s => !s.finalizedViewedBy || !s.finalizedViewedBy.includes(currentUser.id))
+            .map(s => s.id);
+        
+        if (unviewedIds.length > 0) {
+            markFinalizedAsViewed(unviewedIds, currentUser.id);
+        }
+    }
+  }, [finalizedStudents, currentUser]);
 
 
   const isLoading = isUserLoading || !isMounted || (studentsQuery && studentsAreLoading) || usersLoading;
@@ -188,6 +202,7 @@ export default function FinalizedStudentsPage() {
         <FinalizedStudentsTable
           students={(finalizedStudents as FinalizedStudent[]) || []}
           showEmployee={currentUser.role !== 'employee'}
+          currentUserId={currentUser.id}
         />
       </CardContent>
     </Card>

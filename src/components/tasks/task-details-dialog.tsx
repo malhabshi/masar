@@ -202,6 +202,14 @@ export function TaskDetailsDialog({
               </div>
             </div>
           </div>
+          {task.status === 'denied' && task.denialReason && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg animate-in fade-in slide-in-from-top-2">
+              <p className="text-[10px] font-black uppercase text-red-600 mb-1 flex items-center gap-1">
+                <XCircle className="h-3 w-3" /> Rejection Reason
+              </p>
+              <p className="text-sm text-red-800 font-medium italic">"{task.denialReason}"</p>
+            </div>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-5">

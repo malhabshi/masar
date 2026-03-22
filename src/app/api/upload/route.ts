@@ -87,10 +87,18 @@ export async function POST(req: NextRequest) {
         let counterUpdate: any = { lastActivityAt: now };
         if (uploaderRole === 'employee') {
           // Employee uploaded, notify admins
-          counterUpdate = { ...counterUpdate, newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1 };
+          counterUpdate = { 
+            ...counterUpdate, 
+            newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1,
+            newDocsViewedBy: [decodedToken.uid]
+          };
         } else if (uploaderRole === 'admin' || uploaderRole === 'department') {
           // Admin/Dept uploaded, notify employee
-          counterUpdate = { ...counterUpdate, newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1 };
+          counterUpdate = { 
+            ...counterUpdate, 
+            newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1,
+            newDocsViewedBy: [decodedToken.uid]
+          };
         }
    
         await studentRef.update({

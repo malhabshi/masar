@@ -111,7 +111,12 @@ export interface Student {
   newDocumentsForAdminCount?: number; // legacy
   newDocumentsForEmployeeCount?: number; // legacy
   newMissingItemsForEmployee?: number;
+  newDocsViewedBy?: string[];
+  updatesViewedBy?: string[];
+  missingItemsViewedBy?: string[];
   finalChoiceUniversity?: string;
+  finalizedAt?: string;
+  finalizedViewedBy?: string[];
   ieltsOverall?: number;
   profileCompletionStatus?: ProfileCompletionStatus;
   transferRequested?: boolean;
@@ -208,6 +213,7 @@ export interface Task {
   viewedBy?: TaskViewRecord[];
   notifications?: TaskNotification[];
   isPrioritized?: boolean;
+  denialReason?: string;
 }
 
 export interface ResourceLink {

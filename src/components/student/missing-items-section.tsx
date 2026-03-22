@@ -10,7 +10,7 @@ import { Loader2, PlusCircle, Trash2, CheckCircle, Building2 } from 'lucide-reac
 import { useToast } from '@/hooks/use-toast';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, arrayUnion } from 'firebase/firestore';
 import { addMissingItemToStudent, removeMissingItemFromStudent, markMissingItemAsReceived } from '@/lib/actions';
 import { Badge } from '@/components/ui/badge';
 
@@ -29,9 +29,9 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
 
   // When an employee views this component, clear the 'new' indicator
   useEffect(() => {
-    if (isEmployee && student.newMissingItemsForEmployee && student.newMissingItemsForEmployee > 0) {
+    if (isEmployee && student.newMissingItemsForEmployee && student.newMissingItemsForEmployee > 0 && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(currentUser.id))) {
       const studentDocRef = doc(firestore, 'students', student.id);
-      updateDocumentNonBlocking(studentDocRef, { newMissingItemsForEmployee: 0 });
+      updateDocumentNonBlocking(studentDocRef, { missingItemsViewedBy: arrayUnion(currentUser.id) as any });
     }
     // This should only run once when the component mounts for the employee
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,11 +110,6 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
                   {canManage && (
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveItem(item)} disabled={isLoading}>
                       <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {isEmployee && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-success" onClick={() => handleMarkAsReceived(item)} disabled={isLoading}>
-                      <CheckCircle className="h-4 w-4" />
                     </Button>
                   )}
                 </div>

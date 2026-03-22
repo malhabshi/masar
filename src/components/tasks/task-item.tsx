@@ -119,10 +119,15 @@ export function TaskItem({
                 </div>
             </CardHeader>
             <CardContent className="p-4 pt-2 flex-1">
-                <p className="text-sm text-muted-foreground line-clamp-2 italic mb-4">
+                <p className="text-sm text-muted-foreground line-clamp-2 italic mb-1">
                   "{task.content}"
                 </p>
-                <div className="flex items-center gap-2 pt-2 border-t">
+                {task.status === 'denied' && task.denialReason && (
+                   <div className="mt-2 p-2 bg-red-50 border border-red-100 rounded text-[10px] text-red-700 italic line-clamp-2">
+                     Reason: {task.denialReason}
+                   </div>
+                )}
+                <div className="mt-4 flex items-center gap-2 pt-2 border-t">
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={author?.avatarUrl} />
                     <AvatarFallback>{author?.name?.charAt(0) || 'E'}</AvatarFallback>

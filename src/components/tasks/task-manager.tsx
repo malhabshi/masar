@@ -166,12 +166,21 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   }, [filteredTasks, currentUser]);
 
   const handleStatusChange = async (taskId: string, status: TaskStatus) => {
+      let reason = undefined;
+      
+      if (status === 'denied') {
+          // A premium-feeling prompt (native but effective for quick workflow)
+          const resp = window.prompt("Why is this task being denied? (Optional)");
+          if (resp === null) return; // User cancelled
+          reason = resp.trim() || undefined;
+      }
+
       setIsUpdatingStatus(taskId);
-      const result = await updateTaskStatus(taskId, status, currentUser.id);
+      const result = await updateTaskStatus(taskId, status, currentUser.id, reason);
       if (result.success) {
           toast({
               title: "Task Status Updated",
-              description: "The task status has been changed."
+              description: `The task status has been changed to ${status}.`
           });
       } else {
           toast({ variant: 'destructive', title: "Error", description: result.message });
@@ -210,10 +219,17 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     }
   };
 
-  const newTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
-  const progressTasks = useMemo(() => filteredTasks.filter(t => t.status === 'in-progress').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
-  const completedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
-  const deniedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'denied').sort((a,b) => sortByDate(a,b, 'createdAt', 'asc')), [filteredTasks]);
+  const sortTasks = (a: Task, b: Task) => {
+    const aPrio = a.isPrioritized ? 1 : 0;
+    const bPrio = b.isPrioritized ? 1 : 0;
+    if (aPrio !== bPrio) return bPrio - aPrio;
+    return sortByDate(a, b, 'createdAt', 'asc');
+  };
+
+  const newTasks = useMemo(() => filteredTasks.filter(t => t.status === 'new').sort(sortTasks), [filteredTasks]);
+  const progressTasks = useMemo(() => filteredTasks.filter(t => t.status === 'in-progress').sort(sortTasks), [filteredTasks]);
+  const completedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'completed').sort(sortTasks), [filteredTasks]);
+  const deniedTasks = useMemo(() => filteredTasks.filter(t => t.status === 'denied').sort(sortTasks), [filteredTasks]);
 
   return (
     <div className="space-y-6">

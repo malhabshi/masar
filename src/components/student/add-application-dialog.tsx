@@ -63,7 +63,11 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
 
   const availableUniversities = useMemo(() => {
     if(!universities) return [];
-    const available = universities.filter(uni => uni.isAvailable);
+    
+    // Filter out universities already in the student's applications list
+    const existingUniNames = new Set((student?.applications || []).map(a => a.university));
+    
+    const available = universities.filter(uni => uni.isAvailable && !existingUniNames.has(uni.name));
     const unique: ApprovedUniversity[] = [];
     const seen = new Set<string>();
     for (const uni of available) {
@@ -73,7 +77,7 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
         }
     }
     return unique;
-  }, [universities]);
+  }, [universities, student?.applications]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!student) return;
