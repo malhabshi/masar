@@ -209,7 +209,7 @@ export default function StudentDetailPage() {
                 <StatusNoteCard student={student} currentUser={currentUser} />
                 {isAdminOnly && <AdminStatusNoteCard student={student} currentUser={currentUser} />}
               </div>
-              <div className="pdf-hide">
+              <div>
                 <InactivityReportSection student={student} currentUser={currentUser} />
               </div>
               <TargetCountriesCard student={student} currentUser={currentUser} />
@@ -231,11 +231,11 @@ export default function StudentDetailPage() {
 
           <div className="space-y-6">
               {currentUser.role === 'admin' && (
-                <div className="pdf-hide">
+                <div>
                   <AssignmentCard student={student} />
                 </div>
               )}
-              <div className="pdf-hide">
+              <div>
                 <TaskStatsCard tasks={tasks || []} />
               </div>
               <ReadinessChecklist student={student} currentUser={currentUser} />
@@ -253,7 +253,7 @@ export default function StudentDetailPage() {
                   placeholder="Add a new employee note..."
               />
 
-              <Card className="pdf-hide">
+              <Card>
                   <CardHeader>
                       <CardTitle>Internal Chat</CardTitle>
                   </CardHeader>
@@ -266,7 +266,7 @@ export default function StudentDetailPage() {
           </div>
       </div>
       
-      <div className="pdf-hide">
+      <div>
         <TaskHistory tasks={tasks || []} studentId={student.id} currentUser={currentUser} isLoading={tasksLoading} />
       </div>
     </div>

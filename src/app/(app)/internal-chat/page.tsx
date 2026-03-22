@@ -14,10 +14,17 @@ import { formatRelativeTime } from '@/lib/timestamp-utils';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StudentChat } from '@/components/student/student-chat';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 export default function InternalChatPage() {
   const { user: currentUser, isUserLoading, effectiveRole } = useUser();
   const [isMounted, setIsMounted] = useState(false);
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -69,13 +76,22 @@ export default function InternalChatPage() {
       });
     }
 
-    // 2. Client-side sort: SMS Style (Stack from new to old)
+    // 2. Filter for Unread Only
+    if (showUnreadOnly) {
+        filtered = filtered.filter(s => {
+            const count = isAdminDept ? (s.unreadUpdates || 0) : (s.employeeUnreadMessages || 0);
+            const hasNotViewed = !s.updatesViewedBy || !s.updatesViewedBy.includes(currentUser?.id || '');
+            return count > 0 && hasNotViewed;
+        });
+    }
+
+    // 3. Client-side sort: SMS Style (Stack from new to old)
     return [...filtered].sort((a, b) => {
       const timeA = new Date(a.lastChatMessageTimestamp || a.lastActivityAt || a.createdAt).getTime();
       const timeB = new Date(b.lastChatMessageTimestamp || b.lastActivityAt || b.createdAt).getTime();
       return timeB - timeA;
     });
-  }, [rawStudents, currentUser, effectiveRole]);
+  }, [rawStudents, currentUser, effectiveRole, showUnreadOnly, isAdminDept]);
   
   const isLoading = isUserLoading || !isMounted || studentsAreLoading;
 
@@ -96,7 +112,7 @@ export default function InternalChatPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between px-2">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 px-2">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <MessageSquare className="h-8 w-8 text-primary" />
@@ -108,6 +124,10 @@ export default function InternalChatPage() {
               : "Updates from management regarding your students."}
           </p>
         </div>
+        <div className="flex items-center space-x-2 bg-muted/30 px-4 py-2 rounded-full border">
+          <Switch id="unread-only" checked={showUnreadOnly} onCheckedChange={setShowUnreadOnly} />
+          <Label htmlFor="unread-only" className="font-bold text-xs cursor-pointer">Unread Only</Label>
+        </div>
       </div>
 
       <Card className="border-0 shadow-none bg-transparent">
@@ -116,19 +136,26 @@ export default function InternalChatPage() {
             displayedStudents.map((student) => {
               const employee = student.employeeId ? employeeMap.get(student.employeeId) : null;
               const unreadCount = isAdminDept ? (student.unreadUpdates || 0) : (student.employeeUnreadMessages || 0);
+              const hasNotViewed = !student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id);
+              const isUnread = unreadCount > 0 && hasNotViewed;
               const lastTime = student.lastChatMessageTimestamp || student.lastActivityAt || student.createdAt;
               
               return (
-                <Link key={student.id} href={`/student/${student.id}`}>
-                  <div className={cn(
-                    "group flex items-center gap-4 p-4 rounded-xl border bg-card hover:bg-muted/50 transition-all cursor-pointer shadow-sm",
-                    unreadCount > 0 && "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
-                  )}>
+                <div 
+                    key={student.id} 
+                    onClick={() => setSelectedStudent(student)}
+                    className={cn(
+                        "group flex items-center gap-4 p-4 rounded-xl border bg-card hover:bg-muted/50 transition-all cursor-pointer shadow-sm relative overflow-hidden",
+                        isUnread && "border-primary bg-primary/5 ring-1 ring-primary/20"
+                    )}
+                >
+                    {isUnread && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />}
+                    
                     <div className="relative">
                       <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg border">
                         {student.name.charAt(0)}
                       </div>
-                      {unreadCount > 0 && (
+                      {isUnread && (
                         <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-background animate-in zoom-in">
                           {unreadCount}
                         </span>
@@ -151,28 +178,49 @@ export default function InternalChatPage() {
 
                       <p className={cn(
                         "text-sm line-clamp-1 italic",
-                        unreadCount > 0 ? "text-foreground font-semibold" : "text-muted-foreground"
+                        isUnread ? "text-foreground font-semibold" : "text-muted-foreground"
                       )}>
-                        {student.lastChatMessageText || "Open profile to view history"}
+                        {student.lastChatMessageText || "Open chat to view history"}
                       </p>
                     </div>
 
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase bg-background">View Chat</Badge>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase bg-background">Open Chat</Badge>
                     </div>
-                  </div>
-                </Link>
+                </div>
               );
             })
           ) : (
             <div className="flex flex-col items-center justify-center py-20 bg-card rounded-xl border border-dashed text-muted-foreground">
               <MessageSquare className="h-12 w-12 mb-4 opacity-20" />
               <p className="text-sm font-medium">No active conversations found.</p>
-              <p className="text-xs">Active threads with messages will appear here.</p>
+              <p className="text-xs">{showUnreadOnly ? "You have no unread messages." : "Active threads with messages will appear here."}</p>
+              {showUnreadOnly && (
+                <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowUnreadOnly(false)}>View All Messages</Button>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedStudent} onOpenChange={(open) => !open && setSelectedStudent(null)}>
+        <DialogContent className="max-w-xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader className="p-4 border-b bg-muted/10">
+            <DialogTitle className="flex items-center gap-3">
+               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm border">
+                    {selectedStudent?.name.charAt(0)}
+               </div>
+               <div>
+                 <p className="text-base font-bold leading-none">{selectedStudent?.name}</p>
+                 <Link href={`/student/${selectedStudent?.id}`} className="text-[10px] text-primary hover:underline font-bold uppercase tracking-wider mt-1 block">View Full Profile</Link>
+               </div>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden h-[600px] flex flex-col">
+            {selectedStudent && <StudentChat student={selectedStudent} currentUser={currentUser} />}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

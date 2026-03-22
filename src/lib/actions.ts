@@ -1408,51 +1408,111 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       ...(documentPayload && { document: documentPayload }) 
     });
     
-    // 2. Update the student profile with modern metadata for SMS-style sorting
-    const isAdminDept = ['admin', 'department'].includes(author.role);
+    // 2. Update metadata for SMS-style sorting
+    const authorRole = author.role;
+    const nowISO = new Date().toISOString();
     const updates: any = { 
-      lastActivityAt: now,
-      lastChatMessageText: content || (documentPayload ? `Shared file: ${documentPayload.name}` : 'Sent a file'),
-      lastChatMessageTimestamp: now
+        lastActivityAt: nowISO,
+        lastChatMessageText: content || (documentPayload ? `Shared file: ${documentPayload.name}` : 'Sent a file'),
+        lastChatMessageTimestamp: nowISO,
+        // Mark as viewed by the author automatically
+        updatesViewedBy: [author.id]
     };
-    
-    if (isAdminDept) {
-      updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
-      updates.updatesViewedBy = [author.id];
-      await studentRef.update(updates);
-      if (studentData.employeeId) {
-        const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
-        if (!employeeQuery.empty) {
-          const emp = employeeQuery.docs[0].data() as User;
-          await triggerWhatsAppNotification('admin_update', { employeeName: emp.name, messageContent: `Management sent a message for ${studentData.name}: ${content.substring(0, 50)}...`, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` }, emp.phone);
-        }
-      }
+
+    // Calculate who should see this as an UNREAD message (internal flags)
+    // Rule: Mentions or Role defaults
+    const isAdminAuthor = authorRole === 'admin';
+    const isDeptAuthor = authorRole === 'department';
+    const isEmployeeAuthor = authorRole === 'employee';
+
+    // Target users for notifications and unread counts
+    let targetUserIds: string[] = [];
+    let targetGroups: ('admins' | 'departments' | 'all')[] = [];
+
+    if (recipientId) {
+        if (recipientId === 'admins') targetGroups.push('admins');
+        else if (recipientId === 'departments') targetGroups.push('departments');
+        else targetUserIds.push(recipientId);
     } else {
-      updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
-      updates.updatesViewedBy = [author.id];
-      await studentRef.update(updates);
-      
-      // Precision Routing: Only notify admins and the relevant departments
-      const relevantDepts = getDepartmentsForStudent(studentData);
-      const staffToNotifySnap = await adminDb!.collection('users')
-        .where('role', 'in', ['admin', 'department'])
-        .get();
+        // DEFAULT RULES (No explicit recipient/mention)
+        if (isAdminAuthor) {
+            // Admin sends: Only notify employee
+            if (studentData.employeeId) {
+                 // We'll resolve civilId to userId later
+            }
+        } else if (isDeptAuthor || isEmployeeAuthor) {
+            // Dept or Employee sends: Notify all relevant parties
+            targetGroups.push('all');
+        }
+    }
+
+    // Resolve specific target users (e.g. employeeId from student profile if admin sent no mention)
+    if (!recipientId && isAdminAuthor && studentData.employeeId) {
+        const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+        if (!empQuery.empty) targetUserIds.push(empQuery.docs[0].id);
+    }
+
+    // Update unread counts
+    if (isAdminAuthor || isDeptAuthor) {
+        // Management sends: Mark as unread for the employee (if they are a target)
+        // If it's a specific mention to another admin/dept, maybe employee shouldn't see it?
+        // But user said: "department user message will show to all they do not have to mention employee"
+        // And for admin: "only send it to the assend employee and not the department"
         
-      for (const staffDoc of staffToNotifySnap.docs) {
-        const staffData = staffDoc.data() as User;
-        const isTargetDept = staffData.role === 'department' && staffData.department && relevantDepts.includes(staffData.department);
+        if (targetUserIds.length > 0 || targetGroups.includes('all')) {
+            // Check if employee is in specific targets or 'all'
+            updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
+        }
+    } else {
+        // Employee sends: Mark as unread for the management side
+        updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
+    }
+
+    await studentRef.update(updates);
+
+    // 3. Trigger Targeted WhatsApp Notifications
+    const relevantDepts = getDepartmentsForStudent(studentData);
+    const staffSnap = await adminDb!.collection('users').get(); // Fetching once (can be optimized if many users)
+    
+    // Management users Map for easy access
+    const allUsers: User[] = staffSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+
+    for (const staff of allUsers) {
+        if (staff.id === author.id) continue;
+        if (!staff.phone) continue;
+
+        let shouldNotify = false;
+
+        // Check explicit ID target
+        if (targetUserIds.includes(staff.id)) shouldNotify = true;
         
-        if (staffData.role === 'admin' || isTargetDept) {
-          if (staffData.phone) {
+        // Check group targets
+        if (targetGroups.includes('all')) {
+            if (staff.role === 'admin') shouldNotify = true;
+            if (staff.role === 'department' && staff.department && relevantDepts.includes(staff.department)) shouldNotify = true;
+            // Also notify employee if they belong to this student
+            if (staff.role === 'employee' && staff.civilId === studentData.employeeId) shouldNotify = true;
+        }
+
+        if (targetGroups.includes('admins') && staff.role === 'admin') shouldNotify = true;
+        
+        if (targetGroups.includes('departments')) {
+            if (staff.role === 'department' && staff.department && relevantDepts.includes(staff.department)) shouldNotify = true;
+        }
+
+        if (isAdminAuthor && !recipientId) {
+            // Only notify employee
+            if (staff.role === 'employee' && staff.civilId === studentData.employeeId) shouldNotify = true;
+        }
+
+        if (shouldNotify) {
             await triggerWhatsAppNotification('admin_update', { 
-              employeeName: staffData.name, 
+              employeeName: staff.name, 
               studentName: studentData.name, 
               messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`, 
-              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/internal-chat` 
-            }, staffData.phone);
-          }
+              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` 
+            }, staff.phone);
         }
-      }
     }
     return { success: true };
   } catch (error: any) { return { success: false, message: error.message }; }
@@ -1528,9 +1588,21 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
         await studentRef.update(updates);
         
         if (status) {
+            // 1. Identify relevant countries and departments based on selected schools
+            const selectedApps = studentData.applications?.filter(app => universities?.includes(app.university)) || [];
+            const countries = [...new Set(selectedApps.map(app => app.country))];
+            
+            const targetDepts: string[] = [];
+            if (countries.includes('UK')) targetDepts.push('UK');
+            if (countries.includes('USA')) targetDepts.push('USA');
+            if (countries.includes('Australia') || countries.includes('New Zealand')) targetDepts.push('AU/NZ');
+
+            const schoolsDetails = selectedApps.map(app => `${app.university} (${app.country})`).join(', ');
             const uniString = universities && universities.length > 0 ? ` (${universities.join(', ')})` : '';
-            const taskContent = `🚨 URGENT: Change Agent status for ${studentName}${uniString}.`;
+            const taskContent = `🚨 URGENT: Change Agent status for ${studentName}${uniString}. Schools: ${schoolsDetails}`;
             const studentUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`;
+
+            // 2. Notify Assigned Employee
             if (studentData.employeeId) {
                 const employeeQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
                 if (!employeeQuery.empty) {
@@ -1540,12 +1612,32 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
                     if (employeeData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: employeeData.name, studentName: studentName, employeeName: employeeData.name, messageContent: taskContent, studentUrl: studentUrl }, employeeData.phone);
                 }
             }
-            const managementSnap = await adminDb!.collection('users').where('role', 'in', ['admin', 'department']).get();
-            const assignedEmployeeName = studentData.employeeId ? (await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get()).docs[0]?.data()?.name || 'Unassigned' : 'Unassigned';
-            for (const mDoc of managementSnap.docs) {
-              const mData = mDoc.data() as User;
-              if (mData.id === adminId) continue;
-              if (mData.phone) await triggerWhatsAppNotification('change_agent_enabled', { userName: mData.name, studentName: studentName, employeeName: assignedEmployeeName, messageContent: taskContent, studentUrl: studentUrl }, mData.phone);
+
+            // 3. Notify Admins and Targeted Departments
+            const staffSnap = await adminDb!.collection('users').get();
+            const assignedEmployeeSnap = studentData.employeeId ? await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get() : null;
+            const assignedEmployeeName = assignedEmployeeSnap && !assignedEmployeeSnap.empty ? assignedEmployeeSnap.docs[0].data().name : 'Unassigned';
+
+            for (const staffDoc of staffSnap.docs) {
+              const staff = { id: staffDoc.id, ...staffDoc.data() } as User;
+              if (staff.id === adminId) continue;
+              if (!staff.phone) continue;
+
+              let shouldNotify = false;
+              if (staff.role === 'admin') shouldNotify = true;
+              if (staff.role === 'department' && staff.department && targetDepts.includes(staff.department)) shouldNotify = true;
+
+              if (shouldNotify) {
+                  // Detailed WhatsApp Message
+                  const waContent = `🚨 *Change Agent Required* 🚨\n\nStudent: *${studentName}*\nSchools: *${schoolsDetails}*\nAssigned Employee: *${assignedEmployeeName}*`;
+                  await triggerWhatsAppNotification('change_agent_enabled', { 
+                      userName: staff.name, 
+                      studentName: studentName, 
+                      employeeName: assignedEmployeeName, 
+                      messageContent: waContent, 
+                      studentUrl: studentUrl 
+                  }, staff.phone);
+              }
             }
         }
         return { success: true, message: status ? 'Enabled.' : 'Removed.' };

@@ -286,28 +286,58 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
       const element = document.getElementById('student-profile-content');
       if (!element) return;
 
-      // Hide interactive elements during capture
-      const actionsToHide = element.querySelectorAll('.pdf-hide');
-      actionsToHide.forEach(el => (el as HTMLElement).style.display = 'none');
+      // Temporary style adjustments for optimal capture
+      const originalStyle = element.style.cssText;
+      element.style.width = '1200px'; 
+      element.style.padding = '40px';
+      
+      const styleTag = document.createElement('style');
+      styleTag.innerHTML = `
+        #student-profile-content * { overflow: visible !important; max-height: none !important; }
+        #student-profile-content .pdf-hide, 
+        #student-profile-content button, 
+        #student-profile-content .pdf-exclude { display: none !important; }
+        #student-profile-content .h-\\[400px\\], 
+        #student-profile-content .h-\\[500px\\],
+        #student-profile-content .h-\\[600px\\] { height: auto !important; }
+      `;
+      document.head.appendChild(styleTag);
 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: 1200
       });
 
-      // Show elements back
-      actionsToHide.forEach(el => (el as HTMLElement).style.display = '');
+      // Restore elements
+      document.head.removeChild(styleTag);
+      element.style.cssText = originalStyle;
 
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${student.name.replace(/\s+/g, '_')}_Profile.pdf`);
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add the first page
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add subsequent pages if content overflows
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= (pageHeight);
+      }
+
+      pdf.save(`Student_Profile_${student.name.replace(/\s+/g, '_')}.pdf`);
       
       toast({ title: 'PDF Ready', description: 'The profile document has been generated.' });
     } catch (error) {
