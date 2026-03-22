@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2, UserPlus, Users, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import type { Student, PipelineStatus, User, Note } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
 import {
@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { updateStudentPipelineStatus } from '@/lib/actions';
+import { updateStudentPipelineStatus, bulkAssignStudents } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
@@ -36,10 +36,12 @@ import { useUserCacheById } from '@/hooks/use-user-cache';
 import { TransferStudentDialog } from '@/components/student/transfer-student-dialog';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface StudentTableProps {
   students: Student[];
-  currentUser: any; // Using any to avoid complex type intersection issues in render
+  currentUser: any; 
   allUsers: User[];
   emptyStateMessage?: string;
 }
@@ -73,6 +75,9 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   
   // Smart Routing Filter for Departments
   const [showAllStudents, setShowAllStudents] = useState(false);
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -299,12 +304,80 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
             </div>
         </div>
 
+        {selectedIds.length > 0 && isAdminDept && (
+          <div className="mb-4 p-4 bg-muted/30 border-2 border-primary/20 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3">
+              <div className="bg-primary text-primary-foreground h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm">
+                {selectedIds.length}
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Students Selected</p>
+                <p className="text-xs text-muted-foreground">You can assign these students to an agent in bulk.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setSelectedIds([])} disabled={isAssigning}>Cancel</Button>
+              
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="sm" className="gap-2" disabled={isAssigning}>
+                    {isAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                    Assign to Agent
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="end">
+                  <div className="p-3 border-b bg-muted/50">
+                    <p className="text-sm font-bold flex items-center gap-2"><Users className="h-4 w-4 text-primary" />Select Employee</p>
+                  </div>
+                  <div className="max-h-[300px] overflow-auto p-1">
+                    {employeeOptions.map(emp => (
+                      <button
+                        key={emp.civilId}
+                        className="w-full text-left p-2 hover:bg-muted rounded-md text-sm transition-colors flex items-center justify-between group"
+                        onClick={async () => {
+                          setIsAssigning(true);
+                          const result = await bulkAssignStudents(selectedIds, emp.civilId!, currentUser.id!);
+                          setIsAssigning(false);
+                          if (result.success) {
+                             toast({ title: 'Success', description: result.message });
+                             setSelectedIds([]);
+                          } else {
+                             toast({ variant: 'destructive', title: 'Error', description: result.message });
+                          }
+                        }}
+                      >
+                        <div className="flex flex-col">
+                           <span className="font-medium">{emp.name}</span>
+                           <span className="text-[10px] text-muted-foreground">ID: {emp.civilId}</span>
+                        </div>
+                        <ArrowRightLeft className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        )}
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
+              {isAdminDept && (
+                <TableHead className="w-10">
+                  <Checkbox 
+                    checked={selectedIds.length === displayedStudents.length && displayedStudents.length > 0} 
+                    onCheckedChange={(val) => {
+                      if (val) setSelectedIds(displayedStudents.map(s => s.id));
+                      else setSelectedIds([]);
+                    }}
+                  />
+                </TableHead>
+              )}
               <TableHead>Student</TableHead>
-              <TableHead>Apps</TableHead>
+              <TableHead>Apps / Target</TableHead>
               <TableHead>Jotform</TableHead>
               <TableHead>Pipeline</TableHead>
               <TableHead>Assigned Agent</TableHead>
@@ -312,7 +385,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
               {isAdminOnly && <TableHead>Admin Status</TableHead>}
               <TableHead>IELTS Overall</TableHead>
               <TableHead>Intake Term</TableHead>
-              <TableHead>App. Countries</TableHead>
+              <TableHead>Countries</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -327,9 +400,20 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 const canAssign = isAdminDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
                 const isDuplicate = duplicatePhoneSet.has(student.phone);
+                const isUnassigned = !student.employeeId;
 
                 return (
-                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20")}>
+                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20", selectedIds.includes(student.id) && "bg-primary/5")}>
+                  {isAdminDept && (
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedIds.includes(student.id)} 
+                        onCheckedChange={(val) => {
+                          setSelectedIds(prev => val ? [...prev, student.id] : prev.filter(id => id !== student.id));
+                        }} 
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <Link href={`/student/${student.id}`} className="hover:underline">
@@ -376,7 +460,15 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       {student.finalChoiceUniversity && <div className="flex items-center gap-1 text-lg text-success font-bold mt-1"><GraduationCap className="h-5 w-5" /><span>{student.finalChoiceUniversity}</span></div>}
                     </div>
                   </TableCell>
-                  <TableCell><Badge variant="secondary" className="font-mono">{student.applications?.length || 0}</Badge></TableCell>
+                  <TableCell>
+                    {isUnassigned && student.targetCountries && student.targetCountries.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 max-w-[150px]">
+                        {student.targetCountries.map(c => <Badge key={c} variant="secondary" className="text-[10px] px-1.5 h-6 bg-sky-100 text-sky-800 border-sky-200 font-bold">{c}</Badge>)}
+                      </div>
+                    ) : (
+                      <Badge variant="secondary" className="font-mono">{student.applications?.length || 0}</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {student.jotform ? (
                       <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50 flex items-center gap-1 w-fit whitespace-nowrap">
@@ -436,7 +528,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 </TableRow>
               )})
             ) : (
-              <TableRow><TableCell colSpan={isAdminOnly ? 11 : 10} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={isAdminDept ? (isAdminOnly ? 12 : 11) : (isAdminOnly ? 11 : 10)} className="h-24 text-center">{displayedStudents.length === 0 && isFiltered ? 'No students match your current filters.' : emptyStateMessage}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -444,3 +536,4 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     </div>
   );
 }
+

@@ -1926,3 +1926,51 @@ export async function updateSharedDocument(adminId: string, docId: string, data:
     return { success: true, message: 'Document updated successfully.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
+
+export async function bulkAssignStudents(studentIds: string[], targetCivilId: string, requesterId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(requesterId);
+    if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized' };
+
+    const employeeQuery = await adminDb!.collection('users').where('civilId', '==', targetCivilId).limit(1).get();
+    if (employeeQuery.empty) return { success: false, message: 'Employee not found' };
+    const employeeDoc = employeeQuery.docs[0];
+    const employeeData = employeeDoc.data() as User;
+
+    const batch = adminDb!.batch();
+    const now = new Date().toISOString();
+
+    for (const studentId of studentIds) {
+      batch.update(adminDb!.collection('students').doc(studentId), {
+        employeeId: targetCivilId,
+        isNewForEmployee: true,
+        lastActivityAt: now
+      });
+    }
+
+    // Add a summary task for the employee
+    await adminDb!.collection('tasks').add({
+      authorId: requesterId,
+      createdBy: requesterId,
+      recipientId: employeeDoc.id,
+      recipientIds: [employeeDoc.id],
+      content: `Bulk Assignment: You have been assigned ${studentIds.length} new students.`,
+      createdAt: now,
+      status: 'new',
+      category: 'system',
+      replies: []
+    });
+
+    if (employeeData.phone) {
+        await triggerWhatsAppNotification('admin_update', { 
+          employeeName: employeeData.name, 
+          messageContent: `Management has bulk-assigned ${studentIds.length} new students to your portfolio.`, 
+          dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/applicants` 
+        }, employeeData.phone);
+    }
+
+    await batch.commit();
+    return { success: true, message: `Assigned ${studentIds.length} students to ${employeeData.name}` };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
