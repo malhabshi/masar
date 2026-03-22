@@ -28,7 +28,9 @@ import { addApplication } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle } from 'lucide-react';
 import type { ApprovedUniversity, Student } from '@/lib/types';
-import { useCollection, useDoc } from '@/firebase/client';
+import { useCollection, useDoc, updateDocumentNonBlocking } from '@/firebase/client';
+import { doc } from 'firebase/firestore';
+import { firestore } from '@/firebase';
 import { useUser } from '@/hooks/use-user';
 
 const formSchema = z.object({
@@ -84,16 +86,31 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
       return;
     }
     
-    // Server action
-    const result = await addApplication(student.id, university.name, university.country, values.major, student.name, student.employeeId);
-    
-    if (result.success) {
-      // The useDoc hook will automatically update the UI on snapshot change
-      toast({ title: 'Application Added', description: result.message });
-      setIsOpen(false);
-      form.reset();
-    } else {
-      toast({ variant: 'destructive', title: 'Failed to add application', description: result.message });
+    try {
+      // Server action
+      const result = await addApplication(student.id, university.name, university.country, values.major, student.name, student.employeeId);
+      
+      if (result.success) {
+        toast({ title: 'Application Added', description: result.message });
+        setIsOpen(false);
+        form.reset();
+      } else if (result.message === 'DB not available') {
+        // Fallback to client-side write if Firebase Admin isn't configured for local development
+        const studentRef = doc(firestore, 'students', student.id);
+        const newApplication = { university: university.name, country: university.country, major: values.major, status: 'Pending' as const, updatedAt: new Date().toISOString() };
+        
+        await updateDocumentNonBlocking(studentRef, { 
+          applications: [...(student.applications || []), newApplication] 
+        });
+        
+        toast({ title: 'Application Added (Local Fallback)', description: 'Added successfully. (Note: System tasks and WhatsApp notifications were bypassed).' });
+        setIsOpen(false);
+        form.reset();
+      } else {
+        toast({ variant: 'destructive', title: 'Failed to add application', description: result.message });
+      }
+    } catch(err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message || 'Unknown error occurred.' });
     }
     setIsLoading(false);
   }
