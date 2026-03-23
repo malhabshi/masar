@@ -238,7 +238,16 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const isAdminOnly = currentUser?.role === 'admin';
 
   return (
-    <div>
+    <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-xl font-bold tracking-tight">Applicants List</h2>
+            <Badge variant="secondary" className="rounded-full bg-primary/10 text-primary border-primary/20 px-3 py-0.5 font-bold animate-in fade-in zoom-in duration-300">
+              {displayedStudents.length} Students
+            </Badge>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-4 mb-4">
             <div className="flex flex-col md:flex-row items-center gap-4">
               <div className="relative w-full">

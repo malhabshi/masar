@@ -198,7 +198,25 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                 <p className="text-xs">Loading conversation...</p>
               </div>
             ) : messages && messages.length > 0 ? (
-              messages.map(message => {
+              messages
+                .filter(message => {
+                  const author = userMap.get(message.authorId);
+                  
+                  // Rule: If user is department, only show Admin messages if they are mentioned
+                  if (currentUser.role === 'department') {
+                    // Own messages always visible
+                    if (message.authorId === currentUser.id) return true;
+                    // Non-admin messages always visible (from employee or other department staff)
+                    if (author?.role !== 'admin') return true;
+                    // Admin messages: Only see if @Departments or @[TheirName] is mentioned
+                    const content = message.content || '';
+                    const isMentioned = content.includes('@Departments') || (currentUser.name && content.includes(`@${currentUser.name}`));
+                    return isMentioned;
+                  }
+                  
+                  return true;
+                })
+                .map(message => {
                 const author = userMap.get(message.authorId);
                 const isCurrentUser = author?.id === currentUser.id;
                 return (

@@ -798,6 +798,22 @@ export async function createStudent(values: { studentName: string; studentEmail?
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
     await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    
+    // Auto-post initial notes to chat if they exist
+    if (notes && notes.trim()) {
+      const chatMessageId = `msg-init-${Date.now()}`;
+      await adminDb!.collection('chats').doc(studentId).collection('messages').doc(chatMessageId).set({
+        id: chatMessageId,
+        authorId: creatingUserId,
+        content: `[SYSTEM] Initial Notes: ${notes.trim()}`,
+        timestamp: now
+      });
+      // Increment unread count for employee if assigned
+      if (assignedEmployeeId) {
+        await studentRef.update({ employeeUnreadMessages: 1 });
+      }
+    }
+
     if (!assignedEmployeeId) {
       const adminsSnapshot = await adminDb!.collection('users').where('role', '==', 'admin').get();
       if (!adminsSnapshot.empty) {
