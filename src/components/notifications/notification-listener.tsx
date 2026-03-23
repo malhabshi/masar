@@ -193,6 +193,21 @@ export function NotificationListener() {
             return;
         }
 
+        // 4. CHAT NOTIFICATIONS (Check unread counters)
+        const role = user.role;
+        const prevUnread = role === 'employee' ? (prevStudent.employeeUnreadMessages || 0) : (prevStudent.unreadUpdates || 0);
+        const currentUnread = role === 'employee' ? (currentStudent.employeeUnreadMessages || 0) : (currentStudent.unreadUpdates || 0);
+        
+        // Trigger if unread count increased since the last snapshot
+        if (currentUnread > prevUnread) {
+            playNotificationSound(900);
+            toast({
+                title: 'New Message',
+                description: `You have a new internal chat message for ${currentStudent.name}.`,
+                action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>Open Chat</ToastAction>,
+            });
+        }
+
         if (!isMyDept) return;
 
         const prevDocIds = new Set((prevStudent.documents || []).map(d => d.id));

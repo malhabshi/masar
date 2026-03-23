@@ -5,8 +5,9 @@ import type { ChatMessage, User, Student } from '@/lib/types';
 import { CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Send, Paperclip, FileText, X, Loader2, Download, MessageSquare } from 'lucide-react';
+import { Send, Paperclip, FileText, X, Loader2, Download, MessageSquare, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -22,7 +23,7 @@ import { doc, collection, query, orderBy, arrayUnion } from 'firebase/firestore'
 import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { sendChatMessage } from '@/lib/actions';
+import { sendChatMessage, deleteChatMessage } from '@/lib/actions';
 
 interface StudentChatProps {
   student: Student;
@@ -167,6 +168,16 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
+    const result = await deleteChatMessage(student.id, messageId, currentUser.id);
+    if (result.success) {
+      toast({ title: 'Message Deleted' });
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: result.message });
+    }
+  };
+
   const renderMessageContent = (content: string) => {
     if (!content) return null;
     const mentionRegex = /^(@[A-Za-z\s]+:)/;
@@ -235,12 +246,24 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                     )}
                     <div
                       className={cn(
-                        'max-w-[80%] rounded-lg p-3 text-sm shadow-sm',
+                        'max-w-[80%] rounded-lg p-3 text-sm shadow-sm relative group',
                         isCurrentUser
                           ? 'bg-primary text-primary-foreground rounded-br-none'
                           : 'bg-muted text-muted-foreground rounded-bl-none border'
                       )}
                     >
+                      {(isCurrentUser || currentUser.role === 'admin') && (
+                        <button 
+                          onClick={() => handleDeleteMessage(message.id)}
+                          className={cn(
+                             "absolute -top-2 -right-2 bg-background border border-border h-6 w-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10",
+                             isCurrentUser ? "-right-2" : "-left-2"
+                          )}
+                          title="Delete message"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
                       {!isCurrentUser && author && (
                           <div className="text-[10px] font-bold opacity-70 mb-1 uppercase">
                               {author.name} ({author.role})
@@ -312,21 +335,25 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
             </div>
           )}
 
-          <div className="flex w-full items-center space-x-2">
+          <div className="flex w-full items-end space-x-2">
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={ALLOWED_FILE_EXTENSIONS} />
-            <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} disabled={isSending}>
+            <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => fileInputRef.current?.click()} disabled={isSending}>
               <Paperclip className="h-4 w-4" />
             </Button>
-            <Input
-              type="text"
-              placeholder="Type a message..."
+            <Textarea
+              placeholder="Type a message... (Shift+Enter for new line)"
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
               disabled={isSending}
-              className="flex-1"
+              className="flex-1 min-h-[40px] max-h-[120px] resize-none overflow-y-auto pt-2.5 pb-2"
             />
-            <Button type="button" size="icon" onClick={handleSendMessage} disabled={isSending || (!newMessage.trim() && !file)}>
+            <Button type="button" size="icon" className="h-10 w-10 shrink-0" onClick={handleSendMessage} disabled={isSending || (!newMessage.trim() && !file)}>
               {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>

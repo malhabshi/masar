@@ -1534,6 +1534,28 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+export async function deleteChatMessage(studentId: string, messageId: string, userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const user = await getUser(userId);
+    if (!user) return { success: false, message: 'User not found.' };
+    
+    const messageRef = adminDb!.collection('chats').doc(studentId).collection('messages').doc(messageId);
+    const messageDoc = await messageRef.get();
+    
+    if (!messageDoc.exists) return { success: false, message: 'Message not found.' };
+    const messageData = messageDoc.data() as any;
+    
+    // Only author or admin can delete
+    if (messageData.authorId !== userId && user.role !== 'admin') {
+      return { success: false, message: 'Unauthorized to delete this message.' };
+    }
+    
+    await messageRef.delete();
+    return { success: true, message: 'Message deleted successfully.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
 export async function triggerDocumentUploadNotification(studentId: string, documentName: string, authorId: string) {
   if (!checkAdminServices()) return;
   try {

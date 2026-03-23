@@ -26,12 +26,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { addApplication } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle } from 'lucide-react';
+import { Loader2, PlusCircle, Search, ChevronsUpDown, Check } from 'lucide-react';
 import type { ApprovedUniversity, Student } from '@/lib/types';
 import { useCollection, useDoc, updateDocumentNonBlocking } from '@/firebase/client';
 import { doc } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { useUser } from '@/hooks/use-user';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   universityName: z.string().min(1, { message: 'Please select a university.' }),
@@ -45,6 +48,9 @@ interface AddApplicationDialogProps {
 export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  
   const { toast } = useToast();
   const { user } = useUser();
 
@@ -79,6 +85,14 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
     return unique;
   }, [universities, student?.applications]);
 
+  const filteredUniversities = useMemo(() => {
+    if (!search.trim()) return availableUniversities;
+    return availableUniversities.filter(uni => 
+      uni.name.toLowerCase().includes(search.toLowerCase()) ||
+      uni.country.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [availableUniversities, search]);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!student) return;
 
@@ -98,8 +112,8 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
         toast({ title: 'Application Added', description: result.message });
         setIsOpen(false);
         form.reset();
+        setSearch('');
       } else if (result.message === 'DB not available') {
-        // Fallback to client-side write if Firebase Admin isn't configured for local development
         const studentRef = doc(firestore, 'students', student.id);
         const newApplication = { university: university.name, country: university.country, major: values.major, status: 'Pending' as const, updatedAt: new Date().toISOString() };
         
@@ -107,9 +121,10 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
           applications: [...(student.applications || []), newApplication] 
         });
         
-        toast({ title: 'Application Added (Local Fallback)', description: 'Added successfully. (Note: System tasks and WhatsApp notifications were bypassed).' });
+        toast({ title: 'Application Added (Local Fallback)', description: 'Added successfully.' });
         setIsOpen(false);
         form.reset();
+        setSearch('');
       } else {
         toast({ variant: 'destructive', title: 'Failed to add application', description: result.message });
       }
@@ -127,11 +142,11 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
           Add Application
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle>Add New Application</DialogTitle>
           <DialogDescription>
-            Select an approved university and specify the major for this application.
+            Search and select an approved university.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -140,22 +155,71 @@ export function AddApplicationDialog({ studentId }: AddApplicationDialogProps) {
               control={form.control}
               name="universityName"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="flex flex-col">
                   <FormLabel>University</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select from available universities" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {availableUniversities.map(uni => (
-                        <SelectItem key={uni.id} value={uni.name}>
-                          {uni.name} ({uni.country})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between text-left font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value
+                            ? availableUniversities.find(
+                                (uni) => uni.name === field.value
+                              )?.name
+                            : "Search university..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <div className="flex items-center border-b px-3 py-2 bg-muted/50">
+                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-primary" />
+                        <Input
+                          placeholder="Type name or country..."
+                          className="h-8 border-none bg-transparent focus-visible:ring-0 px-0 shadow-none focus-visible:ring-offset-0"
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                        />
+                      </div>
+                      <ScrollArea className="h-[250px]">
+                        <div className="p-1">
+                          {filteredUniversities.length === 0 ? (
+                            <div className="p-4 text-center text-sm text-muted-foreground italic">
+                              No matching universities found.
+                            </div>
+                          ) : (
+                            filteredUniversities.map((uni) => (
+                              <button
+                                key={uni.id}
+                                type="button"
+                                className={cn(
+                                  "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors",
+                                  "hover:bg-primary/10 text-left",
+                                  field.value === uni.name && "bg-primary/5 text-primary font-bold"
+                                )}
+                                onClick={() => {
+                                  form.setValue("universityName", uni.name);
+                                  setPopoverOpen(false);
+                                  setSearch('');
+                                }}
+                              >
+                                <span>{uni.name} ({uni.country})</span>
+                                {field.value === uni.name && (
+                                  <Check className="h-4 w-4" />
+                                )}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}
