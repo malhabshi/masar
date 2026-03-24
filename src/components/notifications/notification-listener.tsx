@@ -113,6 +113,19 @@ export function NotificationListener() {
     tasks.forEach(task => {
         // Only toast if item is genuinely new AND created after the last time we viewed the list
         if (!prevTaskIds.has(task.id) && task.authorId !== user.id && task.createdAt > cutOffTime) {
+            // Filter: If task has specific recipients and I'm not one of them, don't show toast
+            // (Even for admins, to avoid noise if management transfers students)
+            const myIds = [user.id, 'all'];
+            if (user.department) myIds.push(`dept:${user.department}`);
+            
+            const isForMe = task.recipientIds?.some(id => myIds.includes(id)) || task.recipientId === user.id || task.recipientId === 'all';
+            
+            if (!isForMe && user.role !== 'admin') return; 
+            // If I'm an admin, I still might want to see them? 
+            // The user says 'all employee is notified'.
+            
+            if (!isForMe) return;
+
             if (user.role === 'department' && task.studentId && students) {
               const student = students.find(s => s.id === task.studentId);
               if (student && !isStudentInUserDepartment(student, user.department)) return;

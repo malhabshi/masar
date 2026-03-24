@@ -139,10 +139,13 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         // Department Routing Logic
         if (effectiveRole === 'department' && !showAllStudents && currentUser.department) {
           const appCountries = (student.applications || []).map(a => a.country);
+          const targets = (student.targetCountries || []) as string[];
+          const allRelevantCountries = [...appCountries, ...targets];
+          
           const dept = currentUser.department;
-          const isMatch = (dept === 'UK' && appCountries.includes('UK')) || 
-                          (dept === 'USA' && appCountries.includes('USA')) || 
-                          (dept === 'AU/NZ' && (appCountries.includes('Australia') || appCountries.includes('New Zealand')));
+          const isMatch = (dept === 'UK' && allRelevantCountries.includes('UK')) || 
+                          (dept === 'USA' && allRelevantCountries.includes('USA')) || 
+                          (dept === 'AU/NZ' && (allRelevantCountries.includes('Australia') || allRelevantCountries.includes('New Zealand')));
           if (!isMatch) return false;
         }
 
@@ -321,7 +324,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                     </SelectContent>
                   </Select>
                 )}
-                {isClient && effectiveRole !== 'employee' && (
+                {isClient && (
                   <Select value={genderFilter} onValueChange={(v) => setGenderFilter(v as any)}>
                     <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Gender" /></SelectTrigger>
                     <SelectContent>

@@ -63,7 +63,6 @@ export default function EmployeeActivityPage() {
         if (!allTimeLogs) return [];
         
         return allTimeLogs.filter(log => {
-            if (!log.clockOut) return false; // Only show completed logs
 
             const logDate = toDate(log.date);
             if (!logDate) return false;
@@ -89,7 +88,7 @@ export default function EmployeeActivityPage() {
     const summaryStats = useMemo(() => {
         const totalMinutes = filteredLogs.reduce((acc, log) => {
             const start = toDate(log.clockIn);
-            const end = toDate(log.clockOut);
+            const end = log.clockOut ? toDate(log.clockOut) : new Date();
             if (start && end) {
                 return acc + (end.getTime() - start.getTime()) / (1000 * 60);
             }
@@ -101,7 +100,7 @@ export default function EmployeeActivityPage() {
         const employeeHours: Record<string, number> = {};
         filteredLogs.forEach(log => {
             const start = toDate(log.clockIn);
-            const end = toDate(log.clockOut);
+            const end = log.clockOut ? toDate(log.clockOut) : new Date();
             if(start && end) {
                 const minutes = (end.getTime() - start.getTime()) / (1000 * 60);
                 employeeHours[log.employeeId] = (employeeHours[log.employeeId] || 0) + minutes;
@@ -220,7 +219,7 @@ export default function EmployeeActivityPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Users</SelectItem>
-                                    {(users || []).filter(u => ['employee', 'department'].includes(u.role)).map(emp => (
+                                    {(users || []).map(emp => (
                                         <SelectItem key={emp.id} value={emp.id}>{emp.name} ({emp.role})</SelectItem>
                                     ))}
                                 </SelectContent>
