@@ -220,16 +220,18 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
+  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
     setPipelineFilter('all');
     setEmployeeFilter('all');
     setIeltsFilter('all');
+    setGenderFilter('all');
+    setCountryFilter('all');
     setShowAllStudents(false);
   };
-  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || showAllStudents;
+  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || countryFilter !== 'all' || showAllStudents;
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
