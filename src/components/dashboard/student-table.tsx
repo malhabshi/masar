@@ -70,6 +70,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
+  const [genderFilter, setGenderFilter] = useState<'all' | 'M' | 'F'>('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
   
@@ -166,7 +167,9 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
             }
         }
         
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts;
+        const matchesGender = genderFilter === 'all' || student.gender === genderFilter;
+        
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender;
     });
 
     return [...filtered].sort((a, b) => {
@@ -298,6 +301,16 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         </SelectContent>
                     </Select>
                 )}
+                {isClient && effectiveRole !== 'employee' && (
+                  <Select value={genderFilter} onValueChange={(v) => setGenderFilter(v as any)}>
+                    <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Gender" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Genders</SelectItem>
+                      <SelectItem value="M">Male (M)</SelectItem>
+                      <SelectItem value="F">Female (F)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
                 <Select value={ieltsFilter} onValueChange={setIeltsFilter}>
                     <SelectTrigger className="w-full flex-1"><SelectValue placeholder="IELTS Score" /></SelectTrigger>
                     <SelectContent>
@@ -386,6 +399,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 </TableHead>
               )}
               <TableHead>Student</TableHead>
+              <TableHead>Gender</TableHead>
               <TableHead>Apps / Target</TableHead>
               <TableHead>Jotform</TableHead>
               <TableHead>Pipeline</TableHead>
@@ -468,6 +482,18 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
                       {student.finalChoiceUniversity && <div className="flex items-center gap-1 text-lg text-success font-bold mt-1"><GraduationCap className="h-5 w-5" /><span>{student.finalChoiceUniversity}</span></div>}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {student.gender ? (
+                      <Badge variant="outline" className={cn(
+                        "font-bold text-[11px]",
+                        student.gender === 'M' ? "border-blue-200 bg-blue-50 text-blue-700" : "border-pink-200 bg-pink-50 text-pink-700"
+                      )}>
+                        {student.gender}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs italic">N/A</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {isUnassigned && student.targetCountries && student.targetCountries.length > 0 ? (

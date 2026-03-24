@@ -783,9 +783,9 @@ export async function createNewUser(userData: { name: string; email: string; pas
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; internalNumber?: string; highSchoolGrade?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
+export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-  const { studentName, studentEmail, phone, internalNumber, highSchoolGrade, targetCountries, otherCountry, notes } = values;
+  const { studentName, studentEmail, phone, gender, internalNumber, highSchoolGrade, targetCountries, otherCountry, notes } = values;
   let finalTargetCountries = targetCountries;
   if (otherCountry && otherCountry.trim()) finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
   try {
@@ -797,7 +797,7 @@ export async function createStudent(values: { studentName: string; studentEmail?
     const studentId = `${idPrefix}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
-    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
     
     // Auto-post initial notes to chat if they exist
     if (notes && notes.trim()) {

@@ -38,6 +38,7 @@ const formSchema = z.object({
   highSchoolGrade: z.string().optional(),
   targetCountries: z.array(z.string()).default([]),
   otherCountry: z.string().optional(),
+  gender: z.enum(['M', 'F'], { required_error: 'Please select a gender.' }),
   notes: z.string().optional(),
 }).refine(data => {
     return data.targetCountries.length > 0 || (!!data.otherCountry && data.otherCountry.trim() !== '');
@@ -70,6 +71,7 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
             notes: '',
             targetCountries: [],
             otherCountry: '',
+            gender: undefined as any,
         },
     });
 
@@ -210,22 +212,46 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
                                 />
                             </div>
 
-                            <FormField
-                            control={form.control}
-                            name="phone"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Phone Number</FormLabel>
-                                <FormControl>
-                                    <Input type="tel" placeholder="e.g., 55123456" {...field} />
-                                </FormControl>
-                                <FormDescription>
-                                    Kuwait country code (+965) is assumed.
-                                </FormDescription>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                control={form.control}
+                                name="gender"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-3">
+                                    <FormLabel>Gender</FormLabel>
+                                    <FormControl>
+                                        <div className="flex items-center space-x-4">
+                                            <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange('M')}>
+                                                <input type="radio" checked={field.value === 'M'} onChange={() => {}} className="accent-primary" />
+                                                <span className="text-sm font-medium">Male (M)</span>
+                                            </div>
+                                            <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange('F')}>
+                                                <input type="radio" checked={field.value === 'F'} onChange={() => {}} className="accent-primary" />
+                                                <span className="text-sm font-medium">Female (F)</span>
+                                            </div>
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="phone"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Phone Number</FormLabel>
+                                        <FormControl>
+                                            <Input type="tel" placeholder="e.g., 55123456" {...field} />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Kuwait (+965) assumed.
+                                        </FormDescription>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
 
                             <FormField
                                 control={form.control}

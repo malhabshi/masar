@@ -80,7 +80,8 @@ export interface Student {
   name: string;
   email: string;
   phone: string;
-  internalNumber?: string; // Internal use number
+  gender?: 'M' | 'F';
+  internalNumber?: string;
   highSchoolGrade?: string; // High school % or GPA
   employeeId: string | null;
   applications: Application[];
