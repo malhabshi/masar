@@ -71,6 +71,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState<'all' | 'M' | 'F'>('all');
+  const [countryFilter, setCountryFilter] = useState<string>('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
   
@@ -165,6 +166,13 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
             case '6.0': matchesIelts = studentIelts === 6.0; break;
             case '>=6.5': matchesIelts = studentIelts >= 6.5; break;
             }
+        }
+
+        // Country filter
+        if (countryFilter !== 'all') {
+            const hasCountryInApps = (student.applications || []).some(a => a.country === countryFilter);
+            const hasCountryInTargets = (student.targetCountries || []).includes(countryFilter as any);
+            if (!hasCountryInApps && !hasCountryInTargets) return false;
         }
         
         const matchesGender = genderFilter === 'all' || student.gender === genderFilter;
@@ -300,6 +308,18 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             ))}
                         </SelectContent>
                     </Select>
+                )}
+                {isClient && (
+                  <Select value={countryFilter} onValueChange={setCountryFilter}>
+                    <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Country" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Countries</SelectItem>
+                      <SelectItem value="UK">UK</SelectItem>
+                      <SelectItem value="USA">USA</SelectItem>
+                      <SelectItem value="Australia">Australia</SelectItem>
+                      <SelectItem value="New Zealand">New Zealand</SelectItem>
+                    </SelectContent>
+                  </Select>
                 )}
                 {isClient && effectiveRole !== 'employee' && (
                   <Select value={genderFilter} onValueChange={(v) => setGenderFilter(v as any)}>
