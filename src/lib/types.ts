@@ -107,6 +107,8 @@ export interface Student {
   }[];
   unreadUpdates?: number;
   employeeUnreadMessages?: number;
+  duplicatePhoneWarning?: boolean;
+  duplicateOfStudentIds?: string[];
   newDocumentsForEmployee?: number;
   newDocumentsForAdmin?: number;
   newDocumentsForAdminCount?: number; // legacy
@@ -134,8 +136,6 @@ export interface Student {
   };
   isNewForEmployee?: boolean;
   studentLogins?: StudentLogin[];
-  duplicatePhoneWarning?: boolean;
-  duplicateOfStudentIds?: string[] | null;
   academicIntakeSemester?: string;
   academicIntakeYear?: number;
   changeAgentRequired?: boolean;

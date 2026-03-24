@@ -173,9 +173,15 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
         // Country filter
         if (countryFilter !== 'all') {
-            const hasCountryInApps = (student.applications || []).some(a => a.country === countryFilter);
-            const hasCountryInTargets = (student.targetCountries || []).includes(countryFilter as any);
-            if (!hasCountryInApps && !hasCountryInTargets) return false;
+            const appCountries = (student.applications || []).map(a => a.country);
+            if (appCountries.length > 0) {
+              // If they have formal applications, filter ONLY by those
+              if (!appCountries.includes(countryFilter as any)) return false;
+            } else {
+              // Otherwise (e.g. unassigned or new students), check targets
+              const targets = (student.targetCountries || []) as string[];
+              if (!targets.includes(countryFilter)) return false;
+            }
         }
         
         const matchesGender = genderFilter === 'all' || student.gender === genderFilter;
@@ -447,7 +453,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 const transferRequester = student.transferRequest?.requestedBy ? requesterMap.get(student.transferRequest.requestedBy) : null;
                 const canAssign = isAdminDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
-                const isDuplicate = duplicatePhoneSet.has(student.phone);
+                const isDuplicate = duplicatePhoneSet.has(student.phone) || student.duplicatePhoneWarning;
                 const isUnassigned = !student.employeeId;
 
                 return (
