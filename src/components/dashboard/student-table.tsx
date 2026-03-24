@@ -174,13 +174,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         // Country filter
         if (countryFilter !== 'all') {
             const appCountries = (student.applications || []).map(a => a.country);
-            if (appCountries.length > 0) {
-              // If they have formal applications, filter ONLY by those
-              if (!appCountries.includes(countryFilter as any)) return false;
+            if (countryFilter === 'none') {
+                if (appCountries.length > 0) return false;
             } else {
-              // Otherwise (e.g. unassigned or new students), check targets
-              const targets = (student.targetCountries || []) as string[];
-              if (!targets.includes(countryFilter)) return false;
+                if (!appCountries.includes(countryFilter as any)) return false;
             }
         }
         
@@ -324,7 +321,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                   <Select value={countryFilter} onValueChange={setCountryFilter}>
                     <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Country" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Countries</SelectItem>
+                      <SelectItem value="all">All Applied</SelectItem>
+                      <SelectItem value="none">No Application</SelectItem>
                       <SelectItem value="UK">UK</SelectItem>
                       <SelectItem value="USA">USA</SelectItem>
                       <SelectItem value="Australia">Australia</SelectItem>

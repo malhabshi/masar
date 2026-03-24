@@ -28,6 +28,7 @@ const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email().or(z.literal('')),
   phone: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }),
+  gender: z.enum(['M', 'F'], { required_error: 'Please select a gender.' }),
   internalNumber: z.string().optional(),
 });
 
@@ -46,6 +47,7 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
       name: student.name,
       email: student.email,
       phone: student.phone,
+      gender: (student.gender as any) || 'M',
       internalNumber: student.internalNumber || '',
     },
   });
@@ -56,6 +58,7 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
             name: student.name,
             email: student.email,
             phone: student.phone,
+            gender: (student.gender as any) || 'M',
             internalNumber: student.internalNumber || '',
         });
     }
@@ -130,6 +133,28 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
                   <FormLabel>Email Address</FormLabel>
                   <FormControl>
                     <Input type="email" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="gender"
+              render={({ field }) => (
+                <FormItem className="space-y-3 pb-2 border-b">
+                  <FormLabel>Gender</FormLabel>
+                  <FormControl>
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange('M')}>
+                        <input type="radio" checked={field.value === 'M'} onChange={() => {}} className="accent-primary" />
+                        <span className="text-sm font-medium">Male (M)</span>
+                      </div>
+                      <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange('F')}>
+                        <input type="radio" checked={field.value === 'F'} onChange={() => {}} className="accent-primary" />
+                        <span className="text-sm font-medium">Female (F)</span>
+                      </div>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
