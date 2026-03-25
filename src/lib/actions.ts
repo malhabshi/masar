@@ -1337,17 +1337,52 @@ export async function handleEmployeeLogin(userId: string) {
   try {
     const user = await getUser(userId);
     if (!user || user.role !== 'employee') return { success: true, message: 'Not an employee.' };
+    
     const timeLogsRef = adminDb!.collection('time_logs');
-    const activeLogQuery = await timeLogsRef.where('employeeId', '==', userId).where('clockOut', '==', null).get();
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // Check for an active session (clockOut is null)
+    const activeLogQuery = await timeLogsRef
+      .where('employeeId', '==', userId)
+      .where('clockOut', '==', null)
+      .orderBy('clockIn', 'desc')
+      .limit(1)
+      .get();
+
     if (!activeLogQuery.empty) {
+      const activeLog = activeLogQuery.docs[0].data() as TimeLog;
+      
+      // If the active session is from today, just continue it (don't create a new log)
+      if (activeLog.date === todayStr) {
+        await activeLogQuery.docs[0].ref.update({ lastSeen: new Date().toISOString() });
+        return { success: true, message: 'Session continued.' };
+      }
+      
+      // If it's an old session from a previous day, close all old ones first
+      const allActiveQuery = await timeLogsRef.where('employeeId', '==', userId).where('clockOut', '==', null).get();
       const batch = adminDb!.batch();
-      activeLogQuery.docs.forEach(doc => batch.update(doc.ref, { clockOut: new Date().toISOString() }));
+      allActiveQuery.docs.forEach(doc => batch.update(doc.ref, { 
+        clockOut: new Date().toISOString(),
+        notes: (doc.data().notes || '') + ' (Auto-closed on next login)'
+      }));
       await batch.commit();
     }
-    await timeLogsRef.add({ employeeId: userId, date: new Date().toISOString().split('T')[0], clockIn: new Date().toISOString(), clockOut: null, lastSeen: new Date().toISOString() });
+    
+    // Start a new session
+    await timeLogsRef.add({ 
+      employeeId: userId, 
+      date: todayStr, 
+      clockIn: new Date().toISOString(), 
+      clockOut: null, 
+      lastSeen: new Date().toISOString() 
+    });
+    
     processInactivityReminders();
-    return { success: true, message: 'Login started.' };
-  } catch (error: any) { return { success: false, message: error.message }; }
+    return { success: true, message: 'New session started.' };
+  } catch (error: any) { 
+    console.error("Login log error:", error);
+    return { success: false, message: error.message }; 
+  }
 }
 
 export async function handleEmployeeLogout(userId: string) {
