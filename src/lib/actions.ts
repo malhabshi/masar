@@ -386,7 +386,12 @@ export async function addApplication(studentId: string, universityName: string, 
         const employeeData = employeeDoc.data() as User;
         const taskContent = `A new application for '${universityName}' has been added for ${studentName}.`;
         await adminDb!.collection('tasks').add({ authorId: 'system', recipientId: employeeDoc.id, recipientIds: [employeeDoc.id], content: taskContent, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
-        await triggerWhatsAppNotification('admin_update', { employeeName: employeeData.name, messageContent: taskContent, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` }, employeeData.phone);
+        await triggerWhatsAppNotification('application_status_update', { 
+          employeeName: employeeData.name, 
+          studentName: studentName,
+          messageContent: taskContent, 
+          studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` 
+        }, employeeData.phone);
       }
     }
     return { success: true, message: `Application for ${universityName} added.` };
@@ -678,7 +683,14 @@ export async function sendTaskNotification(taskId: string, fromId: string, fromN
     await taskRef.update({ notifications: FieldValue.arrayUnion({ fromId, fromName, message, timestamp: new Date().toISOString() }) });
     await adminDb!.collection('tasks').add({ authorId: fromId, createdBy: fromId, recipientId: task.authorId, recipientIds: [task.authorId], content: `Update from ${fromName} on "${task.taskType}": ${message}`, status: 'new', category: 'system', createdAt: new Date().toISOString(), replies: [] });
     const recipient = await getUser(task.authorId);
-    if (recipient?.phone) await triggerWhatsAppNotification('admin_update', { employeeName: recipient.name, messageContent: `Update on "${task.taskType}": ${message}`, dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/tasks` }, recipient.phone);
+    if (recipient?.phone) await triggerWhatsAppNotification('task_reply_received', { 
+      userName: recipient.name,
+      employeeName: recipient.name, 
+      taskTitle: task.taskType || 'Task',
+      replyAuthor: fromName,
+      replyMessage: message, 
+      taskUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/tasks` 
+    }, recipient.phone);
     return { success: true };
   } catch (e: any) { return { success: false, message: e.message }; }
 }
@@ -688,7 +700,45 @@ export async function sendTask(authorId: string, recipientId: string, content: s
   try {
     const author = await getUser(authorId);
     if (!author || !['admin', 'department'].includes(author.role)) return { success: false, message: 'Unauthorized.' };
-    await adminDb!.collection('tasks').add({ authorId, createdBy: authorId, recipientId, recipientIds: [recipientId], content, createdAt: new Date().toISOString(), status: 'new', category, replies: [] });
+    
+    await adminDb!.collection('tasks').add({ 
+      authorId, 
+      createdBy: authorId, 
+      recipientId, 
+      recipientIds: [recipientId], 
+      content, 
+      createdAt: new Date().toISOString(), 
+      status: 'new', 
+      category, 
+      replies: [] 
+    });
+
+    // Notify recipients via WhatsApp
+    if (recipientId === 'all') {
+      const staffSnap = await adminDb!.collection('users').where('role', 'in', ['employee', 'department']).get();
+      for (const doc of staffSnap.docs) {
+        const staff = doc.data() as User;
+        if (staff.phone) {
+          await triggerWhatsAppNotification('admin_update', {
+            userName: staff.name,
+            employeeName: staff.name,
+            messageContent: content,
+            dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard`
+          }, staff.phone);
+        }
+      }
+    } else {
+      const staff = await getUser(recipientId);
+      if (staff?.phone) {
+        await triggerWhatsAppNotification('admin_update', {
+          userName: staff.name,
+          employeeName: staff.name,
+          messageContent: content,
+          dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard`
+        }, staff.phone);
+      }
+    }
+
     return { success: true, message: 'Update sent.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
@@ -1522,11 +1572,12 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       }
 
       if (shouldNotify) {
-        await triggerWhatsAppNotification('admin_update', {
+        await triggerWhatsAppNotification('internal_chat_message', {
+          userName: staff.name,
           employeeName: staff.name,
           studentName: studentData.name,
           messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`,
-          dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
+          studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
         }, staff.phone);
       }
     }
@@ -2001,10 +2052,12 @@ export async function bulkAssignStudents(studentIds: string[], targetCivilId: st
     });
 
     if (employeeData.phone) {
-        await triggerWhatsAppNotification('admin_update', { 
+        await triggerWhatsAppNotification('student_assigned', { 
+          userName: employeeData.name,
           employeeName: employeeData.name, 
-          messageContent: `Management has bulk-assigned ${studentIds.length} new students to your portfolio.`, 
-          dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/applicants` 
+          assignedBy: admin.name,
+          studentName: `A bulk set of ${studentIds.length} students`,
+          studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/applicants` 
         }, employeeData.phone);
     }
 

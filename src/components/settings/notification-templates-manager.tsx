@@ -74,9 +74,15 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
   },
   { 
     type: 'admin_update', 
-    label: 'Admin Update/Announcement', 
+    label: 'Dashboard Update/Announcement', 
     variables: ['userName', 'messageContent', 'dashboardUrl'],
     exampleMessage: "📣 *Management Update*\n\nHello {{userName}},\n\n{{messageContent}}\n\nMore info: {{dashboardUrl}}"
+  },
+  { 
+    type: 'internal_chat_message', 
+    label: 'Internal Chat Message', 
+    variables: ['userName', 'employeeName', 'studentName', 'messageContent', 'studentUrl'],
+    exampleMessage: "💬 *Internal Team Message*\n\nHello {{userName}},\n\n{{messageContent}}\n\nView student: {{studentUrl}}"
   },
   { 
     type: 'document_uploaded_admin', 

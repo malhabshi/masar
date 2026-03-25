@@ -374,6 +374,7 @@ export type NotificationType =
   | 'student_assigned'
   | 'task_reminder'
   | 'admin_update'
+  | 'internal_chat_message'
   | 'document_uploaded_admin'
   | 'document_uploaded_employee'
   | 'document_uploaded_student'
