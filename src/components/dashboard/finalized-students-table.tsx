@@ -11,9 +11,26 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { Student } from '@/lib/types';
-import { Plane, Calendar } from 'lucide-react';
+import { Plane, Calendar, MoreHorizontal, XCircle, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
+import { unfinalizeStudentDecision } from '@/lib/actions';
+import { useUser } from '@/hooks/use-user';
+import { 
+    AlertDialog, 
+    AlertDialogAction, 
+    AlertDialogCancel, 
+    AlertDialogContent, 
+    AlertDialogDescription, 
+    AlertDialogFooter, 
+    AlertDialogHeader, 
+    AlertDialogTitle, 
+    AlertDialogTrigger 
+} from '@/components/ui/alert-dialog';
+import { useState } from 'react';
 
 interface FinalizedStudent extends Student {
   finalChoiceUniversity: string;
@@ -26,6 +43,9 @@ interface FinalizedStudentsTableProps {
 }
 
 export function FinalizedStudentsTable({ students, showEmployee = true, currentUserId }: FinalizedStudentsTableProps) {
+  const { toast } = useToast();
+  const { user: currentUser } = useUser();
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const employeeCivilIds = useMemo(() => {
     if (!showEmployee) return [];
     return [...new Set(students.map(s => s.employeeId).filter((id): id is string => !!id))];
@@ -55,6 +75,7 @@ export function FinalizedStudentsTable({ students, showEmployee = true, currentU
             <TableHead>Finalized Date</TableHead>
             {showEmployee && <TableHead>Intake Term</TableHead>}
             {showEmployee && <TableHead>Assigned Employee</TableHead>}
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -101,11 +122,47 @@ export function FinalizedStudentsTable({ students, showEmployee = true, currentU
                   </TableCell>
                 )}
                 {showEmployee && <TableCell>{getEmployeeName(student.employeeId)}</TableCell>}
+                <TableCell className="text-right">
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                                <RotateCcw className="h-4 w-4" />
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Remove from Finalized List?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will remove <strong>{student.name}</strong> from the finalized list and reset their choice of <strong>{student.finalChoiceUniversity}</strong>.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction 
+                                    className="bg-destructive text-white hover:bg-destructive/90"
+                                    onClick={async () => {
+                                        if (!currentUser) return;
+                                        setIsProcessing(student.id);
+                                        const result = await unfinalizeStudentDecision(student.id, currentUser.id);
+                                        if (result.success) {
+                                            toast({ title: 'Student Removed', description: result.message });
+                                        } else {
+                                            toast({ variant: 'destructive', title: 'Error', description: result.message });
+                                        }
+                                        setIsProcessing(null);
+                                    }}
+                                >
+                                    Proceed
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </TableCell>
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={showEmployee ? 6 : 4} className="h-24 text-center">
+              <TableCell colSpan={showEmployee ? 7 : 5} className="h-24 text-center">
                 No students match your filters.
               </TableCell>
             </TableRow>

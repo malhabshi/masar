@@ -253,7 +253,7 @@ export function TaskDetailsDialog({
                     <div className="space-y-3">
                         {selectedMultiUnis.map((uni: any, i: number) => (
                             <div key={i} className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {renderDataField('University', uni.name)}
+                                {renderDataField('University', uni.name || uni.university)}
                                 {renderDataField('Major', uni.major)}
                                 {renderDataField('Country', uni.country)}
                                 {renderDataField('Category', uni.category)}
@@ -268,7 +268,7 @@ export function TaskDetailsDialog({
                         Requested New school/major
                     </h3>
                     <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderDataField('New University', selectedGlobalUni.name)}
+                        {renderDataField('New University', selectedGlobalUni.name || selectedGlobalUni.university)}
                         {renderDataField('New Major', selectedGlobalUni.major)}
                         {renderDataField('Country', selectedGlobalUni.country)}
                         {renderDataField('Category', selectedGlobalUni.category)}

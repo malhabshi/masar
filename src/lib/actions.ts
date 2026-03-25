@@ -9,6 +9,7 @@ import {
   format,
   differenceInMinutes,
   subMinutes,
+  addMinutes,
   subDays,
   startOfDay,
 } from 'date-fns';
@@ -681,6 +682,27 @@ export async function sendTaskNotification(taskId: string, fromId: string, fromN
     if (!taskDoc.exists) return { success: false, message: 'Task not found' };
     const task = taskDoc.data() as Task;
     await taskRef.update({ notifications: FieldValue.arrayUnion({ fromId, fromName, message, timestamp: new Date().toISOString() }) });
+    
+    // Sync to Student Admin Notes for permanent archival
+    if (task.studentId) {
+      try {
+        const studentRef = adminDb!.collection('students').doc(task.studentId);
+        const studentDoc = await studentRef.get();
+        if (studentDoc.exists) {
+          const studentData = studentDoc.data() as Student;
+          const noteLabel = task.taskType || 'Task';
+          await studentRef.update({
+            adminNotes: [...(studentData.adminNotes || []), {
+              id: `note-task-notif-${Date.now()}`,
+              authorId: fromId,
+              content: `[Task Notification - ${noteLabel}] ${message}`,
+              createdAt: new Date().toISOString()
+            }]
+          });
+        }
+      } catch (err) { console.error("Sync error:", err); }
+    }
+
     await adminDb!.collection('tasks').add({ authorId: fromId, createdBy: fromId, recipientId: task.authorId, recipientIds: [task.authorId], content: `Update from ${fromName} on "${task.taskType}": ${message}`, status: 'new', category: 'system', createdAt: new Date().toISOString(), replies: [] });
     const recipient = await getUser(task.authorId);
     if (recipient?.phone) await triggerWhatsAppNotification('task_reply_received', { 
@@ -754,10 +776,42 @@ export async function addReplyToTask(taskId: string, authorId: string, content: 
     const taskData = taskDoc.data() as Task;
     const newReply = { id: `reply-${Date.now()}`, authorId, content, createdAt: new Date().toISOString() };
     await taskRef.update({ replies: FieldValue.arrayUnion(newReply), status: 'in-progress' });
+    
+    // Also sync to Student Admin Notes for permanent archival
+    if (taskData.studentId) {
+      try {
+        const studentRef = adminDb!.collection('students').doc(taskData.studentId);
+        const studentDoc = await studentRef.get();
+        if (studentDoc.exists) {
+          const studentData = studentDoc.data() as Student;
+          const noteId = `note-task-reply-${Date.now()}`;
+          const noteAuthor = author.name;
+          const taskLabel = taskData.taskType || 'Task';
+          await studentRef.update({
+            adminNotes: [...(studentData.adminNotes || []), {
+              id: noteId,
+              authorId: authorId,
+              content: `[Task Update - ${taskLabel}] ${content}`,
+              createdAt: newReply.createdAt
+            }]
+          });
+        }
+      } catch (noteErr) {
+        console.error("Failed to sync reply to student notes:", noteErr);
+      }
+    }
+
     if (taskData.authorId !== authorId) {
       await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: taskData.authorId, recipientIds: [taskData.authorId], content: `${author.name} replied to: "${taskData.taskType || 'Task'}"`, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
       const recipient = await getUser(taskData.authorId);
-      if (recipient?.phone) await triggerWhatsAppNotification('task_reply_received', { employeeName: recipient.name, taskTitle: taskData.taskType || 'Task', replyAuthor: author.name, replyMessage: content, taskUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/tasks` }, recipient.phone);
+      if (recipient?.phone) await triggerWhatsAppNotification('task_reply_received', { 
+        userName: recipient.name,
+        employeeName: recipient.name, 
+        taskTitle: taskData.taskType || 'Task',
+        replyAuthor: author.name, 
+        replyMessage: content, 
+        taskUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/tasks` 
+      }, recipient.phone);
     }
     return { success: true, message: 'Reply sent.' };
   } catch (error: any) { return { success: false, message: error.message }; }
@@ -942,7 +996,18 @@ export async function requestTransfer(studentId: string, reason: string, request
     if (!adminsSnapshot.empty) {
       const batch = adminDb!.batch();
       adminsSnapshot.forEach(adminDoc => {
-        batch.set(adminDb!.collection('tasks').doc(), { authorId: requestingEmployeeId, createdBy: requestingEmployeeId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `Transfer request for ${studentName}: ${reason}`, createdAt: now, status: 'new', category: 'request', replies: [] });
+        batch.set(adminDb!.collection('tasks').doc(), { 
+          authorId: requestingEmployeeId, 
+          createdBy: requestingEmployeeId, 
+          recipientId: adminDoc.id, 
+          recipientIds: [adminDoc.id], 
+          content: `Transfer request for ${studentName}: ${reason}`, 
+          taskType: 'Transfer Request',
+          createdAt: now, 
+          status: 'new', 
+          category: 'request', 
+          replies: [] 
+        });
       });
       await batch.commit();
     }
@@ -962,7 +1027,18 @@ export async function requestStudentDeletion(studentId: string, employeeId: stri
       const studentData = (await studentRef.get()).data() as Student;
       const batch = adminDb!.batch();
       adminsSnap.forEach(adminDoc => {
-        batch.set(adminDb!.collection('tasks').doc(), { authorId: employeeId, createdBy: employeeId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `Deletion request for ${studentData.name}: ${reason}`, status: 'new', category: 'request', createdAt: new Date().toISOString(), replies: [] });
+        batch.set(adminDb!.collection('tasks').doc(), { 
+          authorId: employeeId, 
+          createdBy: employeeId, 
+          recipientId: adminDoc.id, 
+          recipientIds: [adminDoc.id], 
+          content: `Deletion request for ${studentData.name}: ${reason}`, 
+          taskType: 'Deletion Request',
+          status: 'new', 
+          category: 'request', 
+          createdAt: new Date().toISOString(), 
+          replies: [] 
+        });
       });
       await batch.commit();
     }
@@ -1122,6 +1198,38 @@ export async function setStudentFinalChoice(studentId: string, university: strin
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+export async function unfinalizeStudentDecision(studentId: string, updaterId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+    const updater = await getUser(updaterId);
+    if (!updater) return { success: false, message: 'Updater not found.' };
+    
+    // Authorization check
+    if (updater.role === 'employee' && updater.civilId !== studentData.employeeId) {
+      if (!['admin', 'department'].includes(updater.role)) return { success: false, message: 'Unauthorized.' };
+    }
+
+    await studentRef.update({
+      finalChoiceUniversity: FieldValue.delete(),
+      finalizedAt: FieldValue.delete(),
+      finalizedViewedBy: FieldValue.delete(),
+      lastActivityAt: new Date().toISOString(),
+      adminNotes: FieldValue.arrayUnion({ 
+        id: `note-unfinalize-${Date.now()}`, 
+        authorId: updaterId, 
+        content: `${updater.name} removed student from finalized list. (Mistake corrected)`, 
+        createdAt: new Date().toISOString() 
+      })
+    });
+
+    return { success: true, message: `Student removed from finalized list.` };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
 export async function markFinalizedAsViewed(studentIds: string[], userId: string) {
   if (!checkAdminServices()) return { success: false };
   if (!studentIds || studentIds.length === 0) return { success: true };
@@ -1264,14 +1372,38 @@ export async function keepAlive(userId: string) {
 export async function closeInactiveSessions() {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    const fiveMinutesAgo = subMinutes(new Date(), 2).toISOString();
-    const inactiveSessionsQuery = await adminDb!.collection('time_logs').where('clockOut', '==', null).where('lastSeen', '<', fiveMinutesAgo).get();
-    if (inactiveSessionsQuery.empty) return { success: true, message: 'No inactive sessions.' };
+    // If a user stops working for a full 60 min, then count him as logged out
+    const sixtyMinutesAgo = subMinutes(new Date(), 60).toISOString();
+    
+    const inactiveSessionsQuery = await adminDb!.collection('time_logs')
+      .where('clockOut', '==', null)
+      .where('lastSeen', '<', sixtyMinutesAgo)
+      .get();
+      
+    if (inactiveSessionsQuery.empty) return { success: true, message: 'No inactive sessions to close.' };
+    
     const batch = adminDb!.batch();
-    inactiveSessionsQuery.docs.forEach(doc => batch.update(doc.ref, { clockOut: doc.data().lastSeen }));
+    
+    inactiveSessionsQuery.docs.forEach(doc => {
+      const data = doc.data() as TimeLog;
+      const lastSeenStr = data.lastSeen || data.clockIn;
+      const lastSeenDate = parseISO(lastSeenStr);
+      // Log out starting from minute 5 (lastSeen + 5 minutes)
+      const adjustedClockOut = addMinutes(lastSeenDate, 5).toISOString();
+      
+      batch.update(doc.ref, { 
+        clockOut: adjustedClockOut,
+        automatedLogout: true,
+        inactivityPeriod: 60
+      });
+    });
+    
     await batch.commit();
-    return { success: true, message: `Closed ${inactiveSessionsQuery.size} sessions.` };
-  } catch (error) { return { success: false, message: 'Failed.' }; }
+    return { success: true, message: `Closed ${inactiveSessionsQuery.size} inactive sessions (applied 5-minute buffer).` };
+  } catch (error) { 
+    console.error("Error closing inactive sessions:", error);
+    return { success: false, message: 'Failed to close sessions.' }; 
+  }
 }
 
 export async function closeForceInactivitySessions() {
