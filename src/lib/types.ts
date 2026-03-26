@@ -75,6 +75,12 @@ export interface MissingItem {
   createdAt: string;
 }
 
+export interface MissingItemTemplate {
+  id: string;
+  text: string;
+  category?: string;
+}
+
 export interface Student {
   id: string;
   name: string;

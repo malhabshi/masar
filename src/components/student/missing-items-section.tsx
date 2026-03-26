@@ -13,6 +13,17 @@ import { firestore } from '@/firebase';
 import { doc, arrayUnion } from 'firebase/firestore';
 import { addMissingItemToStudent, removeMissingItemFromStudent, markMissingItemAsReceived } from '@/lib/actions';
 import { Badge } from '@/components/ui/badge';
+import { 
+    Select, 
+    SelectContent, 
+    SelectGroup, 
+    SelectItem, 
+    SelectLabel, 
+    SelectTrigger, 
+    SelectValue 
+} from '@/components/ui/select';
+import { useCollection } from '@/firebase/client';
+import type { MissingItemTemplate } from '@/lib/types';
 
 interface MissingItemsSectionProps {
   student: Student;
@@ -23,6 +34,22 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
   const [newItem, setNewItem] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  const { data: remoteTemplates } = useCollection<MissingItemTemplate>('missing_item_templates');
+
+  const defaultTemplates: Partial<MissingItemTemplate>[] = [
+    { text: 'Passport Copy', category: 'General' },
+    { text: 'High School Transcript', category: 'Academic' },
+    { text: 'Graduation Certificate', category: 'Academic' },
+    { text: 'English Proficiency (IELTS)', category: 'Academic' },
+    { text: 'Personal Statement (CV)', category: 'General' },
+    { text: 'Recommendation Letters (2)', category: 'General' },
+    { text: 'Financial Letter', category: 'Visa' },
+    { text: 'TB Certificate', category: 'Visa' },
+    { text: 'Previous Visas', category: 'Visa' },
+  ];
+
+  const templates = remoteTemplates && remoteTemplates.length > 0 ? remoteTemplates : defaultTemplates;
 
   const canManage = currentUser.role === 'admin' || currentUser.role === 'department';
   const isEmployee = currentUser.role === 'employee';
@@ -37,15 +64,16 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmployee, student.id, student.newMissingItemsForEmployee]);
 
-  const handleAddItem = async () => {
-    if (!newItem.trim()) return;
+  const handleAddItem = async (text?: string) => {
+    const itemText = text || newItem.trim();
+    if (!itemText) return;
 
     setIsLoading(true);
-    const result = await addMissingItemToStudent(student.id, newItem.trim(), currentUser.id);
+    const result = await addMissingItemToStudent(student.id, itemText, currentUser.id);
     
     if (result.success) {
-        toast({ title: 'Item Added', description: `"${newItem.trim()}" added to the list.` });
-        setNewItem('');
+        toast({ title: 'Item Added', description: `"${itemText}" added.` });
+        if (!text) setNewItem('');
     } else {
         toast({ variant: 'destructive', title: 'Error', description: result.message });
     }
@@ -121,15 +149,31 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
         </div>
       </CardContent>
       {canManage && (
-        <CardFooter className="border-t pt-4">
+        <CardFooter className="border-t pt-4 flex flex-col gap-3">
+          <div className="w-full">
+            <Select onValueChange={(val) => handleAddItem(val)}>
+                <SelectTrigger className="w-full text-xs h-9 bg-primary/5 border-primary/20">
+                    <SelectValue placeholder="Quick add from templates..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectGroup>
+                        <SelectLabel>Common Requirements</SelectLabel>
+                        {templates.map((t, idx) => (
+                            <SelectItem key={t.id || idx} value={t.text || ''}>{t.text}</SelectItem>
+                        ))}
+                    </SelectGroup>
+                </SelectContent>
+            </Select>
+          </div>
           <div className="flex w-full items-center space-x-2">
             <Input
-              placeholder="Add a missing item..."
+              placeholder="Or type custom item..."
               value={newItem}
               onChange={(e) => setNewItem(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleAddItem(); }}
+              className="text-xs h-9"
             />
-            <Button onClick={handleAddItem} disabled={isLoading || !newItem.trim()}>
+            <Button onClick={() => handleAddItem()} disabled={isLoading || !newItem.trim()} size="sm" className="h-9 px-3">
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
             </Button>
           </div>
