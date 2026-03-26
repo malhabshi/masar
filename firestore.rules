@@ -185,5 +185,10 @@ service cloud.firestore {
     match /system_metadata/{docId} {
       allow read, write: if isAdmin();
     }
+
+    match /missing_item_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
   }
 }
