@@ -22,8 +22,6 @@ import {
     SelectTrigger, 
     SelectValue 
 } from '@/components/ui/select';
-import { useCollection } from '@/firebase/client';
-import type { MissingItemTemplate } from '@/lib/types';
 
 interface MissingItemsSectionProps {
   student: Student;
@@ -35,21 +33,17 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const { data: remoteTemplates } = useCollection<MissingItemTemplate>('missing_item_templates');
-
-  const defaultTemplates: Partial<MissingItemTemplate>[] = [
-    { text: 'Passport Copy', category: 'General' },
-    { text: 'High School Transcript', category: 'Academic' },
-    { text: 'Graduation Certificate', category: 'Academic' },
-    { text: 'English Proficiency (IELTS)', category: 'Academic' },
-    { text: 'Personal Statement (CV)', category: 'General' },
-    { text: 'Recommendation Letters (2)', category: 'General' },
-    { text: 'Financial Letter', category: 'Visa' },
-    { text: 'TB Certificate', category: 'Visa' },
-    { text: 'Previous Visas', category: 'Visa' },
+  const templates = [
+    { id: '1', text: 'Passport Copy', category: 'General' },
+    { id: '2', text: 'High School Transcript', category: 'Academic' },
+    { id: '3', text: 'Graduation Certificate', category: 'Academic' },
+    { id: '4', text: 'English Proficiency (IELTS)', category: 'Academic' },
+    { id: '5', text: 'Personal Statement (CV)', category: 'General' },
+    { id: '6', text: 'Recommendation Letters (2)', category: 'General' },
+    { id: '7', text: 'Financial Letter', category: 'Visa' },
+    { id: '8', text: 'TB Certificate', category: 'Visa' },
+    { id: '9', text: 'Previous Visas', category: 'Visa' },
   ];
-
-  const templates = remoteTemplates && remoteTemplates.length > 0 ? remoteTemplates : defaultTemplates;
 
   const canManage = currentUser.role === 'admin' || currentUser.role === 'department';
   const isEmployee = currentUser.role === 'employee';
