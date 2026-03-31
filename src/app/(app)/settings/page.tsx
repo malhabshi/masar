@@ -10,6 +10,7 @@ import { Loader2, Database, Download } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { AvatarUpload } from '@/components/user-management/avatar-upload';
 import { getFullSystemBackup } from '@/lib/actions';
+import { MissingItemsTemplateManager } from '@/components/settings/missing-items-template-manager';
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -210,6 +211,7 @@ export default function SettingsPage() {
               <Button onClick={handleSaveTheme}>Save Theme</Button>
             </CardFooter>
           </Card>
+          <MissingItemsTemplateManager />
         </>
       )}
     </div>

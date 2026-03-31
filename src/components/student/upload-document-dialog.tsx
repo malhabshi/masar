@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -22,14 +22,23 @@ import { validateFile, MAX_FILE_SIZE_MB, ALLOWED_FILE_EXTENSIONS } from '@/lib/f
 
 interface UploadDocumentDialogProps {
   student: Student;
+  initialCustomName?: string;
+  trigger?: React.ReactNode;
 }
 
-export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
+export function UploadDocumentDialog({ student, initialCustomName = '', trigger }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
-  const [customName, setCustomName] = useState('');
+  const [customName, setCustomName] = useState(initialCustomName);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Reset customName when dialog opens to ensure it reflects the latest initialCustomName
+  useEffect(() => {
+    if (isOpen) {
+      setCustomName(initialCustomName);
+    }
+  }, [isOpen, initialCustomName]);
   const { auth: authUser } = useUser();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,10 +120,12 @@ export function UploadDocumentDialog({ student }: UploadDocumentDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <UploadCloud className="mr-2 h-4 w-4" />
-          Upload Document
-        </Button>
+        {trigger || (
+          <Button>
+            <UploadCloud className="mr-2 h-4 w-4" />
+            Upload Document
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

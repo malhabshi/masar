@@ -33,6 +33,7 @@ import { AssignmentCard } from '@/components/student/assignment-card';
 import { StatusNoteCard } from '@/components/student/status-note-card';
 import { AdminStatusNoteCard } from '@/components/student/admin-status-note-card';
 import { JotformCard } from '@/components/student/jotform-card';
+import { StudyLevelCard } from '@/components/student/study-level-card';
 
 function playLoudAlert() {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -242,6 +243,7 @@ export default function StudentDetailPage() {
               <MissingItemsSection student={student} currentUser={currentUser} />
               <JotformCard student={student} currentUser={currentUser} />
               <AcademicIntakeCard student={student} currentUser={currentUser} />
+              <StudyLevelCard student={student} currentUser={currentUser} />
               <GradeCard student={student} currentUser={currentUser} />
               <IeltsCard student={student} currentUser={currentUser} />
               

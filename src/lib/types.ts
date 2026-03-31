@@ -148,6 +148,7 @@ export interface Student {
   changeAgentUniversities?: string[];
   term?: string;
   jotform?: boolean;
+  studyLevel?: 'Foundation' | 'First Year';
 }
 
 export interface ChatMessage {

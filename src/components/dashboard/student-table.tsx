@@ -71,6 +71,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState<'all' | 'M' | 'F'>('all');
+  const [studyLevelFilter, setStudyLevelFilter] = useState<'all' | 'Foundation' | 'First Year'>('all');
   const [countryFilter, setCountryFilter] = useState<string>('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
@@ -182,8 +183,9 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         }
         
         const matchesGender = genderFilter === 'all' || student.gender === genderFilter;
+        const matchesStudyLevel = studyLevelFilter === 'all' || student.studyLevel === studyLevelFilter;
         
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender && matchesStudyLevel;
     });
 
     return [...filtered].sort((a, b) => {
@@ -223,7 +225,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
+  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
@@ -231,10 +233,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setEmployeeFilter('all');
     setIeltsFilter('all');
     setGenderFilter('all');
+    setStudyLevelFilter('all');
     setCountryFilter('all');
     setShowAllStudents(false);
   };
-  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || countryFilter !== 'all' || showAllStudents;
+  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || studyLevelFilter !== 'all' || countryFilter !== 'all' || showAllStudents;
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -337,6 +340,16 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       <SelectItem value="all">All Genders</SelectItem>
                       <SelectItem value="M">Male (M)</SelectItem>
                       <SelectItem value="F">Female (F)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+                {isClient && (
+                  <Select value={studyLevelFilter} onValueChange={(v) => setStudyLevelFilter(v as any)}>
+                    <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Study Level" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Levels</SelectItem>
+                      <SelectItem value="Foundation">Foundation</SelectItem>
+                      <SelectItem value="First Year">First Year</SelectItem>
                     </SelectContent>
                   </Select>
                 )}

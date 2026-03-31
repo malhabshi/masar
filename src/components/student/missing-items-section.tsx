@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc, arrayUnion } from 'firebase/firestore';
-import { addMissingItemToStudent, removeMissingItemFromStudent, markMissingItemAsReceived } from '@/lib/actions';
+import { addMissingItemToStudent, removeMissingItemFromStudent, markMissingItemAsReceived, getMissingItemTemplates } from '@/lib/actions';
 import { Badge } from '@/components/ui/badge';
 import { 
     Select, 
@@ -33,17 +33,25 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const templates = [
-    { id: '1', text: 'Passport Copy', category: 'General' },
-    { id: '2', text: 'High School Transcript', category: 'Academic' },
-    { id: '3', text: 'Graduation Certificate', category: 'Academic' },
-    { id: '4', text: 'English Proficiency (IELTS)', category: 'Academic' },
-    { id: '5', text: 'Personal Statement (CV)', category: 'General' },
-    { id: '6', text: 'Recommendation Letters (2)', category: 'General' },
-    { id: '7', text: 'Financial Letter', category: 'Visa' },
-    { id: '8', text: 'TB Certificate', category: 'Visa' },
-    { id: '9', text: 'Previous Visas', category: 'Visa' },
+  const DEFAULT_TEMPLATES = [
+    { id: '1', text: 'Passport Copy' },
+    { id: '2', text: 'High School Transcript' },
+    { id: '3', text: 'Graduation Certificate' },
+    { id: '4', text: 'English Proficiency (IELTS)' },
+    { id: '5', text: 'Personal Statement (CV)' },
+    { id: '6', text: 'Recommendation Letters (2)' },
+    { id: '7', text: 'Financial Letter' },
+    { id: '8', text: 'TB Certificate' },
+    { id: '9', text: 'Previous Visas' },
   ];
+
+  const [templates, setTemplates] = useState<{ id: string; text: string }[]>(DEFAULT_TEMPLATES);
+
+  useEffect(() => {
+    getMissingItemTemplates().then(saved => {
+      if (saved && saved.length > 0) setTemplates(saved);
+    });
+  }, []);
 
   const canManage = currentUser.role === 'admin' || currentUser.role === 'department';
   const isEmployee = currentUser.role === 'employee';

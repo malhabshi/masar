@@ -1549,6 +1549,15 @@ export async function updateStudentGrade(studentId: string, grade: string, autho
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+export async function updateStudentStudyLevel(studentId: string, level: 'Foundation' | 'First Year', authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    await studentRef.update({ studyLevel: level, lastActivityAt: new Date().toISOString(), adminNotes: FieldValue.arrayUnion({ id: `note-study-${Date.now()}`, authorId, content: `Study Level updated to: ${level}`, createdAt: new Date().toISOString() }) });
+    return { success: true, message: 'Study Level updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
 export async function createStudentLogin(studentId: string, description: string, username: string, password: string, notes: string | undefined, createdByUserId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
@@ -2049,6 +2058,26 @@ export async function deleteEvent(eventId: string, adminId: string) {
     if (!admin || !['admin', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
     await adminDb!.collection('upcoming_events').doc(eventId).delete();
     return { success: true, message: 'Event deleted.' };
+  } catch (e: any) { return { success: false, message: e.message }; }
+}
+
+export async function getMissingItemTemplates(): Promise<{ id: string; text: string }[]> {
+  if (!checkAdminServices()) return [];
+  try {
+    const doc = await adminDb!.collection('system_metadata').doc('missing_item_templates').get();
+    if (!doc.exists) return [];
+    const data = doc.data();
+    return data?.items || [];
+  } catch { return []; }
+}
+
+export async function saveMissingItemTemplates(items: { id: string; text: string }[], adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized' };
+    await adminDb!.collection('system_metadata').doc('missing_item_templates').set({ items, updatedAt: new Date().toISOString(), updatedBy: adminId });
+    return { success: true, message: 'Templates saved.' };
   } catch (e: any) { return { success: false, message: e.message }; }
 }
 

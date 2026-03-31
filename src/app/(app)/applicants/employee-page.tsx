@@ -69,6 +69,7 @@ export function EmployeeApplicantsPage() {
       "IELTS", 
       "Intake Semester", 
       "Intake Year", 
+      "Study Level",
       "Created Date"
     ];
     
@@ -86,6 +87,7 @@ export function EmployeeApplicantsPage() {
       s.ieltsOverall ? s.ieltsOverall.toFixed(1) : '0.0',
       s.academicIntakeSemester || '',
       s.academicIntakeYear?.toString() || '',
+      s.studyLevel || '',
       s.createdAt ? format(new Date(s.createdAt), 'yyyy-MM-dd') : ''
     ]);
 

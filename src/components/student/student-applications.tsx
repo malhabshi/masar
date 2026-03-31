@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle, CheckSquare, Layers } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle, CheckSquare, Layers, UploadCloud } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -24,6 +24,7 @@ import {
   bulkUpdateApplicationStatuses
 } from '@/lib/actions';
 import { AddApplicationDialog } from './add-application-dialog';
+import { UploadDocumentDialog } from './upload-document-dialog';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -284,6 +285,18 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                       </TableCell>
                       <TableCell className="text-right align-top">
                           <div className="flex items-center justify-end gap-2">
+                            {isAdminDept && (
+                                <UploadDocumentDialog
+                                    student={student}
+                                    initialCustomName={app.university}
+                                    trigger={
+                                        <Button variant="outline" size="sm" title={`Upload document for ${app.university}`}>
+                                            <UploadCloud className="h-4 w-4 md:mr-2" />
+                                            <span className="hidden md:inline">Upload</span>
+                                        </Button>
+                                    }
+                                />
+                            )}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon">
