@@ -31,13 +31,13 @@ export function InactivityReportSection({ student, currentUser }: InactivityRepo
       return false;
     }
 
-    // 2. Check for 10 days of inactivity
+    // 2. Check for 20 days of inactivity
     // Use lastActivityAt, fallback to createdAt
     const lastActivity = toDate(student.lastActivityAt || student.createdAt);
     if (!lastActivity) return false;
 
-    const tenDaysAgo = subDays(new Date(), 10);
-    return lastActivity < tenDaysAgo;
+    const twentyDaysAgo = subDays(new Date(), 20);
+    return lastActivity < twentyDaysAgo;
   }, [student]);
 
   const handleSubmit = async () => {
@@ -72,7 +72,7 @@ export function InactivityReportSection({ student, currentUser }: InactivityRepo
           <CardTitle className="text-lg">Inactivity Alert: Give a report on the student after you contact him</CardTitle>
         </div>
         <CardDescription className="text-orange-600 font-medium">
-          There has been no activity on this profile for over 10 days. Management requires an status update.
+          There has been no activity on this profile for over 20 days. Management requires an status update.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

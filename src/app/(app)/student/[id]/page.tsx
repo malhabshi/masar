@@ -231,7 +231,7 @@ export default function StudentDetailPage() {
           </div>
 
           <div className="space-y-6">
-              {currentUser.role === 'admin' && (
+              {(currentUser.role === 'admin' || currentUser.role === 'department') && (
                 <div>
                   <AssignmentCard student={student} />
                 </div>

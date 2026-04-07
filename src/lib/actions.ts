@@ -8,6 +8,7 @@ import {
   parseISO,
   format,
   differenceInMinutes,
+  differenceInHours,
   subMinutes,
   addMinutes,
   subDays,
@@ -1960,14 +1961,20 @@ export async function processInactivityReminders() {
 
     await cooldownRef.set({ lastRunAt: now.toISOString() }, { merge: true });
 
-    const tenDaysAgo = subDays(new Date(), 10).toISOString();
-    const snapshot = await adminDb!.collection('students').where('lastActivityAt', '<', tenDaysAgo).get();
+    const twentyDaysAgo = subDays(new Date(), 20).toISOString();
+    const snapshot = await adminDb!.collection('students').where('lastActivityAt', '<', twentyDaysAgo).get();
 
     if (snapshot.empty) return { success: true };
 
     for (const doc of snapshot.docs) {
       const student = doc.data() as Student;
       if (student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel || !student.employeeId) continue;
+
+      if (student.lastInactivityReminderSentAt) {
+        if (differenceInHours(now, parseISO(student.lastInactivityReminderSentAt)) < 48) {
+          continue;
+        }
+      }
 
       const reminderContent = "Please contact the student, and give me a report why there is no activities\n\nتواصل مع الطالب و عطني تقرير عن الطالب ليش ماكو اي شي يديد عنه ؟";
       await adminDb!.collection('chats').doc(doc.id).collection('messages').add({ authorId: 'system', content: reminderContent, timestamp: new Date().toISOString() });
@@ -1986,8 +1993,8 @@ export async function processInactivityReminders() {
 export async function forceInactivity(studentId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    const elevenDaysAgo = subDays(new Date(), 11).toISOString();
-    await adminDb!.collection('students').doc(studentId).update({ lastActivityAt: elevenDaysAgo, createdAt: elevenDaysAgo, changeAgentRequired: false, pipelineStatus: 'none', lastInactivityReminderSentAt: null, 'profileCompletionStatus.readyToTravel': false });
+    const twentyOneDaysAgo = subDays(new Date(), 21).toISOString();
+    await adminDb!.collection('students').doc(studentId).update({ lastActivityAt: twentyOneDaysAgo, createdAt: twentyOneDaysAgo, changeAgentRequired: false, pipelineStatus: 'none', lastInactivityReminderSentAt: null, 'profileCompletionStatus.readyToTravel': false });
     return { success: true, message: 'Forced inactivity state.' };
   } catch (e: any) { return { success: false, message: e.message }; }
 }
