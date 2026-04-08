@@ -1303,6 +1303,24 @@ export async function deleteStudent(studentId: string, adminId: string) {
     await adminDb!.collection('chats').doc(studentId).collection('messages').get().then(s => s.forEach(d => d.ref.delete()));
     await adminDb!.collection('chats').doc(studentId).delete();
     await studentRef.delete();
+
+    // Check if we just resolved a duplicate phone issue
+    if (studentData.phone) {
+      const remainingWithPhoneSnap = await adminDb!.collection('students').where('phone', '==', studentData.phone).get();
+      if (remainingWithPhoneSnap.size === 1) {
+        await remainingWithPhoneSnap.docs[0].ref.update({ 
+          duplicatePhoneWarning: false, 
+          duplicateOfStudentIds: FieldValue.delete() 
+        });
+      } else if (remainingWithPhoneSnap.size > 1) {
+        const batch = adminDb!.batch();
+        remainingWithPhoneSnap.docs.forEach(doc => {
+          batch.update(doc.ref, { duplicateOfStudentIds: FieldValue.arrayRemove(studentId) });
+        });
+        await batch.commit();
+      }
+    }
+
     return { success: true, message: `Student deleted successfully.` };
   } catch (error: any) { return { success: false, message: error.message }; }
 }

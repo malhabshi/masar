@@ -170,9 +170,11 @@ export function TaskDetailsDialog({
               </DialogTitle>
             </div>
             <div className="flex flex-col items-end gap-3 shrink-0">
-              <Link href={`/student/${task.studentId}`} className="text-xs text-primary font-bold underline flex items-center gap-1">
-                View Full Profile <ExternalLink className="h-3 w-3" />
-              </Link>
+              {task.studentId && (student || isStudentLoading) && (
+                <Link href={`/student/${task.studentId}`} className="text-xs text-primary font-bold underline flex items-center gap-1">
+                  View Full Profile <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
               <div className="flex flex-col gap-2">
                 <div className="flex gap-1 p-1 bg-muted rounded-md border">
                   {(['new', 'in-progress', 'completed', 'denied'] as TaskStatus[]).map(s => (
