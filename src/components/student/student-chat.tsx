@@ -269,6 +269,14 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                               {author.name} ({author.role})
                           </div>
                       )}
+                      {(message as any).recipientLabel && (
+                          <div className={cn(
+                            "text-[9px] font-bold mb-1 border-b pb-1",
+                            isCurrentUser ? "text-primary-foreground/80 border-primary-foreground/20" : "text-muted-foreground/80 border-border"
+                          )}>
+                              Sent to: {(message as any).recipientLabel}
+                          </div>
+                      )}
                       {renderMessageContent(message.content)}
                       {message.document && (
                         <a

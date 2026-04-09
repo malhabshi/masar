@@ -1661,11 +1661,33 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     const studentData = studentDoc.data() as Student;
     const now = new Date().toISOString();
 
+    let recipientLabel = '';
+    if (recipientId) {
+      if (recipientId === 'admins') recipientLabel = 'Admins';
+      else if (recipientId === 'departments') recipientLabel = 'Departments';
+      else {
+        const rUser = await getUser(recipientId);
+        recipientLabel = rUser ? rUser.name : 'Target User';
+      }
+    } else {
+      if (author.role === 'admin') {
+        if (studentData.employeeId) {
+          const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+          recipientLabel = !empQuery.empty ? empQuery.docs[0].data().name : 'Assigned Employee';
+        } else {
+          recipientLabel = 'Assigned Employee';
+        }
+      } else {
+        recipientLabel = 'All Employees';
+      }
+    }
+
     // 1. Add the message to the subcollection
     await adminDb!.collection('chats').doc(studentId).collection('messages').add({
       authorId,
       content,
       timestamp: now,
+      recipientLabel, // Store who this message is meant for
       ...(documentPayload && { document: documentPayload })
     });
 
@@ -2284,5 +2306,32 @@ export async function bulkAssignStudents(studentIds: string[], targetCivilId: st
 
     await batch.commit();
     return { success: true, message: `Assigned ${studentIds.length} students to ${employeeData.name}` };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+export async function rejectStudentDeletion(studentId: string, adminId: string, reason: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const adminUser = await getUser(adminId);
+    if (!adminUser || adminUser.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+    const authorRole = adminUser.role;
+    const authorName = adminUser.name;
+
+    await studentRef.update({ 
+      deletionRequested: FieldValue.delete(),
+      lastActivityAt: new Date().toISOString(),
+      adminNotes: FieldValue.arrayUnion({ 
+        id: `note-reject-del-${Date.now()}`, 
+        authorId: adminId, 
+        content: `Admin (${authorName}) rejected the deletion request. Reason: ${reason}`, 
+        createdAt: new Date().toISOString() 
+      })
+    });
+    
+    return { success: true, message: 'Deletion request rejected.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }

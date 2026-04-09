@@ -87,7 +87,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
 
   const isAdminDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
   const canAddApplications = isAdminDept;
-  const canSetFinalChoice = currentUser?.role === 'employee' && currentUser.civilId === student.employeeId;
+  const canSetFinalChoice = !!(currentUser?.civilId && currentUser.civilId === student.employeeId);
 
   const toggleSelect = (university: string, major: string) => {
     const key = `${university}|${major}`;

@@ -121,13 +121,13 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
                            t.taskType?.toLowerCase() === 'ielts course';
       if (isIeltsCourse) return false;
       
-      // Transfer/Deletion requests are ONLY for admins
-      const isAdminRequest = t.taskType === 'Transfer Request' || 
+      // Transfer/Deletion requests are no longer shown in the task page
+      const isTransferOrDeletion = t.taskType === 'Transfer Request' || 
                              t.taskType === 'Deletion Request' ||
                              t.content?.toLowerCase().includes('transfer request') ||
                              t.content?.toLowerCase().includes('deletion request');
 
-      if (isAdminRequest && currentUser.role !== 'admin') return false;
+      if (isTransferOrDeletion) return false;
 
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
