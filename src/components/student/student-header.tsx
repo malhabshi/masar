@@ -479,8 +479,8 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               )}
               {canEdit && <EditStudentDialog student={student} />}
               
-              {/* Restored "New Task" Button - Now restricted to assigned employee only per user request */}
-              {isAssignedEmployee && (
+              {/* "New Task" Button - Available to managers and the assigned employee */}
+              {canEdit && (
                 <CreateStudentTaskDialog student={student} currentUser={currentUser} />
               )}
 
