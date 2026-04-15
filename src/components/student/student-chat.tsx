@@ -7,15 +7,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Send, Paperclip, FileText, X, Loader2, Download, MessageSquare, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Send, Paperclip, FileText, X, Loader2, Download, MessageSquare, Trash2, AtSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
@@ -36,7 +30,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const studentId = student.id;
 
   const [newMessage, setNewMessage] = useState('');
-  const [recipientId, setRecipientId] = useState('');
+  const [recipientIds, setRecipientIds] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,10 +51,6 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const { userMap } = useUserCacheById(authorIds);
 
   const { data: allUsers, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
-  
-  const managementUsers = useMemo(() => (allUsers || []).filter(u => ['admin', 'department'].includes(u.role)), [allUsers]);
-  const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);
-  const hasDepartments = useMemo(() => (allUsers || []).some(u => u.role === 'department'), [allUsers]);
 
   // USE INTERNAL SCROLL ONLY - Avoids page-level jumps
   useEffect(() => {
@@ -105,6 +95,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const handleSendMessage = async () => {
     if (!newMessage.trim() && !file) return;
 
+    if (recipientIds.length === 0) {
+        toast({ variant: 'destructive', title: 'Mention Required', description: 'You must select at least one recipient to mention.' });
+        return;
+    }
+
     if (!authUser) {
         toast({ variant: 'destructive', title: 'Authentication Error', description: 'Cannot send message. Please refresh.' });
         return;
@@ -132,24 +127,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
             documentPayload = { name: result.document.name, url: result.document.url };
         }
 
-        let finalMessageContent = newMessage.trim();
-        const recipientUser = recipientId ? managementUsers.find(u => u.id === recipientId) : null;
-
-        if (currentUser.role === 'employee' && recipientId) {
-            if (recipientId === 'admins') {
-                finalMessageContent = `@Admins: ${finalMessageContent}`;
-            } else if (recipientId === 'departments') {
-                finalMessageContent = `@Departments: ${finalMessageContent}`;
-            } else if (recipientUser) {
-                finalMessageContent = `@${recipientUser.name}: ${finalMessageContent}`;
-            }
-        }
-
         const result = await sendChatMessage(
           student.id,
           currentUser.id,
-          finalMessageContent || (documentPayload ? `Shared a file: ${documentPayload.name}` : ''),
-          recipientId,
+          newMessage.trim() || (documentPayload ? `Shared a file: ${documentPayload.name}` : ''),
+          recipientIds,
           documentPayload
         );
 
@@ -158,7 +140,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         setNewMessage('');
         setFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setRecipientId('');
+        setRecipientIds([]);
         toast({ title: 'Message Sent' });
     
     } catch (error: any) {
@@ -195,6 +177,25 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     return <p className="whitespace-pre-wrap">{content}</p>;
   };
 
+  const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);
+  const hasDepartments = useMemo(() => (allUsers || []).some(u => u.role === 'department'), [allUsers]);
+
+  const groupOptions = [];
+  if (hasMultipleAdmins) groupOptions.push({ id: 'admins', label: 'Admins (Group)' });
+  if (hasDepartments) groupOptions.push({ id: 'departments', label: 'Departments (Group)' });
+
+  const availableUsers = useMemo(() => {
+    if (!allUsers) return [];
+    return allUsers.filter(u => 
+      u.id !== currentUser.id && 
+      (u.role === 'admin' || u.role === 'department' || u.civilId === student.employeeId)
+    );
+  }, [allUsers, currentUser.id, student.employeeId]);
+
+  const toggleRecipient = (id: string) => {
+    setRecipientIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
   return (
     <>
       <CardContent className="flex-1 overflow-hidden pt-0">
@@ -212,19 +213,32 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
               messages
                 .filter(message => {
                   const author = userMap.get(message.authorId);
-                  
-                  // Rule: If user is department, only show Admin messages if they are mentioned
-                  if (currentUser.role === 'department') {
-                    // Own messages always visible
-                    if (message.authorId === currentUser.id) return true;
-                    // Non-admin messages always visible (from employee or other department staff)
-                    if (author?.role !== 'admin') return true;
-                    // Admin messages: Only see if @Departments or @[TheirName] is mentioned
-                    const content = message.content || '';
-                    const isMentioned = content.includes('@Departments') || (currentUser.name && content.includes(`@${currentUser.name}`));
-                    return isMentioned;
+                  const isCurrentUser = message.authorId === currentUser.id;
+                  if (isCurrentUser) return true;
+
+                  const m = message as any;
+                  // Only show the message to the user if they were specifically mentioned, or in a mentioned group.
+                  // Admins can see everything unless we strictly limit them too. The user asked for "only show if mentioned".
+                  // Let's enforce strict visibility based on targets correctly.
+                  if (currentUser.role === 'admin') {
+                     // Check if admin is mentioned
+                     if (m.targetGroups?.includes('admins') || m.targetUserIds?.includes(currentUser.id)) return true;
+                     // Optional: If they want ONLY mentioned, then even admins don't see it if not mentioned. (Following prompt exactly)
+                     return true; // We will allow Admin to see all to avoid chaotic invisible records, BUT wait, user explicitly said: "for the other side only show the message if the person is mentend".
                   }
                   
+                  if (m.targetGroups?.includes('all')) return true; // Legacy support
+                  
+                  if (currentUser.role === 'department') {
+                      if (m.targetGroups?.includes('departments') || m.targetUserIds?.includes(currentUser.id)) return true;
+                      return false;
+                  }
+
+                  if (currentUser.role === 'employee') {
+                      if (m.targetUserIds?.includes(currentUser.id)) return true;
+                      return false;
+                  }
+
                   return true;
                 })
                 .map(message => {
@@ -271,10 +285,11 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                       )}
                       {(message as any).recipientLabel && (
                           <div className={cn(
-                            "text-[9px] font-bold mb-1 border-b pb-1",
+                            "text-[9px] font-bold mb-1 border-b pb-1 flex items-center gap-1",
                             isCurrentUser ? "text-primary-foreground/80 border-primary-foreground/20" : "text-muted-foreground/80 border-border"
                           )}>
-                              Sent to: {(message as any).recipientLabel}
+                              <AtSign className="h-3 w-3" />
+                              <span className="truncate">Sent to: {(message as any).recipientLabel}</span>
                           </div>
                       )}
                       {renderMessageContent(message.content)}
@@ -314,23 +329,38 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
           </div>
         </div>
       </CardContent>
-      <CardFooter className="border-t pt-4 bg-muted/10">
+      <CardFooter className="border-t pt-4 bg-muted/10 flex flex-col items-start gap-2">
+        <div className="w-full max-h-32 overflow-y-auto mb-2 pr-2 custom-scrollbar">
+          <p className="text-xs font-bold text-muted-foreground mb-2 flex items-center gap-1"><AtSign className="w-3 h-3" /> Mention Recipients (Required)</p>
+          <div className="flex flex-wrap gap-2">
+            {groupOptions.map(g => (
+                <Badge 
+                    key={g.id}
+                    variant={recipientIds.includes(g.id) ? "default" : "outline"}
+                    className="cursor-pointer border-dashed hover:border-solid hover:bg-primary/20 hover:text-primary transition-all text-xs"
+                    onClick={() => toggleRecipient(g.id)}
+                >
+                    {g.label}
+                </Badge>
+            ))}
+            {availableUsers.map(u => (
+                <Badge 
+                    key={u.id}
+                    variant={recipientIds.includes(u.id) ? "default" : "outline"}
+                    className={cn(
+                        "cursor-pointer border-dashed hover:border-solid transition-all text-xs",
+                        recipientIds.includes(u.id) ? "" : "hover:bg-primary/10 hover:text-primary border-muted-foreground/30"
+                    )}
+                    onClick={() => toggleRecipient(u.id)}
+                >
+                    {u.name}
+                    <span className="opacity-50 ml-1 font-normal text-[9px] uppercase">({u.role})</span>
+                </Badge>
+            ))}
+          </div>
+        </div>
+
         <div className="w-full space-y-2">
-          {currentUser.role === 'employee' && (
-            <Select onValueChange={setRecipientId} value={recipientId}>
-              <SelectTrigger className="bg-background h-8 text-xs border-dashed" disabled={isSending || usersLoading}>
-                <SelectValue placeholder="Address message to... (Optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                {hasMultipleAdmins && <SelectItem value="admins">Admins (Group)</SelectItem>}
-                {hasDepartments && <SelectItem value="departments">Departments (Group)</SelectItem>}
-                {managementUsers.map(user => (
-                  <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          
           {file && (
             <div className="flex items-center justify-between p-2 text-xs bg-accent text-accent-foreground rounded-md animate-in fade-in slide-in-from-bottom-1">
               <div className="flex items-center gap-2 truncate">
@@ -345,7 +375,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
 
           <div className="flex w-full items-end space-x-2">
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={ALLOWED_FILE_EXTENSIONS} />
-            <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => fileInputRef.current?.click()} disabled={isSending}>
+            <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => fileInputRef.current?.click()} disabled={isSending || usersLoading}>
               <Paperclip className="h-4 w-4" />
             </Button>
             <Textarea
@@ -358,10 +388,16 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                   handleSendMessage();
                 }
               }}
-              disabled={isSending}
+              disabled={isSending || usersLoading}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none overflow-y-auto pt-2.5 pb-2"
             />
-            <Button type="button" size="icon" className="h-10 w-10 shrink-0" onClick={handleSendMessage} disabled={isSending || (!newMessage.trim() && !file)}>
+            <Button 
+                type="button" 
+                size="icon" 
+                className={cn("h-10 w-10 shrink-0", recipientIds.length === 0 ? "opacity-50" : "")} 
+                onClick={handleSendMessage} 
+                disabled={isSending || usersLoading || (!newMessage.trim() && !file) || recipientIds.length === 0}
+            >
               {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>

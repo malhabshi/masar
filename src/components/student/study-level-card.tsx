@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, FilePenLine, BookOpen } from 'lucide-react';
 
 const studyLevelFormSchema = z.object({
-  level: z.enum(['Foundation', 'First Year'], {
+  level: z.enum(['Foundation', 'First Year', 'Transfer Student'], {
     required_error: 'Please select a study level.',
   }),
 });
@@ -86,6 +86,7 @@ function EditStudyLevelDialog({ student, currentUser, children }: { student: Stu
                                         <SelectContent>
                                             <SelectItem value="Foundation">Foundation</SelectItem>
                                             <SelectItem value="First Year">First Year</SelectItem>
+                                            <SelectItem value="Transfer Student">Transfer Student</SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />

@@ -41,6 +41,7 @@ export interface Document {
   uploadedAt: string;
   authorId: string;
   isNew?: boolean;
+  note?: string;
 }
 
 export type PipelineStatus = 'green' | 'orange' | 'red' | 'none';
@@ -148,7 +149,7 @@ export interface Student {
   changeAgentUniversities?: string[];
   term?: string;
   jotform?: boolean;
-  studyLevel?: 'Foundation' | 'First Year';
+  studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';
 }
 
 export interface ChatMessage {

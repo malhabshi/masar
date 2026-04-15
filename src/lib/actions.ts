@@ -1351,6 +1351,28 @@ export async function deleteStudentDocument(studentId: string, documentId: strin
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+export async function updateStudentDocumentNote(studentId: string, documentId: string, note: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+    
+    const updatedDocs = (studentData.documents || []).map(doc => {
+      if (doc.id === documentId) {
+        return { ...doc, note };
+      }
+      return doc;
+    });
+
+    await studentRef.update({ documents: updatedDocs, lastActivityAt: new Date().toISOString() });
+    return { success: true, message: 'Note updated.' };
+  } catch (error: any) { 
+    return { success: false, message: error.message }; 
+  }
+}
+
 export async function handleEmployeeLogin(userId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
@@ -1650,7 +1672,7 @@ export async function updateStudentTerm(studentId: string, term: string, authorI
   } catch (e: any) { return { success: false, message: e.message }; }
 }
 
-export async function sendChatMessage(studentId: string, authorId: string, content: string, recipientId?: string, documentPayload?: { name: string; url: string }) {
+export async function sendChatMessage(studentId: string, authorId: string, content: string, recipientIds?: string[], documentPayload?: { name: string; url: string }) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const author = await getUser(authorId);
@@ -1661,26 +1683,29 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     const studentData = studentDoc.data() as Student;
     const now = new Date().toISOString();
 
-    let recipientLabel = '';
-    if (recipientId) {
-      if (recipientId === 'admins') recipientLabel = 'Admins';
-      else if (recipientId === 'departments') recipientLabel = 'Departments';
-      else {
-        const rUser = await getUser(recipientId);
-        recipientLabel = rUser ? rUser.name : 'Target User';
+    let targetUserIds: string[] = [];
+    let targetGroups: ('admins' | 'departments')[] = [];
+    let labels: string[] = [];
+
+    if (recipientIds && recipientIds.length > 0) {
+      if (recipientIds.includes('admins')) {
+        targetGroups.push('admins');
+        labels.push('Admins');
       }
-    } else {
-      if (author.role === 'admin') {
-        if (studentData.employeeId) {
-          const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
-          recipientLabel = !empQuery.empty ? empQuery.docs[0].data().name : 'Assigned Employee';
-        } else {
-          recipientLabel = 'Assigned Employee';
-        }
-      } else {
-        recipientLabel = 'All Employees';
+      if (recipientIds.includes('departments')) {
+        targetGroups.push('departments');
+        labels.push('Departments');
+      }
+      const specificUsers = recipientIds.filter(id => id !== 'admins' && id !== 'departments');
+      for (const id of specificUsers) {
+        targetUserIds.push(id);
+        const rUser = await getUser(id);
+        if (rUser) labels.push(rUser.name);
+        else labels.push('Target User');
       }
     }
+
+    const recipientLabel = labels.length > 0 ? labels.join(', ') : 'No one specified';
 
     // 1. Add the message to the subcollection
     await adminDb!.collection('chats').doc(studentId).collection('messages').add({
@@ -1688,6 +1713,8 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       content,
       timestamp: now,
       recipientLabel, // Store who this message is meant for
+      targetUserIds,
+      targetGroups,
       ...(documentPayload && { document: documentPayload })
     });
 
@@ -1702,62 +1729,38 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       updatesViewedBy: [author.id]
     };
 
-    // Calculate who should see this as an UNREAD message (internal flags)
-    // Rule: Mentions or Role defaults
-    const isAdminAuthor = authorRole === 'admin';
-    const isDeptAuthor = authorRole === 'department';
-    const isEmployeeAuthor = authorRole === 'employee';
+    // Calculate unread updates logic based on precise targets
+    let notifyEmployee = false;
+    let notifyManagement = false;
 
-    // Target users for notifications and unread counts
-    let targetUserIds: string[] = [];
-    let targetGroups: ('admins' | 'departments' | 'all')[] = [];
-
-    if (recipientId) {
-      if (recipientId === 'admins') targetGroups.push('admins');
-      else if (recipientId === 'departments') targetGroups.push('departments');
-      else targetUserIds.push(recipientId);
-    } else {
-      // DEFAULT RULES (No explicit recipient/mention)
-      if (isAdminAuthor) {
-        // Admin sends: Only notify employee
-        if (studentData.employeeId) {
-          // We'll resolve civilId to userId later
+    if (studentData.employeeId) {
+        // If employee is specifically targeted, or if no targets but we fallback
+        const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+        if (!empQuery.empty) {
+            const empId = empQuery.docs[0].id;
+            if (targetUserIds.includes(empId)) notifyEmployee = true;
         }
-      } else if (isDeptAuthor || isEmployeeAuthor) {
-        // Dept or Employee sends: Notify all relevant parties
-        targetGroups.push('all');
-      }
     }
 
-    // Resolve specific target users (e.g. employeeId from student profile if admin sent no mention)
-    if (!recipientId && isAdminAuthor && studentData.employeeId) {
-      const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
-      if (!empQuery.empty) targetUserIds.push(empQuery.docs[0].id);
+    if (targetGroups.includes('admins') || targetGroups.includes('departments')) notifyManagement = true;
+    for (const uid of targetUserIds) {
+       const u = await getUser(uid);
+       if (u && ['admin', 'department'].includes(u.role)) notifyManagement = true;
     }
 
-    // Update unread counts
-    if (isAdminAuthor || isDeptAuthor) {
-      // Management sends: Mark as unread for the employee (if they are a target)
-      // If it's a specific mention to another admin/dept, maybe employee shouldn't see it?
-      // But user said: "department user message will show to all they do not have to mention employee"
-      // And for admin: "only send it to the assend employee and not the department"
-
-      if (targetUserIds.length > 0 || targetGroups.includes('all')) {
-        // Check if employee is in specific targets or 'all'
+    if (notifyEmployee) {
         updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
-      }
-    } else {
-      // Employee sends: Mark as unread for the management side
-      updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
+    }
+    if (notifyManagement) {
+        updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
     }
 
     await studentRef.update(updates);
 
     // 3. Trigger Targeted WhatsApp Notifications
     const relevantDepts = getDepartmentsForStudent(studentData);
-    const staffSnap = await adminDb!.collection('users').get(); // Fetching once (can be optimized if many users)
+    const staffSnap = await adminDb!.collection('users').get(); 
 
-    // Management users Map for easy access
     const allUsers: User[] = staffSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
 
     for (const staff of allUsers) {
@@ -1766,26 +1769,10 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
 
       let shouldNotify = false;
 
-      // Check explicit ID target
       if (targetUserIds.includes(staff.id)) shouldNotify = true;
-
-      // Check group targets
-      if (targetGroups.includes('all')) {
-        if (staff.role === 'admin') shouldNotify = true;
-        if (staff.role === 'department' && staff.department && relevantDepts.includes(staff.department)) shouldNotify = true;
-        // Also notify employee if they belong to this student
-        if (staff.role === 'employee' && staff.civilId === studentData.employeeId) shouldNotify = true;
-      }
-
       if (targetGroups.includes('admins') && staff.role === 'admin') shouldNotify = true;
-
       if (targetGroups.includes('departments')) {
         if (staff.role === 'department' && staff.department && relevantDepts.includes(staff.department)) shouldNotify = true;
-      }
-
-      if (isAdminAuthor && !recipientId) {
-        // Only notify employee
-        if (staff.role === 'employee' && staff.civilId === studentData.employeeId) shouldNotify = true;
       }
 
       if (shouldNotify) {

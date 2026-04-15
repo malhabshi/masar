@@ -18,9 +18,15 @@ import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toDate, formatDate } from '@/lib/timestamp-utils';
 import { markMultipleTasksAsSeen } from '@/lib/actions';
+import { updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { Switch } from '@/components/ui/switch';
 
 export default function IeltsCourseDashboard() {
   const { user: currentUser } = useUser();
+  const { toast } = useToast();
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
@@ -87,11 +93,23 @@ export default function IeltsCourseDashboard() {
     }
   }, [filteredTasks, currentUser]);
 
+  const handleUpdateTaskData = async (taskId: string, key: string, value: any) => {
+    try {
+      const taskRef = doc(firestore, 'tasks', taskId);
+      await updateDocumentNonBlocking(taskRef, {
+        [`data.${key}`]: value
+      });
+      toast({ title: 'Updated successfully' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Update failed', description: e.message });
+    }
+  };
+
   const handleDownloadExcel = () => {
     if (filteredTasks.length === 0) return;
 
     // CSV Headers
-    const headers = ["Student Name", "Phone Number", "Email", "Course Type", "Exam Date", "Employee Name"];
+    const headers = ["Student Name", "Phone Number", "Email", "Course Type", "Exam Date", "Employee Name", "Admin Note", "Sent to IDP"];
     
     // CSV Content
     const rows = filteredTasks.map(task => [
@@ -100,7 +118,9 @@ export default function IeltsCourseDashboard() {
       task.data?.studentEmail || '',
       task.data?.courseOption || '',
       task.data?.courseStartDate ? format(toDate(task.data.courseStartDate)!, 'yyyy-MM-dd') : '',
-      task.authorName || ''
+      task.authorName || '',
+      task.data?.adminNote || '',
+      task.data?.sentToIdp ? 'Yes' : 'No'
     ]);
 
     const csvContent = [
@@ -205,6 +225,8 @@ export default function IeltsCourseDashboard() {
                     <TableHead>Course Type</TableHead>
                     <TableHead>Start Date</TableHead>
                     <TableHead>Employee Name</TableHead>
+                    <TableHead className="w-[200px]">Admin Note</TableHead>
+                    <TableHead className="text-center w-[120px]">Sent to IDP</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -223,11 +245,25 @@ export default function IeltsCourseDashboard() {
                           {task.data?.courseStartDate ? formatDate(task.data.courseStartDate) : 'N/A'}
                         </TableCell>
                         <TableCell>{task.authorName}</TableCell>
+                        <TableCell>
+                          <Input 
+                            defaultValue={task.data?.adminNote || ''}
+                            onBlur={(e) => handleUpdateTaskData(task.id, 'adminNote', e.target.value)}
+                            className="h-8 text-xs bg-muted/50"
+                            placeholder="Add note..."
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch 
+                            checked={task.data?.sentToIdp || false}
+                            onCheckedChange={(val) => handleUpdateTaskData(task.id, 'sentToIdp', val)}
+                          />
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                         No IELTS Course registrations found for the selected criteria.
                       </TableCell>
                     </TableRow>

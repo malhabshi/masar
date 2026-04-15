@@ -71,7 +71,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState<'all' | 'M' | 'F'>('all');
-  const [studyLevelFilter, setStudyLevelFilter] = useState<'all' | 'Foundation' | 'First Year'>('all');
+  const [studyLevelFilter, setStudyLevelFilter] = useState<'all' | 'Foundation' | 'First Year' | 'Transfer Student'>('all');
   const [countryFilter, setCountryFilter] = useState<string>('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
@@ -350,6 +350,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       <SelectItem value="all">All Levels</SelectItem>
                       <SelectItem value="Foundation">Foundation</SelectItem>
                       <SelectItem value="First Year">First Year</SelectItem>
+                      <SelectItem value="Transfer Student">Transfer Student</SelectItem>
                     </SelectContent>
                   </Select>
                 )}

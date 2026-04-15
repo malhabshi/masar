@@ -17,7 +17,8 @@ import { updateDocumentNonBlocking } from '@/firebase/client';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { deleteStudentDocument } from '@/lib/actions';
+import { deleteStudentDocument, updateStudentDocumentNote } from '@/lib/actions';
+import { Input } from '@/components/ui/input';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return '0 Bytes';
@@ -114,6 +115,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
               <TableRow>
                 <TableHead>File Name</TableHead>
                 <TableHead>Uploaded By</TableHead>
+                <TableHead className="w-[150px]">Note</TableHead>
                 <TableHead>Date Uploaded</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -142,6 +144,24 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                       ) : (
                         <span className="text-muted-foreground">Student</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        defaultValue={doc.note || ''}
+                        disabled={isBeingDeleted}
+                        className="text-xs h-8 bg-muted/50"
+                        placeholder="Add note..."
+                        onBlur={async (e) => {
+                          if (e.target.value !== doc.note) {
+                             const res = await updateStudentDocumentNote(student.id, doc.id, e.target.value);
+                             if (res.success) {
+                                toast({ title: 'Note saved' });
+                             } else {
+                                toast({ variant: 'destructive', title: 'Error', description: res.message });
+                             }
+                          }
+                        }}
+                      />
                     </TableCell>
                     <TableCell>{isClient ? formatDate(doc.uploadedAt) : '...'}</TableCell>
                     <TableCell>{formatBytes(doc.size || 0)}</TableCell>
