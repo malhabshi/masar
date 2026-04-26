@@ -1590,7 +1590,7 @@ export async function updateStudentGrade(studentId: string, grade: string, autho
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function updateStudentStudyLevel(studentId: string, level: 'Foundation' | 'First Year', authorId: string) {
+export async function updateStudentStudyLevel(studentId: string, level: 'Foundation' | 'First Year' | 'Transfer Student', authorId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
