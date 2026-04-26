@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar as CalendarIcon, Download, FileSpreadsheet, Loader2, Search } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, FileSpreadsheet, Loader2, Search, CheckCircle2, Circle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -233,7 +233,15 @@ export default function IeltsCourseDashboard() {
                   {filteredTasks.length > 0 ? (
                     filteredTasks.map((task) => (
                       <TableRow key={task.id}>
-                        <TableCell className="font-bold">{task.studentName}</TableCell>
+                        <TableCell className="font-bold">
+                          <div className="flex items-center gap-1.5">
+                            {task.data?.sentToIdp
+                              ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                              : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                            }
+                            {task.studentName}
+                          </div>
+                        </TableCell>
                         <TableCell>{task.studentPhone}</TableCell>
                         <TableCell className="text-muted-foreground text-xs">{task.data?.studentEmail || 'N/A'}</TableCell>
                         <TableCell>
