@@ -123,6 +123,7 @@ export interface Student {
   newMissingItemsForEmployee?: number;
   newDocsViewedBy?: string[];
   updatesViewedBy?: string[];
+  unreadChatMentionsFor?: string[];
   missingItemsViewedBy?: string[];
   finalChoiceUniversity?: string;
   finalizedAt?: string;

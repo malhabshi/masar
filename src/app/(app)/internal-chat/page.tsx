@@ -79,9 +79,9 @@ export default function InternalChatPage() {
     // 2. Filter for Unread Only
     if (showUnreadOnly) {
         filtered = filtered.filter(s => {
-            const count = isAdminDept ? (s.unreadUpdates || 0) : (s.employeeUnreadMessages || 0);
+            if (isAdminDept) return s.unreadChatMentionsFor?.includes(currentUser?.id || '') ?? false;
             const hasNotViewed = !s.updatesViewedBy || !s.updatesViewedBy.includes(currentUser?.id || '');
-            return count > 0 && hasNotViewed;
+            return (s.employeeUnreadMessages || 0) > 0 && hasNotViewed;
         });
     }
 
@@ -135,9 +135,9 @@ export default function InternalChatPage() {
           {displayedStudents.length > 0 ? (
             displayedStudents.map((student) => {
               const employee = student.employeeId ? employeeMap.get(student.employeeId) : null;
-              const unreadCount = isAdminDept ? (student.unreadUpdates || 0) : (student.employeeUnreadMessages || 0);
-              const hasNotViewed = !student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id);
-              const isUnread = unreadCount > 0 && hasNotViewed;
+              const isUnread = isAdminDept
+                ? (student.unreadChatMentionsFor?.includes(currentUser.id) ?? false)
+                : (student.employeeUnreadMessages || 0) > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id));
               const lastTime = student.lastChatMessageTimestamp || student.lastActivityAt || student.createdAt;
               
               return (
@@ -157,7 +157,7 @@ export default function InternalChatPage() {
                       </div>
                       {isUnread && (
                         <span className="absolute -top-1 -right-1 h-5 w-5 bg-destructive text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-background animate-in zoom-in">
-                          {unreadCount}
+                          !
                         </span>
                       )}
                     </div>

@@ -1718,72 +1718,58 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       ...(documentPayload && { document: documentPayload })
     });
 
-    // 2. Update metadata for SMS-style sorting
-    const authorRole = author.role;
+    // 2. Resolve all users to determine exact notification targets
+    const relevantDepts = getDepartmentsForStudent(studentData);
+    const staffSnap = await adminDb!.collection('users').get();
+    const allUsers: User[] = staffSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+
+    // Build the precise list of user IDs who should be notified
+    const mentionedUserIds: string[] = [];
+    for (const staff of allUsers) {
+      if (staff.id === author.id) continue;
+      if (targetUserIds.includes(staff.id)) { mentionedUserIds.push(staff.id); continue; }
+      if (targetGroups.includes('admins') && staff.role === 'admin') { mentionedUserIds.push(staff.id); continue; }
+      if (targetGroups.includes('departments') && staff.role === 'department' && staff.department && relevantDepts.includes(staff.department)) { mentionedUserIds.push(staff.id); continue; }
+    }
+
+    // Update metadata for SMS-style sorting
     const nowISO = new Date().toISOString();
     const updates: any = {
       lastActivityAt: nowISO,
       lastChatMessageText: content || (documentPayload ? `Shared file: ${documentPayload.name}` : 'Sent a file'),
       lastChatMessageTimestamp: nowISO,
-      // Mark as viewed by the author automatically
-      updatesViewedBy: [author.id]
     };
 
-    // Calculate unread updates logic based on precise targets
-    let notifyEmployee = false;
-    let notifyManagement = false;
+    // Track per-user unread mentions (replaces the global unreadUpdates counter for management)
+    if (mentionedUserIds.length > 0) {
+      updates.unreadChatMentionsFor = FieldValue.arrayUnion(...mentionedUserIds);
+    }
 
+    // Employee unread counter — only if employee is specifically targeted
     if (studentData.employeeId) {
-        // If employee is specifically targeted, or if no targets but we fallback
         const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
         if (!empQuery.empty) {
             const empId = empQuery.docs[0].id;
-            if (targetUserIds.includes(empId)) notifyEmployee = true;
+            if (targetUserIds.includes(empId)) {
+                updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
+            }
         }
-    }
-
-    if (targetGroups.includes('admins') || targetGroups.includes('departments')) notifyManagement = true;
-    for (const uid of targetUserIds) {
-       const u = await getUser(uid);
-       if (u && ['admin', 'department'].includes(u.role)) notifyManagement = true;
-    }
-
-    if (notifyEmployee) {
-        updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
-    }
-    if (notifyManagement) {
-        updates.unreadUpdates = (studentData.unreadUpdates || 0) + 1;
     }
 
     await studentRef.update(updates);
 
     // 3. Trigger Targeted WhatsApp Notifications
-    const relevantDepts = getDepartmentsForStudent(studentData);
-    const staffSnap = await adminDb!.collection('users').get(); 
-
-    const allUsers: User[] = staffSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
-
     for (const staff of allUsers) {
-      if (staff.id === author.id) continue;
+      if (!mentionedUserIds.includes(staff.id)) continue;
       if (!staff.phone) continue;
 
-      let shouldNotify = false;
-
-      if (targetUserIds.includes(staff.id)) shouldNotify = true;
-      if (targetGroups.includes('admins') && staff.role === 'admin') shouldNotify = true;
-      if (targetGroups.includes('departments')) {
-        if (staff.role === 'department' && staff.department && relevantDepts.includes(staff.department)) shouldNotify = true;
-      }
-
-      if (shouldNotify) {
-        await triggerWhatsAppNotification('internal_chat_message', {
-          userName: staff.name,
-          employeeName: staff.name,
-          studentName: studentData.name,
-          messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`,
-          studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
-        }, staff.phone);
-      }
+      await triggerWhatsAppNotification('internal_chat_message', {
+        userName: staff.name,
+        employeeName: staff.name,
+        studentName: studentData.name,
+        messageContent: `${author.name} sent a message for ${studentData.name}: ${content.substring(0, 50)}...`,
+        studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
+      }, staff.phone);
     }
     return { success: true };
   } catch (error: any) { return { success: false, message: error.message }; }

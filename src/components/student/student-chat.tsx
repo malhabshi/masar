@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc, collection, query, orderBy, arrayUnion } from 'firebase/firestore';
+import { doc, collection, query, orderBy, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 import { useUserCacheById } from '@/hooks/use-user-cache';
@@ -67,12 +67,12 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     const isAdminDept = ['admin', 'department'].includes(currentUser.role);
     const isEmployee = currentUser.role === 'employee';
 
-    if (isAdminDept && student.unreadUpdates && student.unreadUpdates > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id))) {
-      updateDocumentNonBlocking(studentDocRef, { updatesViewedBy: arrayUnion(currentUser.id) as any });
+    if (isAdminDept && student.unreadChatMentionsFor?.includes(currentUser.id)) {
+      updateDocumentNonBlocking(studentDocRef, { unreadChatMentionsFor: arrayRemove(currentUser.id) as any });
     } else if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id))) {
       updateDocumentNonBlocking(studentDocRef, { updatesViewedBy: arrayUnion(currentUser.id) as any });
     }
-  }, [student.id, student.unreadUpdates, student.employeeUnreadMessages, currentUser.role]);
+  }, [student.id, student.unreadChatMentionsFor, student.employeeUnreadMessages, currentUser.role]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

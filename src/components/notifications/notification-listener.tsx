@@ -208,9 +208,9 @@ export function NotificationListener() {
 
         // 4. CHAT NOTIFICATIONS (Check unread counters)
         const role = user.role;
-        const prevUnread = role === 'employee' ? (prevStudent.employeeUnreadMessages || 0) : (prevStudent.unreadUpdates || 0);
-        const currentUnread = role === 'employee' ? (currentStudent.employeeUnreadMessages || 0) : (currentStudent.unreadUpdates || 0);
-        
+        const prevUnread = role === 'employee' ? (prevStudent.employeeUnreadMessages || 0) : (prevStudent.unreadChatMentionsFor?.includes(user.id) ? 1 : 0);
+        const currentUnread = role === 'employee' ? (currentStudent.employeeUnreadMessages || 0) : (currentStudent.unreadChatMentionsFor?.includes(user.id) ? 1 : 0);
+
         // Trigger if unread count increased since the last snapshot
         if (currentUnread > prevUnread) {
             playNotificationSound(900);
