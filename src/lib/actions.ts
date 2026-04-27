@@ -1740,9 +1740,9 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       lastChatMessageTimestamp: nowISO,
     };
 
-    // Track per-user unread mentions (replaces the global unreadUpdates counter for management)
-    if (mentionedUserIds.length > 0) {
-      updates.unreadChatMentionsFor = FieldValue.arrayUnion(...mentionedUserIds);
+    // Increment per-user unread count for each mentioned user
+    for (const uid of mentionedUserIds) {
+      updates[`chatUnreadCountByUser.${uid}`] = FieldValue.increment(1);
     }
 
     // Employee unread counter — only if employee is specifically targeted

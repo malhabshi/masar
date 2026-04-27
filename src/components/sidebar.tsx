@@ -108,7 +108,7 @@ export function AppSidebar() {
       
       return students.reduce((acc, student) => {
         if (!isEmployeeView) {
-          const ud = student.unreadChatMentionsFor?.includes(user.id) ? 1 : 0;
+          const ud = student.chatUnreadCountByUser?.[user.id] || 0;
           const nd = (student.newDocumentsForAdmin || 0) > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) ? student.newDocumentsForAdmin || 0 : 0;
           return acc + ud + nd;
         } else {
@@ -124,7 +124,7 @@ export function AppSidebar() {
     const unreadChatCount = useMemo(() => {
       if (!students || !user || !isManagementRole || isEmployeeView) return 0;
       return students.reduce((acc, student) => {
-          const ud = student.unreadChatMentionsFor?.includes(user.id) ? 1 : 0;
+          const ud = student.chatUnreadCountByUser?.[user.id] || 0;
           return acc + ud;
       }, 0);
     }, [students, user, isManagementRole, isEmployeeView]);

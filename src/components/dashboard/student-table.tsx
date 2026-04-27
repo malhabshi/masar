@@ -193,7 +193,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const getNotificationScore = (s: Student) => {
             let score = 0;
             if (currentUser.role === 'admin' || currentUser.role === 'department') {
-                if (s.unreadChatMentionsFor?.includes(currentUser.id)) score += 1;
+                if ((s.chatUnreadCountByUser?.[currentUser.id] || 0) > 0) score += s.chatUnreadCountByUser![currentUser.id];
                 if ((s.newDocumentsForAdmin || 0) > 0 && (!s.newDocsViewedBy || !s.newDocsViewedBy.includes(currentUser.id))) score += s.newDocumentsForAdmin || 0;
                 if (s.deletionRequested?.status === 'pending') score += 100;
                 if (s.transferRequested) score += 80;
@@ -488,7 +488,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           <span>{student.name || 'Unknown Student'}</span>
                           {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border animate-pulse uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
                           {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
-                          {isAdminDept && student.unreadChatMentionsFor?.includes(currentUser.id) ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /></Badge> : null}
+                          {isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0 ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.chatUnreadCountByUser![currentUser.id]}</span></Badge> : null}
                           {isAdminDept && student.newDocumentsForAdmin && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
                           {isCurrentUserAssigned && student.employeeUnreadMessages && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id)) ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.employeeUnreadMessages}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newDocumentsForEmployee && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
