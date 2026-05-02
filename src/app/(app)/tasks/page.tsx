@@ -14,7 +14,7 @@ export default function TasksPage() {
       return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
   
-  if (!currentUser || !['admin', 'department'].includes(currentUser.role)) {
+  if (!currentUser || !['admin', 'adminplus', 'department'].includes(currentUser.role)) {
        return (
             <Card>
                 <CardHeader>

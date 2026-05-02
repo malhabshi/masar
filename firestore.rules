@@ -33,8 +33,12 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/departmentUsers/$(request.auth.uid));
     }
 
+    function isAdminPlus() {
+      return isSignedIn() && getUserData().get('role', '') == 'adminplus';
+    }
+
     function isPrivileged() {
-      return isAdmin() || isDepartment();
+      return isAdmin() || isDepartment() || isAdminPlus();
     }
 
     function isOwner(userId) {
@@ -95,7 +99,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       
       allow get: if isSignedIn() && (
-        isAdmin() ||
+        isAdmin() || isAdminPlus() ||
         request.auth.uid == resource.data.authorId ||
         (resource.data.recipientIds != null && (
           request.auth.uid in resource.data.recipientIds ||
@@ -189,6 +193,27 @@ service cloud.firestore {
     match /missing_item_templates/{templateId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    match /student_reminders/{reminderId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /upload_links/{token} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    match /student_public_uploads/{uploadId} {
+      allow create: if exists(/databases/$(database)/documents/upload_links/$(request.resource.data.token));
+      allow read, list: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
     }
   }
 }

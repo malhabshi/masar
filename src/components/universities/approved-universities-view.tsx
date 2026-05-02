@@ -39,6 +39,19 @@ export function ApprovedUniversitiesView() {
   const [categoryFilter, setCategoryFilter] = useState<UniversityCategory | 'all'>('all');
 
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('universities_filters');
+      if (raw) {
+        const f = JSON.parse(raw);
+        if (f.searchQuery !== undefined)       { setSearchQuery(f.searchQuery); setDebouncedSearchQuery(f.searchQuery); }
+        if (f.countryFilter !== undefined)     setCountryFilter(f.countryFilter);
+        if (f.availabilityFilter !== undefined) setAvailabilityFilter(f.availabilityFilter);
+        if (f.categoryFilter !== undefined)    setCategoryFilter(f.categoryFilter);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
     }, 300);
@@ -48,11 +61,21 @@ export function ApprovedUniversitiesView() {
     };
   }, [searchQuery]);
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('universities_filters', JSON.stringify({ searchQuery, countryFilter, availabilityFilter, categoryFilter }));
+    } catch {}
+  }, [searchQuery, countryFilter, availabilityFilter, categoryFilter]);
+
   const handleClearFilters = () => {
     setSearchQuery('');
+    setDebouncedSearchQuery('');
     setCountryFilter('all');
     setAvailabilityFilter('all');
     setCategoryFilter('all');
+    try {
+      sessionStorage.removeItem('universities_filters');
+    } catch {}
   };
 
   const isFiltered = searchQuery !== '' || countryFilter !== 'all' || availabilityFilter !== 'all' || categoryFilter !== 'all';

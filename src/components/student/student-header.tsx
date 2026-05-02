@@ -3,7 +3,9 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -192,10 +194,15 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isClearingFlags, setIsClearingFlags] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [navIds, setNavIds] = useState<string[]>([]);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
   useEffect(() => {
     setIsClient(true);
+    try {
+      const raw = sessionStorage.getItem('applicants_nav_ids');
+      if (raw) setNavIds(JSON.parse(raw));
+    } catch {}
   }, []);
 
   const requesterId = student?.deletionRequested?.requestedBy;
@@ -213,9 +220,14 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     return <StudentHeaderSkeleton />;
   }
   
+  const currentIndex = navIds.indexOf(student.id);
+  const prevId = currentIndex > 0 ? navIds[currentIndex - 1] : null;
+  const nextId = currentIndex !== -1 && currentIndex < navIds.length - 1 ? navIds[currentIndex + 1] : null;
+  const showNav = navIds.length > 0 && currentIndex !== -1;
+
   const isAssignedEmployee = currentUser.civilId === student.employeeId;
-  const canManage = ['admin', 'department'].includes(currentUser.role);
-  const isAdmin = currentUser.role === 'admin';
+  const canManage = ['admin', 'adminplus', 'department'].includes(currentUser.role);
+  const isAdmin = ['admin', 'adminplus'].includes(currentUser.role);
   const canEdit = canManage || isAssignedEmployee;
 
   const canRequestTransfer = isAssignedEmployee && !student.transferRequested;
@@ -225,7 +237,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const canApproveDeletion = isAdmin && student.deletionRequested?.status === 'pending';
   
   // Inclusive filter: Any staff member with a Civil ID can be assigned students
-  const staffOptions = (users || []).filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
+  const staffOptions = (users || []).filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'adminplus' || u.role === 'department'));
 
   const countryEmojis: Record<Country, string> = {
     UK: '🇬🇧',
@@ -357,6 +369,32 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
 
   return (
     <div className="mb-6 relative" id="student-header">
+      {showNav && (
+        <div className="pdf-hide flex items-center gap-2 mb-3 text-sm text-muted-foreground">
+          <Link
+            href={prevId ? `/student/${prevId}` : '#'}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium transition-colors",
+              prevId ? "hover:bg-muted border-border text-foreground" : "opacity-30 pointer-events-none border-transparent"
+            )}
+          >
+            <ChevronLeft className="h-4 w-4" /> Prev
+          </Link>
+          <span className="font-mono text-xs">{currentIndex + 1} / {navIds.length}</span>
+          <Link
+            href={nextId ? `/student/${nextId}` : '#'}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium transition-colors",
+              nextId ? "hover:bg-muted border-border text-foreground" : "opacity-30 pointer-events-none border-transparent"
+            )}
+          >
+            Next <ChevronRight className="h-4 w-4" />
+          </Link>
+          <Link href="/applicants" className="ml-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
+            Back to list
+          </Link>
+        </div>
+      )}
       <div className="absolute top-0 right-0 flex flex-col items-end gap-3 z-10">
         {allCountries.length > 0 && (
           <div className="flex gap-2" title={allCountries.join(', ')}>

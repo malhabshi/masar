@@ -82,7 +82,7 @@ export function TaskHistory({ tasks, studentId, currentUser, isLoading }: TaskHi
 
   const handleViewDetails = async (task: Task) => {
     setSelectedTask(task);
-    if (['admin', 'department'].includes(currentUser.role)) {
+    if (['admin', 'adminplus', 'department'].includes(currentUser.role)) {
       await markTaskAsSeen(task.id, currentUser.id, currentUser.name);
     }
   };

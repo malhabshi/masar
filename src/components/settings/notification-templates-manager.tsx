@@ -121,6 +121,12 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     exampleMessage: "🎓 *IELTS Course Registration*\n\nHello {{adminName}},\n\nA new student has registered for an IELTS course:\n\nStudent: {{studentName}}\nCourse: {{courseOption}}\nStart Date: {{courseStartDate}}\nRegistered by: {{employeeName}}"
   },
   {
+    type: 'student_reminder',
+    label: 'Student Reminder (Scheduled)',
+    variables: ['recipientName', 'studentName', 'reminderTitle', 'dueAt'],
+    exampleMessage: "Hi {{recipientName}},\n\nI hope that you are doing well.\n\nPlease notice that *{{studentName}}*\n\nWe would like to remind you that the student has *{{reminderTitle}}*.\n\nPlease log in to see the full information.\n\nA reminder that this event is *{{dueAt}}*.\n\nThank you for your time.\n\n_This is an AI bot to make your life better._"
+  },
+  {
     type: 'inactivity_reminder',
     label: 'Inactivity Reminder (Auto)',
     variables: ['employeeName', 'studentName', 'dashboardUrl'],
@@ -149,6 +155,12 @@ const NOTIFICATION_TYPES: NotificationTypeMeta[] = [
     label: 'Combined Application Summary',
     variables: ['employeeName', 'studentName', 'messageContent', 'studentUrl'],
     exampleMessage: "📋 *Application Summary Update*\n\nHello {{employeeName}},\n\nStatuses have been updated for *{{studentName}}*.\n\n{{messageContent}}\n\nProfile: {{studentUrl}}"
+  },
+  {
+    type: 'document_uploaded_student',
+    label: 'Document Uploaded (by Student via Link)',
+    variables: ['recipientName', 'studentName', 'fileName', 'studentUrl'],
+    exampleMessage: "📎 *Student Document Uploaded*\n\nHello {{recipientName}},\n\nThe student *{{studentName}}* has uploaded a new document via their upload link:\n\n📄 {{fileName}}\n\nView profile: {{studentUrl}}"
   }
 ];
 
@@ -193,6 +205,7 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
         staffName: 'Test Employee',
         taskName: 'UK University Application',
         taskTitle: 'Urgent Documentation',
+        reminderTitle: 'University Interview',
         taskDescription: 'Please verify the passport scan.',
         studentName: 'Ahmad Example',
         taskUrl: 'https://uniapplyhub.com/tasks',
@@ -207,6 +220,7 @@ export function NotificationTemplatesManager({ currentUser }: { currentUser: App
         courseOption: 'One Month In-Person',
         courseStartDate: 'Sunday, Oct 12',
         assignedBy: 'Manager Ahmad',
+        dueAt: 'Apr 30, 2026, 10:00 AM',
         dashboardUrl: 'https://uniapplyhub.com/dashboard',
         studentUrl: 'https://uniapplyhub.com/student/test'
       };

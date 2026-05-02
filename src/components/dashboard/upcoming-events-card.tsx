@@ -69,7 +69,7 @@ export function UpcomingEventsCard() {
   });
 
   const isLoading = isUserLoading || areEventsLoading;
-  const canManage = user?.role === 'admin' || user?.role === 'department';
+  const canManage = user?.role === 'admin' || user?.role === 'adminplus' || user?.role === 'department';
 
   const futureEvents = useMemo(() => {
     if (!events) return [];

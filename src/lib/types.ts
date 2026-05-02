@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'employee' | 'department' | 'student';
+export type UserRole = 'admin' | 'adminplus' | 'employee' | 'department' | 'student';
 
 export interface User {
   id: string;
@@ -44,7 +44,7 @@ export interface Document {
   note?: string;
 }
 
-export type PipelineStatus = 'green' | 'orange' | 'red' | 'none';
+export type PipelineStatus = 'green' | 'yellow' | 'orange' | 'red' | 'none';
 
 export interface ProfileCompletionStatus {
   submitUniversityApplication: boolean;
@@ -121,6 +121,9 @@ export interface Student {
   newDocumentsForAdminCount?: number; // legacy
   newDocumentsForEmployeeCount?: number; // legacy
   newMissingItemsForEmployee?: number;
+  newPublicUploadsForAdmin?: number;
+  newPublicUploadsForEmployee?: number;
+  publicUploadsViewedBy?: string[];
   newDocsViewedBy?: string[];
   updatesViewedBy?: string[];
   chatUnreadCountByUser?: Record<string, number>;
@@ -151,6 +154,7 @@ export interface Student {
   term?: string;
   jotform?: boolean;
   studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';
+  uploadNote?: string;
 }
 
 export interface ChatMessage {
@@ -182,12 +186,6 @@ export interface TaskReply {
 }
 
 export type TaskStatus = 'new' | 'in-progress' | 'completed' | 'denied';
-
-export interface TaskViewRecord {
-  userId: string;
-  userName: string;
-  timestamp: string;
-}
 
 export interface TaskViewRecord {
   userId: string;
@@ -370,6 +368,7 @@ export interface EmployeeStats {
   monthlyTotals: EmployeeMonthlyTotal[];
   pipelineBreakdown: {
     green: number;
+    yellow: number;
     orange: number;
     red: number;
     none: number;
@@ -397,7 +396,8 @@ export type NotificationType =
   | 'visa_update'
   | 'inactivity_reminder'
   | 'change_agent_enabled'
-  | 'application_status_update';
+  | 'application_status_update'
+  | 'student_reminder';
 
 export interface NotificationTemplate {
   id: string;
@@ -491,4 +491,35 @@ export interface Invoice {
   updatedAt: string;
   createdBy: string;
   authorName?: string;
+}
+
+export type ReminderRecipientType = 'admin' | 'employee' | 'department' | 'all' | 'custom';
+
+export interface UploadLink {
+  id: string;
+  token: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+}
+
+export interface Reminder {
+  id: string;
+  studentId: string;
+  studentName: string;
+  title: string;
+  description?: string;
+  location?: string;
+  dueAt: string;
+  recipientType: ReminderRecipientType;
+  recipientUserIds?: string[];
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  status: 'active' | 'dismissed';
+  notifyWhatsApp: boolean;
+  whatsAppSentAt?: string;
 }

@@ -25,6 +25,7 @@ function DashboardPageContent() {
     // Render the appropriate dashboard based on the effective role (handles view mode toggling)
     switch (effectiveRole) {
         case 'admin':
+        case 'adminplus':
             return <AdminDashboard currentUser={currentUser} />;
         case 'employee':
             return <EmployeeDashboard currentUser={currentUser} />;

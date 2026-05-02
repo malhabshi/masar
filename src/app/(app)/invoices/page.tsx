@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
 import type { Invoice, Student, InvoiceTemplate } from '@/lib/types';
@@ -15,7 +15,23 @@ import { Input } from '@/components/ui/input';
 export default function InvoicesPage() {
   const { user: currentUser, isUserLoading } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
-  
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('invoices_filters');
+      if (raw) {
+        const f = JSON.parse(raw);
+        if (f.searchQuery !== undefined) setSearchQuery(f.searchQuery);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('invoices_filters', JSON.stringify({ searchQuery }));
+    } catch {}
+  }, [searchQuery]);
+
   const { data: invoices, isLoading: invoicesLoading } = useCollection<Invoice>(currentUser?.role === 'admin' ? 'invoices' : '');
   const { data: students } = useCollection<Student>(currentUser?.role === 'admin' ? 'students' : '');
   const { data: templates, isLoading: templatesLoading } = useCollection<InvoiceTemplate>(currentUser?.role === 'admin' ? 'invoice_templates' : '');

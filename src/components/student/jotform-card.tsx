@@ -22,7 +22,7 @@ export function JotformCard({ student, currentUser }: JotformCardProps) {
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Editable by assigned employee or admins/departments
-  const canManage = currentUser.role === 'admin' || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
+  const canManage = currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
 
   const handleToggle = async (currentValue: boolean) => {
     if (!canManage) return;

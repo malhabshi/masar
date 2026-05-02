@@ -54,7 +54,7 @@ export function TaskItem({
     
     const author = userMap.get(task.authorId);
     const hasStatusChanged = localStatus !== task.status;
-    const canManage = ['admin', 'department'].includes(currentUser.role);
+    const canManage = ['admin', 'adminplus', 'department'].includes(currentUser.role);
 
     const handleTogglePriority = async (e: React.MouseEvent) => {
         e.stopPropagation();

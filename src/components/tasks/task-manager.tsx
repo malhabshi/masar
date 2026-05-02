@@ -37,7 +37,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   const tasksQuery = useMemoFirebase(() => {
     if (!currentUser) return null;
     
-    if (currentUser.role === 'admin') {
+    if (currentUser.role === 'admin' || currentUser.role === 'adminplus') {
       return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
     }
 
@@ -213,7 +213,7 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
   const handleViewDetails = async (task: Task) => {
     setSelectedRequestTask(task);
-    if (['admin', 'department'].includes(currentUser.role)) {
+    if (['admin', 'adminplus', 'department'].includes(currentUser.role)) {
       await markTaskAsSeen(task.id, currentUser.id, currentUser.name);
     }
   };

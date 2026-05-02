@@ -4,7 +4,7 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return get(/databases/(default)/documents/users/$(request.auth.uid)).data;
     }
 
     function isUserAdmin() {
@@ -19,7 +19,7 @@ service firebase.storage {
     match /students/{studentId}/{fileName} {
       allow read, write: if request.auth != null && (
         isUserAdmin() || isDepartment() ||
-        get(/databases/$(database)/documents/students/$(studentId)).data.employeeId == getUserData().civilId
+        get(/databases/(default)/documents/students/$(studentId)).data.employeeId == getUserData().civilId
       );
     }
 
@@ -33,6 +33,12 @@ service firebase.storage {
     match /user_avatars/{userId}/{fileName} {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Public student uploads via shared link - anyone with a valid token can upload
+    match /student_uploads/{token}/{fileName} {
+      allow write: if firestore.exists(/databases/(default)/documents/upload_links/$(token));
+      allow read, delete: if request.auth != null;
     }
 
   }

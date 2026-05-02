@@ -36,7 +36,7 @@ export default function EmployeeActivityPage() {
     
     useEffect(() => {
         setIsMounted(true);
-        if (currentUser && ['admin', 'department'].includes(currentUser.role)) {
+        if (currentUser && ['admin', 'adminplus', 'department'].includes(currentUser.role)) {
             closeInactiveSessions();
         }
     }, [currentUser]);
@@ -132,7 +132,7 @@ export default function EmployeeActivityPage() {
         );
     }
     
-    const canFilterUsers = currentUser.role === 'admin' || currentUser.role === 'department';
+    const canFilterUsers = ['admin', 'adminplus', 'department'].includes(currentUser.role);
 
     return (
         <div className="space-y-6">

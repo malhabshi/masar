@@ -53,7 +53,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
     setIsClient(true);
   }, []);
 
-  const managementRoles: UserRole[] = ['admin', 'department'];
+  const managementRoles: UserRole[] = ['admin', 'adminplus', 'department'];
 
   const documents = (student.documents || []).filter(doc => {
       const isEmployeeSection = title === 'Employee Documents';
@@ -72,7 +72,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
   useEffect(() => {
     if (!student || !currentUser) return;
     const studentDocRef = doc(firestore, 'students', student.id);
-    const isAdminDept = ['admin', 'department'].includes(currentUser.role);
+    const isAdminDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
     const isEmployee = currentUser.role === 'employee';
     const updates: Partial<Student> = {};
 
@@ -203,10 +203,11 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
         ) : (
           <p className="text-sm text-muted-foreground text-center py-8">No documents uploaded for this section.</p>
         )}
+
       </CardContent>
       {allowUpload && (
         <CardFooter className="border-t pt-4">
-           <UploadDocumentDialog student={student} />
+          <UploadDocumentDialog student={student} />
         </CardFooter>
       )}
     </Card>

@@ -34,7 +34,7 @@ export function TermSelectionCard({ student, currentUser }: { student: Student; 
   // Fetch all global intake terms in real-time
   const { data: terms, isLoading: termsLoading } = useCollection<AcademicTerm>('academic_terms');
 
-  const isAdmin = currentUser.role === 'admin';
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'adminplus';
   const canManage = isAdmin || currentUser.role === 'department' || currentUser.civilId === student.employeeId;
 
   // Memoize sorted terms (newest first based on creation date)

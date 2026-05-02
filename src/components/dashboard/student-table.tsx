@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2, UserPlus, Users, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2, UserPlus, Users, Check, ChevronsUpDown, Loader2, Upload } from 'lucide-react';
 import type { Student, PipelineStatus, User, Note } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
 import {
@@ -48,12 +48,14 @@ interface StudentTableProps {
 
 const pipelineStatusStyles: { [key: string]: string } = {
   green: 'bg-green-500 text-primary-foreground',
+  yellow: 'bg-yellow-400 text-black',
   orange: 'bg-orange-500 text-primary-foreground',
   red: 'bg-red-500 text-primary-foreground',
   none: 'bg-gray-400 text-primary-foreground',
 };
 const pipelineStatusLabels: { [key: string]: string } = {
     green: 'Green',
+    yellow: 'Yellow',
     orange: 'Orange',
     red: 'Red',
     none: 'No Status',
@@ -84,11 +86,20 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
-
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
+    try {
+      const raw = sessionStorage.getItem('applicants_filters');
+      if (raw) {
+        const f = JSON.parse(raw);
+        if (f.searchQuery !== undefined)       { setSearchQuery(f.searchQuery); setDebouncedSearchQuery(f.searchQuery); }
+        if (f.pipelineFilter !== undefined)    setPipelineFilter(f.pipelineFilter);
+        if (f.employeeFilter !== undefined)    setEmployeeFilter(f.employeeFilter);
+        if (f.genderFilter !== undefined)      setGenderFilter(f.genderFilter);
+        if (f.studyLevelFilter !== undefined)  setStudyLevelFilter(f.studyLevelFilter);
+        if (f.countryFilter !== undefined)     setCountryFilter(f.countryFilter);
+        if (f.ieltsFilter !== undefined)       setIeltsFilter(f.ieltsFilter);
+        if (f.showAllStudents !== undefined)   setShowAllStudents(f.showAllStudents);
+      }
+    } catch {}
   }, []);
 
   const requesters = useMemo(() => {
@@ -109,6 +120,16 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  useEffect(() => {
+    if (!isClient) return;
+    try {
+      sessionStorage.setItem('applicants_filters', JSON.stringify({
+        searchQuery, pipelineFilter, employeeFilter,
+        genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents,
+      }));
+    } catch {}
+  }, [isClient, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents]);
+
   // Identify duplicate phones across all currently loaded students
   const duplicatePhoneSet = useMemo(() => {
     const counts = new Map<string, number>();
@@ -126,7 +147,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
   // Include any user with a Civil ID as a potential agent (Admins/Dept users can also handle cases)
   const employeeOptions = useMemo(() => {
-    return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
+    return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'adminplus' || u.role === 'department'));
   }, [allUsers]);
 
   const employeeMapByCivilId = useMemo(() => {
@@ -192,9 +213,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (!!a.changeAgentRequired !== !!b.changeAgentRequired) return a.changeAgentRequired ? -1 : 1;
         const getNotificationScore = (s: Student) => {
             let score = 0;
-            if (currentUser.role === 'admin' || currentUser.role === 'department') {
+            if (currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department') {
                 if ((s.chatUnreadCountByUser?.[currentUser.id] || 0) > 0) score += s.chatUnreadCountByUser![currentUser.id];
                 if ((s.newDocumentsForAdmin || 0) > 0 && (!s.newDocsViewedBy || !s.newDocsViewedBy.includes(currentUser.id))) score += s.newDocumentsForAdmin || 0;
+                if ((s.newPublicUploadsForAdmin || 0) > 0 && (!s.publicUploadsViewedBy || !s.publicUploadsViewedBy.includes(currentUser.id))) score += (s.newPublicUploadsForAdmin || 0) + 10;
                 if (s.deletionRequested?.status === 'pending') score += 100;
                 if (s.transferRequested) score += 80;
             } else if (currentUser.role === 'employee') {
@@ -227,8 +249,16 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     });
   }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
 
+  useEffect(() => {
+    if (!isClient) return;
+    try {
+      sessionStorage.setItem('applicants_nav_ids', JSON.stringify(displayedStudents.map(s => s.id)));
+    } catch {}
+  }, [isClient, displayedStudents]);
+
   const handleClearFilters = () => {
     setSearchQuery('');
+    setDebouncedSearchQuery('');
     setPipelineFilter('all');
     setEmployeeFilter('all');
     setIeltsFilter('all');
@@ -236,6 +266,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setStudyLevelFilter('all');
     setCountryFilter('all');
     setShowAllStudents(false);
+    try {
+      sessionStorage.removeItem('applicants_filters');
+      sessionStorage.removeItem('applicants_nav_ids');
+    } catch {}
   };
   const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || studyLevelFilter !== 'all' || countryFilter !== 'all' || showAllStudents;
 
@@ -256,8 +290,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     }
   }
 
-  const isAdminDept = ['admin', 'department'].includes(currentUser?.role);
-  const isAdminOnly = currentUser?.role === 'admin';
+  const isAdminDept = ['admin', 'adminplus', 'department'].includes(currentUser?.role);
+  const isAdminOnly = ['admin', 'adminplus'].includes(currentUser?.role);
 
   return (
     <div className="space-y-4">
@@ -304,6 +338,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         <SelectItem value="all">All Pipelines</SelectItem>
                         <SelectItem value="none">No Status</SelectItem>
                         <SelectItem value="green">Green</SelectItem>
+                        <SelectItem value="yellow">Yellow</SelectItem>
                         <SelectItem value="orange">Orange</SelectItem>
                         <SelectItem value="red">Red</SelectItem>
                     </SelectContent>
@@ -460,7 +495,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
               displayedStudents.map((student) => {
                 const wasTransferred = student.transferHistory?.some(t => t.fromEmployeeId);
                 const isCurrentUserAssigned = currentUser.civilId === student.employeeId;
-                const isAdminDept = ['admin', 'department'].includes(currentUser.role);
+                const isAdminDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
                 const requester = student.deletionRequested?.requestedBy ? requesterMap.get(student.deletionRequested.requestedBy) : null;
                 const transferRequester = student.transferRequest?.requestedBy ? requesterMap.get(student.transferRequest.requestedBy) : null;
                 const canAssign = isAdminDept && !student.employeeId;
@@ -492,6 +527,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           {isAdminDept && student.newDocumentsForAdmin && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
                           {isCurrentUserAssigned && student.employeeUnreadMessages && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id)) ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.employeeUnreadMessages}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newDocumentsForEmployee && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
+                          {isAdminDept && (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForAdmin}</span></Badge> : null}
+                          {isCurrentUserAssigned && (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForEmployee}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newMissingItemsForEmployee && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 text-black"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
                           {student.transferRequested && (
                             <TooltipProvider>
@@ -595,6 +632,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'green')}>Move to Green</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'yellow')}>Move to Yellow</DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'orange')}>Move to Orange</DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'red')}>Move to Red</DropdownMenuItem>
                                   </>

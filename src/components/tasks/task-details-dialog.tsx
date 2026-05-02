@@ -87,13 +87,22 @@ export function TaskDetailsDialog({
 
   const author = userMap.get(task.authorId);
   const data = task.data || {};
-  
+
   const studentRef = useMemoFirebase(() => {
     if (!task.studentId) return null;
     return doc(firestore, 'students', task.studentId);
   }, [task.studentId]);
 
   const { data: student, isLoading: isStudentLoading } = useDoc<any>(studentRef);
+
+  const uniLookupId = (data.selectedGlobalUniversityDetails?.id || data.selectedGlobalUniversityId) && !data.selectedGlobalUniversityDetails?.name
+    ? (data.selectedGlobalUniversityDetails?.id || data.selectedGlobalUniversityId)
+    : null;
+  const uniLookupRef = useMemoFirebase(() => {
+    if (!uniLookupId) return null;
+    return doc(firestore, 'approved_universities', uniLookupId);
+  }, [uniLookupId]);
+  const { data: liveUni } = useDoc<any>(uniLookupRef);
 
   const taskThread = useMemo(() => {
     const thread: any[] = [];
@@ -270,8 +279,8 @@ export function TaskDetailsDialog({
                         Requested New school/major
                     </h3>
                     <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderDataField('New University', selectedGlobalUni.name || selectedGlobalUni.university)}
-                        {renderDataField('New Major', selectedGlobalUni.major)}
+                        {renderDataField('New University', selectedGlobalUni.name || selectedGlobalUni.university || liveUni?.name)}
+                        {renderDataField('New Major', selectedGlobalUni.major || liveUni?.major)}
                         {renderDataField('Country', selectedGlobalUni.country)}
                         {renderDataField('Category', selectedGlobalUni.category)}
                     </div>

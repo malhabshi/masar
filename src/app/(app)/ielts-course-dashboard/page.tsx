@@ -6,12 +6,12 @@ import { useUser } from '@/hooks/use-user';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import type { Task } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar as CalendarIcon, Download, FileSpreadsheet, Loader2, Search, CheckCircle2, Circle } from 'lucide-react';
+import { Calendar as CalendarIcon, FileSpreadsheet, Loader2, Search, CheckCircle2, Circle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -32,6 +32,34 @@ export default function IeltsCourseDashboard() {
     to: undefined,
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+    try {
+      const raw = sessionStorage.getItem('ielts_filters');
+      if (raw) {
+        const f = JSON.parse(raw);
+        if (f.searchQuery !== undefined) setSearchQuery(f.searchQuery);
+        if (f.dateRange) {
+          setDateRange({
+            from: f.dateRange.from ? new Date(f.dateRange.from) : undefined,
+            to: f.dateRange.to ? new Date(f.dateRange.to) : undefined,
+          });
+        }
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+    try {
+      sessionStorage.setItem('ielts_filters', JSON.stringify({
+        searchQuery,
+        dateRange: { from: dateRange.from?.toISOString() ?? null, to: dateRange.to?.toISOString() ?? null },
+      }));
+    } catch {}
+  }, [isClient, searchQuery, dateRange]);
 
   // Fetch only formal requests
   const ieltsCourseConstraints = useMemoFirebase(() => {
@@ -77,7 +105,7 @@ export default function IeltsCourseDashboard() {
         data.studentEmail?.toLowerCase().includes(query) ||
         data.courseOption?.toLowerCase().includes(query)
       );
-    });
+    }).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }, [tasks, dateRange, searchQuery]);
 
   // Mark all visible "new" tasks as seen automatically when they appear in the table
@@ -140,7 +168,7 @@ export default function IeltsCourseDashboard() {
   };
 
   // Restricted to ADMIN ONLY
-  if (!currentUser || currentUser.role !== 'admin') {
+  if (!currentUser || !['admin', 'adminplus'].includes(currentUser.role)) {
     return <div className="p-8 text-center text-muted-foreground">Access Denied. This dashboard is for administrators only.</div>;
   }
 
@@ -203,7 +231,7 @@ export default function IeltsCourseDashboard() {
                 </Popover>
 
                 {(dateRange.from || dateRange.to) && (
-                  <Button variant="ghost" onClick={() => setDateRange({ from: undefined, to: undefined })}>Clear</Button>
+                  <Button variant="ghost" onClick={() => { setDateRange({ from: undefined, to: undefined }); try { sessionStorage.removeItem('ielts_filters'); } catch {} }}>Clear</Button>
                 )}
               </div>
             </div>

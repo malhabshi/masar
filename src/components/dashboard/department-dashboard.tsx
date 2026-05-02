@@ -16,6 +16,7 @@ import { TaskList } from '@/components/dashboard/task-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { SendTaskForm } from './send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
+import { DashboardRemindersCard } from '@/components/dashboard/dashboard-reminders-card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -87,14 +88,14 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
           totalStudents: 0, 
           unassignedStudents: 0, 
           apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
-          pipeline: { green: 0, orange: 0, red: 0, none: 0 }
+          pipeline: { green: 0, yellow: 0, orange: 0, red: 0, none: 0 }
         };
         
         const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
         const validUserIds = new Set(users.map(u => u.id));
         
         const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
-        const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
+        const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, none: 0 };
         let totalStudents = 0;
         let unassignedStudents = 0;
 
@@ -111,6 +112,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
               // Count pipeline status for assigned students
               const status = s.pipelineStatus || 'none';
               if (status === 'green') pipeline.green++;
+              else if (status === 'yellow') pipeline.yellow++;
               else if (status === 'orange') pipeline.orange++;
               else if (status === 'red') pipeline.red++;
               else pipeline.none++;
@@ -313,6 +315,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                     <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
                 </div>
                 <div className="space-y-6">
+                    <DashboardRemindersCard currentUser={currentUser} />
                     <UpcomingEventsCard />
                     <PersonalTodoList />
                 </div>

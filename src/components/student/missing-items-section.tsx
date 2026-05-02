@@ -53,7 +53,7 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
     });
   }, []);
 
-  const canManage = currentUser.role === 'admin' || currentUser.role === 'department';
+  const canManage = currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department';
   const isEmployee = currentUser.role === 'employee';
 
   // When an employee views this component, clear the 'new' indicator

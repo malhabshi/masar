@@ -35,7 +35,7 @@ export function AcademicIntakeCard({ student, currentUser }: AcademicIntakeCardP
   const [tempSemester, setTempSemester] = useState<string>(student.academicIntakeSemester || '');
   const [tempYear, setTempYear] = useState<string>(student.academicIntakeYear?.toString() || '');
 
-  const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'adminplus' || currentUser?.role === 'department';
   const isAssignedEmployee = currentUser?.civilId === student.employeeId;
   const canEdit = isAdminOrDept || isAssignedEmployee;
 

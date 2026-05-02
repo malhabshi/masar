@@ -1,8 +1,9 @@
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
+import { formatKuwaitTime } from '@/lib/timestamp-utils';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1553,6 +1554,7 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
       const assigned = allStudents.filter(s => s.employeeId === employee.civilId);
       const pipelineBreakdown = {
         green: assigned.filter(s => s.pipelineStatus === 'green').length,
+        yellow: assigned.filter(s => s.pipelineStatus === 'yellow').length,
         orange: assigned.filter(s => s.pipelineStatus === 'orange').length,
         red: assigned.filter(s => s.pipelineStatus === 'red').length,
         none: assigned.filter(s => !s.pipelineStatus || s.pipelineStatus === 'none').length,
@@ -1840,6 +1842,50 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
       }
     }
   } catch (e) { console.error('Notification failed:', e); }
+}
+
+export async function notifyStudentUpload(token: string, fileName: string) {
+  if (!checkAdminServices()) return;
+  try {
+    const linkDoc = await adminDb!.collection('upload_links').doc(token).get();
+    if (!linkDoc.exists) return;
+    const link = linkDoc.data() as {
+      studentId: string; studentName: string; createdBy: string;
+      notifyEmployee?: boolean; notifyDepartment?: boolean; notifyAdmin?: boolean;
+    };
+
+    const studentUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${link.studentId}`;
+    const usersToNotify: User[] = [];
+
+    if (link.notifyEmployee !== false) {
+      const creator = await getUser(link.createdBy);
+      if (creator) usersToNotify.push(creator);
+    }
+
+    if (link.notifyDepartment || link.notifyAdmin) {
+      const roles: string[] = [];
+      if (link.notifyDepartment) roles.push('department');
+      if (link.notifyAdmin) roles.push('admin');
+      const staffSnap = await adminDb!.collection('users').where('role', 'in', roles).get();
+      staffSnap.docs.forEach(d => {
+        const u = d.data() as User;
+        if (u.id !== link.createdBy) usersToNotify.push(u);
+      });
+    }
+
+    for (const u of usersToNotify) {
+      if (u.phone) {
+        await triggerWhatsAppNotification('document_uploaded_student', {
+          recipientName: u.name,
+          studentName: link.studentName,
+          fileName,
+          studentUrl,
+        }, u.phone);
+      }
+    }
+  } catch (e) {
+    console.error('notifyStudentUpload failed:', e);
+  }
 }
 
 export async function toggleChangeAgentStatus(studentId: string, status: boolean, adminId: string, universities?: string[]) {
@@ -2308,3 +2354,92 @@ export async function rejectStudentDeletion(studentId: string, adminId: string, 
     return { success: true, message: 'Deletion request rejected.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
+
+
+export async function processStudentReminders(params: {
+  userId: string;
+  userRole: string;
+  userDepartment?: string;
+  userCivilId?: string;
+}): Promise<{ triggered: Reminder[] }> {
+  if (!checkAdminServices()) return { triggered: [] };
+  try {
+    const now = new Date().toISOString();
+    const snapshot = await adminDb!
+      .collection('student_reminders')
+      .where('status', '==', 'active')
+      .where('dueAt', '<=', now)
+      .get();
+
+    if (snapshot.empty) return { triggered: [] };
+
+    const triggered: Reminder[] = [];
+
+    for (const doc of snapshot.docs) {
+      const reminder = { id: doc.id, ...doc.data() } as Reminder;
+
+      // Check if this user is a recipient
+      const { recipientType, recipientUserIds } = reminder;
+      let isRecipient = false;
+      if (recipientType === 'all') isRecipient = true;
+      else if (recipientType === 'admin' && params.userRole === 'admin') isRecipient = true;
+      else if (recipientType === 'employee' && params.userRole === 'employee') isRecipient = true;
+      else if (recipientType === 'department' && params.userRole === 'department') isRecipient = true;
+      else if (recipientType === 'custom' && recipientUserIds?.includes(params.userId)) isRecipient = true;
+
+      if (!isRecipient) continue;
+
+      triggered.push(scrub(reminder));
+
+      // Send WhatsApp if not yet sent
+      if (reminder.notifyWhatsApp && !reminder.whatsAppSentAt) {
+        const recipients: { phone: string; name: string }[] = [];
+
+        if (recipientType === 'admin' || recipientType === 'all') {
+          const admins = await adminDb!.collection('users').where('role', '==', 'admin').get();
+          admins.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Admin' }); });
+        }
+        if (recipientType === 'employee' || recipientType === 'all') {
+          // Get student's assigned employee
+          const studentDoc = await adminDb!.collection('students').doc(reminder.studentId).get();
+          if (studentDoc.exists) {
+            const student = studentDoc.data() as Student;
+            if (student.employeeId) {
+              const emp = await adminDb!.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
+              emp.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Employee' }); });
+            }
+          }
+        }
+        if (recipientType === 'department') {
+          const depts = await adminDb!.collection('users').where('role', '==', 'department').get();
+          depts.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Team' }); });
+        }
+        if (recipientType === 'custom' && recipientUserIds?.length) {
+          const docs = await Promise.all(recipientUserIds.map(uid => adminDb!.collection('users').doc(uid).get()));
+          docs.forEach(d => { if (d.exists && d.data()?.phone) recipients.push({ phone: d.data()!.phone, name: d.data()!.name || 'Team' }); });
+        }
+
+        const seen = new Set<string>();
+        for (const { phone, name } of recipients) {
+          if (seen.has(phone)) continue;
+          seen.add(phone);
+          await triggerWhatsAppNotification('student_reminder', {
+            recipientName: name,
+            studentName: reminder.studentName,
+            reminderTitle: reminder.title,
+            reminderDescription: reminder.description || '',
+            dueAt: formatKuwaitTime(reminder.dueAt),
+          }, phone);
+        }
+
+        await doc.ref.update({ whatsAppSentAt: now });
+      }
+    }
+
+    return { triggered };
+  } catch (e: any) {
+    console.error('processStudentReminders failed:', e);
+    return { triggered: [] };
+  }
+}
+

@@ -194,6 +194,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   const handleGlobalUniSelect = (uni: ApprovedUniversity) => {
     form.setValue('selectedGlobalUniversityId', uni.id);
     form.setValue('selectedGlobalUniversityDetails', {
+      id: uni.id,
       name: uni.name,
       major: uni.major,
       country: uni.country,

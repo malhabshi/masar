@@ -36,6 +36,7 @@ import {
   RefreshCw,
   Globe,
   UserRoundX,
+  Link2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -57,7 +58,7 @@ export function AppSidebar() {
     const { user, effectiveRole, viewMode, toggleViewMode } = useUser();
     const pathname = usePathname();
 
-    const isManagementRole = user?.role === 'admin' || user?.role === 'department';
+    const isManagementRole = user?.role === 'admin' || user?.role === 'adminplus' || user?.role === 'department';
     const isEmployeeView = effectiveRole === 'employee';
     
     // 1. Memoize constraints for real-time student monitoring
@@ -83,8 +84,8 @@ export function AppSidebar() {
     const taskQuery = useMemoFirebase(() => {
         if (!user) return null;
         
-        // Admins see all tasks for global badge
-        if (user.role === 'admin' && viewMode === 'management') {
+        // Admins and adminplus see all tasks for oversight
+        if ((user.role === 'admin' || user.role === 'adminplus') && viewMode === 'management') {
             return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
         }
 
@@ -129,25 +130,23 @@ export function AppSidebar() {
       }, 0);
     }, [students, user, isManagementRole, isEmployeeView]);
 
-    // 5. Tasks notification count
+    // 5. Tasks notification count — active personal tasks (new or in-progress), matching "My Tasks" tab logic
     const unreadTaskCount = useMemo(() => {
         if (!tasks || !user) return 0;
         return tasks.filter(t => {
-            if (t.status !== 'new' || t.category !== 'request') return false;
-            
-            // USER PREFERENCE: Only count tasks explicitly assigned to THIS user
-            const isDirectlyForMe = t.recipientIds && t.recipientIds.includes(user.id);
-            if (!isDirectlyForMe) return false;
-            
-            const hasSeen = t.viewedBy?.some(v => v.userId === user.id);
-            if (hasSeen) return false;
-
-            const isIeltsCourse = 
-              t.data?.examType === 'ielts_course' || 
-              t.requestTypeId === 'ielts_course' ||
-              t.taskType?.toLowerCase() === 'ielts course';
-
-            return !isIeltsCourse;
+            if (t.category !== 'request') return false;
+            const isIeltsCourse = t.data?.examType === 'ielts_course' ||
+                                  t.requestTypeId === 'ielts_course' ||
+                                  t.taskType?.toLowerCase() === 'ielts course';
+            if (isIeltsCourse) return false;
+            const isTransferOrDeletion = t.taskType === 'Transfer Request' ||
+                                         t.taskType === 'Deletion Request' ||
+                                         t.content?.toLowerCase().includes('transfer request') ||
+                                         t.content?.toLowerCase().includes('deletion request');
+            if (isTransferOrDeletion) return false;
+            const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
+            if (!targets.includes(user.id)) return false;
+            return t.status === 'new' || t.status === 'in-progress';
         }).length;
     }, [tasks, user]);
 
@@ -198,17 +197,17 @@ export function AppSidebar() {
     }, [students, user, isEmployeeView]);
     
     const mainNav = [
-        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'employee', 'department'] },
-        { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'employee', 'department'] },
-        { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'employee', 'department'] },
-        { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'employee', 'department'] },
-        { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'employee', 'department'], badge: unreadFinalizedCount },
-        { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'employee', 'department'] },
+        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'adminplus', 'employee', 'department'] },
+        { href: '/applicants', label: 'Applicants', icon: Users, roles: ['admin', 'adminplus', 'employee', 'department'] },
+        { href: '/unassigned-students', label: 'Unassigned', icon: UserPlus, roles: ['admin', 'adminplus', 'employee', 'department'] },
+        { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'adminplus', 'employee', 'department'] },
+        { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'adminplus', 'employee', 'department'], badge: unreadFinalizedCount },
+        { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'adminplus', 'employee', 'department'] },
     ];
-    
+
     const managementNav = [
-        { href: '/all-applications', label: 'Applications', icon: Globe, roles: ['admin', 'department'] },
-        { href: '/change-agent-dashboard', label: 'Change Agent', icon: UserRoundX, roles: ['admin', 'department'], badge: changeAgentCount },
+        { href: '/all-applications', label: 'Applications', icon: Globe, roles: ['admin', 'adminplus', 'department'] },
+        { href: '/change-agent-dashboard', label: 'Change Agent', icon: UserRoundX, roles: ['admin', 'adminplus', 'department'], badge: changeAgentCount },
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
         { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin'] },
         { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'] },
@@ -221,6 +220,7 @@ export function AppSidebar() {
         { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
+        { href: '/upload-links', label: 'Upload Links', icon: Link2, roles: ['admin'] },
         { href: '/settings/notifications', label: 'WA Templates', icon: BellRing, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },
     ];
@@ -286,7 +286,7 @@ export function AppSidebar() {
             ))}
             </SidebarMenu>
 
-            {isManagementRole && (
+            {isManagementRole && user?.role !== 'adminplus' && (
               <SidebarGroup className="mt-auto">
                 <SidebarGroupLabel>Switch View</SidebarGroupLabel>
                 <SidebarMenu>

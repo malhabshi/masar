@@ -14,12 +14,13 @@ import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import type { AppUser } from '@/hooks/use-user';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
+import { DashboardRemindersCard } from '@/components/dashboard/dashboard-reminders-card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'adminplus';
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
       assigned: 0, 
       unassigned: 0, 
       apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
-      pipeline: { green: 0, orange: 0, red: 0, none: 0 }
+      pipeline: { green: 0, yellow: 0, orange: 0, red: 0, none: 0 }
     };
     
     const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
@@ -64,7 +65,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     let assigned = 0;
     let unassigned = 0;
     const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
-    const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
+    const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, none: 0 };
 
     students.forEach(s => {
       const hasAgent = !!s.employeeId;
@@ -77,6 +78,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
         // Count pipeline status for assigned students
         const status = s.pipelineStatus || 'none';
         if (status === 'green') pipeline.green++;
+        else if (status === 'yellow') pipeline.yellow++;
         else if (status === 'orange') pipeline.orange++;
         else if (status === 'red') pipeline.red++;
         else pipeline.none++;
@@ -104,12 +106,12 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
   const agentBreakdown = useMemo(() => {
     if (!isClient || !users || !students) return [];
 
-    const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, orange: number, red: number, none: number }>();
-    
+    const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, yellow: number, orange: number, red: number, none: number }>();
+
     // Initialize map with all users who have a Civil ID (potential agents)
     users.forEach(u => {
       if (u.civilId) {
-        statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, orange: 0, red: 0, none: 0 });
+        statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, yellow: 0, orange: 0, red: 0, none: 0 });
       }
     });
 
@@ -119,6 +121,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
         entry.total++;
         const status = s.pipelineStatus || 'none';
         if (status === 'green') entry.green++;
+        else if (status === 'yellow') entry.yellow++;
         else if (status === 'orange') entry.orange++;
         else if (status === 'red') entry.red++;
         else entry.none++;
@@ -300,6 +303,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
         </div>
         <div className="space-y-6">
+          <DashboardRemindersCard currentUser={currentUser} />
           <UpcomingEventsCard />
           <PersonalTodoList />
         </div>

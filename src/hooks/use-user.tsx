@@ -10,7 +10,7 @@ export interface AppUser {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'employee' | 'department';
+  role: 'admin' | 'adminplus' | 'employee' | 'department';
   avatarUrl?: string;
   phone?: string;
   civilId?: string;
@@ -27,7 +27,7 @@ interface UserContextType {
   auth: AuthUser | null;
   viewMode: ViewMode;
   toggleViewMode: () => void;
-  effectiveRole: 'admin' | 'employee' | 'department';
+  effectiveRole: 'admin' | 'adminplus' | 'employee' | 'department';
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -74,21 +74,22 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Explicitly type the return value to match UserContextType
-  const effectiveRole = React.useMemo((): 'admin' | 'employee' | 'department' => {
-    if (!appUser) return 'employee'; 
-    
-    // Core logic: If user is an employee, they are always effectively an employee
+  const effectiveRole = React.useMemo((): 'admin' | 'adminplus' | 'employee' | 'department' => {
+    if (!appUser) return 'employee';
+
     if (appUser.role === 'employee') return 'employee';
-    
+
+    // adminplus never uses view-mode toggling
+    if (appUser.role === 'adminplus') return 'adminplus';
+
     // If management role, respect the current viewMode toggle
     if (viewMode === 'employee') return 'employee';
-    
-    // Narrow UserRole to allowed effectiveRole types
+
     if (appUser.role === 'admin' || appUser.role === 'department') {
-      return appUser.role as 'admin' | 'department';
+      return appUser.role;
     }
-    
-    return 'employee'; // Fallback
+
+    return 'employee';
   }, [appUser, viewMode]);
 
   const value: UserContextType = {

@@ -22,7 +22,7 @@ export function AdminStatusNoteCard({ student, currentUser }: AdminStatusNoteCar
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const isAdminOnly = currentUser.role === 'admin';
+  const isAdminOnly = currentUser.role === 'admin' || currentUser.role === 'adminplus';
 
   useEffect(() => {
     setNote(student.adminStatusNote || '');

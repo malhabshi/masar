@@ -34,6 +34,8 @@ import { StatusNoteCard } from '@/components/student/status-note-card';
 import { AdminStatusNoteCard } from '@/components/student/admin-status-note-card';
 import { JotformCard } from '@/components/student/jotform-card';
 import { StudyLevelCard } from '@/components/student/study-level-card';
+import { RemindersCard } from '@/components/student/reminders-card';
+import { StudentUploadedDocuments } from '@/components/student/student-uploaded-documents';
 
 function playLoudAlert() {
   if (typeof window === 'undefined' || !window.AudioContext) return;
@@ -181,8 +183,8 @@ export default function StudentDetailPage() {
   }
   
   const isAssignedEmployee = student.employeeId === currentUser.civilId;
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
-  const isAdminOnly = currentUser.role === 'admin';
+  const isAdminOrDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
+  const isAdminOnly = ['admin', 'adminplus'].includes(currentUser.role);
   
   const handleAddEmployeeNote = async (content: string) => {
     if (!student || !currentUser) return { success: false, message: 'Missing context' };
@@ -218,6 +220,7 @@ export default function StudentDetailPage() {
               <StudentUsersCard student={student} currentUser={currentUser} />
               <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} />
               <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
+              <StudentUploadedDocuments student={student} currentUser={currentUser} allowGenerateLink={isAssignedEmployee || isAdminOrDept} />
               
               {isAdminOrDept && (
                   <NotesSection
@@ -231,11 +234,12 @@ export default function StudentDetailPage() {
           </div>
 
           <div className="space-y-6">
-              {(currentUser.role === 'admin' || currentUser.role === 'department') && (
+              {isAdminOrDept && (
                 <div>
                   <AssignmentCard student={student} />
                 </div>
               )}
+              <RemindersCard student={student} currentUser={currentUser} />
               <div>
                 <TaskStatsCard tasks={tasks || []} />
               </div>

@@ -26,7 +26,7 @@ export default function UnassignedStudentsPage() {
     setIsMounted(true);
   }, []);
 
-  const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const isAdminOrDept = currentUser?.role === 'admin' || currentUser?.role === 'adminplus' || currentUser?.role === 'department';
   const isEmployee = currentUser?.role === 'employee';
   
   // Path guard: Only attempt query if we have a valid role and the component is client-mounted

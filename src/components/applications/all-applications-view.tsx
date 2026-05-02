@@ -63,7 +63,23 @@ export function AllApplicationsView() {
 
   useEffect(() => {
     setIsClient(true);
+    try {
+      const raw = sessionStorage.getItem('all_applications_filters');
+      if (raw) {
+        const f = JSON.parse(raw);
+        if (f.searchQuery !== undefined)   setSearchQuery(f.searchQuery);
+        if (f.countryFilter !== undefined) setCountryFilter(f.countryFilter);
+        if (f.statusFilter !== undefined)  setStatusFilter(f.statusFilter);
+      }
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+    try {
+      sessionStorage.setItem('all_applications_filters', JSON.stringify({ searchQuery, countryFilter, statusFilter }));
+    } catch {}
+  }, [isClient, searchQuery, countryFilter, statusFilter]);
 
   const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
 

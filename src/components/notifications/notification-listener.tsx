@@ -50,7 +50,7 @@ export function NotificationListener() {
   const sessionStartTime = useRef(new Date().toISOString());
 
   const tasksQuery = useMemoFirebase(() => {
-    if (!user) return null;
+    if (!user || user.role === 'adminplus') return null;
     if (user.role === 'admin') return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
     
     // Correctly match targeted tasks for employees and departments
@@ -62,14 +62,14 @@ export function NotificationListener() {
   const { data: tasks } = useCollection<Task>(tasksQuery);
 
   const eventsQuery = useMemoFirebase(() => {
-    if (!user) return null;
+    if (!user || user.role === 'adminplus') return null;
     return query(collection(firestore, 'upcoming_events'));
   }, [user]);
 
   const { data: events } = useCollection<UpcomingEvent>(eventsQuery);
 
   const studentQuery = useMemoFirebase(() => {
-    if (!user) return null;
+    if (!user || user.role === 'adminplus') return null;
     const isAdminDept = user.role === 'admin' || user.role === 'department';
     const isEmployee = user.role === 'employee';
     if (isAdminDept) return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
@@ -227,16 +227,27 @@ export function NotificationListener() {
         const newDocs = (currentStudent.documents || []).filter(d => !prevDocIds.has(d.id));
         
         if (newDocs.length > 0) {
-            const newDoc = newDocs[newDocs.length - 1]; 
-            const uploader = userMap.get(newDoc.authorId);
-            // Only toast if document was uploaded after we loaded the page
-            if (uploader && uploader.id !== user.id && newDoc.uploadedAt > sessionStartTime.current) {
-                playNotificationSound();
-                toast({
-                    title: 'New Document Received',
-                    description: `${uploader.name} uploaded a document for ${currentStudent.name}.`,
-                    action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
-                });
+            const newDoc = newDocs[newDocs.length - 1];
+            const isStudentSelfUpload = newDoc.authorId === 'student-self-upload';
+            const uploader = isStudentSelfUpload ? null : userMap.get(newDoc.authorId);
+
+            if (newDoc.uploadedAt > sessionStartTime.current) {
+                if (isStudentSelfUpload) {
+                    playNotificationSound();
+                    toast({
+                        title: 'Student Uploaded a Document',
+                        description: `${currentStudent.name} submitted a document via upload link.`,
+                        action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
+                        className: 'border-green-500',
+                    });
+                } else if (uploader && uploader.id !== user.id) {
+                    playNotificationSound();
+                    toast({
+                        title: 'New Document Received',
+                        description: `${uploader.name} uploaded a document for ${currentStudent.name}.`,
+                        action: <ToastAction altText="View" onClick={() => router.push(`/student/${currentStudent.id}`)}>View</ToastAction>,
+                    });
+                }
             }
         }
         

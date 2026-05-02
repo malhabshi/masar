@@ -28,14 +28,30 @@ export default function FinalizedStudentsPage() {
 
   useEffect(() => {
     setIsMounted(true);
+    try {
+      const raw = sessionStorage.getItem('finalized_filters');
+      if (raw) {
+        const f = JSON.parse(raw);
+        if (f.universityFilter !== undefined) setUniversityFilter(f.universityFilter);
+        if (f.countryFilter !== undefined)    setCountryFilter(f.countryFilter);
+        if (f.employeeFilter !== undefined)   setEmployeeFilter(f.employeeFilter);
+      }
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    try {
+      sessionStorage.setItem('finalized_filters', JSON.stringify({ universityFilter, countryFilter, employeeFilter }));
+    } catch {}
+  }, [isMounted, universityFilter, countryFilter, employeeFilter]);
 
   const studentsQuery = useMemo(() => {
     if (!isMounted || !currentUser) {
       return null;
     }
     
-    if (currentUser.role === 'admin' || currentUser.role === 'department') {
+    if (currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department') {
       return [where('finalChoiceUniversity', '>', '')];
     }
     
@@ -57,13 +73,13 @@ export default function FinalizedStudentsPage() {
   );
   
   const { data: allUsers, isLoading: usersLoading } = useCollection<User>(
-    (currentUser?.role === 'admin' || currentUser?.role === 'department') ? 'users' : ''
+    (currentUser?.role === 'admin' || currentUser?.role === 'adminplus' || currentUser?.role === 'department') ? 'users' : ''
   );
 
   const staffOptions = useMemo(() => {
     if (!allUsers) return [];
     // Inclusive filter: Anyone with a Civil ID can be an agent (Management users acting as agents)
-    return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'department'));
+    return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'adminplus' || u.role === 'department'));
   }, [allUsers]);
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
@@ -79,7 +95,7 @@ export default function FinalizedStudentsPage() {
     }
     
     // For admins/depts, apply the UI filters.
-    if (currentUser?.role === 'admin' || currentUser?.role === 'department') {
+    if (currentUser?.role === 'admin' || currentUser?.role === 'adminplus' || currentUser?.role === 'department') {
         return studentsToFilter.filter(student => {
             const matchesUniversity = !universityFilter || (student.finalChoiceUniversity && student.finalChoiceUniversity.toLowerCase().includes(universityFilter.toLowerCase()));
 
@@ -98,7 +114,7 @@ export default function FinalizedStudentsPage() {
 
   // Mark students as viewed when they land on the page (Admin/Department only)
   useEffect(() => {
-    if (currentUser?.id && (currentUser.role === 'admin' || currentUser.role === 'department') && finalizedStudents.length > 0) {
+    if (currentUser?.id && (currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department') && finalizedStudents.length > 0) {
         const unviewedIds = (finalizedStudents as Student[])
             .filter(s => !s.finalizedViewedBy || !s.finalizedViewedBy.includes(currentUser.id))
             .map(s => s.id);
@@ -169,7 +185,7 @@ export default function FinalizedStudentsPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {(currentUser.role === 'admin' || currentUser.role === 'department') && (
+        {(currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department') && (
             <div className="flex flex-col md:flex-row gap-2 mb-4">
                 <Input
                     placeholder="Filter by university..."

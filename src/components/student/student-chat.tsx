@@ -64,7 +64,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   useEffect(() => {
     if (!student || !currentUser) return;
     const studentDocRef = doc(firestore, 'students', student.id);
-    const isAdminDept = ['admin', 'department'].includes(currentUser.role);
+    const isAdminDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
     const isEmployee = currentUser.role === 'employee';
 
     if (isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0) {
@@ -188,7 +188,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     if (!allUsers) return [];
     return allUsers.filter(u => 
       u.id !== currentUser.id && 
-      (u.role === 'admin' || u.role === 'department' || u.civilId === student.employeeId)
+      (u.role === 'admin' || u.role === 'adminplus' || u.role === 'department' || u.civilId === student.employeeId)
     );
   }, [allUsers, currentUser.id, student.employeeId]);
 

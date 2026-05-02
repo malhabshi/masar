@@ -74,6 +74,18 @@ export function formatRelativeTime(value: any): string {
   return formatDate(date);
 }
 
+export function formatKuwaitTime(isoString: string): string {
+  return new Date(isoString).toLocaleString('en-US', {
+    timeZone: 'Asia/Kuwait',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 // Safe sort function for dates
 export function sortByDate(a: any, b: any, field: string = 'createdAt', direction: 'asc' | 'desc' = 'desc'): number {
   const dateA = toDate(a[field])?.getTime() || 0;

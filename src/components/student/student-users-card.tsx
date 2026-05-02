@@ -23,7 +23,7 @@ export function StudentUsersCard({ student, currentUser }: StudentUsersCardProps
   const { toast } = useToast();
   const [isMutating, setIsMutating] = useState<string | null>(null);
 
-  const canManage = currentUser.role === 'admin' || currentUser.civilId === student.employeeId;
+  const canManage = currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.civilId === student.employeeId;
 
   const handleDelete = async (id: string, description: string) => {
     setIsMutating(`delete-${id}`);

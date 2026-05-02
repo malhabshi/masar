@@ -85,7 +85,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
   const [rejectionReason, setRejectionReason] = useState('');
 
 
-  const isAdminDept = currentUser?.role === 'admin' || currentUser?.role === 'department';
+  const isAdminDept = currentUser?.role === 'admin' || currentUser?.role === 'adminplus' || currentUser?.role === 'department';
   const canAddApplications = isAdminDept;
   const canSetFinalChoice = !!(currentUser?.civilId && currentUser.civilId === student.employeeId);
 

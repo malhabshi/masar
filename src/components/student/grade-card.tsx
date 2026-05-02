@@ -98,7 +98,7 @@ function EditGradeDialog({ student, currentUser, children }: { student: Student;
 
 export function GradeCard({ student, currentUser }: GradeCardProps) {
   const isAssignedEmployee = currentUser.civilId === student.employeeId;
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const isAdminOrDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
   const canEdit = isAssignedEmployee || isAdminOrDept;
 
   return (

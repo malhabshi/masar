@@ -111,6 +111,10 @@ export function EmployeeStatsView() {
                           <div className="text-2xl font-black text-green-700">{employeeStat.pipelineBreakdown.green}</div>
                         </div>
                         <div className="space-y-1">
+                          <span className="text-[10px] font-black text-yellow-600 uppercase">Yellow</span>
+                          <div className="text-2xl font-black text-yellow-600">{employeeStat.pipelineBreakdown.yellow}</div>
+                        </div>
+                        <div className="space-y-1">
                           <span className="text-[10px] font-black text-orange-700 uppercase">Orange</span>
                           <div className="text-2xl font-black text-orange-700">{employeeStat.pipelineBreakdown.orange}</div>
                         </div>

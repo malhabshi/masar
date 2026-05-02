@@ -15,6 +15,7 @@ import { TaskList } from '@/components/dashboard/task-list';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { Badge } from '@/components/ui/badge';
+import { DashboardRemindersCard } from '@/components/dashboard/dashboard-reminders-card';
 
 export default function EmployeeDashboard({ currentUser }: { currentUser: AppUser }) {
     // 1. Query for officially assigned students (Portfolio)
@@ -59,10 +60,11 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
             return acc + (s.applications?.filter(a => a.status === 'Pending').length || 0);
         }, 0);
 
-        const pipeline = { green: 0, orange: 0, red: 0, none: 0 };
+        const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, none: 0 };
         myStudents.forEach(s => {
             const status = s.pipelineStatus || 'none';
             if (status === 'green') pipeline.green++;
+            else if (status === 'yellow') pipeline.yellow++;
             else if (status === 'orange') pipeline.orange++;
             else if (status === 'red') pipeline.red++;
             else pipeline.none++;
@@ -142,6 +144,7 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
                     </CardContent>
                 </Card>
             </div>
+            <DashboardRemindersCard currentUser={currentUser} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TaskList tasks={relevantTasks} currentUser={currentUser} isLoading={isLoading} />
                 <UpcomingEventsCard />

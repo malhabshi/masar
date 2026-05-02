@@ -109,7 +109,7 @@ function EditStudyLevelDialog({ student, currentUser, children }: { student: Stu
 
 export function StudyLevelCard({ student, currentUser }: StudyLevelCardProps) {
   const isAssignedEmployee = currentUser.civilId === student.employeeId;
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const isAdminOrDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
   const canEdit = isAssignedEmployee || isAdminOrDept;
 
   return (

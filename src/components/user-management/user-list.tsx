@@ -37,7 +37,7 @@ interface UserListProps {
   currentUser: AppUser;
 }
 
-const userRoles: UserRole[] = ['admin', 'employee', 'department'];
+const userRoles: UserRole[] = ['admin', 'adminplus', 'employee', 'department'];
 
 export function UserList({ currentUser }: UserListProps) {
   const { toast } = useToast();

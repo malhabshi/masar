@@ -44,7 +44,7 @@ export default function ReportsPage() {
     });
     
     useEffect(() => {
-        if (!dateRange?.from || !dateRange?.to || user?.role !== 'admin') return;
+        if (!dateRange?.from || !dateRange?.to || !['admin', 'adminplus'].includes(user?.role ?? '')) return;
         
         setIsLoading(true);
         setError(null);
@@ -65,7 +65,7 @@ export default function ReportsPage() {
         return <div className="flex h-full w-full items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 
-    if (user?.role !== 'admin') {
+    if (!['admin', 'adminplus'].includes(user?.role ?? '')) {
         return (
             <Card>
                 <CardHeader>

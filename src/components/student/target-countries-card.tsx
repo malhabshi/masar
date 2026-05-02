@@ -55,7 +55,7 @@ export function TargetCountriesCard({ student, currentUser }: TargetCountriesCar
   const [isClearing, setIsClearing] = useState(false);
   const [selectedCountries, setSelectedCountries] = useState<Country[]>(student.targetCountries || []);
 
-  const isAdminOrDept = ['admin', 'department'].includes(currentUser.role);
+  const isAdminOrDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
   const isAssignedEmployee = currentUser.role === 'employee' && currentUser.civilId === student.employeeId;
   
   // Both admins and assigned employees can clear. Only admins can edit individually.

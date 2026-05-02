@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -n '35,55p' /Users/mohammedalhabashi/.gemini/antigravity/scratch/masar/src/lib/types.ts)",
+      "Bash(sed -n '71,90p' /Users/mohammedalhabashi/.gemini/antigravity/scratch/masar/src/lib/types.ts)",
+      "Bash(node -e \"console.log\\(typeof crypto, typeof crypto?.randomUUID\\)\")"
+    ],
+    "additionalDirectories": [
+      "/Users/mohammedalhabashi/.gemini/antigravity/scratch/masar/src/app/upload"
+    ]
+  }
+}

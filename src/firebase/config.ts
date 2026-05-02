@@ -3,6 +3,7 @@ export const firebaseConfig = {
   "appId": "1:290186629807:web:26a19c9284bec0b4eefa5a",
   "apiKey": "AIzaSyDtj_3bxpvi6rP_guv-0TwrHOUtqwt4vbI",
   "authDomain": "studio-9484431255-91d96.firebaseapp.com",
+  "storageBucket": "studio-9484431255-91d96.firebasestorage.app",
   "measurementId": "",
   "messagingSenderId": "290186629807"
 };
