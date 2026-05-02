@@ -25,7 +25,7 @@ export function AdminApplicantsPage() {
     setIsMounted(true);
   }, []);
 
-  const isManagementMode = effectiveRole === 'admin' || effectiveRole === 'department';
+  const isManagementMode = effectiveRole === 'admin' || effectiveRole === 'adminplus' || effectiveRole === 'department';
   
   const studentsPath = (isMounted && isManagementMode) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
