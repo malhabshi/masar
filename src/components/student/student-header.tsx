@@ -199,11 +199,16 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
 
   useEffect(() => {
     setIsClient(true);
-    try {
-      const raw = sessionStorage.getItem('applicants_nav_ids');
-      if (raw) setNavIds(JSON.parse(raw));
-    } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    try {
+      const raw = sessionStorage.getItem(`applicants_nav_ids_${currentUser.id}`);
+      if (raw) setNavIds(JSON.parse(raw));
+      else setNavIds([]);
+    } catch {}
+  }, [currentUser?.id]);
 
   const requesterId = student?.deletionRequested?.requestedBy;
   const transferRequesterId = student?.transferRequest?.requestedBy;

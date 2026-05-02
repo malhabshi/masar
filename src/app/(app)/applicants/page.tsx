@@ -42,7 +42,7 @@ export default function ApplicantsPage() {
     return <EmployeeApplicantsPage />;
   }
 
-  if (effectiveRole === 'admin' || effectiveRole === 'department') {
+  if (effectiveRole === 'admin' || effectiveRole === 'adminplus' || effectiveRole === 'department') {
     return <AdminApplicantsPage />;
   }
 

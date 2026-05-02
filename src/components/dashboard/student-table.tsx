@@ -86,8 +86,21 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    setSearchQuery('');
+    setDebouncedSearchQuery('');
+    setPipelineFilter('all');
+    setEmployeeFilter('all');
+    setGenderFilter('all');
+    setStudyLevelFilter('all');
+    setCountryFilter('all');
+    setIeltsFilter('all');
+    setShowAllStudents(false);
     try {
-      const raw = sessionStorage.getItem('applicants_filters');
+      const raw = sessionStorage.getItem(`applicants_filters_${currentUser.id}`);
       if (raw) {
         const f = JSON.parse(raw);
         if (f.searchQuery !== undefined)       { setSearchQuery(f.searchQuery); setDebouncedSearchQuery(f.searchQuery); }
@@ -100,7 +113,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (f.showAllStudents !== undefined)   setShowAllStudents(f.showAllStudents);
       }
     } catch {}
-  }, []);
+  }, [currentUser?.id]);
 
   const requesters = useMemo(() => {
       const ids = new Set<string>();
@@ -121,14 +134,14 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   }, [searchQuery]);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || !currentUser?.id) return;
     try {
-      sessionStorage.setItem('applicants_filters', JSON.stringify({
+      sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
         genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents,
       }));
     } catch {}
-  }, [isClient, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents]);
+  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents]);
 
   // Identify duplicate phones across all currently loaded students
   const duplicatePhoneSet = useMemo(() => {
@@ -250,11 +263,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || !currentUser?.id) return;
     try {
-      sessionStorage.setItem('applicants_nav_ids', JSON.stringify(displayedStudents.map(s => s.id)));
+      sessionStorage.setItem(`applicants_nav_ids_${currentUser.id}`, JSON.stringify(displayedStudents.map(s => s.id)));
     } catch {}
-  }, [isClient, displayedStudents]);
+  }, [isClient, currentUser?.id, displayedStudents]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
@@ -267,8 +280,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setCountryFilter('all');
     setShowAllStudents(false);
     try {
-      sessionStorage.removeItem('applicants_filters');
-      sessionStorage.removeItem('applicants_nav_ids');
+      sessionStorage.removeItem(`applicants_filters_${currentUser?.id}`);
+      sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
   const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || studyLevelFilter !== 'all' || countryFilter !== 'all' || showAllStudents;
