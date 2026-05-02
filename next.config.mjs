@@ -5,13 +5,15 @@ const nextConfig = {
   devIndicators: {
     buildActivity: false,
   },
-  // Ensure chunks are loaded correctly through port forwarding
-  webpack: (config) => {
-    config.optimization.splitChunks = {
-      cacheGroups: {
-        default: false,
-      },
-    };
+  // Disable chunk splitting only in dev to avoid port-forwarding issues in cloud IDEs
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.optimization.splitChunks = {
+        cacheGroups: {
+          default: false,
+        },
+      };
+    }
     return config;
   },
 };
