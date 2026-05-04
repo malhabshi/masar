@@ -11,13 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, XCircle, Printer, GraduationCap, Search } from 'lucide-react';
+import { CheckCircle2, Printer, GraduationCap, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TRACKS = [
-  { key: 'medicine',    label: 'Medicine',    math: 0.05, eng: 0.05, cumul: 0.90, desc: '5% Math + 5% Eng + 90% Cumul' },
-  { key: 'pharmacy',    label: 'Pharmacy',    math: 0.15, eng: 0.15, cumul: 0.70, desc: '15% Math + 15% Eng + 70% Cumul' },
-  { key: 'engineering', label: 'Engineering', math: 0.20, eng: 0.15, cumul: 0.65, desc: '20% Math + 15% Eng + 65% Cumul' },
+  { key: 'medicine',    label: 'Medicine',    math: 0.05, eng: 0.05, cumul: 0.90, desc: '5% + 5% + 90%' },
+  { key: 'pharmacy',    label: 'Pharmacy',    math: 0.15, eng: 0.15, cumul: 0.70, desc: '15% + 15% + 70%' },
+  { key: 'engineering', label: 'Engineering', math: 0.20, eng: 0.15, cumul: 0.65, desc: '20% + 15% + 65%' },
 ] as const;
 
 export default function GpaPage() {
@@ -91,10 +91,11 @@ export default function GpaPage() {
   const filteredMajors = useMemo(() => {
     if (!majors) return [];
     const lower = majorSearch.toLowerCase();
-    return lower
+    const pool = lower
       ? majors.filter(m => m.name.toLowerCase().includes(lower) || m.country.toLowerCase().includes(lower))
       : majors;
-  }, [majors, majorSearch]);
+    return cumulative !== null ? pool.filter(m => cumulative >= m.requiredPercentage) : pool;
+  }, [majors, majorSearch, cumulative]);
 
   const majorsByCountry = useMemo(() => {
     const groups: Record<string, GpaMajor[]> = {};
@@ -106,47 +107,153 @@ export default function GpaPage() {
     return groups;
   }, [filteredMajors]);
 
-  const qualifies = (required: number) => cumulative !== null && cumulative >= required;
-
   if (!isClient) return null;
+
+  const smallLogo = logoSrc ? (
+    <img src={logoSrc} alt="Logo" style={{ height: 60, width: 60, objectFit: 'contain' }} />
+  ) : (
+    <div style={{ height: 60, width: 60, background: '#ede9fe', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <GraduationCap style={{ height: 30, width: 30, color: '#7c3aed' }} />
+    </div>
+  );
 
   return (
     <>
       <style>{`
         @media print {
-          aside, [data-sidebar], .print-hide { display: none !important; }
+          @page { size: A4 portrait; margin: 10mm 12mm; }
+          aside, [data-sidebar], .screen-only { display: none !important; }
           .print-only { display: block !important; }
-          main { padding: 8px !important; overflow: visible !important; }
-          body { background: white !important; }
+          main { padding: 0 !important; overflow: visible !important; }
+          body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
         .print-only { display: none; }
       `}</style>
 
-      <div className="max-w-3xl space-y-4 pb-8">
+      {/* ═══ PDF / PRINT LAYOUT (one A4 page) ═══ */}
+      <div className="print-only" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#111', maxWidth: '100%' }}>
 
-        {/* Header: Logo + (print-only employee info) + Title */}
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingBottom: 8, borderBottom: '2px solid #e5e7eb', marginBottom: 10 }}>
+          {smallLogo}
+          <div style={{ flex: 1 }}>
+            {pageTitle && <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.2 }}>{pageTitle}</div>}
+            {studentName && <div style={{ fontSize: 10, color: '#374151', marginTop: 2 }}>{studentName}</div>}
+            {studentPhone && <div style={{ fontSize: 10, color: '#6b7280' }}>{studentPhone}</div>}
+          </div>
+          {(employeeName || employeePhone) && (
+            <div style={{ textAlign: 'right', fontSize: 10, color: '#6b7280' }}>
+              {employeeName && <div style={{ fontWeight: 600, color: '#374151' }}>{employeeName}</div>}
+              {employeePhone && <div>{employeePhone}</div>}
+            </div>
+          )}
+        </div>
+
+        {/* 3-column calculators */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+
+          {/* GPA */}
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#9ca3af', marginBottom: 6 }}>GPA → Percentage</div>
+            <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 6 }}>GPA: <strong style={{ fontFamily: 'monospace', fontSize: 11 }}>{gpa || '—'}</strong></div>
+            <div style={{ background: gpaPercentage !== null ? '#f5f3ff' : '#f9fafb', border: `1px solid ${gpaPercentage !== null ? '#ddd6fe' : '#f3f4f6'}`, borderRadius: 6, padding: '6px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>Result</div>
+              <div style={{ fontSize: 24, fontWeight: 800, fontFamily: 'monospace', color: gpaPercentage !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1.1 }}>
+                {gpaPercentage !== null ? `${gpaPercentage.toFixed(2)}%` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* High School */}
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#9ca3af', marginBottom: 6 }}>High School Cumulative</div>
+            {[{ label: 'Grade 10', w: '10%', val: grade10 }, { label: 'Grade 11', w: '20%', val: grade11 }, { label: 'Grade 12', w: '70%', val: grade12 }].map(({ label, w, val }) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 9 }}>
+                <span style={{ color: '#6b7280' }}>{label} <span style={{ color: '#9ca3af' }}>({w})</span></span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{val || '—'}</span>
+              </div>
+            ))}
+            <div style={{ background: cumulative !== null ? '#f5f3ff' : '#f9fafb', border: `1px solid ${cumulative !== null ? '#ddd6fe' : '#f3f4f6'}`, borderRadius: 6, padding: '4px 8px', textAlign: 'center', marginTop: 4 }}>
+              <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>Cumulative</div>
+              <div style={{ fontSize: 24, fontWeight: 800, fontFamily: 'monospace', color: cumulative !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1.1 }}>
+                {cumulative !== null ? `${cumulative.toFixed(2)}%` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Unified Exam */}
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#9ca3af', marginBottom: 6 }}>Unified Exam</div>
+            {(mathScore || englishScore) && (
+              <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 6 }}>
+                Math: {mathScore || 0} · English: {englishScore || 0}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {TRACKS.map(track => {
+                const score = examScores ? examScores[track.key] : null;
+                return (
+                  <div key={track.key} style={{ background: score !== null ? '#eff6ff' : '#f9fafb', border: `1px solid ${score !== null ? '#bfdbfe' : '#f3f4f6'}`, borderRadius: 6, padding: '5px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 8, fontWeight: 600 }}>{track.label}</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: score !== null ? '#1d4ed8' : '#d1d5db' }}>
+                      {score !== null ? `${score.toFixed(2)}%` : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Qualified Majors */}
+        {filteredMajors.length > 0 && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, borderBottom: '1px solid #e5e7eb', paddingBottom: 4 }}>
+              <span style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280' }}>Qualified Majors</span>
+              {cumulative !== null && <span style={{ fontSize: 7, color: '#9ca3af' }}>Cumulative: {cumulative.toFixed(2)}%</span>}
+              <span style={{ fontSize: 7, color: '#9ca3af', marginLeft: 'auto' }}>{filteredMajors.length} major{filteredMajors.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div style={{ columnCount: 3, columnGap: 10 }}>
+              {Object.entries(majorsByCountry).map(([country, countryMajors]) => (
+                <div key={country} style={{ breakInside: 'avoid', marginBottom: 8 }}>
+                  <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 3, borderBottom: '1px dashed #e5e7eb', paddingBottom: 2 }}>
+                    {country}
+                  </div>
+                  {countryMajors.map(m => (
+                    <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 5px', marginBottom: 2, background: '#f0fdf4', borderRadius: 3, breakInside: 'avoid' }}>
+                      <span style={{ fontSize: 8 }}>
+                        {m.name}
+                        {m.requiresUnifiedExam && <span style={{ fontSize: 6, color: '#d97706', marginLeft: 3 }}>EXAM</span>}
+                      </span>
+                      <span style={{ fontSize: 7.5, fontFamily: 'monospace', color: '#6b7280', marginLeft: 4, flexShrink: 0 }}>{m.requiredPercentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ SCREEN LAYOUT ═══ */}
+      <div className="screen-only max-w-3xl space-y-4 pb-8">
+
+        {/* Header */}
         <div className="flex flex-col items-center text-center py-6 border-b mb-2">
           <div className="mb-3">
             {logoSrc ? (
-              <img src={logoSrc} alt="Logo" className="h-20 w-20 object-contain" />
+              <img src={logoSrc} alt="Logo" className="h-36 w-36 object-contain" />
             ) : (
-              <div className="bg-primary/10 rounded-2xl p-4 h-20 w-20 flex items-center justify-center">
-                <GraduationCap className="h-10 w-10 text-primary" />
+              <div className="bg-primary/10 rounded-2xl p-6 h-36 w-36 flex items-center justify-center">
+                <GraduationCap className="h-16 w-16 text-primary" />
               </div>
             )}
-          </div>
-          {/* Print-only employee info — appears under logo, above title */}
-          <div className="print-only mb-2">
-            {employeeName && <p className="font-semibold text-sm">{employeeName}</p>}
-            {employeePhone && <p className="text-sm text-gray-500">{employeePhone}</p>}
           </div>
           {pageTitle && <h1 className="text-2xl font-bold">{pageTitle}</h1>}
         </div>
 
-        {/* Row 1: GPA + High School side by side */}
+        {/* GPA + High School */}
         <div className="grid grid-cols-2 gap-4">
-
-          {/* GPA → Percentage */}
           <div className="border rounded-xl p-5 space-y-3 bg-card">
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">GPA → Percentage</p>
             <div className="space-y-1.5">
@@ -170,7 +277,6 @@ export default function GpaPage() {
             </div>
           </div>
 
-          {/* High School Cumulative */}
           <div className="border rounded-xl p-5 space-y-3 bg-card">
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">High School Cumulative</p>
             <div className="space-y-2">
@@ -204,7 +310,7 @@ export default function GpaPage() {
           </div>
         </div>
 
-        {/* Unified Exam — all 3 tracks */}
+        {/* Unified Exam */}
         <div className="border rounded-xl p-5 space-y-4 bg-card">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Unified Exam Percentage</p>
           <div className="grid grid-cols-2 gap-4">
@@ -255,8 +361,10 @@ export default function GpaPage() {
         {majors && majors.length > 0 && (
           <div className="border rounded-xl p-5 space-y-4 bg-card">
             <div className="flex items-center gap-3">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest shrink-0">Major Qualifications</p>
-              <div className="relative flex-1 print-hide">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest shrink-0">
+                {cumulative !== null ? 'Qualified Majors' : 'Major Qualifications'}
+              </p>
+              <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Search majors..."
@@ -266,33 +374,48 @@ export default function GpaPage() {
                 />
               </div>
             </div>
-            {cumulative === null && (
-              <p className="text-sm text-muted-foreground">Enter high school grades to see qualification status.</p>
+            {cumulative === null ? (
+              <p className="text-sm text-muted-foreground">Enter high school grades to see which majors you qualify for.</p>
+            ) : filteredMajors.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {majorSearch ? `No qualified majors match "${majorSearch}"` : 'No majors qualify at this cumulative percentage.'}
+              </p>
+            ) : (
+              <div className="space-y-5">
+                {Object.entries(majorsByCountry).map(([country, countryMajors]) => (
+                  <div key={country}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">{country}</span>
+                      <div className="flex-1 border-t border-dashed" />
+                      <span className="text-[10px] text-muted-foreground shrink-0">{countryMajors.length}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {countryMajors.map(m => (
+                        <div key={m.id} className="flex items-center justify-between px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{m.name}</span>
+                            {m.requiresUnifiedExam && (
+                              <Badge variant="outline" className="text-[9px] py-0 h-4 border-amber-400 text-amber-700 bg-amber-50">
+                                Exam
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono text-muted-foreground">{m.requiredPercentage}%</span>
+                            <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-            <div className="space-y-5">
-              {Object.entries(majorsByCountry).map(([country, countryMajors]) => (
-                <div key={country}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">{country}</span>
-                    <div className="flex-1 border-t border-dashed" />
-                    <span className="text-[10px] text-muted-foreground shrink-0">{countryMajors.length}</span>
-                  </div>
-                  <div className="space-y-1">
-                    {countryMajors.map(m => (
-                      <MajorRow key={m.id} major={m} qualified={cumulative !== null ? qualifies(m.requiredPercentage) : null} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {Object.keys(majorsByCountry).length === 0 && majorSearch && (
-                <p className="text-center text-sm text-muted-foreground py-4">No majors match &ldquo;{majorSearch}&rdquo;</p>
-              )}
-            </div>
           </div>
         )}
 
-        {/* Contact Information — screen only */}
-        <div className="border rounded-xl p-5 space-y-4 bg-card print-hide">
+        {/* Contact Information */}
+        <div className="border rounded-xl p-5 space-y-4 bg-card">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Contact Information</p>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -318,7 +441,7 @@ export default function GpaPage() {
         </div>
 
         {/* PDF Button */}
-        <div className="print-hide flex justify-end">
+        <div className="flex justify-end">
           <Button onClick={() => window.print()} className="gap-2">
             <Printer className="h-4 w-4" />
             Download as PDF
@@ -326,31 +449,5 @@ export default function GpaPage() {
         </div>
       </div>
     </>
-  );
-}
-
-function MajorRow({ major, qualified }: { major: GpaMajor; qualified: boolean | null }) {
-  return (
-    <div className={cn(
-      "flex items-center justify-between px-3 py-2 rounded-lg border text-sm",
-      qualified === true  && "border-green-200 bg-green-50",
-      qualified === false && "border-red-100 bg-red-50/50",
-      qualified === null  && "border-border bg-muted/20"
-    )}>
-      <div className="flex items-center gap-2">
-        <span className="font-medium">{major.name}</span>
-        {major.requiresUnifiedExam && (
-          <Badge variant="outline" className="text-[9px] py-0 h-4 border-amber-400 text-amber-700 bg-amber-50">
-            Exam
-          </Badge>
-        )}
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-xs font-mono text-muted-foreground">{major.requiredPercentage}%</span>
-        {qualified === true  && <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />}
-        {qualified === false && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
-        {qualified === null  && <span className="text-muted-foreground/40 w-4 text-center text-xs">—</span>}
-      </div>
-    </div>
   );
 }
