@@ -26,6 +26,11 @@ export default function GpaSettingsPage() {
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [isTitleLoaded, setIsTitleLoaded] = useState(false);
 
+  const [instagram, setInstagram] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [isSavingCompanyInfo, setIsSavingCompanyInfo] = useState(false);
+
   const [newName, setNewName] = useState('');
   const [newCountry, setNewCountry] = useState<Country | ''>('');
   const [newRequired, setNewRequired] = useState('');
@@ -41,7 +46,13 @@ export default function GpaSettingsPage() {
     } catch {}
     getDoc(doc(firestore, 'gpa_settings', 'config'))
       .then(snap => {
-        if (snap.exists()) setPageTitle(snap.data().pageTitle || '');
+        if (snap.exists()) {
+          const d = snap.data();
+          setPageTitle(d.pageTitle || '');
+          setInstagram(d.instagram || '');
+          setTiktok(d.tiktok || '');
+          setCompanyEmail(d.email || '');
+        }
         setIsTitleLoaded(true);
       })
       .catch(() => setIsTitleLoaded(true));
@@ -61,6 +72,22 @@ export default function GpaSettingsPage() {
       toast({ variant: 'destructive', title: 'Failed to save', description: e.message });
     } finally {
       setIsSavingTitle(false);
+    }
+  };
+
+  const handleSaveCompanyInfo = async () => {
+    setIsSavingCompanyInfo(true);
+    try {
+      await setDoc(doc(firestore, 'gpa_settings', 'config'), {
+        instagram: instagram.trim(),
+        tiktok: tiktok.trim(),
+        email: companyEmail.trim(),
+      }, { merge: true });
+      toast({ title: 'Company info saved' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed to save', description: e.message });
+    } finally {
+      setIsSavingCompanyInfo(false);
     }
   };
 
@@ -181,6 +208,53 @@ export default function GpaSettingsPage() {
               Save
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Company Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Company Info</CardTitle>
+          <CardDescription>Displayed in the PDF footer — Instagram handle, TikTok handle, and company email.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Instagram Handle</Label>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">@</span>
+                <Input
+                  placeholder="yourhandle"
+                  value={instagram}
+                  onChange={e => setInstagram(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>TikTok Handle</Label>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground">@</span>
+                <Input
+                  placeholder="yourhandle"
+                  value={tiktok}
+                  onChange={e => setTiktok(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Company Email</Label>
+            <Input
+              type="email"
+              placeholder="info@yourcompany.com"
+              value={companyEmail}
+              onChange={e => setCompanyEmail(e.target.value)}
+            />
+          </div>
+          <Button onClick={handleSaveCompanyInfo} disabled={isSavingCompanyInfo}>
+            {isSavingCompanyInfo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save Company Info
+          </Button>
         </CardContent>
       </Card>
 
