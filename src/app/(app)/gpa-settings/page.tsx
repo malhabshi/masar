@@ -21,6 +21,7 @@ export default function GpaSettingsPage() {
   const { user } = useUser();
   const { toast } = useToast();
 
+  const [logoSrc, setLogoSrc] = useState<string | null>(null);
   const [pageTitle, setPageTitle] = useState('');
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [isTitleLoaded, setIsTitleLoaded] = useState(false);
@@ -34,6 +35,10 @@ export default function GpaSettingsPage() {
   const { data: majors, isLoading } = useCollection<GpaMajor>('gpa_majors');
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem('gpaLogo');
+      if (saved) setLogoSrc(saved);
+    } catch {}
     getDoc(doc(firestore, 'gpa_settings', 'config'))
       .then(snap => {
         if (snap.exists()) setPageTitle(snap.data().pageTitle || '');
@@ -111,6 +116,50 @@ export default function GpaSettingsPage() {
           Configure the page title and manage major requirements shown on the GPA calculator.
         </p>
       </div>
+
+      {/* Logo Upload */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Page Logo</CardTitle>
+          <CardDescription>Upload a logo to display on the GPA calculator page. Saved locally on this device.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {logoSrc && (
+            <div className="flex items-center gap-4">
+              <img src={logoSrc} alt="Current logo" className="h-16 w-16 object-contain border rounded-lg p-1 bg-muted/30" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  try { localStorage.removeItem('gpaLogo'); } catch {}
+                  setLogoSrc(null);
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="logo-upload">Upload Image</Label>
+            <Input
+              id="logo-upload"
+              type="file"
+              accept="image/*"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  const result = ev.target?.result as string;
+                  try { localStorage.setItem('gpaLogo', result); } catch {}
+                  setLogoSrc(result);
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Page Title */}
       <Card>
