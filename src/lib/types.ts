@@ -274,6 +274,15 @@ export interface UnifiedExamDate {
   createdAt: string;
 }
 
+export interface GpaMajor {
+  id: string;
+  name: string;
+  country: Country;
+  requiredPercentage: number;
+  requiresUnifiedExam: boolean;
+  createdAt: string;
+}
+
 export interface SpecialTaskConfig {
   examTypes: ('ielts' | 'toefl' | 'ielts_retake' | 'ielts_course' | 'unified_exam')[];
   ielts: {

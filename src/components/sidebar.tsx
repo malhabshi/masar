@@ -38,6 +38,7 @@ import {
   Globe,
   UserRoundX,
   Link2,
+  Calculator,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -204,6 +205,7 @@ export function AppSidebar() {
         { href: '/approved-universities', label: 'Universities', icon: Library, roles: ['admin', 'adminplus', 'employee', 'department'] },
         { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'adminplus', 'employee', 'department'], badge: unreadFinalizedCount },
         { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'adminplus', 'employee', 'department'] },
+        { href: '/gpa', label: 'GPA Calculator', icon: Calculator, roles: ['admin', 'adminplus', 'employee', 'department'] },
     ];
 
     const managementNav = [
@@ -223,6 +225,7 @@ export function AppSidebar() {
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
         { href: '/unified-exam-settings', label: 'Unified Exam Dates', icon: ScrollText, roles: ['admin'] },
+        { href: '/gpa-settings', label: 'GPA Settings', icon: Calculator, roles: ['admin'] },
         { href: '/upload-links', label: 'Upload Links', icon: Link2, roles: ['admin'] },
         { href: '/settings/notifications', label: 'WA Templates', icon: BellRing, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },

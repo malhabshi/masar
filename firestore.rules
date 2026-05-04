@@ -214,6 +214,16 @@ service cloud.firestore {
       allow write: if isAdmin() || isAdminPlus();
     }
 
+    match /gpa_settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isAdminPlus();
+    }
+
+    match /gpa_majors/{majorId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isAdminPlus();
+    }
+
     match /student_public_uploads/{uploadId} {
       allow create: if exists(/databases/$(database)/documents/upload_links/$(request.resource.data.token));
       allow read, list: if isSignedIn();
