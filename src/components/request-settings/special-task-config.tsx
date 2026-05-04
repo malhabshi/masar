@@ -21,7 +21,7 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-sm">Exam Type Options</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {['ielts', 'toefl', 'ielts_retake', 'ielts_course'].map((exam) => (
+              {['ielts', 'toefl', 'ielts_retake', 'ielts_course', 'unified_exam'].map((exam) => (
                 <FormField key={exam} control={form.control} name="specialConfig.examTypes" render={({ field }) => (
                   <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                     <FormControl>

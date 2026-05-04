@@ -209,6 +209,11 @@ service cloud.firestore {
       allow delete: if isSignedIn();
     }
 
+    match /unified_exam_dates/{dateId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isAdminPlus();
+    }
+
     match /student_public_uploads/{uploadId} {
       allow create: if exists(/databases/$(database)/documents/upload_links/$(request.resource.data.token));
       allow read, list: if isSignedIn();

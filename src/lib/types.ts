@@ -267,8 +267,15 @@ export interface RecipientConfig {
   name?: string;
 }
 
+export interface UnifiedExamDate {
+  id: string;
+  label: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface SpecialTaskConfig {
-  examTypes: ('ielts' | 'toefl' | 'ielts_retake' | 'ielts_course')[];
+  examTypes: ('ielts' | 'toefl' | 'ielts_retake' | 'ielts_course' | 'unified_exam')[];
   ielts: {
     showSubtypes: boolean;
     subtypes: ('academic' | 'ukvi')[];
@@ -291,6 +298,9 @@ export interface SpecialTaskConfig {
   ielts_course?: {
     showOptions: boolean;
     showSundaysOnly: boolean;
+  };
+  unified_exam?: {
+    showDeliveryMethod: boolean;
   };
   requireUniversitySelection?: boolean;
   useApprovedUniversitiesList?: boolean; // Toggles selection from Global Approved Universities

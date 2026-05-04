@@ -4,7 +4,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, RequestType, Application, ApprovedUniversity, Country, StudentLogin } from '@/lib/types';
+import type { Student, RequestType, Application, ApprovedUniversity, Country, StudentLogin, UnifiedExamDate } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     config?.useApprovedUniversitiesList ? 'approved_universities' : ''
   );
 
+  // Fetch unified exam dates
+  const { data: unifiedExamDates } = useCollection<UnifiedExamDate>(
+    config?.examTypes?.includes('unified_exam') ? 'unified_exam_dates' : ''
+  );
+  const activeExamDates = (unifiedExamDates || []).filter(d => d.isActive);
+
   // Dynamic Schema Builder
   const schemaFields: any = {
     notes: z.string().optional(),
@@ -73,6 +79,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       schemaFields.examType = z.literal('ielts_course').optional();
       schemaFields.courseOption = z.string({ required_error: 'Please select a course option' });
       schemaFields.courseStartDate = z.date({ required_error: 'Course start date is required' });
+    }
+
+    if (config.examTypes?.includes('unified_exam')) {
+      schemaFields.examType = z.literal('unified_exam').optional();
+      schemaFields.unifiedExamDateId = z.string({ required_error: 'Please select an exam date' }).min(1, 'Please select an exam date');
+      schemaFields.unifiedExamDateLabel = z.string().optional();
+      schemaFields.unifiedExamDelivery = z.enum(['Online', 'In-Person'], { required_error: 'Please select Online or In-Person' });
     }
 
     if (config.studentInfo?.passportNameField) {
@@ -131,6 +144,9 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       selectedApplicationId: '',
       selectedGlobalUniversityId: '',
       selectedPortalId: '',
+      unifiedExamDateId: '',
+      unifiedExamDateLabel: '',
+      unifiedExamDelivery: undefined,
     },
   });
 
@@ -706,6 +722,65 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                       <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date.getDay() !== 0 || date < startOfDay(new Date())} initialFocus />
                     </PopoverContent>
                   </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
+        {/* UNIFIED EXAM LOGIC */}
+        {watchExamType === 'unified_exam' && config && (
+          <div className="space-y-6 border-t pt-4 animate-in fade-in">
+            <FormField
+              control={form.control}
+              name="unifiedExamDateId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Exam Date *</FormLabel>
+                  <Select
+                    onValueChange={(val) => {
+                      field.onChange(val);
+                      const selected = activeExamDates.find(d => d.id === val);
+                      if (selected) form.setValue('unifiedExamDateLabel', selected.label);
+                    }}
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an exam date" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {activeExamDates.length > 0 ? (
+                        activeExamDates.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>No exam dates available</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="unifiedExamDelivery"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormLabel>Delivery Method *</FormLabel>
+                  <FormControl>
+                    <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-6">
+                      {['Online', 'In-Person'].map((method) => (
+                        <FormItem key={method} className="flex items-center space-x-2 space-y-0 border px-4 py-3 rounded-lg bg-muted/20 cursor-pointer">
+                          <FormControl><RadioGroupItem value={method} /></FormControl>
+                          <FormLabel className="font-medium cursor-pointer">{method}</FormLabel>
+                        </FormItem>
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

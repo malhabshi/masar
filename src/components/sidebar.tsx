@@ -31,6 +31,7 @@ import {
   LineChart,
   BookOpenCheck,
   BellRing,
+  ScrollText,
   ReceiptText,
   UserCog,
   RefreshCw,
@@ -211,6 +212,7 @@ export function AppSidebar() {
         { href: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['admin', 'department'], badge: unreadTaskCount },
         { href: '/invoices', label: 'Invoices', icon: ReceiptText, roles: ['admin'] },
         { href: '/ielts-course-dashboard', label: 'IELTS Courses', icon: BookOpenCheck, roles: ['admin'] },
+        { href: '/unified-exam', label: 'Unified Exam', icon: ScrollText, roles: ['admin', 'adminplus'] },
         { href: '/internal-chat', label: 'Chats', icon: MessageSquare, roles: ['admin', 'department'], badge: unreadChatCount },
     ];
 
@@ -220,6 +222,7 @@ export function AppSidebar() {
         { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin'] },
         { href: '/user-management', label: 'User Management', icon: Users2, roles: ['admin'] },
         { href: '/request-settings', label: 'Request Settings', icon: Settings2, roles: ['admin'] },
+        { href: '/unified-exam-settings', label: 'Unified Exam Dates', icon: ScrollText, roles: ['admin'] },
         { href: '/upload-links', label: 'Upload Links', icon: Link2, roles: ['admin'] },
         { href: '/settings/notifications', label: 'WA Templates', icon: BellRing, roles: ['admin'] },
         { href: '/settings', label: 'App Settings', icon: Settings, roles: ['admin'] },
