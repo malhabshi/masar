@@ -118,6 +118,17 @@ export default function GpaPage() {
     return groups;
   }, [filteredMajors]);
 
+  const allMajorsByCountry = useMemo(() => {
+    if (!majors) return {} as Record<string, GpaMajor[]>;
+    const groups: Record<string, GpaMajor[]> = {};
+    majors.forEach(m => {
+      if (!groups[m.country]) groups[m.country] = [];
+      groups[m.country].push(m);
+    });
+    Object.values(groups).forEach(g => g.sort((a, b) => a.name.localeCompare(b.name)));
+    return groups;
+  }, [majors]);
+
   if (!isClient) return null;
 
   return (
@@ -134,86 +145,86 @@ export default function GpaPage() {
       `}</style>
 
       {/* ═══ PDF / PRINT LAYOUT (full A4 page) ═══ */}
-      <div className="print-only" style={{ fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif", color: '#1a1a2e', width: '100%', background: 'white' }}>
+      <div className="print-only" style={{ fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif", color: '#111827', width: '100%', background: 'white' }}>
 
-        {/* HEADER BAND */}
-        <div style={{ background: 'linear-gradient(135deg, #3730a3 0%, #4f46e5 55%, #7c3aed 100%)', padding: '20px 24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        {/* HEADER */}
+        <div style={{ padding: '20px 0 16px', textAlign: 'center', borderBottom: '2px solid #f3f4f6' }}>
           {logoSrc ? (
-            <img src={logoSrc} alt="Logo" style={{ height: 90, width: 90, objectFit: 'contain', background: 'white', borderRadius: 14, padding: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.25)' }} />
+            <img src={logoSrc} alt="Logo" style={{ height: 88, width: 88, objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
           ) : (
-            <div style={{ height: 90, width: 90, background: 'rgba(255,255,255,0.15)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.3)' }}>
-              <GraduationCap style={{ height: 46, width: 46, color: 'white' }} />
+            <div style={{ height: 88, width: 88, background: '#f5f3ff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', border: '1.5px solid #e0e7ff' }}>
+              <GraduationCap style={{ height: 44, width: 44, color: '#6366f1' }} />
             </div>
           )}
           {pageTitle && (
-            <div style={{ fontSize: 21, fontWeight: 800, color: 'white', textAlign: 'center', letterSpacing: '-0.3px', marginTop: 4, lineHeight: 1.2 }}>
+            <div style={{ fontSize: 21, fontWeight: 800, color: '#111827', textAlign: 'center', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
               {pageTitle}
             </div>
           )}
           {(studentName || studentPhone) && (
-            <div style={{ background: 'rgba(255,255,255,0.18)', borderRadius: 20, padding: '5px 18px', display: 'flex', gap: 14, fontSize: 10.5, color: 'rgba(255,255,255,0.92)', border: '1px solid rgba(255,255,255,0.28)', marginTop: 2 }}>
-              {studentName && <span style={{ fontWeight: 600 }}>{studentName}</span>}
-              {studentName && studentPhone && <span style={{ opacity: 0.35 }}>|</span>}
+            <div style={{ fontSize: 10, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+              {studentName && <span style={{ fontWeight: 600, color: '#374151' }}>{studentName}</span>}
+              {studentName && studentPhone && <span style={{ color: '#e5e7eb' }}>|</span>}
               {studentPhone && <span>{studentPhone}</span>}
             </div>
           )}
         </div>
 
         {/* BODY */}
-        <div style={{ flex: 1, padding: '16px 0 12px' }}>
+        <div style={{ flex: 1, padding: '18px 0 14px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
           {/* 3-column calculators */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
 
             {/* GPA */}
-            <div style={{ border: '1.5px solid #e0e7ff', borderRadius: 10, padding: '10px 12px', background: '#fafaff' }}>
-              <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 8 }}>GPA → Percentage</div>
-              <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 8 }}>
-                GPA Score: <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#1a1a2e' }}>{gpa || '—'}</span>
+            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '16px 16px', background: '#fafafa' }}>
+              <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 12 }}>GPA → Percentage</div>
+              <div style={{ fontSize: 9.5, color: '#6b7280', marginBottom: 12 }}>
+                GPA Score: <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: '#111827' }}>{gpa || '—'}</span>
               </div>
-              <div style={{ background: gpaPercentage !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${gpaPercentage !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 8, padding: '8px 10px', textAlign: 'center' as const }}>
-                <div style={{ fontSize: 6.5, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 3 }}>Result</div>
-                <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: gpaPercentage !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
+              <div style={{ background: gpaPercentage !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${gpaPercentage !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 10, padding: '18px 14px', textAlign: 'center' as const }}>
+                <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 6 }}>Result</div>
+                <div style={{ fontSize: 34, fontWeight: 900, fontFamily: 'monospace', color: gpaPercentage !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
                   {gpaPercentage !== null ? `${gpaPercentage.toFixed(2)}%` : '—'}
                 </div>
               </div>
             </div>
 
             {/* High School */}
-            <div style={{ border: '1.5px solid #e0e7ff', borderRadius: 10, padding: '10px 12px', background: '#fafaff' }}>
-              <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 8 }}>High School Cumulative</div>
+            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '16px 16px', background: '#fafafa' }}>
+              <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 12 }}>High School Cumulative</div>
               {[{ label: 'Grade 10', w: '10%', val: grade10 }, { label: 'Grade 11', w: '20%', val: grade11 }, { label: 'Grade 12', w: '70%', val: grade12 }].map(({ label, w, val }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: 8.5 }}>
-                  <span style={{ color: '#6b7280' }}>{label} <span style={{ color: '#d1d5db', fontSize: 7 }}>({w})</span></span>
-                  <span style={{ fontFamily: 'monospace', fontWeight: 700, color: val ? '#1a1a2e' : '#d1d5db' }}>{val || '—'}</span>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 9 }}>
+                  <span style={{ color: '#6b7280' }}>{label} <span style={{ color: '#d1d5db', fontSize: 7.5 }}>({w})</span></span>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: val ? '#111827' : '#d1d5db' }}>{val || '—'}</span>
                 </div>
               ))}
-              <div style={{ background: cumulative !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${cumulative !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 8, padding: '6px 10px', textAlign: 'center' as const, marginTop: 6 }}>
-                <div style={{ fontSize: 6.5, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 3 }}>Cumulative</div>
-                <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: cumulative !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
+              <div style={{ background: cumulative !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${cumulative !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 10, padding: '14px 14px', textAlign: 'center' as const, marginTop: 10 }}>
+                <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 6 }}>Cumulative</div>
+                <div style={{ fontSize: 34, fontWeight: 900, fontFamily: 'monospace', color: cumulative !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
                   {cumulative !== null ? `${cumulative.toFixed(2)}%` : '—'}
                 </div>
               </div>
             </div>
 
             {/* Unified Exam */}
-            <div style={{ border: '1.5px solid #e0e7ff', borderRadius: 10, padding: '10px 12px', background: '#fafaff' }}>
-              <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 8 }}>Unified Exam</div>
+            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 12, padding: '16px 16px', background: '#fafafa' }}>
+              <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 12 }}>Unified Exam</div>
               {(mathScore || englishScore) && (
-                <div style={{ fontSize: 7.5, color: '#9ca3af', marginBottom: 6 }}>
+                <div style={{ fontSize: 8, color: '#9ca3af', marginBottom: 10 }}>
                   Math: <strong style={{ color: '#374151' }}>{mathScore || 0}</strong> · English: <strong style={{ color: '#374151' }}>{englishScore || 0}</strong>
                 </div>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {TRACKS.map(track => {
                   const score = examScores ? examScores[track.key] : null;
                   return (
-                    <div key={track.key} style={{ background: score !== null ? '#eff6ff' : '#f5f5f5', border: `1.5px solid ${score !== null ? '#bfdbfe' : '#e5e7eb'}`, borderRadius: 6, padding: '5px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div key={track.key} style={{ background: score !== null ? '#eff6ff' : '#f5f5f5', border: `1.5px solid ${score !== null ? '#bfdbfe' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontSize: 8, fontWeight: 700, color: '#1e40af' }}>{track.label}</div>
-                        <div style={{ fontSize: 6, color: '#93c5fd' }}>{track.desc}</div>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: '#1e40af' }}>{track.label}</div>
+                        <div style={{ fontSize: 6.5, color: '#93c5fd', marginTop: 1 }}>{track.desc}</div>
                       </div>
-                      <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'monospace', color: score !== null ? '#1d4ed8' : '#d1d5db' }}>
+                      <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'monospace', color: score !== null ? '#1d4ed8' : '#d1d5db' }}>
                         {score !== null ? `${score.toFixed(2)}%` : '—'}
                       </div>
                     </div>
@@ -223,33 +234,38 @@ export default function GpaPage() {
             </div>
           </div>
 
-          {/* Qualified Majors */}
-          {filteredMajors.length > 0 && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, paddingBottom: 6, borderBottom: '1.5px solid #e0e7ff' }}>
-                <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1' }}>Qualified Majors</div>
+          {/* All Majors (all shown, qualified highlighted) */}
+          {majors && majors.length > 0 && (
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, paddingBottom: 8, borderBottom: '1.5px solid #e5e7eb' }}>
+                <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#374151' }}>Major Requirements</div>
                 {cumulative !== null && (
-                  <div style={{ fontSize: 7, color: '#9ca3af' }}>Cumulative: <strong style={{ color: '#4f46e5' }}>{cumulative.toFixed(2)}%</strong></div>
+                  <div style={{ fontSize: 7.5, color: '#9ca3af' }}>
+                    Your cumulative: <strong style={{ color: '#4f46e5' }}>{cumulative.toFixed(2)}%</strong>
+                  </div>
                 )}
-                <div style={{ marginLeft: 'auto', fontSize: 7, background: '#eef2ff', color: '#4f46e5', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
-                  {filteredMajors.length} major{filteredMajors.length !== 1 ? 's' : ''}
+                <div style={{ marginLeft: 'auto', fontSize: 7, background: filteredMajors.length > 0 ? '#dcfce7' : '#f3f4f6', color: filteredMajors.length > 0 ? '#15803d' : '#6b7280', padding: '2px 8px', borderRadius: 10, fontWeight: 700, border: `1px solid ${filteredMajors.length > 0 ? '#bbf7d0' : '#e5e7eb'}` }}>
+                  {cumulative !== null ? `${filteredMajors.length} / ${majors.length} qualified` : `${majors.length} majors`}
                 </div>
               </div>
-              <div style={{ columnCount: 3, columnGap: 12 }}>
-                {Object.entries(majorsByCountry).map(([country, countryMajors]) => (
-                  <div key={country} style={{ breakInside: 'avoid', marginBottom: 10 }}>
-                    <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1, color: '#4f46e5', background: '#eef2ff', padding: '3px 8px', borderRadius: 4, marginBottom: 4 }}>
+              <div style={{ columnCount: 3, columnGap: 14 }}>
+                {Object.entries(allMajorsByCountry).map(([country, countryMajors]) => (
+                  <div key={country} style={{ breakInside: 'avoid' as const, marginBottom: 14 }}>
+                    <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1, color: '#4f46e5', background: '#eef2ff', padding: '4px 10px', borderRadius: 5, marginBottom: 5 }}>
                       {country}
                     </div>
-                    {countryMajors.map(m => (
-                      <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2.5px 6px', marginBottom: 2, background: '#f0fdf4', borderRadius: 4, border: '1px solid #bbf7d0', breakInside: 'avoid' }}>
-                        <span style={{ fontSize: 8, fontWeight: 500, color: '#15803d' }}>
-                          {m.name}
-                          {m.requiresUnifiedExam && <span style={{ fontSize: 6, color: '#d97706', marginLeft: 4, fontWeight: 700 }}>EXAM</span>}
-                        </span>
-                        <span style={{ fontSize: 7.5, fontFamily: 'monospace', color: '#6b7280', marginLeft: 4, flexShrink: 0 }}>{m.requiredPercentage}%</span>
-                      </div>
-                    ))}
+                    {countryMajors.map(m => {
+                      const isQualified = cumulative !== null && cumulative >= m.requiredPercentage;
+                      return (
+                        <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', marginBottom: 3, background: isQualified ? '#f0fdf4' : '#f9fafb', borderRadius: 5, border: `1px solid ${isQualified ? '#bbf7d0' : '#e5e7eb'}`, breakInside: 'avoid' as const }}>
+                          <span style={{ fontSize: 8.5, fontWeight: isQualified ? 600 : 400, color: isQualified ? '#15803d' : '#6b7280' }}>
+                            {m.name}
+                            {m.requiresUnifiedExam && <span style={{ fontSize: 6.5, color: '#d97706', marginLeft: 4, fontWeight: 700 }}>EXAM</span>}
+                          </span>
+                          <span style={{ fontSize: 8, fontFamily: 'monospace', color: isQualified ? '#6b7280' : '#9ca3af', marginLeft: 4, flexShrink: 0 }}>{m.requiredPercentage}%</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
@@ -258,28 +274,28 @@ export default function GpaPage() {
         </div>
 
         {/* FOOTER */}
-        <div style={{ borderTop: '2px solid #4f46e5', paddingTop: 10, marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div style={{ borderTop: '2px solid #4f46e5', paddingTop: 11, marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div>
-            <div style={{ fontSize: 6.5, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 0.8, marginBottom: 2 }}>Prepared by</div>
-            <div style={{ fontWeight: 700, fontSize: 10.5, color: '#1a1a2e' }}>{employeeName || '—'}</div>
-            {employeePhone && <div style={{ fontSize: 8, color: '#6b7280', marginTop: 1 }}>{employeePhone}</div>}
+            <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 0.8, marginBottom: 2 }}>Prepared by</div>
+            <div style={{ fontWeight: 700, fontSize: 11, color: '#111827' }}>{employeeName || '—'}</div>
+            {employeePhone && <div style={{ fontSize: 8.5, color: '#6b7280', marginTop: 1.5 }}>{employeePhone}</div>}
           </div>
           {(companyInstagram || companyTiktok || companyEmail) && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3.5 }}>
               {companyInstagram && (
-                <div style={{ fontSize: 8.5, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontWeight: 800, color: '#e1306c', fontSize: 7, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Instagram</span>
+                <div style={{ fontSize: 9, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontWeight: 800, color: '#e1306c', fontSize: 7.5, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Instagram</span>
                   <span>@{companyInstagram}</span>
                 </div>
               )}
               {companyTiktok && (
-                <div style={{ fontSize: 8.5, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontWeight: 800, color: '#374151', fontSize: 7, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>TikTok</span>
+                <div style={{ fontSize: 9, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontWeight: 800, color: '#374151', fontSize: 7.5, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>TikTok</span>
                   <span>@{companyTiktok}</span>
                 </div>
               )}
               {companyEmail && (
-                <div style={{ fontSize: 8.5, color: '#6b7280' }}>{companyEmail}</div>
+                <div style={{ fontSize: 9, color: '#6b7280' }}>{companyEmail}</div>
               )}
             </div>
           )}
