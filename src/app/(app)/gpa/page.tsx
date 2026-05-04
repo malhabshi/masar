@@ -114,20 +114,12 @@ export default function GpaPage() {
       if (!groups[m.country]) groups[m.country] = [];
       groups[m.country].push(m);
     });
-    Object.values(groups).forEach(g => g.sort((a, b) => a.name.localeCompare(b.name)));
+    Object.values(groups).forEach(g => g.sort((a, b) => {
+      if (a.requiresUnifiedExam !== b.requiresUnifiedExam) return a.requiresUnifiedExam ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    }));
     return groups;
   }, [filteredMajors]);
-
-  const allMajorsByCountry = useMemo(() => {
-    if (!majors) return {} as Record<string, GpaMajor[]>;
-    const groups: Record<string, GpaMajor[]> = {};
-    majors.forEach(m => {
-      if (!groups[m.country]) groups[m.country] = [];
-      groups[m.country].push(m);
-    });
-    Object.values(groups).forEach(g => g.sort((a, b) => a.name.localeCompare(b.name)));
-    return groups;
-  }, [majors]);
 
   if (!isClient) return null;
 
@@ -239,38 +231,32 @@ export default function GpaPage() {
             </div>
           </div>
 
-          {/* Row 3: All Majors (all shown, qualified highlighted) */}
-          {majors && majors.length > 0 && (
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, paddingBottom: 8, borderBottom: '1.5px solid #e5e7eb' }}>
+          {/* Row 3: Qualified Majors only */}
+          {Object.keys(majorsByCountry).length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, paddingBottom: 6, borderBottom: '1.5px solid #e5e7eb' }}>
                 <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#374151' }}>Major Requirements</div>
                 {cumulative !== null && (
                   <div style={{ fontSize: 8, color: '#9ca3af' }}>
                     Cumulative: <strong style={{ color: '#4f46e5' }}>{cumulative.toFixed(2)}%</strong>
                   </div>
                 )}
-                <div style={{ marginLeft: 'auto', fontSize: 7.5, background: filteredMajors.length > 0 ? '#dcfce7' : '#f3f4f6', color: filteredMajors.length > 0 ? '#15803d' : '#6b7280', padding: '2px 10px', borderRadius: 10, fontWeight: 700, border: `1px solid ${filteredMajors.length > 0 ? '#bbf7d0' : '#e5e7eb'}` }}>
-                  {cumulative !== null ? `${filteredMajors.length} / ${majors.length} qualified` : `${majors.length} majors`}
-                </div>
               </div>
-              <div style={{ columnCount: 3, columnGap: 14 }}>
-                {Object.entries(allMajorsByCountry).map(([country, countryMajors]) => (
-                  <div key={country} style={{ breakInside: 'avoid' as const, marginBottom: 14 }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1, color: '#4f46e5', background: '#eef2ff', padding: '5px 10px', borderRadius: 6, marginBottom: 5 }}>
+              <div style={{ columnCount: 4, columnGap: 10 }}>
+                {Object.entries(majorsByCountry).map(([country, countryMajors]) => (
+                  <div key={country} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1, color: '#4f46e5', background: '#eef2ff', padding: '4px 8px', borderRadius: 5, marginBottom: 4 }}>
                       {country}
                     </div>
-                    {countryMajors.map(m => {
-                      const isQualified = cumulative !== null && cumulative >= m.requiredPercentage;
-                      return (
-                        <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 9px', marginBottom: 3.5, background: isQualified ? '#f0fdf4' : '#f9fafb', borderRadius: 6, border: `1px solid ${isQualified ? '#bbf7d0' : '#e5e7eb'}`, breakInside: 'avoid' as const }}>
-                          <span style={{ fontSize: 9, fontWeight: isQualified ? 600 : 400, color: isQualified ? '#15803d' : '#6b7280' }}>
-                            {m.name}
-                            {m.requiresUnifiedExam && <span style={{ fontSize: 7, color: '#d97706', marginLeft: 4, fontWeight: 700 }}>EXAM</span>}
-                          </span>
-                          <span style={{ fontSize: 8.5, fontFamily: 'monospace', color: isQualified ? '#6b7280' : '#9ca3af', marginLeft: 4, flexShrink: 0 }}>{m.requiredPercentage}%</span>
-                        </div>
-                      );
-                    })}
+                    {countryMajors.map(m => (
+                      <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 7px', marginBottom: 2.5, background: '#f0fdf4', borderRadius: 5, border: '1px solid #bbf7d0', breakInside: 'avoid' as const }}>
+                        <span style={{ fontSize: 8, fontWeight: 600, color: '#15803d' }}>
+                          {m.name}
+                          {m.requiresUnifiedExam && <span style={{ fontSize: 6.5, color: '#d97706', marginLeft: 3, fontWeight: 700 }}>EXAM</span>}
+                        </span>
+                        <span style={{ fontSize: 7.5, fontFamily: 'monospace', color: '#6b7280', marginLeft: 4, flexShrink: 0 }}>{m.requiredPercentage}%</span>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
