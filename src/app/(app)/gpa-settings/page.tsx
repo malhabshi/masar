@@ -31,6 +31,9 @@ export default function GpaSettingsPage() {
   const [companyEmail, setCompanyEmail] = useState('');
   const [isSavingCompanyInfo, setIsSavingCompanyInfo] = useState(false);
 
+  const [labelExamBadge, setLabelExamBadge] = useState('EXAM');
+  const [isSavingLabels, setIsSavingLabels] = useState(false);
+
   const [newName, setNewName] = useState('');
   const [newCountry, setNewCountry] = useState<Country | ''>('');
   const [newRequired, setNewRequired] = useState('');
@@ -52,6 +55,7 @@ export default function GpaSettingsPage() {
           setInstagram(d.instagram || '');
           setTiktok(d.tiktok || '');
           setCompanyEmail(d.email || '');
+          setLabelExamBadge(d.labelExamBadge || 'EXAM');
         }
         setIsTitleLoaded(true);
       })
@@ -88,6 +92,20 @@ export default function GpaSettingsPage() {
       toast({ variant: 'destructive', title: 'Failed to save', description: e.message });
     } finally {
       setIsSavingCompanyInfo(false);
+    }
+  };
+
+  const handleSaveLabels = async () => {
+    setIsSavingLabels(true);
+    try {
+      await setDoc(doc(firestore, 'gpa_settings', 'config'), {
+        labelExamBadge: labelExamBadge.trim() || 'EXAM',
+      }, { merge: true });
+      toast({ title: 'Labels saved' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed to save', description: e.message });
+    } finally {
+      setIsSavingLabels(false);
     }
   };
 
@@ -255,6 +273,32 @@ export default function GpaSettingsPage() {
             {isSavingCompanyInfo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save Company Info
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Labels */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Labels</CardTitle>
+          <CardDescription>Customize text labels shown on the GPA calculator page and PDF.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Unified Exam Badge Text</Label>
+            <p className="text-xs text-muted-foreground">Shown next to majors that require the unified exam (e.g. "EXAM", "اختبار وطني").</p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="EXAM"
+                value={labelExamBadge}
+                onChange={e => setLabelExamBadge(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveLabels(); }}
+              />
+              <Button onClick={handleSaveLabels} disabled={isSavingLabels}>
+                {isSavingLabels ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

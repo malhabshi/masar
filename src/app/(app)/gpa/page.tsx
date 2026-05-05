@@ -46,6 +46,7 @@ export default function GpaPage() {
   const [labelHighSchool, setLabelHighSchool] = useState('High School Cumulative');
   const [labelUnifiedExam, setLabelUnifiedExam] = useState('Unified Exam Percentage');
   const [labelQualifiedMajors, setLabelQualifiedMajors] = useState('Qualified Majors');
+  const [labelExamBadge, setLabelExamBadge] = useState('EXAM');
   const [selectedCountries, setSelectedCountries] = useState<Set<string>>(
     () => new Set(['UK', 'USA', 'Australia', 'New Zealand'])
   );
@@ -68,6 +69,7 @@ export default function GpaPage() {
           setLabelHighSchool(d.labelHighSchool || 'High School Cumulative');
           setLabelUnifiedExam(d.labelUnifiedExam || 'Unified Exam Percentage');
           setLabelQualifiedMajors(d.labelQualifiedMajors || 'Qualified Majors');
+          setLabelExamBadge(d.labelExamBadge || 'EXAM');
         }
       })
       .catch(() => {});
@@ -272,7 +274,7 @@ export default function GpaPage() {
                       <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 7px', marginBottom: 2.5, background: '#f0fdf4', borderRadius: 5, border: '1px solid #bbf7d0', breakInside: 'avoid' as const }}>
                         <span style={{ fontSize: 8, fontWeight: 600, color: '#15803d' }}>
                           {m.name}
-                          {m.requiresUnifiedExam && <span style={{ fontSize: 6.5, color: '#d97706', marginLeft: 3, fontWeight: 700 }}>EXAM</span>}
+                          {m.requiresUnifiedExam && <span style={{ fontSize: 6.5, color: '#dc2626', marginLeft: 3, fontWeight: 700 }}>{labelExamBadge}</span>}
                         </span>
                         <span style={{ fontSize: 7.5, fontFamily: 'monospace', color: '#6b7280', marginLeft: 4, flexShrink: 0 }}>{m.requiredPercentage}%</span>
                       </div>
@@ -507,8 +509,8 @@ export default function GpaPage() {
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{m.name}</span>
                             {m.requiresUnifiedExam && (
-                              <Badge variant="outline" className="text-[9px] py-0 h-4 border-amber-400 text-amber-700 bg-amber-50">
-                                Exam
+                              <Badge variant="outline" className="text-[9px] py-0 h-4 border-red-400 text-red-600 bg-red-50 font-bold">
+                                {labelExamBadge}
                               </Badge>
                             )}
                           </div>
