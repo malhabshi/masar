@@ -39,6 +39,7 @@ import {
   UserRoundX,
   Link2,
   Calculator,
+  Send,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -209,6 +210,7 @@ export function AppSidebar() {
         { href: '/finalized-students', label: 'Finalized', icon: GraduationCap, roles: ['admin', 'adminplus', 'employee', 'department'], badge: unreadFinalizedCount },
         { href: '/resources', label: 'Resources', icon: Book, roles: ['admin', 'adminplus', 'employee', 'department'] },
         { href: '/gpa', label: 'GPA Calculator', icon: Calculator, roles: ['admin', 'adminplus', 'employee', 'department'] },
+        { href: '/jotform', label: 'Jotform', icon: Send, roles: ['admin', 'adminplus', 'employee', 'department'] },
     ];
 
     const managementNav = [

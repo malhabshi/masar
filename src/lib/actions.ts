@@ -2443,3 +2443,227 @@ export async function processStudentReminders(params: {
   }
 }
 
+// ─── Jotform Application Submission ───────────────────────────────────────────
+
+const JOTFORM_UK_FORM_ID = '240775032170045';
+const JOTFORM_AUNZ_FORM_ID = '241203903610442';
+const JOTFORM_USA_FORM_ID = '242303620566450';
+
+const STAFF_CIVIL_ID_MAP: Record<string, string> = {
+  'طلال':              '295021900391',
+  'محمد سليمان':       '302052600167',
+  'خالد الشمري':       '295100401179',
+  'عبدالرحمن العنزي': '887766554433',
+  'طلال العنزي':       '998877665544',
+  'زينب دشتي':         '300021001306',
+  'دنيا':              '299121800441',
+  'عايشه':             '001122334455',
+  'مريم العنزي':       '665544332211',
+  'حنان الكندري':      '301042901113',
+  'فاطمه الشمري':      '299021001191',
+  'خالد الهدهود':      '300072600069',
+  // يوسف سليمان: left the company — no entry, resolves to null
+};
+
+export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean }[]; studentData: { firstName: string; lastName: string; email: string; phone: string; employeeId: string | null; targetCountries: string[]; creatingUserCivilId: string; studyLevel: string | null } }> {
+  const jotformResults: { country: string; success: boolean }[] = [];
+
+  const selectedCountries = JSON.parse((formData.get('selectedCountries') as string) || '[]') as string[];
+  const firstName = (formData.get('firstName') as string) || '';
+  const lastName = (formData.get('lastName') as string) || '';
+  const dob = (formData.get('dob') as string) || '';
+  const email = (formData.get('email') as string) || '';
+  const major = (formData.get('major') as string) || '';
+  const universities = (formData.get('universities') as string) || '';
+  const kuwaitAddress = (formData.get('kuwaitAddress') as string) || '';
+  const kuwaitPhone = (formData.get('kuwaitPhone') as string) || '';
+  const civilId = (formData.get('civilId') as string) || '';
+  const schoolName = (formData.get('schoolName') as string) || '';
+  const ieltsScore = (formData.get('ieltsScore') as string) || '';
+  const followUpPerson = (formData.get('followUpPerson') as string) || '';
+  const guardianName = (formData.get('guardianName') as string) || '';
+  const guardianEmail = (formData.get('guardianEmail') as string) || '';
+  const guardianPhone = (formData.get('guardianPhone') as string) || '';
+  const scholarshipType = (formData.get('scholarshipType') as string) || '';
+  const acceptanceType = (formData.get('acceptanceType') as string) || '';
+  const semester = (formData.get('semester') as string) || '';
+  const guardianDob = (formData.get('guardianDob') as string) || '';
+  const creatingUserCivilId = (formData.get('creatingUserCivilId') as string) || '';
+
+  const getFiles = (key: string) =>
+    formData.getAll(key).filter((f): f is File => f instanceof File && (f as File).size > 0);
+
+  const passportFiles = getFiles('passport');
+  const secondaryCertsFiles = getFiles('secondaryCerts');
+  const ieltsFileFiles = getFiles('ieltsFile');
+  const otherFilesFiles = getFiles('otherFiles');
+  const universityDegreeFiles = getFiles('universityDegree');
+  const recommendationLetterFiles = getFiles('recommendationLetter');
+  const personalStatementFiles = getFiles('personalStatement');
+
+  const toDateParts = (iso: string) => {
+    if (!iso) return null;
+    const [year, month, day] = iso.split('-');
+    return { month, day, year };
+  };
+
+  type FileData = { buffer: ArrayBuffer; name: string; type: string };
+  const readFilesData = async (files: File[]): Promise<FileData[]> =>
+    Promise.all(files.map(async f => ({ buffer: await f.arrayBuffer(), name: f.name, type: f.type || 'application/octet-stream' })));
+
+  const [passportData, secondaryCertsData, ieltsFileData, otherFilesData, universityDegreeData, recommendationLetterData, personalStatementData] =
+    await Promise.all([
+      readFilesData(passportFiles), readFilesData(secondaryCertsFiles), readFilesData(ieltsFileFiles),
+      readFilesData(otherFilesFiles), readFilesData(universityDegreeFiles), readFilesData(recommendationLetterFiles),
+      readFilesData(personalStatementFiles),
+    ]);
+
+  const appendFiles = (fd: FormData, field: string, filesData: FileData[]) => {
+    for (const f of filesData) fd.append(field, new Blob([f.buffer], { type: f.type }), f.name);
+  };
+
+  // Build FormData using the browser-style q{id}_{name} format for direct form submission.
+  // Passport field name differs between forms: UK uses 'input11', AU/NZ uses 'passportPhoto'.
+  const buildJotformData = (formId: string): FormData => {
+    const fd = new FormData();
+    fd.append('formID', formId);
+    fd.append('q3_input3[first]', firstName);
+    fd.append('q3_input3[last]', lastName);
+    const dobj = toDateParts(dob);
+    if (dobj) {
+      fd.append('q4_input4[month]', dobj.month);
+      fd.append('q4_input4[day]', dobj.day);
+      fd.append('q4_input4[year]', dobj.year);
+    }
+    if (email) fd.append('q5_input5', email);
+    if (major) fd.append('q7_input7', major);
+    if (universities) fd.append('q8_input8', universities);
+    if (kuwaitAddress) fd.append('q9_input9', kuwaitAddress);
+    if (ieltsScore) fd.append('q16_input16', ieltsScore);
+    if (followUpPerson) fd.append('q17_input17', followUpPerson);
+    if (guardianName) fd.append('q23_input23', guardianName);
+    if (guardianEmail) fd.append('q25_input25', guardianEmail);
+    if (guardianPhone) fd.append('q26_input26', guardianPhone);
+
+    appendFiles(fd,'q12_input12[]', secondaryCertsData);
+    appendFiles(fd,'q13_input13[]', ieltsFileData);
+    appendFiles(fd,'q14_input14[]', otherFilesData);
+    appendFiles(fd,'q15_input15[]', universityDegreeData);
+    appendFiles(fd,'q28_input28[]', recommendationLetterData);
+    appendFiles(fd,'q29_personalStatement[]', personalStatementData);
+
+    return fd;
+  };
+
+  const postToJotform = async (formId: string, fd: FormData) => {
+    const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, {
+      method: 'POST',
+      body: fd,
+    });
+    return { responseCode: res.ok ? 200 : res.status };
+  };
+
+  if (selectedCountries.includes('UK')) {
+    const fd = buildJotformData(JOTFORM_UK_FORM_ID);
+    appendFiles(fd,'q11_input11[]', passportData);
+    if (kuwaitPhone) fd.append('q48_input48', kuwaitPhone);
+    if (civilId) fd.append('q52_input52', civilId);
+    if (schoolName) fd.append('q62_input62', schoolName);
+    if (scholarshipType) fd.append('q37_input37', scholarshipType);
+    if (acceptanceType) fd.append('q38_input38', acceptanceType);
+    if (followUpPerson) fd.append('q39_input39', followUpPerson);
+    try {
+      const res = await postToJotform(JOTFORM_UK_FORM_ID, fd);
+      jotformResults.push({ country: 'UK', success: res.responseCode === 200 });
+    } catch {
+      jotformResults.push({ country: 'UK', success: false });
+    }
+  }
+
+  if (selectedCountries.includes('Australia / New Zealand') || selectedCountries.includes('Australia') || selectedCountries.includes('New Zealand')) {
+    const fd = buildJotformData(JOTFORM_AUNZ_FORM_ID);
+    appendFiles(fd,'q11_passportPhoto[]', passportData);
+    if (kuwaitPhone) fd.append('q10_input10[full]', kuwaitPhone);
+    if (civilId) fd.append('q36_input36', civilId);
+    // q21_input21 is a required checkbox — values must match form options exactly
+    const aunzProgramMap: Record<string, string> = {
+      'Foundation': 'I want to apply for foundation',
+      'First Year': 'I want to apply for first year',
+      'General English': 'General English معهد اللغة',
+      'ESL': 'General English معهد اللغة',
+      'ESL + Foundation': 'I want to apply for foundation',
+      'Masters': 'Masters',
+    };
+    const mappedProgram = acceptanceType ? aunzProgramMap[acceptanceType] : '';
+    if (mappedProgram) fd.append('q21_input21[]', mappedProgram);
+    try {
+      const res = await postToJotform(JOTFORM_AUNZ_FORM_ID, fd);
+      jotformResults.push({ country: 'AU/NZ', success: res.responseCode === 200 });
+    } catch {
+      jotformResults.push({ country: 'AU/NZ', success: false });
+    }
+  }
+
+  if (selectedCountries.includes('USA')) {
+    const fd = new FormData();
+    fd.append('formID', JOTFORM_USA_FORM_ID);
+    fd.append('q3_input3[first]', firstName);
+    fd.append('q3_input3[last]', lastName);
+    const dobObj = toDateParts(dob);
+    if (dobObj) {
+      fd.append('q19_input19[month]', dobObj.month);
+      fd.append('q19_input19[day]', dobObj.day);
+      fd.append('q19_input19[year]', dobObj.year);
+    }
+    if (email) fd.append('q26_input26', email);
+    if (semester) fd.append('q5_input5', semester);
+    if (major) fd.append('q6_input6', major);
+    if (universities) fd.append('q7_input7', universities);
+    if (kuwaitAddress) fd.append('q8_input8', kuwaitAddress);
+    if (kuwaitPhone) fd.append('q10_input10[full]', kuwaitPhone);
+    if (guardianName) fd.append('q12_input12', guardianName);
+    const guardianDobObj = toDateParts(guardianDob);
+    if (guardianDobObj) {
+      fd.append('q34_input34[month]', guardianDobObj.month);
+      fd.append('q34_input34[day]', guardianDobObj.day);
+      fd.append('q34_input34[year]', guardianDobObj.year);
+    }
+    if (guardianPhone) fd.append('q13_input13[full]', guardianPhone);
+    if (guardianEmail) fd.append('q36_input36', guardianEmail);
+    if (ieltsScore) fd.append('q20_input20', ieltsScore);
+    if (followUpPerson) fd.append('q33_input33', followUpPerson);
+    // Required agreement widget fields — must be sent to pass server-side validation
+    fd.append('q22_typeA', 'Yes');
+    fd.append('q23_typeA23', 'Yes');
+    appendFiles(fd, 'q14_passport[]', passportData);
+    appendFiles(fd, 'q15_highSchool[]', secondaryCertsData);
+    appendFiles(fd, 'q16_input16[]', ieltsFileData);
+    appendFiles(fd, 'q17_input17[]', otherFilesData);
+    appendFiles(fd, 'q18_input18[]', universityDegreeData);
+    try {
+      const res = await postToJotform(JOTFORM_USA_FORM_ID, fd);
+      jotformResults.push({ country: 'USA', success: res.responseCode === 200 });
+    } catch {
+      jotformResults.push({ country: 'USA', success: false });
+    }
+  }
+
+  // Return all the data the client needs to create the student profile using the client-side Firestore SDK
+  const studyLevelMap: Record<string, string> = { 'Foundation': 'Foundation', 'First Year': 'First Year' };
+  const employeeCivilId = STAFF_CIVIL_ID_MAP[followUpPerson] || null;
+
+  return {
+    jotformResults,
+    studentData: {
+      firstName,
+      lastName,
+      email,
+      phone: kuwaitPhone,
+      employeeId: employeeCivilId,
+      targetCountries: selectedCountries,
+      creatingUserCivilId,
+      studyLevel: acceptanceType ? (studyLevelMap[acceptanceType] ?? null) : null,
+    },
+  };
+}
+
