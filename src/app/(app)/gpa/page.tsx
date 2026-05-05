@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { GpaMajor } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,6 +64,10 @@ export default function GpaPage() {
           setCompanyInstagram(d.instagram || '');
           setCompanyTiktok(d.tiktok || '');
           setCompanyEmail(d.email || '');
+          setLabelGpa(d.labelGpa || 'GPA → Percentage');
+          setLabelHighSchool(d.labelHighSchool || 'High School Cumulative');
+          setLabelUnifiedExam(d.labelUnifiedExam || 'Unified Exam Percentage');
+          setLabelQualifiedMajors(d.labelQualifiedMajors || 'Qualified Majors');
         }
       })
       .catch(() => {});
@@ -129,6 +133,15 @@ export default function GpaPage() {
     return groups;
   }, [filteredMajors]);
 
+  const canEditLabels = user?.role === 'admin' || user?.role === 'adminplus';
+
+  const saveLabel = async (key: string, value: string) => {
+    if (!canEditLabels) return;
+    try {
+      await setDoc(doc(firestore, 'gpa_settings', 'config'), { [key]: value }, { merge: true });
+    } catch {}
+  };
+
   if (!isClient) return null;
 
   return (
@@ -180,33 +193,33 @@ export default function GpaPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
 
             {/* GPA */}
-            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 6 }}>{labelGpa}</div>
-              <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 4 }}>
-                GPA Score: <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#111827' }}>{gpa || '—'}</span>
+            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '7px 10px', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 4 }}>{labelGpa}</div>
+              <div style={{ fontSize: 8.5, color: '#6b7280', marginBottom: 3 }}>
+                GPA Score: <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#111827' }}>{gpa || '—'}</span>
               </div>
-              <div style={{ fontSize: 7.5, color: '#c7d2fe', marginBottom: 8 }}>Formula: (GPA + 1) × 20</div>
-              <div style={{ background: gpaPercentage !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${gpaPercentage !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 10px', textAlign: 'center' as const, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 4 }}>Result</div>
-                <div style={{ fontSize: 30, fontWeight: 900, fontFamily: 'monospace', color: gpaPercentage !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
+              <div style={{ fontSize: 7, color: '#c7d2fe', marginBottom: 6 }}>Formula: (GPA + 1) × 20</div>
+              <div style={{ background: gpaPercentage !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${gpaPercentage !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 8, padding: '7px 8px', textAlign: 'center' as const, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontSize: 6.5, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 3 }}>Result</div>
+                <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'monospace', color: gpaPercentage !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
                   {gpaPercentage !== null ? `${gpaPercentage.toFixed(2)}%` : '—'}
                 </div>
               </div>
             </div>
 
             {/* High School */}
-            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontSize: 7.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 6 }}>{labelHighSchool}</div>
-              <div style={{ fontSize: 7.5, color: '#c7d2fe', marginBottom: 6 }}>Formula: (G10 × 10%) + (G11 × 20%) + (G12 × 70%)</div>
+            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '7px 10px', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontSize: 7, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1.2, color: '#6366f1', marginBottom: 4 }}>{labelHighSchool}</div>
+              <div style={{ fontSize: 7, color: '#c7d2fe', marginBottom: 4 }}>Formula: (G10 × 10%) + (G11 × 20%) + (G12 × 70%)</div>
               {[{ label: 'Grade 10', w: '10%', val: grade10 }, { label: 'Grade 11', w: '20%', val: grade11 }, { label: 'Grade 12', w: '70%', val: grade12 }].map(({ label, w, val }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, padding: '5px 10px', background: '#f3f4f6', borderRadius: 6, fontSize: 9 }}>
-                  <span style={{ color: '#6b7280' }}>{label} <span style={{ color: '#d1d5db', fontSize: 7.5 }}>({w})</span></span>
-                  <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: val ? '#111827' : '#d1d5db' }}>{val || '—'}</span>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3, padding: '3px 8px', background: '#f3f4f6', borderRadius: 6, fontSize: 8.5 }}>
+                  <span style={{ color: '#6b7280' }}>{label} <span style={{ color: '#d1d5db', fontSize: 7 }}>({w})</span></span>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: val ? '#111827' : '#d1d5db' }}>{val || '—'}</span>
                 </div>
               ))}
-              <div style={{ background: cumulative !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${cumulative !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 8, padding: '10px 10px', textAlign: 'center' as const, marginTop: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 4 }}>Cumulative</div>
-                <div style={{ fontSize: 30, fontWeight: 900, fontFamily: 'monospace', color: cumulative !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
+              <div style={{ background: cumulative !== null ? '#eef2ff' : '#f5f5f5', border: `1.5px solid ${cumulative !== null ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: 8, padding: '7px 8px', textAlign: 'center' as const, marginTop: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontSize: 6.5, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 3 }}>Cumulative</div>
+                <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'monospace', color: cumulative !== null ? '#4f46e5' : '#d1d5db', lineHeight: 1 }}>
                   {cumulative !== null ? `${cumulative.toFixed(2)}%` : '—'}
                 </div>
               </div>
@@ -320,7 +333,11 @@ export default function GpaPage() {
         {/* GPA + High School */}
         <div className="grid grid-cols-2 gap-4">
           <div className="border rounded-xl p-5 space-y-3 bg-card">
-            <input value={labelGpa} onChange={e => setLabelGpa(e.target.value)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none w-full" />
+            {canEditLabels ? (
+              <input value={labelGpa} onChange={e => setLabelGpa(e.target.value)} onBlur={() => saveLabel('labelGpa', labelGpa)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none w-full" />
+            ) : (
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">{labelGpa}</p>
+            )}
             <div className="space-y-1.5">
               <Label>GPA (0.0 – 4.0)</Label>
               <Input
@@ -343,7 +360,11 @@ export default function GpaPage() {
           </div>
 
           <div className="border rounded-xl p-5 space-y-3 bg-card">
-            <input value={labelHighSchool} onChange={e => setLabelHighSchool(e.target.value)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none w-full" />
+            {canEditLabels ? (
+              <input value={labelHighSchool} onChange={e => setLabelHighSchool(e.target.value)} onBlur={() => saveLabel('labelHighSchool', labelHighSchool)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none w-full" />
+            ) : (
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">{labelHighSchool}</p>
+            )}
             <div className="space-y-2">
               {[
                 { label: 'Grade 10', weight: '10%', value: grade10, set: setGrade10 },
@@ -377,7 +398,11 @@ export default function GpaPage() {
 
         {/* Unified Exam */}
         <div className="border rounded-xl p-5 space-y-4 bg-card">
-          <input value={labelUnifiedExam} onChange={e => setLabelUnifiedExam(e.target.value)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none w-full" />
+          {canEditLabels ? (
+            <input value={labelUnifiedExam} onChange={e => setLabelUnifiedExam(e.target.value)} onBlur={() => saveLabel('labelUnifiedExam', labelUnifiedExam)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none w-full" />
+          ) : (
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">{labelUnifiedExam}</p>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Math Score (0–100)</Label>
@@ -425,7 +450,11 @@ export default function GpaPage() {
         {majors && majors.length > 0 && (
           <div className="border rounded-xl p-5 space-y-4 bg-card">
             <div className="flex items-center gap-3">
-              <input value={labelQualifiedMajors} onChange={e => setLabelQualifiedMajors(e.target.value)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none shrink-0" />
+              {canEditLabels ? (
+                <input value={labelQualifiedMajors} onChange={e => setLabelQualifiedMajors(e.target.value)} onBlur={() => saveLabel('labelQualifiedMajors', labelQualifiedMajors)} className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest bg-transparent border-b border-dashed border-muted-foreground/20 hover:border-muted-foreground/50 focus:border-primary outline-none shrink-0" />
+              ) : (
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest shrink-0">{labelQualifiedMajors}</p>
+              )}
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
