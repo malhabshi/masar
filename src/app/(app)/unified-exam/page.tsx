@@ -3,14 +3,15 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
-import { where } from 'firebase/firestore';
-import type { Task } from '@/lib/types';
+import { where, deleteDoc, doc } from 'firebase/firestore';
+import { firestore } from '@/firebase';
+import type { Task, Student } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { FileSpreadsheet, Loader2, Search } from 'lucide-react';
+import { FileSpreadsheet, Loader2, Search, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { markMultipleTasksAsSeen } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +21,8 @@ export default function UnifiedExamDashboard() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('all');
+  const [selectedDelivery, setSelectedDelivery] = useState('all');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const constraints = useMemoFirebase(() => {
     if (!currentUser) return [];
@@ -30,6 +33,13 @@ export default function UnifiedExamDashboard() {
     currentUser ? 'tasks' : '',
     ...constraints
   );
+
+  const { data: students } = useCollection<Student>(currentUser ? 'students' : '');
+  const studentInternalNumberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (students || []).forEach(s => { if (s.internalNumber) map.set(s.id, s.internalNumber); });
+    return map;
+  }, [students]);
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
@@ -42,6 +52,7 @@ export default function UnifiedExamDashboard() {
         if (!isUnifiedExam) return false;
 
         if (selectedDate !== 'all' && task.data?.unifiedExamDateId !== selectedDate) return false;
+        if (selectedDelivery !== 'all' && (task.data?.unifiedExamDelivery || '') !== selectedDelivery) return false;
 
         const q = searchQuery.toLowerCase();
         return (
@@ -53,7 +64,7 @@ export default function UnifiedExamDashboard() {
         );
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [tasks, searchQuery, selectedDate]);
+  }, [tasks, searchQuery, selectedDate, selectedDelivery]);
 
   // Collect unique dates for the filter dropdown
   const availableDates = useMemo(() => {
@@ -75,11 +86,26 @@ export default function UnifiedExamDashboard() {
     }
   }, [filteredTasks, currentUser]);
 
+  const handleDelete = async (taskId: string) => {
+    if (!window.confirm('Remove this registration from the list?')) return;
+    setDeletingId(taskId);
+    try {
+      await deleteDoc(doc(firestore, 'tasks', taskId));
+      toast({ title: 'Registration removed' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed to delete', description: e.message });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleDownload = () => {
     if (filteredTasks.length === 0) return;
 
-    const headers = ['Student Name', 'Phone Number', 'Email', 'Employee Name', 'Exam Date', 'Delivery Method'];
-    const rows = filteredTasks.map((task) => [
+    const headers = ['#', 'Internal #', 'Student Name', 'Phone Number', 'Email', 'Employee Name', 'Exam Date', 'Delivery Method'];
+    const rows = filteredTasks.map((task, i) => [
+      String(i + 1),
+      studentInternalNumberMap.get(task.studentId || '') || '',
       task.studentName || '',
       task.studentPhone || '',
       task.data?.studentEmail || '',
@@ -145,6 +171,17 @@ export default function UnifiedExamDashboard() {
                 ))}
               </select>
             </div>
+            <div className="space-y-1 min-w-[160px]">
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                value={selectedDelivery}
+                onChange={(e) => setSelectedDelivery(e.target.value)}
+              >
+                <option value="all">All Delivery Methods</option>
+                <option value="Online">Online</option>
+                <option value="In-Person">In-Person</option>
+              </select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -158,12 +195,14 @@ export default function UnifiedExamDashboard() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>#</TableHead>
+                    <TableHead>Internal #</TableHead>
                     <TableHead>Student Name</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Exam Date</TableHead>
                     <TableHead>Delivery</TableHead>
+                    <TableHead className="w-[50px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -171,6 +210,9 @@ export default function UnifiedExamDashboard() {
                     filteredTasks.map((task, i) => (
                       <TableRow key={task.id}>
                         <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {studentInternalNumberMap.get(task.studentId || '') || '—'}
+                        </TableCell>
                         <TableCell className="font-bold">{task.studentName}</TableCell>
                         <TableCell>{task.studentPhone}</TableCell>
                         <TableCell className="text-muted-foreground text-xs">{task.data?.studentEmail || 'N/A'}</TableCell>
@@ -183,11 +225,24 @@ export default function UnifiedExamDashboard() {
                             {task.data?.unifiedExamDelivery || 'N/A'}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(task.id)}
+                            disabled={deletingId === task.id}
+                          >
+                            {deletingId === task.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Trash2 className="h-3.5 w-3.5" />}
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                         No unified exam registrations found.
                       </TableCell>
                     </TableRow>

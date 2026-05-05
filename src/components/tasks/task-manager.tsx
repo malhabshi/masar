@@ -72,10 +72,12 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
 
     const newlyAdded = new Set<string>();
     tasks.forEach(task => {
-        const isIeltsCourse = task.data?.examType === 'ielts_course' || 
+        const isIeltsCourse = task.data?.examType === 'ielts_course' ||
                              task.taskType?.toLowerCase() === 'ielts course';
+        const isUnifiedExam = task.data?.examType === 'unified_exam' ||
+                             task.taskType?.toLowerCase() === 'unified exam';
 
-        if (task.category === 'request' && !isIeltsCourse && (!lastViewed || new Date(task.createdAt) > new Date(lastViewed))) {
+        if (task.category === 'request' && !isIeltsCourse && !isUnifiedExam && (!lastViewed || new Date(task.createdAt) > new Date(lastViewed))) {
             newlyAdded.add(task.id);
         }
     });
@@ -117,9 +119,13 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     const validTasks = tasks.filter(t => {
       if (t.category !== 'request') return false;
       
-      const isIeltsCourse = t.data?.examType === 'ielts_course' || 
+      const isIeltsCourse = t.data?.examType === 'ielts_course' ||
                            t.taskType?.toLowerCase() === 'ielts course';
       if (isIeltsCourse) return false;
+
+      const isUnifiedExam = t.data?.examType === 'unified_exam' ||
+                            t.taskType?.toLowerCase() === 'unified exam';
+      if (isUnifiedExam) return false;
       
       // Transfer/Deletion requests are no longer shown in the task page
       const isTransferOrDeletion = t.taskType === 'Transfer Request' || 

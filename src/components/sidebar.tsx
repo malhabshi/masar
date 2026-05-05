@@ -141,6 +141,9 @@ export function AppSidebar() {
                                   t.requestTypeId === 'ielts_course' ||
                                   t.taskType?.toLowerCase() === 'ielts course';
             if (isIeltsCourse) return false;
+            const isUnifiedExam = t.data?.examType === 'unified_exam' ||
+                                  t.taskType?.toLowerCase() === 'unified exam';
+            if (isUnifiedExam) return false;
             const isTransferOrDeletion = t.taskType === 'Transfer Request' ||
                                          t.taskType === 'Deletion Request' ||
                                          t.content?.toLowerCase().includes('transfer request') ||
