@@ -2465,7 +2465,7 @@ const STAFF_CIVIL_ID_MAP: Record<string, string> = {
   // يوسف سليمان: left the company — no entry, resolves to null
 };
 
-export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean }[]; studentData: { firstName: string; lastName: string; email: string; phone: string; employeeId: string | null; targetCountries: string[]; creatingUserCivilId: string; studyLevel: string | null } }> {
+export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean }[]; studentCreated: boolean }> {
   const jotformResults: { country: string; success: boolean }[] = [];
 
   const selectedCountries = JSON.parse((formData.get('selectedCountries') as string) || '[]') as string[];
@@ -2473,8 +2473,12 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   const lastName = (formData.get('lastName') as string) || '';
   const dob = (formData.get('dob') as string) || '';
   const email = (formData.get('email') as string) || '';
-  const major = (formData.get('major') as string) || '';
-  const universities = (formData.get('universities') as string) || '';
+  const ukMajor = (formData.get('ukMajor') as string) || '';
+  const ukUniversities = (formData.get('ukUniversities') as string) || '';
+  const aunzMajor = (formData.get('aunzMajor') as string) || '';
+  const aunzUniversities = (formData.get('aunzUniversities') as string) || '';
+  const usaMajor = (formData.get('usaMajor') as string) || '';
+  const usaUniversities = (formData.get('usaUniversities') as string) || '';
   const kuwaitAddress = (formData.get('kuwaitAddress') as string) || '';
   const kuwaitPhone = (formData.get('kuwaitPhone') as string) || '';
   const civilId = (formData.get('civilId') as string) || '';
@@ -2488,7 +2492,6 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   const acceptanceType = (formData.get('acceptanceType') as string) || '';
   const semester = (formData.get('semester') as string) || '';
   const guardianDob = (formData.get('guardianDob') as string) || '';
-  const creatingUserCivilId = (formData.get('creatingUserCivilId') as string) || '';
 
   const getFiles = (key: string) =>
     formData.getAll(key).filter((f): f is File => f instanceof File && (f as File).size > 0);
@@ -2536,8 +2539,6 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
       fd.append('q4_input4[year]', dobj.year);
     }
     if (email) fd.append('q5_input5', email);
-    if (major) fd.append('q7_input7', major);
-    if (universities) fd.append('q8_input8', universities);
     if (kuwaitAddress) fd.append('q9_input9', kuwaitAddress);
     if (ieltsScore) fd.append('q16_input16', ieltsScore);
     if (followUpPerson) fd.append('q17_input17', followUpPerson);
@@ -2565,6 +2566,8 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
 
   if (selectedCountries.includes('UK')) {
     const fd = buildJotformData(JOTFORM_UK_FORM_ID);
+    if (ukMajor) fd.append('q7_input7', ukMajor);
+    if (ukUniversities) fd.append('q8_input8', ukUniversities);
     appendFiles(fd,'q11_input11[]', passportData);
     if (kuwaitPhone) fd.append('q48_input48', kuwaitPhone);
     if (civilId) fd.append('q52_input52', civilId);
@@ -2582,6 +2585,8 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
 
   if (selectedCountries.includes('Australia / New Zealand') || selectedCountries.includes('Australia') || selectedCountries.includes('New Zealand')) {
     const fd = buildJotformData(JOTFORM_AUNZ_FORM_ID);
+    if (aunzMajor) fd.append('q7_input7', aunzMajor);
+    if (aunzUniversities) fd.append('q8_input8', aunzUniversities);
     appendFiles(fd,'q11_passportPhoto[]', passportData);
     if (kuwaitPhone) fd.append('q10_input10[full]', kuwaitPhone);
     if (civilId) fd.append('q36_input36', civilId);
@@ -2617,8 +2622,8 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     }
     if (email) fd.append('q26_input26', email);
     if (semester) fd.append('q5_input5', semester);
-    if (major) fd.append('q6_input6', major);
-    if (universities) fd.append('q7_input7', universities);
+    if (usaMajor) fd.append('q6_input6', usaMajor);
+    if (usaUniversities) fd.append('q7_input7', usaUniversities);
     if (kuwaitAddress) fd.append('q8_input8', kuwaitAddress);
     if (kuwaitPhone) fd.append('q10_input10[full]', kuwaitPhone);
     if (guardianName) fd.append('q12_input12', guardianName);
@@ -2648,22 +2653,85 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     }
   }
 
-  // Return all the data the client needs to create the student profile using the client-side Firestore SDK
+  // Create student profile server-side using admin SDK (bypasses Firestore rules)
   const studyLevelMap: Record<string, string> = { 'Foundation': 'Foundation', 'First Year': 'First Year' };
   const employeeCivilId = STAFF_CIVIL_ID_MAP[followUpPerson] || null;
+  const newStudentId = (formData.get('newStudentId') as string) || `S-jotform-${Date.now()}`;
+  const creatingUserId = (formData.get('creatingUserId') as string) || 'jotform';
+  let studentCreated = false;
+
+  if ((firstName || lastName) && adminDb) {
+    try {
+      const now = new Date().toISOString();
+
+      // Upload passport files to Storage using admin SDK
+      const passportDocs: Record<string, unknown>[] = [];
+      if (storage) {
+        const bucketName = 'studio-9484431255-91d96.firebasestorage.app';
+        const bucket = storage.bucket(bucketName);
+        for (let i = 0; i < passportData.length; i++) {
+          const f = passportData[i];
+          const storagePath = `students/${newStudentId}/documents/${Date.now()}_${i}_${f.name}`;
+          const downloadToken = crypto.randomUUID();
+          const fileRef = bucket.file(storagePath);
+          await fileRef.save(Buffer.from(f.buffer), {
+            metadata: { contentType: f.type, metadata: { firebaseStorageDownloadTokens: downloadToken } },
+          });
+          const encodedPath = encodeURIComponent(storagePath);
+          const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+          passportDocs.push({ id: `passport-${Date.now()}-${i}`, name: 'Passport', originalName: f.name, size: f.buffer.byteLength, url, uploadedAt: now, authorId: creatingUserId });
+        }
+      }
+
+      const builtApplicationsJson = (formData.get('builtApplications') as string) || '[]';
+      const builtApplications = JSON.parse(builtApplicationsJson);
+      const studyLevel = acceptanceType ? (studyLevelMap[acceptanceType] ?? null) : null;
+
+      const studentDoc: Record<string, unknown> = {
+        id: newStudentId,
+        name: `${firstName} ${lastName}`.trim(),
+        email,
+        phone: kuwaitPhone,
+        employeeId: employeeCivilId,
+        applications: builtApplications,
+        employeeNotes: [],
+        adminNotes: [],
+        documents: passportDocs,
+        createdAt: now,
+        lastActivityAt: now,
+        createdBy: creatingUserId,
+        targetCountries: selectedCountries,
+        missingItems: [],
+        pipelineStatus: 'none',
+        isNewForEmployee: !!employeeCivilId,
+        jotform: true,
+        academicIntakeSemester: 'September 2026',
+        academicIntakeYear: 2026,
+        profileCompletionStatus: {
+          submitUniversityApplication: false,
+          applyMoheScholarship: false,
+          submitKcoRequest: false,
+          receivedCasOrI20: false,
+          appliedForVisa: false,
+          documentsSubmittedToMohe: false,
+          readyToTravel: false,
+          financialStatementsProvided: false,
+          visaGranted: false,
+          medicalFitnessSubmitted: false,
+        },
+      };
+      if (studyLevel) studentDoc.studyLevel = studyLevel;
+
+      await adminDb.collection('students').doc(newStudentId).set(studentDoc);
+      studentCreated = true;
+    } catch (err) {
+      console.error('[Jotform] Server-side student creation failed:', err);
+    }
+  }
 
   return {
     jotformResults,
-    studentData: {
-      firstName,
-      lastName,
-      email,
-      phone: kuwaitPhone,
-      employeeId: employeeCivilId,
-      targetCountries: selectedCountries,
-      creatingUserCivilId,
-      studyLevel: acceptanceType ? (studyLevelMap[acceptanceType] ?? null) : null,
-    },
+    studentCreated,
   };
 }
 

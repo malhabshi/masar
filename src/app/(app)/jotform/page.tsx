@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,14 +8,14 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send, CheckCircle2, RotateCcw, Paperclip, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const ACCEPTANCE_OPTIONS = ['Foundation', 'First Year', 'General English', 'ESL', 'ESL + Foundation', 'Masters'];
 import { cn } from '@/lib/utils';
 import { submitJotformApplications } from '@/lib/actions';
 import { useUser } from '@/hooks/use-user';
-import { firestore, storage } from '@/firebase/init';
-import { doc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useCollection } from '@/firebase';
+import type { ApprovedUniversity, Application } from '@/lib/types';
 
 const STAFF_NAMES = [
   'طلال', 'محمد سليمان', 'خالد الشمري', 'يوسف سليمان', 'عبدالرحمن العنزي',
@@ -51,6 +51,17 @@ const DOC_FIELDS: DocField[] = [
 const emptyFiles = (): Record<string, File[]> =>
   Object.fromEntries(DOC_FIELDS.map(f => [f.key, []]));
 
+interface CountryPick {
+  majorSearch: string;
+  showSugs: boolean;
+  addedMajors: string[];
+  selectedUniNamesByMajor: Record<string, string[]>;
+  uniExtra: string;
+}
+const emptyPick = (): CountryPick => ({ majorSearch: '', showSugs: false, addedMajors: [], selectedUniNamesByMajor: {}, uniExtra: '' });
+
+const COUNTRY_KEY_LABEL: Record<string, string> = { UK: 'UK', AUNZ: 'AU / NZ', USA: 'USA' };
+
 export default function JotformPage() {
   const { toast } = useToast();
   const { user } = useUser();
@@ -62,8 +73,7 @@ export default function JotformPage() {
   const [lastName, setLastName] = useState('');
   const [dob, setDob] = useState('');
   const [email, setEmail] = useState('');
-  const [major, setMajor] = useState('');
-  const [universities, setUniversities] = useState('');
+  const [picks, setPicks] = useState<Record<string, CountryPick>>({});
   const [kuwaitAddress, setKuwaitAddress] = useState('');
   const [kuwaitPhone, setKuwaitPhone] = useState('');
   const [civilId, setCivilId] = useState('');
@@ -78,6 +88,71 @@ export default function JotformPage() {
   const [guardianDob, setGuardianDob] = useState('');
   const [semester, setSemester] = useState('');
   const [files, setFiles] = useState<Record<string, File[]>>(emptyFiles());
+
+  // Default follow-up person to the logged-in user if their name is in the staff list
+  useEffect(() => {
+    if (user?.name && STAFF_NAMES.includes(user.name)) {
+      setFollowUpPerson(user.name);
+    }
+  }, [user?.name]);
+
+  const { data: allApprovedUnis } = useCollection<ApprovedUniversity>('approved_universities');
+
+  // Per-country approved university lists (UK only when Foundation)
+  const unisByCountry = useMemo((): Record<string, ApprovedUniversity[]> => {
+    if (!allApprovedUnis) return {};
+    const result: Record<string, ApprovedUniversity[]> = {};
+    if (selectedCountries.includes('UK')) {
+      result['UK'] = acceptanceType === 'Foundation'
+        ? allApprovedUnis.filter(u => {
+            if (!u.isAvailable || u.country !== 'UK') return false;
+            if (u.entryLevels && u.entryLevels.length > 0 && !u.entryLevels.includes('Foundation')) return false;
+            return true;
+          })
+        : [];
+    }
+    if (selectedCountries.includes('Australia / New Zealand')) {
+      result['AUNZ'] = allApprovedUnis.filter(u => u.isAvailable && (u.country === 'Australia' || u.country === 'New Zealand'));
+    }
+    if (selectedCountries.includes('USA')) {
+      result['USA'] = allApprovedUnis.filter(u => u.isAvailable && u.country === 'USA');
+    }
+    return result;
+  }, [allApprovedUnis, selectedCountries, acceptanceType]);
+
+  // Ordered country keys matching selected countries order
+  const allCountryKeys = useMemo(() =>
+    selectedCountries.map(c => c === 'Australia / New Zealand' ? 'AUNZ' : c === 'UK' ? 'UK' : 'USA'),
+  [selectedCountries]);
+
+  const getPick = (key: string): CountryPick => picks[key] || emptyPick();
+
+  const updPick = (key: string, update: Partial<CountryPick> | ((prev: CountryPick) => Partial<CountryPick>)) => {
+    setPicks(prev => {
+      const current = prev[key] || emptyPick();
+      const changes = typeof update === 'function' ? update(current) : update;
+      return { ...prev, [key]: { ...current, ...changes } };
+    });
+  };
+
+  const getFinalPick = (key: string) => {
+    const pick = getPick(key);
+    const BU = 'Best University';
+    let bestUniUsed = false;
+    const uniParts: string[] = [];
+    for (const major of pick.addedMajors) {
+      const selected = pick.selectedUniNamesByMajor[major] || [];
+      for (const uni of selected) {
+        if (uni.toLowerCase().trim() === BU.toLowerCase()) { bestUniUsed = true; }
+        else { uniParts.push(`${uni} (${major})`); }
+      }
+    }
+    const extras = pick.uniExtra.split(',').map(s => s.trim()).filter(Boolean);
+    return {
+      universities: [...(bestUniUsed ? [BU] : []), ...uniParts, ...extras].join(', '),
+      major: pick.addedMajors.join(', '),
+    };
+  };
 
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -104,7 +179,7 @@ export default function JotformPage() {
     setSubmittedTo(null);
     setSelectedCountries([]);
     setFirstName(''); setLastName(''); setDob(''); setEmail('');
-    setMajor(''); setUniversities(''); setKuwaitAddress(''); setKuwaitPhone('');
+    setPicks({}); setKuwaitAddress(''); setKuwaitPhone('');
     setCivilId(''); setSchoolName(''); setScholarshipType(''); setAcceptanceType('');
     setIeltsScore(''); setFollowUpPerson(''); setGuardianName('');
     setGuardianEmail(''); setGuardianPhone(''); setGuardianDob(''); setSemester('');
@@ -179,8 +254,15 @@ export default function JotformPage() {
       fd.append('lastName', lastName);
       fd.append('dob', dob);
       fd.append('email', email);
-      fd.append('major', major);
-      fd.append('universities', universities);
+      const ukFinal = getFinalPick('UK');
+      const aunzFinal = getFinalPick('AUNZ');
+      const usaFinal = getFinalPick('USA');
+      fd.append('ukMajor', ukFinal.major);
+      fd.append('ukUniversities', ukFinal.universities);
+      fd.append('aunzMajor', aunzFinal.major);
+      fd.append('aunzUniversities', aunzFinal.universities);
+      fd.append('usaMajor', usaFinal.major);
+      fd.append('usaUniversities', usaFinal.universities);
       fd.append('kuwaitAddress', kuwaitAddress);
       fd.append('kuwaitPhone', kuwaitPhone);
       fd.append('civilId', civilId);
@@ -195,87 +277,42 @@ export default function JotformPage() {
       fd.append('semester', semester);
       fd.append('guardianDob', guardianDob);
       fd.append('creatingUserId', user?.id || '');
-      fd.append('creatingUserCivilId', user?.civilId || '');
+
+      // Build applications from selected majors/universities per country and pass to server
+      const countryDefault: Record<string, 'UK' | 'USA' | 'Australia' | 'New Zealand'> = { UK: 'UK', USA: 'USA', AUNZ: 'Australia' };
+      const builtApplications: Application[] = [];
+      const nowIso = new Date().toISOString();
+      for (const key of allCountryKeys) {
+        const pick = getPick(key);
+        const unis = unisByCountry[key] || [];
+        const defaultCountry = countryDefault[key] ?? 'Australia';
+        for (const major of pick.addedMajors) {
+          for (const uniName of pick.selectedUniNamesByMajor[major] || []) {
+            let appCountry: 'UK' | 'USA' | 'Australia' | 'New Zealand' = defaultCountry;
+            if (key === 'AUNZ') {
+              const dbUni = unis.find(u => u.name.toLowerCase().trim() === uniName.toLowerCase().trim());
+              if (dbUni) appCountry = dbUni.country;
+            }
+            builtApplications.push({ university: uniName, major, country: appCountry, status: 'Pending', updatedAt: nowIso });
+          }
+        }
+        for (const uniName of (pick.uniExtra.split(',').map(s => s.trim()).filter(Boolean))) {
+          builtApplications.push({ university: uniName, major: pick.addedMajors.join(', '), country: defaultCountry, status: 'Pending', updatedAt: nowIso });
+        }
+      }
+      const idPrefix = user?.civilId ? `U-${user.civilId}` : `S-${Math.random().toString(36).substring(2, 9)}`;
+      fd.append('newStudentId', `${idPrefix}-${Date.now()}`);
+      fd.append('builtApplications', JSON.stringify(builtApplications));
 
       // Append all files for each doc field (multiple per key)
       Object.entries(files).forEach(([key, fileList]) => {
         fileList.forEach(file => fd.append(key, file, file.name));
       });
 
-      const { jotformResults, studentData } = await submitJotformApplications(fd);
+      const { jotformResults, studentCreated } = await submitJotformApplications(fd);
 
       const failed = jotformResults.filter(r => !r.success).map(r => r.country);
       if (failed.length === 0) {
-        // Create student profile client-side using authenticated Firestore SDK
-        let studentCreated = false;
-        if (studentData.firstName || studentData.lastName) {
-          try {
-            const now = new Date().toISOString();
-            const idPrefix = studentData.creatingUserCivilId ? `U-${studentData.creatingUserCivilId}` : `S-${Math.random().toString(36).substring(2, 9)}`;
-            const newStudentId = `${idPrefix}-${Date.now()}`;
-            const studentDoc: Record<string, unknown> = {
-              id: newStudentId,
-              name: `${studentData.firstName} ${studentData.lastName}`.trim(),
-              email: studentData.email || '',
-              phone: studentData.phone || '',
-              employeeId: studentData.employeeId,
-              applications: [],
-              employeeNotes: [],
-              adminNotes: [],
-              documents: [],
-              createdAt: now,
-              lastActivityAt: now,
-              createdBy: user?.id || 'jotform',
-              targetCountries: studentData.targetCountries,
-              missingItems: [],
-              pipelineStatus: 'none',
-              isNewForEmployee: !!studentData.employeeId,
-              jotform: true,
-              academicIntakeSemester: 'September 2026',
-              academicIntakeYear: 2026,
-              profileCompletionStatus: {
-                submitUniversityApplication: false,
-                applyMoheScholarship: false,
-                submitKcoRequest: false,
-                receivedCasOrI20: false,
-                appliedForVisa: false,
-                documentsSubmittedToMohe: false,
-                readyToTravel: false,
-                financialStatementsProvided: false,
-                visaGranted: false,
-                medicalFitnessSubmitted: false,
-              },
-            };
-            if (studentData.studyLevel) studentDoc.studyLevel = studentData.studyLevel;
-
-            // Upload passport files and attach as named documents (admin section)
-            const passportFiles = files['passport'] || [];
-            const passportDocs = await Promise.all(
-              passportFiles.map(async (file, i) => {
-                const storagePath = `students/${newStudentId}/documents/${Date.now()}_${i}_${file.name}`;
-                const storageRef = ref(storage, storagePath);
-                await uploadBytes(storageRef, file);
-                const url = await getDownloadURL(storageRef);
-                return {
-                  id: `passport-${Date.now()}-${i}`,
-                  name: 'Passport',
-                  originalName: file.name,
-                  size: file.size,
-                  url,
-                  uploadedAt: now,
-                  authorId: user?.id || 'jotform',
-                };
-              })
-            );
-            if (passportDocs.length > 0) studentDoc.documents = passportDocs;
-
-            await setDoc(doc(firestore, 'students', newStudentId), studentDoc);
-            studentCreated = true;
-          } catch (err) {
-            console.error('[Jotform] Client-side student creation failed:', err);
-          }
-        }
-
         setSubmittedTo(jotformResults.map(r => r.country));
         toast({
           title: 'Submitted!',
@@ -444,16 +481,176 @@ export default function JotformPage() {
                   <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="student@email.com" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Major (in English) *</Label>
-                  <Input value={major} onChange={e => setMajor(e.target.value)} required placeholder="e.g. Computer Science" />
-                </div>
-                <div className="space-y-2">
-                  <Label>University Name(s) *</Label>
-                  <Input value={universities} onChange={e => setUniversities(e.target.value)} required placeholder="e.g. University of London" />
-                </div>
-              </div>
+              {/* Per-country major + university selection */}
+              {allCountryKeys.map(key => {
+                const pick = getPick(key);
+                const unis = unisByCountry[key] || [];
+                const BEST_UNI = 'Best University';
+                const showBestUni = (key === 'UK' && unis.length > 0) || key === 'AUNZ';
+
+                // All unique majors in DB for this country (for autocomplete)
+                const allMajorsInDB = [...new Set(unis.map(u => u.major.trim()))].sort();
+                const majorSugs = pick.majorSearch.trim()
+                  ? allMajorsInDB.filter(m => m.toLowerCase().includes(pick.majorSearch.toLowerCase()))
+                  : allMajorsInDB;
+
+                const addMajor = (m: string) => {
+                  const trimmed = m.trim();
+                  if (!trimmed) return;
+                  updPick(key, prev => ({
+                    addedMajors: prev.addedMajors.includes(trimmed) ? prev.addedMajors : [...prev.addedMajors, trimmed],
+                    majorSearch: '',
+                    showSugs: false,
+                  }));
+                };
+
+                const removeMajor = (major: string) => {
+                  updPick(key, prev => {
+                    const newByMajor = { ...prev.selectedUniNamesByMajor };
+                    delete newByMajor[major];
+                    return { addedMajors: prev.addedMajors.filter(m => m !== major), selectedUniNamesByMajor: newByMajor };
+                  });
+                };
+
+                // Set of university names (normalised) already selected under any other major
+                const selectedElsewhere = (targetMajor: string) => new Set(
+                  pick.addedMajors
+                    .filter(m => m !== targetMajor)
+                    .flatMap(m => (pick.selectedUniNamesByMajor[m] || []).map(n => n.toLowerCase().trim()))
+                );
+
+                const toggleUni = (major: string, uniName: string) => {
+                  updPick(key, prev => {
+                    const current = prev.selectedUniNamesByMajor[major] || [];
+                    const norm = uniName.toLowerCase().trim();
+                    const isSelected = current.some(n => n.toLowerCase().trim() === norm);
+                    // Selecting Best University clears all specific schools for this major
+                    if (norm === BEST_UNI.toLowerCase() && !isSelected) {
+                      return { selectedUniNamesByMajor: { ...prev.selectedUniNamesByMajor, [major]: [BEST_UNI] } };
+                    }
+                    return {
+                      selectedUniNamesByMajor: {
+                        ...prev.selectedUniNamesByMajor,
+                        [major]: isSelected
+                          ? current.filter(n => n.toLowerCase().trim() !== norm)
+                          : [...current, uniName],
+                      },
+                    };
+                  });
+                };
+
+                const { universities: finalUnis, major: finalMajor } = getFinalPick(key);
+
+                return (
+                  <div key={key} className="border rounded-lg p-4 space-y-3 bg-muted/10">
+                    <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{COUNTRY_KEY_LABEL[key]}</div>
+
+                    {/* Major search */}
+                    <div className="flex gap-2 items-start">
+                      <div className="flex-1 relative">
+                        <Input
+                          placeholder={unis.length > 0 ? 'Search or type a major…' : 'Type a major and press Enter…'}
+                          value={pick.majorSearch}
+                          onChange={e => updPick(key, { majorSearch: e.target.value, showSugs: true })}
+                          onFocus={() => updPick(key, { showSugs: true })}
+                          onBlur={() => setTimeout(() => updPick(key, { showSugs: false }), 150)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMajor(pick.majorSearch); } }}
+                        />
+                        {pick.showSugs && majorSugs.length > 0 && (
+                          <div className="absolute z-50 w-full border rounded-md bg-background shadow-md mt-0.5 max-h-48 overflow-auto">
+                            {majorSugs.map(m => (
+                              <button key={m} type="button"
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                                onMouseDown={() => addMajor(m)}
+                              >{m}</button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <Button type="button" variant="outline" size="sm" className="shrink-0"
+                        disabled={!pick.majorSearch.trim() || pick.addedMajors.includes(pick.majorSearch.trim())}
+                        onClick={() => addMajor(pick.majorSearch)}
+                      >+ Add</Button>
+                    </div>
+
+                    {/* Added majors — each shows its university list */}
+                    {pick.addedMajors.map(major => {
+                      // Case-insensitive dedup of universities that offer this major
+                      const rawMatches = unis.filter(u => u.major.toLowerCase().trim() === major.toLowerCase().trim());
+                      const seen = new Set<string>();
+                      const matchingUniNames: string[] = [];
+                      for (const u of rawMatches) {
+                        const k = u.name.toLowerCase().trim();
+                        if (!seen.has(k)) { seen.add(k); matchingUniNames.push(u.name); }
+                      }
+                      matchingUniNames.sort();
+
+                      const elsewhere = selectedElsewhere(major);
+                      const selectedForMajor = pick.selectedUniNamesByMajor[major] || [];
+
+                      return (
+                        <div key={major} className="border rounded-md p-3 space-y-2 bg-background">
+                          <div className="flex items-center justify-between">
+                            <span className="text-base font-bold">{major}</span>
+                            <button type="button" onClick={() => removeMajor(major)}
+                              className="text-muted-foreground hover:text-destructive transition-colors">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="grid gap-1.5">
+                            {/* Best University — top item for UK Foundation and AU/NZ */}
+                            {showBestUni && (() => {
+                              const bestSelected = selectedForMajor.some(n => n.toLowerCase().trim() === BEST_UNI.toLowerCase());
+                              return (
+                                <label className="flex items-center gap-2.5 text-sm cursor-pointer select-none">
+                                  <Checkbox checked={bestSelected} onCheckedChange={() => toggleUni(major, BEST_UNI)} />
+                                  <span className="font-bold">{BEST_UNI}</span>
+                                </label>
+                              );
+                            })()}
+
+                            {(() => {
+                              const bestActive = selectedForMajor.some(n => n.toLowerCase().trim() === BEST_UNI.toLowerCase());
+                              return matchingUniNames.length > 0 ? matchingUniNames.map(uniName => {
+                                const norm = uniName.toLowerCase().trim();
+                                const isSelected = selectedForMajor.some(n => n.toLowerCase().trim() === norm);
+                                const conflict = !isSelected && elsewhere.has(norm);
+                                const disabledByBest = bestActive && !isSelected;
+                                const disabled = conflict || disabledByBest;
+                                return (
+                                  <label key={uniName} className={cn('flex items-center gap-2.5 text-sm select-none', disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer')}>
+                                    <Checkbox checked={isSelected} disabled={disabled} onCheckedChange={() => !disabled && toggleUni(major, uniName)} />
+                                    <span className="flex-1">{uniName}</span>
+                                    {conflict && <span className="text-xs text-muted-foreground italic">taken</span>}
+                                  </label>
+                                );
+                              }) : (
+                                <p className="text-xs text-muted-foreground italic">No approved universities for this major — add them below.</p>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Free-text extra universities */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Additional universities (comma-separated)</Label>
+                      <Input value={pick.uniExtra} onChange={e => updPick(key, { uniExtra: e.target.value })}
+                        placeholder="e.g. University of London, UCL" />
+                    </div>
+
+                    {/* Preview */}
+                    {(finalUnis || finalMajor) && (
+                      <div className="text-xs bg-muted/40 rounded p-2 space-y-0.5 text-muted-foreground">
+                        {finalUnis && <div><span className="font-medium text-foreground">Universities:</span> {finalUnis}</div>}
+                        {finalMajor && <div><span className="font-medium text-foreground">Majors:</span> {finalMajor}</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <div className="space-y-2">
                 <Label>Full Kuwaiti Address (in English) *</Label>
                 <Input value={kuwaitAddress} onChange={e => setKuwaitAddress(e.target.value)} required placeholder="Block, Street, House No., Area" />
