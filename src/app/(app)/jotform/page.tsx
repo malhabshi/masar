@@ -87,6 +87,9 @@ export default function JotformPage() {
   const [guardianPhone, setGuardianPhone] = useState('');
   const [guardianDob, setGuardianDob] = useState('');
   const [semester, setSemester] = useState('');
+  const [gender, setGender] = useState('');
+  const [intakeSemester, setIntakeSemester] = useState('FALL (8/9)');
+  const [intakeYear, setIntakeYear] = useState('2026');
   const [files, setFiles] = useState<Record<string, File[]>>(emptyFiles());
 
   // Default follow-up person to the logged-in user if their name is in the staff list
@@ -137,7 +140,7 @@ export default function JotformPage() {
 
   const getFinalPick = (key: string) => {
     const pick = getPick(key);
-    const BU = 'Best University';
+    const BU = 'Best Option';
     let bestUniUsed = false;
     const uniParts: string[] = [];
     for (const major of pick.addedMajors) {
@@ -182,7 +185,8 @@ export default function JotformPage() {
     setPicks({}); setKuwaitAddress(''); setKuwaitPhone('');
     setCivilId(''); setSchoolName(''); setScholarshipType(''); setAcceptanceType('');
     setIeltsScore(''); setFollowUpPerson(''); setGuardianName('');
-    setGuardianEmail(''); setGuardianPhone(''); setGuardianDob(''); setSemester('');
+    setGuardianEmail(''); setGuardianPhone(''); setGuardianDob(''); setSemester(''); setGender('');
+    setIntakeSemester('FALL (8/9)'); setIntakeYear('2026');
     setFiles(emptyFiles());
     Object.values(fileRefs.current).forEach(input => { if (input) input.value = ''; });
   };
@@ -191,6 +195,10 @@ export default function JotformPage() {
     e.preventDefault();
     if (selectedCountries.length === 0) {
       toast({ variant: 'destructive', title: 'Select at least one country' });
+      return;
+    }
+    if (!gender) {
+      toast({ variant: 'destructive', title: 'Gender is required' });
       return;
     }
     if (isUKorAUNZ && !scholarshipType) {
@@ -254,6 +262,7 @@ export default function JotformPage() {
       fd.append('lastName', lastName);
       fd.append('dob', dob);
       fd.append('email', email);
+      fd.append('gender', gender);
       const ukFinal = getFinalPick('UK');
       const aunzFinal = getFinalPick('AUNZ');
       const usaFinal = getFinalPick('USA');
@@ -276,6 +285,8 @@ export default function JotformPage() {
       fd.append('acceptanceType', acceptanceType);
       fd.append('semester', semester);
       fd.append('guardianDob', guardianDob);
+      fd.append('intakeSemester', intakeSemester);
+      fd.append('intakeYear', intakeYear);
       fd.append('creatingUserId', user?.id || '');
 
       // Build applications from selected majors/universities per country and pass to server
@@ -451,6 +462,35 @@ export default function JotformPage() {
                   </Select>
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Academic Semester (الفصل الدراسي)</Label>
+                  <Select value={intakeSemester} onValueChange={setIntakeSemester}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['FALL (8/9)', 'SPRING (1/2)', 'MARCH (3)', 'SUMMER (6/7)'].map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Academic Year (السنة الدراسية)</Label>
+                  <Select value={intakeYear} onValueChange={setIntakeYear}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2026, 2027, 2028, 2029, 2030].map(y => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -471,7 +511,7 @@ export default function JotformPage() {
                   <Input value={lastName} onChange={e => setLastName(e.target.value)} required placeholder="As in passport" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Date of Birth *</Label>
                   <Input type="date" value={dob} onChange={e => setDob(e.target.value)} required />
@@ -480,13 +520,25 @@ export default function JotformPage() {
                   <Label>Email *</Label>
                   <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="student@email.com" />
                 </div>
+                <div className="space-y-2">
+                  <Label>Gender (الجنس) *</Label>
+                  <Select value={gender} onValueChange={setGender}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="M">Male - ذكر</SelectItem>
+                      <SelectItem value="F">Female - أنثى</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               {/* Per-country major + university selection */}
               {allCountryKeys.map(key => {
                 const pick = getPick(key);
                 const unis = unisByCountry[key] || [];
-                const BEST_UNI = 'Best University';
-                const showBestUni = (key === 'UK' && unis.length > 0) || key === 'AUNZ';
+                const BEST_UNI = 'Best Option';
+                const showBestUni = key !== 'USA';
 
                 // All unique majors in DB for this country (for autocomplete)
                 const allMajorsInDB = [...new Set(unis.map(u => u.major.trim()))].sort();
@@ -606,6 +658,7 @@ export default function JotformPage() {
                                 <label className="flex items-center gap-2.5 text-sm cursor-pointer select-none">
                                   <Checkbox checked={bestSelected} onCheckedChange={() => toggleUni(major, BEST_UNI)} />
                                   <span className="font-bold">{BEST_UNI}</span>
+                                  <span className="text-xs text-muted-foreground italic">(schools will be added manually)</span>
                                 </label>
                               );
                             })()}

@@ -2492,6 +2492,9 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   const acceptanceType = (formData.get('acceptanceType') as string) || '';
   const semester = (formData.get('semester') as string) || '';
   const guardianDob = (formData.get('guardianDob') as string) || '';
+  const gender = (formData.get('gender') as string) || '';
+  const intakeSemester = (formData.get('intakeSemester') as string) || 'FALL (8/9)';
+  const intakeYear = parseInt((formData.get('intakeYear') as string) || '2026', 10);
 
   const getFiles = (key: string) =>
     formData.getAll(key).filter((f): f is File => f instanceof File && (f as File).size > 0);
@@ -2692,6 +2695,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         name: `${firstName} ${lastName}`.trim(),
         email,
         phone: kuwaitPhone,
+        ...(gender && { gender }),
         employeeId: employeeCivilId,
         applications: builtApplications,
         employeeNotes: [],
@@ -2705,8 +2709,8 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         pipelineStatus: 'none',
         isNewForEmployee: !!employeeCivilId,
         jotform: true,
-        academicIntakeSemester: 'September 2026',
-        academicIntakeYear: 2026,
+        academicIntakeSemester: intakeSemester,
+        academicIntakeYear: intakeYear,
         profileCompletionStatus: {
           submitUniversityApplication: false,
           applyMoheScholarship: false,
