@@ -1747,13 +1747,14 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
       updates[`chatUnreadCountByUser.${uid}`] = FieldValue.increment(1);
     }
 
-    // Employee unread counter — only if employee is specifically targeted
+    // Employee unread counter — always notify the assigned employee unless they sent the message
     if (studentData.employeeId) {
         const empQuery = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
         if (!empQuery.empty) {
             const empId = empQuery.docs[0].id;
-            if (targetUserIds.includes(empId)) {
+            if (empId !== authorId) {
                 updates.employeeUnreadMessages = (studentData.employeeUnreadMessages || 0) + 1;
+                updates.updatesViewedBy = [];
             }
         }
     }
