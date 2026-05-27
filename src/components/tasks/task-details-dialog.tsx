@@ -144,7 +144,7 @@ export function TaskDetailsDialog({
           {Icon && <Icon className="h-4 w-4 text-primary" />}
           <span className="text-sm">
             {Array.isArray(value) ? value.join(', ') : 
-             (isClient && (value instanceof Date || (typeof value === 'string' && value.includes('T'))) ? formatDateTime(value) : String(value))}
+             (isClient && (value instanceof Date || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value))) ? formatDateTime(value) : String(value))}
           </span>
         </div>
       </div>
