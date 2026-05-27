@@ -518,7 +518,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
+                          <PopoverContent className="w-auto p-0" align="start" onOpenAutoFocus={(e: Event) => e.preventDefault()}>
                             <Calendar
                               mode="single"
                               selected={field.value}
@@ -529,7 +529,6 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                                 const minDate = rule === '5_days_from_today' ? addDays(today, 5) : today;
                                 return date < minDate;
                               }}
-                              initialFocus
                             />
                           </PopoverContent>
                         </Popover>
@@ -622,8 +621,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date()} initialFocus />
+                      <PopoverContent className="w-auto p-0" align="start" onOpenAutoFocus={(e: Event) => e.preventDefault()}>
+                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date()} />
                       </PopoverContent>
                     </Popover>
                     <FormDescription>Date of the exam you wish to retake.</FormDescription>
@@ -648,8 +647,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < addDays(startOfDay(new Date()), 3)} initialFocus />
+                      <PopoverContent className="w-auto p-0" align="start" onOpenAutoFocus={(e: Event) => e.preventDefault()}>
+                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < addDays(startOfDay(new Date()), 3)} />
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
@@ -718,8 +717,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date.getDay() !== 0 || date < startOfDay(new Date())} initialFocus />
+                    <PopoverContent className="w-auto p-0" align="start" onOpenAutoFocus={(e: Event) => e.preventDefault()}>
+                      <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date.getDay() !== 0 || date < startOfDay(new Date())} />
                     </PopoverContent>
                   </Popover>
                   <FormMessage />
