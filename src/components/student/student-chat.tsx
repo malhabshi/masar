@@ -168,13 +168,13 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
       const mention = match[1];
       const rest = content.slice(mention.length);
       return (
-        <p className="whitespace-pre-wrap">
+        <p className="whitespace-pre-wrap break-words">
           <span className="font-bold underline text-accent-foreground/90">{mention}</span>
           {rest}
         </p>
       );
     }
-    return <p className="whitespace-pre-wrap">{content}</p>;
+    return <p className="whitespace-pre-wrap break-words">{content}</p>;
   };
 
   const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);

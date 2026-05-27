@@ -105,7 +105,7 @@ function ChangeAgentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{student.changeAgentRequired ? 'Manage Change Agent' : 'Enable Change Agent Status'}</DialogTitle>
           <DialogDescription>
@@ -434,7 +434,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
         )}
       </div>
 
-      <div className="flex flex-col items-start gap-2">
+      <div className={cn("flex flex-col items-start gap-2", (student.changeAgentRequired && student.changeAgentUniversities?.length) ? "pr-[320px]" : "pr-20")}>
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-bold flex items-center gap-3">
