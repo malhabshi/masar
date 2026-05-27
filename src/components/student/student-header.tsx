@@ -26,7 +26,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogClose,
@@ -158,7 +157,15 @@ function ChangeAgentDialog({
           )}
         </div>
 
-        <DialogFooter className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 pt-2 border-t mt-2">
+          <Button
+            disabled={selectedUnis.length === 0 || isLoading}
+            onClick={() => onConfirm(selectedUnis)}
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold"
+          >
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {student.changeAgentRequired ? 'Update List' : 'Enable Status'}
+          </Button>
           {student.changeAgentRequired && (
             <Button
               variant="outline"
@@ -170,18 +177,10 @@ function ChangeAgentDialog({
               Resolve Problem & Clear Alert
             </Button>
           )}
-          <div className="flex gap-2 justify-end">
-            <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-            <Button
-              disabled={selectedUnis.length === 0 || isLoading}
-              onClick={() => onConfirm(selectedUnis)}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold"
-            >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {student.changeAgentRequired ? 'Update List' : 'Enable Status'}
-            </Button>
-          </div>
-        </DialogFooter>
+          <DialogClose asChild>
+            <Button variant="ghost" className="w-full">Cancel</Button>
+          </DialogClose>
+        </div>
       </DialogContent>
     </Dialog>
   );
