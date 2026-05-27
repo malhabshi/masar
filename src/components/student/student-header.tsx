@@ -105,7 +105,7 @@ function ChangeAgentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{student.changeAgentRequired ? 'Manage Change Agent' : 'Enable Change Agent Status'}</DialogTitle>
           <DialogDescription>
@@ -158,18 +158,18 @@ function ChangeAgentDialog({
           )}
         </div>
 
-        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-          {student.changeAgentRequired ? (
+        <DialogFooter className="flex flex-col gap-2">
+          {student.changeAgentRequired && (
             <Button
               variant="outline"
-              className="border-green-600 text-green-700 hover:bg-green-50 font-bold gap-2"
+              className="w-full border-green-600 text-green-700 hover:bg-green-50 font-bold gap-2"
               onClick={() => onConfirm([])}
               disabled={isLoading}
             >
               <CheckCircle className="h-4 w-4" />
               Resolve Problem & Clear Alert
             </Button>
-          ) : <span />}
+          )}
           <div className="flex gap-2 justify-end">
             <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
             <Button
