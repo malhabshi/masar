@@ -158,28 +158,29 @@ function ChangeAgentDialog({
           )}
         </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2">
-          {student.changeAgentRequired && (
-            <Button 
-              variant="outline" 
-              className="w-full sm:w-auto border-green-600 text-green-700 hover:bg-green-50 font-bold gap-2"
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+          {student.changeAgentRequired ? (
+            <Button
+              variant="outline"
+              className="border-green-600 text-green-700 hover:bg-green-50 font-bold gap-2"
               onClick={() => onConfirm([])}
               disabled={isLoading}
             >
               <CheckCircle className="h-4 w-4" />
               Resolve Problem & Clear Alert
             </Button>
-          )}
-          <div className="flex-1" />
-          <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-          <Button 
-            disabled={selectedUnis.length === 0 || isLoading} 
-            onClick={() => onConfirm(selectedUnis)}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold"
-          >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {student.changeAgentRequired ? 'Update List' : 'Enable Status'}
-          </Button>
+          ) : <span />}
+          <div className="flex gap-2 justify-end">
+            <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+            <Button
+              disabled={selectedUnis.length === 0 || isLoading}
+              onClick={() => onConfirm(selectedUnis)}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold"
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {student.changeAgentRequired ? 'Update List' : 'Enable Status'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -373,7 +374,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   };
 
   return (
-    <div className="mb-6 relative" id="student-header">
+    <div className="mb-6" id="student-header">
       {showNav && (
         <div className="pdf-hide flex items-center gap-2 mb-3 text-sm text-muted-foreground">
           <Link
@@ -400,43 +401,10 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           </Link>
         </div>
       )}
-      <div className="absolute top-0 right-0 flex flex-col items-end gap-3 z-10">
-        {allCountries.length > 0 && (
-          <div className="flex gap-2" title={allCountries.join(', ')}>
-              {allCountries.map(country => (
-                  countryEmojis[country as Country] ? (
-                    <div key={country} className="text-4xl drop-shadow-sm">
-                        {countryEmojis[country as Country]}
-                    </div>
-                  ) : null
-              ))}
-          </div>
-        )}
-        {student.changeAgentRequired && student.changeAgentUniversities && student.changeAgentUniversities.length > 0 && (
-          <div className="flex flex-col items-end gap-1.5 max-w-[300px] animate-in fade-in slide-in-from-right-4">
-            <p className="text-[9px] font-black text-red-600 uppercase tracking-widest bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-red-100">
-              Change Agent Required For:
-            </p>
-            <div className="flex flex-wrap justify-end gap-1">
-              {student.changeAgentUniversities.map((uni, idx) => {
-                const country = getUniCountry(uni);
-                return (
-                  <BadgeComponent 
-                    key={idx} 
-                    className="bg-red-600 text-white font-black text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
-                  >
-                    {uni} {country ? `(${country})` : ''}
-                  </BadgeComponent>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className={cn("flex flex-col items-start gap-2", (student.changeAgentRequired && student.changeAgentUniversities?.length) ? "pr-[320px]" : "pr-20")}>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col items-start gap-2 flex-1 min-w-0">
+          <div className="flex-1 w-full">
+            <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-bold flex items-center gap-3">
               {student.internalNumber && (
                 <span className="text-primary opacity-50 font-mono tracking-tighter">
@@ -593,8 +561,42 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           </div>
         </div>
       </div>
+        <div className="flex flex-col items-end gap-3 flex-shrink-0">
+          {allCountries.length > 0 && (
+            <div className="flex gap-2" title={allCountries.join(', ')}>
+              {allCountries.map(country => (
+                countryEmojis[country as Country] ? (
+                  <div key={country} className="text-4xl drop-shadow-sm">
+                    {countryEmojis[country as Country]}
+                  </div>
+                ) : null
+              ))}
+            </div>
+          )}
+          {student.changeAgentRequired && student.changeAgentUniversities && student.changeAgentUniversities.length > 0 && (
+            <div className="flex flex-col items-end gap-1.5 max-w-[300px] animate-in fade-in slide-in-from-right-4">
+              <p className="text-[9px] font-black text-red-600 uppercase tracking-widest bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-red-100">
+                Change Agent Required For:
+              </p>
+              <div className="flex flex-wrap justify-end gap-1">
+                {student.changeAgentUniversities.map((uni, idx) => {
+                  const country = getUniCountry(uni);
+                  return (
+                    <BadgeComponent
+                      key={idx}
+                      className="bg-red-600 text-white font-black text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
+                    >
+                      {uni} {country ? `(${country})` : ''}
+                    </BadgeComponent>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
-      <ChangeAgentDialog 
+      <ChangeAgentDialog
         student={student} 
         isOpen={isChangeAgentDialogOpen} 
         onOpenChange={setIsChangeAgentDialogOpen} 
