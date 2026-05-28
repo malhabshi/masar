@@ -84,7 +84,7 @@ export function StudentUploadedDocuments({ student, currentUser, allowGenerateLi
       newPublicUploadsForAdmin: 0,
       newPublicUploadsForEmployee: 0,
     }).catch(() => {});
-  }, [student.id]);
+  }, [student.id, student.newPublicUploadsForAdmin, student.newPublicUploadsForEmployee]);
 
   const uploadConstraints = useMemoFirebase(
     () => [where('studentId', '==', student.id)],
