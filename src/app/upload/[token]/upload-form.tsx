@@ -7,15 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { ALLOWED_FILE_EXTENSIONS, ALLOWED_FILE_TYPES, MAX_FILE_SIZE_MB, MAX_FILE_SIZE_BYTES } from '@/lib/file-validation';
 import { cn } from '@/lib/utils';
-import { firestore, storage } from '@/firebase/init';
-import { doc, getDoc, collection, addDoc, updateDoc } from 'firebase/firestore';
+import { firestore } from '@/firebase/init';
+import { doc, getDoc } from 'firebase/firestore';
 import { notifyStudentUpload } from '@/lib/actions';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 interface QueuedFile {
   file: File;
   status: 'pending' | 'uploading' | 'done' | 'error';
-  progress?: number;
   error?: string;
 }
 
@@ -78,36 +76,18 @@ export function PublicUploadForm({ token }: { token: string }) {
     await Promise.all(pendingIndices.map(async (i) => {
       const file = queue[i].file;
       try {
-        const storagePath = `student_uploads/${token}/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, storagePath);
-        const task = uploadBytesResumable(storageRef, file);
+        const fd = new FormData();
+        fd.append('token', token);
+        fd.append('file', file);
+        if (studentNote.trim()) fd.append('studentNote', studentNote.trim());
 
-        await new Promise<void>((resolve, reject) => {
-          task.on(
-            'state_changed',
-            snap => {
-              const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-              setQueue(prev => prev.map((q, idx) => idx === i ? { ...q, progress: pct } : q));
-            },
-            reject,
-            resolve,
-          );
-        });
+        const res = await fetch('/api/upload-public', { method: 'POST', body: fd });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Upload failed (${res.status})`);
+        }
 
-        const url = await getDownloadURL(task.snapshot.ref);
-        await addDoc(collection(firestore, 'student_public_uploads'), {
-          token,
-          studentId: linkInfo.studentId,
-          fileName: file.name,
-          storagePath,
-          size: file.size,
-          url,
-          uploadedAt: new Date().toISOString(),
-          ...(studentNote.trim() ? { studentNote: studentNote.trim() } : {}),
-        });
-
-        setQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'done', progress: 100 } : q));
-        await updateDoc(doc(firestore, 'upload_links', token), { lastUsedAt: new Date().toISOString() });
+        setQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'done' } : q));
         notifyStudentUpload(token, file.name);
       } catch (e: any) {
         setQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'error', error: e.message } : q));
@@ -223,11 +203,7 @@ export function PublicUploadForm({ token }: { token: string }) {
                   <X className="h-4 w-4" />
                 </button>
               )}
-              {item.status === 'uploading' && (
-                <span className="text-xs text-blue-500 shrink-0 w-10 text-right">
-                  {item.progress ?? 0}%
-                </span>
-              )}
+              {item.status === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-blue-500 shrink-0" />}
               {item.status === 'done' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
               {item.status === 'error' && <span className="text-xs text-red-500">{item.error || 'Failed'}</span>}
             </div>
