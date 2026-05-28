@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useHeartbeat } from '@/hooks/use-heartbeat';
 import { AppSidebar } from '@/components/sidebar';
-import { Loader2 } from 'lucide-react';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { Loader2, Menu } from 'lucide-react';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { NotificationListener } from '@/components/notifications/notification-listener';
 import { processInactivityReminders, processStudentReminders } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -83,8 +83,16 @@ export default function AuthenticatedLayout({
       <NotificationListener />
       <div className="flex h-full">
         <AppSidebar />
-        <main className="flex-1 p-6 overflow-auto">
-          {children}
+        <main className="flex-1 overflow-auto flex flex-col">
+          <div className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 border-b bg-background md:hidden">
+            <SidebarTrigger className="h-8 w-8">
+              <Menu className="h-5 w-5" />
+            </SidebarTrigger>
+            <span className="text-sm font-semibold">Masar</span>
+          </div>
+          <div className="flex-1 p-4 md:p-6">
+            {children}
+          </div>
         </main>
       </div>
     </SidebarProvider>

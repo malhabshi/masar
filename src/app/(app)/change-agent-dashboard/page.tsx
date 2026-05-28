@@ -5,15 +5,212 @@ import { useUser } from '@/hooks/use-user';
 import { useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { firestore } from '@/firebase';
-import type { Student, User } from '@/lib/types';
+import type { Student, ChangeAgentLogEntry } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, UserRoundX, ExternalLink, ShieldAlert, User as UserIcon } from 'lucide-react';
+import { Loader2, UserRoundX, ExternalLink, ShieldAlert, User as UserIcon, History, ChevronRight, ChevronDown, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function formatDateShort(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+interface HistoryStudentRowProps {
+  student: Student;
+  isClosed: boolean;
+}
+
+function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const sortedLog = useMemo(() => {
+    return [...(student.changeAgentLog || [])].sort(
+      (a, b) => new Date(b.flaggedAt).getTime() - new Date(a.flaggedAt).getTime()
+    );
+  }, [student.changeAgentLog]);
+
+  // For students flagged before history tracking, synthesise display rows from current universities
+  const syntheticUnis = useMemo(() => {
+    if (sortedLog.length > 0) return [];
+    if (student.changeAgentUniversities && student.changeAgentUniversities.length > 0)
+      return student.changeAgentUniversities;
+    if (student.changeAgentRequired) return ['General Request'];
+    return [];
+  }, [sortedLog, student.changeAgentUniversities, student.changeAgentRequired]);
+
+  const totalEvents = sortedLog.length || syntheticUnis.length;
+  if (totalEvents === 0) return null;
+
+  const latestFlaggedAt = sortedLog[0]?.flaggedAt;
+
+  return (
+    <div className="border-b last:border-b-0">
+      <div
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {isExpanded
+            ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          }
+          <Link
+            href={`/student/${student.id}`}
+            onClick={e => e.stopPropagation()}
+            className="font-black text-sm hover:underline truncate"
+          >
+            {student.name}
+          </Link>
+          {isClosed && (
+            <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5 shrink-0">
+              CLOSED
+            </Badge>
+          )}
+          <Badge variant="outline" className="text-[10px] h-5 shrink-0">
+            {totalEvents} {totalEvents === 1 ? 'event' : 'events'}
+          </Badge>
+        </div>
+        <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
+          {latestFlaggedAt ? `Latest: ${formatDateShort(latestFlaggedAt)}` : 'Currently Active'}
+        </span>
+      </div>
+
+      {isExpanded && (
+        <div className="bg-muted/10 border-t">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted/20 text-muted-foreground uppercase tracking-wider text-[10px]">
+                <th className="text-left px-6 py-2 font-bold">University</th>
+                <th className="text-left px-4 py-2 font-bold">Flagged By</th>
+                <th className="text-left px-4 py-2 font-bold">Date & Time</th>
+                <th className="text-left px-4 py-2 font-bold">Status</th>
+                <th className="text-left px-4 py-2 font-bold">Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedLog.length > 0
+                ? sortedLog.map((entry: ChangeAgentLogEntry) => {
+                    const isResolved = !!entry.resolvedAt;
+                    const isGone = isClosed && !isResolved;
+                    const isActive = !isClosed && !isResolved;
+                    return (
+                      <tr key={entry.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                        <td className="px-6 py-2.5 font-bold">
+                          {entry.university === 'General Request'
+                            ? <span className="italic text-muted-foreground">General Request</span>
+                            : entry.university}
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground">{entry.flaggedByName}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground">{formatDate(entry.flaggedAt)}</td>
+                        <td className="px-4 py-2.5">
+                          {isGone && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white bg-black px-2 py-0.5 rounded-full">
+                              <XCircle className="h-3 w-3" />Gone
+                            </span>
+                          )}
+                          {isActive && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">
+                              <AlertCircle className="h-3 w-3" />Active
+                            </span>
+                          )}
+                          {isResolved && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                              <CheckCircle2 className="h-3 w-3" />Resolved {formatDateShort(entry.resolvedAt!)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground italic">{entry.note || '—'}</td>
+                      </tr>
+                    );
+                  })
+                : syntheticUnis.map((uni, idx) => (
+                    <tr key={idx} className="border-b last:border-b-0 hover:bg-muted/20">
+                      <td className="px-6 py-2.5 font-bold">
+                        {uni === 'General Request'
+                          ? <span className="italic text-muted-foreground">General Request</span>
+                          : uni}
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground italic">—</td>
+                      <td className="px-4 py-2.5 text-muted-foreground italic">—</td>
+                      <td className="px-4 py-2.5">
+                        {isClosed
+                          ? <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white bg-black px-2 py-0.5 rounded-full">
+                              <XCircle className="h-3 w-3" />Gone
+                            </span>
+                          : <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">
+                              <AlertCircle className="h-3 w-3" />Active
+                            </span>
+                        }
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground italic">—</td>
+                    </tr>
+                  ))
+              }
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface HistorySectionProps {
+  title: string;
+  students: Student[];
+  isClosed: boolean;
+  accentClass: string;
+  headerBgClass: string;
+  countBadgeClass: string;
+}
+
+function HistorySection({ title, students, isClosed, accentClass, headerBgClass, countBadgeClass }: HistorySectionProps) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <Card className={cn('border', accentClass)}>
+      <CardHeader
+        className={cn('border-b cursor-pointer flex flex-row items-center justify-between py-3', headerBgClass)}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-sm font-bold uppercase tracking-widest flex items-center gap-2">
+            {title}
+          </CardTitle>
+          <span className={cn('text-xs font-black px-2 py-0.5 rounded-full', countBadgeClass)}>
+            {students.length}
+          </span>
+        </div>
+        {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+      </CardHeader>
+      {isOpen && (
+        <CardContent className="p-0">
+          {students.length > 0 ? (
+            students.map(student => (
+              <HistoryStudentRow key={student.id} student={student} isClosed={isClosed} />
+            ))
+          ) : (
+            <div className="h-16 flex items-center justify-center text-xs text-muted-foreground italic">
+              No records found.
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
 
 export default function ChangeAgentDashboard() {
   const { user: currentUser, isUserLoading, effectiveRole } = useUser();
@@ -25,7 +222,7 @@ export default function ChangeAgentDashboard() {
 
   const isAdminDept = effectiveRole === 'admin' || effectiveRole === 'department';
 
-  // Query only students with changeAgentRequired: true
+  // Query active change agent students
   const changeAgentQuery = useMemoFirebase(() => {
     if (!isMounted || !currentUser) return null;
     return query(
@@ -37,36 +234,71 @@ export default function ChangeAgentDashboard() {
 
   const { data: rawStudents, isLoading: studentsLoading } = useCollection<Student>(changeAgentQuery);
 
+  // Query history students (permanent record)
+  const historyQuery = useMemoFirebase(() => {
+    if (!isMounted || !currentUser) return null;
+    return query(
+      collection(firestore, 'students'),
+      where('hasChangeAgentHistory', '==', true),
+      orderBy('lastActivityAt', 'desc')
+    );
+  }, [isMounted, currentUser]);
+
+  const { data: rawHistoryStudents, isLoading: historyLoading } = useCollection<Student>(historyQuery);
+
+  const applyDeptFilter = (students: Student[]) => {
+    if (effectiveRole !== 'department' || !currentUser?.department) return students;
+    const dept = currentUser.department;
+    return students.filter(student => {
+      const flaggedUnis = student.changeAgentUniversities || [];
+      const flaggedApps = (student.applications || []).filter(app => flaggedUnis.includes(app.university));
+      const flaggedCountries = flaggedApps.map(a => a.country);
+      return (dept === 'UK' && flaggedCountries.includes('UK')) ||
+             (dept === 'USA' && flaggedCountries.includes('USA')) ||
+             (dept === 'AU/NZ' && (flaggedCountries.includes('Australia') || flaggedCountries.includes('New Zealand')));
+    });
+  };
+
+  const applyHistoryDeptFilter = (students: Student[]) => {
+    if (effectiveRole !== 'department' || !currentUser?.department) return students;
+    const dept = currentUser.department;
+    return students.filter(student => {
+      const log = student.changeAgentLog || [];
+      const logUnis = log.map(e => e.university);
+      const relatedApps = (student.applications || []).filter(app => logUnis.includes(app.university));
+      const countries = relatedApps.map(a => a.country);
+      return (dept === 'UK' && countries.includes('UK')) ||
+             (dept === 'USA' && countries.includes('USA')) ||
+             (dept === 'AU/NZ' && (countries.includes('Australia') || countries.includes('New Zealand')));
+    });
+  };
+
   const filteredStudents = useMemo(() => {
     if (!rawStudents) return [];
-    
-    // Regional Filtering for Departments
-    // PRECISION ROUTING: Only show students if one of their FLAGGED universities belongs to this region
-    if (effectiveRole === 'department' && currentUser?.department) {
-      const dept = currentUser.department;
-      return rawStudents.filter(student => {
-        const flaggedUnis = student.changeAgentUniversities || [];
-        const flaggedApps = (student.applications || []).filter(app => flaggedUnis.includes(app.university));
-        
-        const flaggedCountries = flaggedApps.map(a => a.country);
-        
-        return (dept === 'UK' && flaggedCountries.includes('UK')) || 
-               (dept === 'USA' && flaggedCountries.includes('USA')) || 
-               (dept === 'AU/NZ' && (flaggedCountries.includes('Australia') || flaggedCountries.includes('New Zealand')));
-      });
-    }
-
-    return rawStudents;
+    return applyDeptFilter(rawStudents);
   }, [rawStudents, currentUser, effectiveRole]);
 
-  // Fetch unique employee IDs for name mapping
+  const { activeHistoryStudents, closedHistoryStudents } = useMemo(() => {
+    const historyFiltered = rawHistoryStudents ? applyHistoryDeptFilter(rawHistoryStudents) : [];
+    // Merge current active change-agent students so they always appear in history
+    const historyMap = new Map<string, Student>(historyFiltered.map(s => [s.id, s]));
+    for (const student of filteredStudents) {
+      if (!historyMap.has(student.id)) historyMap.set(student.id, student);
+    }
+    const all = [...historyMap.values()];
+    return {
+      activeHistoryStudents: all.filter(s => !s.isClosed),
+      closedHistoryStudents: all.filter(s => s.isClosed),
+    };
+  }, [rawHistoryStudents, filteredStudents, currentUser, effectiveRole]);
+
   const employeeCivilIds = useMemo(() => {
     return [...new Set(filteredStudents.map(s => s.employeeId).filter((id): id is string => !!id))];
   }, [filteredStudents]);
 
   const { userMap: employeeMap } = useUserCacheByCivilId(employeeCivilIds);
 
-  const isLoading = isUserLoading || studentsLoading;
+  const isLoading = isUserLoading || studentsLoading || historyLoading;
 
   if (isLoading) {
     return (
@@ -101,6 +333,7 @@ export default function ChangeAgentDashboard() {
         </div>
       </div>
 
+      {/* Active Change Agent Requests */}
       <Card className="border-red-200">
         <CardHeader className="bg-red-50/30 border-b">
           <CardTitle className="text-sm font-bold uppercase tracking-widest text-red-800 flex items-center gap-2">
@@ -122,7 +355,7 @@ export default function ChangeAgentDashboard() {
               {filteredStudents.length > 0 ? (
                 filteredStudents.map((student) => {
                   const employee = student.employeeId ? employeeMap.get(student.employeeId) : null;
-                  
+
                   return (
                     <TableRow key={student.id} className="group hover:bg-red-50/10">
                       <TableCell>
@@ -184,6 +417,35 @@ export default function ChangeAgentDashboard() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Permanent History Section */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 pt-2">
+          <History className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-xl font-bold tracking-tight">Permanent Change Agent Record</h2>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-1">
+          A full history of every change agent event. Each student can have multiple entries across different universities and dates. Click a student name to open their profile.
+        </p>
+
+        <HistorySection
+          title="Active Students"
+          students={activeHistoryStudents}
+          isClosed={false}
+          accentClass="border-orange-200"
+          headerBgClass="bg-orange-50/30"
+          countBadgeClass="bg-orange-100 text-orange-800"
+        />
+
+        <HistorySection
+          title="Closed / Gone"
+          students={closedHistoryStudents}
+          isClosed={true}
+          accentClass="border-gray-300"
+          headerBgClass="bg-gray-50/50"
+          countBadgeClass="bg-gray-200 text-gray-700"
+        />
+      </div>
     </div>
   );
 }

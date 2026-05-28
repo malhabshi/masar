@@ -83,6 +83,15 @@ export interface MissingItemTemplate {
   category?: string;
 }
 
+export interface ChangeAgentLogEntry {
+  id: string;
+  university: string;
+  flaggedAt: string;
+  flaggedByName: string;
+  resolvedAt?: string;
+  note?: string;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -152,6 +161,8 @@ export interface Student {
   academicIntakeYear?: number;
   changeAgentRequired?: boolean;
   changeAgentUniversities?: string[];
+  changeAgentLog?: ChangeAgentLogEntry[];
+  hasChangeAgentHistory?: boolean;
   term?: string;
   jotform?: boolean;
   studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';

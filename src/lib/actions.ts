@@ -3,7 +3,7 @@
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { formatKuwaitTime } from '@/lib/timestamp-utils';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1926,15 +1926,32 @@ export async function toggleChangeAgentStatus(studentId: string, status: boolean
     const studentData = studentDoc.data() as Student;
     const studentName = studentData.name || 'A student';
 
+    const now = new Date().toISOString();
     const updates: any = {
       changeAgentRequired: status,
-      lastActivityAt: new Date().toISOString()
+      lastActivityAt: now,
     };
 
     if (status) {
       updates.changeAgentUniversities = universities || [];
+      updates.hasChangeAgentHistory = true;
+
+      const universitiesToLog = (universities && universities.length > 0) ? universities : ['General Request'];
+      const logEntries: ChangeAgentLogEntry[] = universitiesToLog.map((uni: string, idx: number) => ({
+        id: `ca-${Date.now()}-${idx}`,
+        university: uni,
+        flaggedAt: now,
+        flaggedByName: admin.name,
+      }));
+      updates.changeAgentLog = FieldValue.arrayUnion(...logEntries);
     } else {
       updates.changeAgentUniversities = FieldValue.delete();
+
+      if (studentData.changeAgentLog && studentData.changeAgentLog.length > 0) {
+        updates.changeAgentLog = studentData.changeAgentLog.map((entry: ChangeAgentLogEntry) =>
+          entry.resolvedAt ? entry : { ...entry, resolvedAt: now }
+        );
+      }
     }
 
     await studentRef.update(updates);
