@@ -159,8 +159,22 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     if (!country || !major) return;
     if (country === 'USA' && !semester) return;
     if (country === 'USA' && !guardianDob && !jd?.guardianDob) return;
+
+    // For AU/NZ, look up the actual country from the approved universities list
+    let firestoreCountry: string | undefined;
+    if (countryKey === 'AUNZ') {
+      outer: for (const m of pick.addedMajors) {
+        for (const uniName of (pick.selectedUniNamesByMajor[m] || [])) {
+          if (uniName === BEST_UNI) continue;
+          const uni = unis.find(u => u.name === uniName);
+          if (uni) { firestoreCountry = uni.country; break outer; }
+        }
+      }
+      if (!firestoreCountry) firestoreCountry = 'Australia';
+    }
+
     setIsSubmitting(true);
-    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined, guardianDob || undefined);
+    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined, guardianDob || undefined, firestoreCountry);
     if (result.success) {
       toast({ title: 'Application Submitted', description: result.message });
       onSuccess();

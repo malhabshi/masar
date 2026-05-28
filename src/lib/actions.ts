@@ -3012,7 +3012,8 @@ export async function addCountryApplication(
   universities: string,
   userId: string,
   semesterOverride?: string,
-  guardianDobOverride?: string
+  guardianDobOverride?: string,
+  firestoreCountry?: string
 ): Promise<{ success: boolean; message: string }> {
   'use server';
   if (!adminDb) return { success: false, message: 'Server not configured.' };
@@ -3245,11 +3246,17 @@ export async function addCountryApplication(
     return { success: false, message: `Jotform error (${jotformResult.status}): ${snippet}` };
   }
 
+  // Strip " (major)" suffix added for Jotform — store clean university names
+  const displayUniversities = universities
+    .split(', ')
+    .map(u => u.replace(/\s*\([^)]+\)\s*$/, '').trim())
+    .join(', ');
+
   // Add application to student and update targetCountries
   const newApplication = {
-    university: universities || '',
+    university: displayUniversities || '',
     major,
-    country,
+    country: firestoreCountry || (country === 'Australia / New Zealand' ? 'Australia' : country),
     status: 'Pending',
     updatedAt: new Date().toISOString(),
   };
