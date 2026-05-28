@@ -11,6 +11,8 @@ import { useUser } from '@/hooks/use-user';
 import { AvatarUpload } from '@/components/user-management/avatar-upload';
 import { getFullSystemBackup } from '@/lib/actions';
 import { MissingItemsTemplateManager } from '@/components/settings/missing-items-template-manager';
+import { ChecklistItemsManager } from '@/components/settings/checklist-items-manager';
+import { AdminChecklistItemsManager } from '@/components/settings/admin-checklist-items-manager';
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -212,6 +214,8 @@ export default function SettingsPage() {
             </CardFooter>
           </Card>
           <MissingItemsTemplateManager />
+          <ChecklistItemsManager />
+          <AdminChecklistItemsManager />
         </>
       )}
     </div>

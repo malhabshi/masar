@@ -58,6 +58,14 @@ export interface ProfileCompletionStatus {
   medicalFitnessSubmitted: boolean;
   financialStatementsProvided: boolean;
   readyToTravel: boolean;
+  [key: string]: boolean;
+}
+
+export interface ChecklistConfigItem {
+  id: string;
+  label: string;
+  order: number;
+  isFinal?: boolean;
 }
 
 export interface StudentLogin {
@@ -143,6 +151,7 @@ export interface Student {
   finalizedViewedBy?: string[];
   ieltsOverall?: number;
   profileCompletionStatus?: ProfileCompletionStatus;
+  adminChecklistStatus?: Record<string, boolean>;
   transferRequested?: boolean;
   transferRequest?: {
     requestedBy: string;

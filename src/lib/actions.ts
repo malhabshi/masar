@@ -3,7 +3,7 @@
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { formatKuwaitTime } from '@/lib/timestamp-utils';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ProfileCompletionStatus, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ChecklistConfigItem, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -1155,7 +1155,7 @@ export async function deleteTodo(userId: string, todoId: string) {
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function updateChecklistItem(studentId: string, itemKey: keyof ProfileCompletionStatus, value: boolean, authorId: string) {
+export async function updateChecklistItem(studentId: string, itemKey: string, value: boolean, authorId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
     const studentDoc = await adminDb!.collection('students').doc(studentId).get();
@@ -1164,6 +1164,74 @@ export async function updateChecklistItem(studentId: string, itemKey: keyof Prof
     if (!author || author.civilId !== studentDoc.data()!.employeeId) return { success: false, message: 'Unauthorized.' };
     await adminDb!.collection('students').doc(studentId).update({ [`profileCompletionStatus.${itemKey}`]: value, lastActivityAt: new Date().toISOString() });
     return { success: true, message: 'Checklist updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+const DEFAULT_CHECKLIST_ITEMS: ChecklistConfigItem[] = [
+  { id: 'submitUniversityApplication', label: 'Submit University Application', order: 0 },
+  { id: 'applyMoheScholarship', label: 'Apply for MOHE Scholarship', order: 1 },
+  { id: 'submitKcoRequest', label: 'Submit KCO Request', order: 2 },
+  { id: 'receivedCasOrI20', label: 'Received CAS or I-20', order: 3 },
+  { id: 'appliedForVisa', label: 'Applied for Visa', order: 4 },
+  { id: 'visaGranted', label: 'Visa Granted', order: 5 },
+  { id: 'documentsSubmittedToMohe', label: 'Documents Submitted to MOHE', order: 6 },
+  { id: 'medicalFitnessSubmitted', label: 'Medical Fitness Submitted', order: 7 },
+  { id: 'financialStatementsProvided', label: 'Financial Statements Provided', order: 8 },
+  { id: 'readyToTravel', label: 'Ready to Travel', order: 9, isFinal: true },
+];
+
+export async function getChecklistConfig(): Promise<ChecklistConfigItem[]> {
+  if (!checkAdminServices()) return DEFAULT_CHECKLIST_ITEMS;
+  try {
+    const doc = await adminDb!.collection('system_metadata').doc('checklist_config').get();
+    if (!doc.exists) return DEFAULT_CHECKLIST_ITEMS;
+    const data = doc.data();
+    return (data?.items as ChecklistConfigItem[]) || DEFAULT_CHECKLIST_ITEMS;
+  } catch { return DEFAULT_CHECKLIST_ITEMS; }
+}
+
+export async function saveChecklistConfig(items: ChecklistConfigItem[], adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized' };
+    await adminDb!.collection('system_metadata').doc('checklist_config').set({ items, updatedAt: new Date().toISOString(), updatedBy: adminId });
+    return { success: true, message: 'Checklist config saved.' };
+  } catch (e: any) { return { success: false, message: e.message }; }
+}
+
+export async function getAdminChecklistConfig(): Promise<ChecklistConfigItem[]> {
+  if (!checkAdminServices()) return [];
+  try {
+    const doc = await adminDb!.collection('system_metadata').doc('admin_checklist_config').get();
+    if (!doc.exists) return [];
+    const data = doc.data();
+    return (data?.items as ChecklistConfigItem[]) || [];
+  } catch { return []; }
+}
+
+export async function saveAdminChecklistConfig(items: ChecklistConfigItem[], adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || admin.role !== 'admin') return { success: false, message: 'Unauthorized' };
+    await adminDb!.collection('system_metadata').doc('admin_checklist_config').set({ items, updatedAt: new Date().toISOString(), updatedBy: adminId });
+    return { success: true, message: 'Admin checklist config saved.' };
+  } catch (e: any) { return { success: false, message: e.message }; }
+}
+
+export async function updateAdminChecklistItem(studentId: string, itemKey: string, value: boolean, authorId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const author = await getUser(authorId);
+    if (!author || !['admin', 'adminplus', 'department'].includes(author.role)) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+    await adminDb!.collection('students').doc(studentId).update({
+      [`adminChecklistStatus.${itemKey}`]: value,
+      lastActivityAt: new Date().toISOString(),
+    });
+    return { success: true, message: 'Admin checklist updated.' };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 

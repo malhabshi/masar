@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StudentChat } from '@/components/student/student-chat';
 import { MissingItemsSection } from '@/components/student/missing-items-section';
 import { ReadinessChecklist } from '@/components/student/readiness-checklist';
+import { AdminChecklist } from '@/components/student/admin-checklist';
 import { IeltsCard } from '@/components/student/ielts-card';
 import { GradeCard } from '@/components/student/grade-card';
 import { StudentUsersCard } from '@/components/student/student-users-card';
@@ -244,6 +245,7 @@ export default function StudentDetailPage() {
                 <TaskStatsCard tasks={tasks || []} />
               </div>
               <ReadinessChecklist student={student} currentUser={currentUser} />
+              <AdminChecklist student={student} currentUser={currentUser} />
               <MissingItemsSection student={student} currentUser={currentUser} />
               <JotformCard student={student} currentUser={currentUser} />
               <AcademicIntakeCard student={student} currentUser={currentUser} />
