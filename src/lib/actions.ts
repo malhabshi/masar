@@ -3212,6 +3212,15 @@ export async function addCountryApplication(
       appendFiles(fd, 'q16_input16[]', ieltsFileData);
       appendFiles(fd, 'q17_input17[]', otherFilesData);
       appendFiles(fd, 'q18_input18[]', universityDegreeData);
+      console.log('[addCountryApplication] USA fields:', {
+        firstName, lastName, dob, email, semester, major, universities,
+        kuwaitAddress, kuwaitPhone: kuwaitPhone ? `${kuwaitPhone.length} chars` : '(empty)',
+        guardianName, guardianDob, guardianPhone: guardianPhone ? 'present' : '(empty)',
+        guardianEmail, ieltsScore, followUpPerson,
+        passport: passportData.length, secondaryCerts: secondaryCertsData.length,
+        ieltsFile: ieltsFileData.length, otherFiles: otherFilesData.length,
+        universityDegree: universityDegreeData.length,
+      });
       jotformResult = await postToJotform(JOTFORM_USA_FORM_ID, fd);
     }
   } catch (err) {
