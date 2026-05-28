@@ -3135,11 +3135,6 @@ export async function addCountryApplication(
     const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, {
       method: 'POST',
       body: fd,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': `https://www.jotform.com/`,
-        'Origin': 'https://www.jotform.com',
-      },
     });
     let detail = '';
     try { detail = await res.text(); } catch { /* ignore */ }
