@@ -3212,15 +3212,25 @@ export async function addCountryApplication(
       appendFiles(fd, 'q16_input16[]', ieltsFileData);
       appendFiles(fd, 'q17_input17[]', otherFilesData);
       appendFiles(fd, 'q18_input18[]', universityDegreeData);
-      console.log('[addCountryApplication] USA fields:', {
-        firstName, lastName, dob, email, semester, major, universities,
-        kuwaitAddress, kuwaitPhone: kuwaitPhone ? `${kuwaitPhone.length} chars` : '(empty)',
-        guardianName, guardianDob, guardianPhone: guardianPhone ? 'present' : '(empty)',
-        guardianEmail, ieltsScore, followUpPerson,
-        passport: passportData.length, secondaryCerts: secondaryCertsData.length,
-        ieltsFile: ieltsFileData.length, otherFiles: otherFilesData.length,
-        universityDegree: universityDegreeData.length,
-      });
+      const missingUSA: string[] = [];
+      if (!firstName) missingUSA.push('firstName');
+      if (!lastName) missingUSA.push('lastName');
+      if (!dob) missingUSA.push('dob');
+      if (!email) missingUSA.push('email');
+      if (!semester) missingUSA.push('semester');
+      if (!kuwaitAddress) missingUSA.push('kuwaitAddress');
+      if (!kuwaitPhone) missingUSA.push('kuwaitPhone');
+      if (!guardianName) missingUSA.push('guardianName');
+      if (!guardianDob) missingUSA.push('guardianDob');
+      if (!guardianPhone) missingUSA.push('guardianPhone');
+      if (!guardianEmail) missingUSA.push('guardianEmail');
+      if (!followUpPerson) missingUSA.push('followUpPerson');
+      if (passportData.length === 0) missingUSA.push('passport(0 files)');
+      if (secondaryCertsData.length === 0) missingUSA.push('secondaryCerts(0 files)');
+      console.log('[addCountryApplication] USA missing:', missingUSA, '| all:', { firstName, lastName, dob, email, semester, kuwaitAddress, kuwaitPhone, guardianName, guardianDob, guardianPhone, guardianEmail, followUpPerson, passport: passportData.length, secondaryCerts: secondaryCertsData.length });
+      if (missingUSA.length > 0) {
+        return { success: false, message: `Missing required fields for USA: ${missingUSA.join(', ')}` };
+      }
       jotformResult = await postToJotform(JOTFORM_USA_FORM_ID, fd);
     }
   } catch (err) {
