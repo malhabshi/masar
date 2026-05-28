@@ -2527,6 +2527,7 @@ export async function closeStudentProfile(studentId: string, reason: string, adm
       pipelineStatus: 'black',
       applications: updatedApplications,
       employeeId: '123456789010',
+      transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId || null, toEmployeeId: '123456789010', date: now, transferredBy: adminId }],
       changeAgentRequired: false,
       changeAgentUniversities: FieldValue.delete(),
       lastActivityAt: now,
@@ -2585,6 +2586,7 @@ export async function reopenStudentProfile(studentId: string, adminId: string) {
       pipelineStatus: 'none',
       applications: updatedApplications,
       employeeId: null,
+      transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId || null, toEmployeeId: null, date: now, transferredBy: adminId }],
       lastActivityAt: now,
       adminNotes: FieldValue.arrayUnion({
         id: `note-reopened-${Date.now()}`,

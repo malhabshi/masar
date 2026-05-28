@@ -25,7 +25,7 @@ export function TransferHistory({ transferHistory }: TransferHistoryProps) {
       if (t.fromEmployeeId) ids.add(t.fromEmployeeId);
       if (t.toEmployeeId) ids.add(t.toEmployeeId);
     });
-    return Array.from(ids);
+    return Array.from(ids).filter(Boolean);
   }, [transferHistory]);
 
   const adminIds = useMemo(() => {
@@ -44,7 +44,7 @@ export function TransferHistory({ transferHistory }: TransferHistoryProps) {
       <CardContent className="space-y-4">
         {transferHistory.map((transfer, index) => {
           const fromEmployee = transfer.fromEmployeeId ? employeesByCivilId.get(transfer.fromEmployeeId) : null;
-          const toEmployee = employeesByCivilId.get(transfer.toEmployeeId);
+          const toEmployee = transfer.toEmployeeId ? employeesByCivilId.get(transfer.toEmployeeId) : null;
           const admin = adminsById.get(transfer.transferredBy);
 
           return (
@@ -74,7 +74,7 @@ export function TransferHistory({ transferHistory }: TransferHistoryProps) {
                                 <span className="font-medium">{toEmployee.name}</span>
                             </>
                         ) : (
-                            <span className="font-medium text-muted-foreground">...</span>
+                            <span className="font-medium text-muted-foreground">{transfer.toEmployeeId ? '...' : 'Unassigned'}</span>
                         )}
                     </div>
                 </div>

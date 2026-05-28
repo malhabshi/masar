@@ -33,17 +33,23 @@ export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) 
     setIsClient(true);
   }, []);
 
-  const calculateTotalTime = (clockIn: string, clockOut?: string | null) => {
+  const calculateTotalTime = (clockIn: string, clockOut?: string | null, lastSeen?: string | null) => {
     const start = toDate(clockIn);
-    const end = toDate(clockOut);
-    if (!start || !end) {
-      return 'N/A';
+    let end: Date | null | undefined;
+    let estimated = false;
+    if (clockOut) {
+      end = toDate(clockOut);
+    } else if (lastSeen) {
+      const ls = toDate(lastSeen);
+      end = ls ? new Date(ls.getTime() + 5 * 60 * 1000) : null;
+      estimated = true;
     }
+    if (!start || !end) return 'N/A';
     const diff = end.getTime() - start.getTime();
     if (diff < 0) return 'Invalid';
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
+    return estimated ? `~${hours}h ${minutes}m` : `${hours}h ${minutes}m`;
   };
 
   const sortedTimeLogs = [...timeLogs].sort((a, b) => {
@@ -85,8 +91,16 @@ export function EmployeeActivityTable({ timeLogs }: EmployeeActivityTableProps) 
                 </TableCell>
                 <TableCell>{isClient ? formatDate(log.date) : <Skeleton className="h-4 w-24" />}</TableCell>
                 <TableCell>{isClient ? toDate(log.clockIn)?.toLocaleTimeString() : <Skeleton className="h-4 w-16" />}</TableCell>
-                <TableCell>{isClient && log.clockOut ? toDate(log.clockOut)?.toLocaleTimeString() : 'In Progress'}</TableCell>
-                <TableCell>{isClient ? calculateTotalTime(log.clockIn, log.clockOut) : <Skeleton className="h-4 w-12" />}</TableCell>
+                <TableCell>
+                  {isClient ? (
+                    log.clockOut
+                      ? toDate(log.clockOut)?.toLocaleTimeString()
+                      : <span className="text-yellow-500 font-medium">
+                          Active{log.lastSeen ? ` · last seen ${toDate(log.lastSeen)?.toLocaleTimeString()}` : ''}
+                        </span>
+                  ) : <Skeleton className="h-4 w-16" />}
+                </TableCell>
+                <TableCell>{isClient ? calculateTotalTime(log.clockIn, log.clockOut, log.lastSeen) : <Skeleton className="h-4 w-12" />}</TableCell>
               </TableRow>
             );
           })}

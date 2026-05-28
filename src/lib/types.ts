@@ -118,7 +118,7 @@ export interface Student {
   lastChatMessageTimestamp?: string; // For Inbox sorting
   transferHistory?: {
     fromEmployeeId: string | null;
-    toEmployeeId: string;
+    toEmployeeId: string | null;
     date: string;
     transferredBy: string;
   }[];

@@ -84,23 +84,33 @@ export default function EmployeeActivityPage() {
         });
     }, [allTimeLogs, dateRange, selectedEmployeeId, currentUser?.role]);
     
+    // For open sessions, use lastSeen + 5 min (matching auto-close logic) instead of now
+    const getEffectiveEnd = (log: TimeLog): Date | null => {
+        if (log.clockOut) return toDate(log.clockOut);
+        if (log.lastSeen) {
+            const ls = toDate(log.lastSeen);
+            if (ls) return new Date(ls.getTime() + 5 * 60 * 1000);
+        }
+        return null; // no data — skip this session
+    };
+
     // Memoize summary stats
     const summaryStats = useMemo(() => {
         const totalMinutes = filteredLogs.reduce((acc, log) => {
             const start = toDate(log.clockIn);
-            const end = log.clockOut ? toDate(log.clockOut) : new Date();
+            const end = getEffectiveEnd(log);
             if (start && end) {
                 return acc + (end.getTime() - start.getTime()) / (1000 * 60);
             }
             return acc;
         }, 0);
-        
+
         const totalHours = totalMinutes / 60;
-        
+
         const employeeHours: Record<string, number> = {};
         filteredLogs.forEach(log => {
             const start = toDate(log.clockIn);
-            const end = log.clockOut ? toDate(log.clockOut) : new Date();
+            const end = getEffectiveEnd(log);
             if(start && end) {
                 const minutes = (end.getTime() - start.getTime()) / (1000 * 60);
                 employeeHours[log.employeeId] = (employeeHours[log.employeeId] || 0) + minutes;

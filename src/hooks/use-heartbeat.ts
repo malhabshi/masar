@@ -1,51 +1,59 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUser } from './use-user';
 import { keepAlive } from '@/lib/actions';
 
-const HEARTBEAT_INTERVAL = 60 * 1000; // 60 seconds
+const HEARTBEAT_INTERVAL = 60 * 1000;  // send keepAlive every 60 s when active
+const IDLE_TIMEOUT      = 15 * 60 * 1000; // 15 minutes of no input = idle
 
-/**
- * Hook to maintain a lightweight "active" session for employees.
- * Updates the user's lastSeen timestamp every minute.
- * Heavy background tasks (like inactivity scans) are decoupled from this hook.
- */
 export function useHeartbeat() {
   const { user } = useUser();
   const [isMounted, setIsMounted] = useState(false);
+  const lastActivityRef = useRef<number>(Date.now());
+  const wasIdleRef      = useRef<boolean>(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!isMounted) return;
+    if (!isMounted || !user || user.role !== 'employee') return;
 
-    let intervalId: NodeJS.Timeout | null = null;
-    
-    const sendKeepAlive = () => {
-      if (user && user.role === 'employee') {
-        // Lightweight call: only updates the user's specific time_log document
-        keepAlive(user.id);
+    const send = () => keepAlive(user.id);
+
+    // Called on any user interaction
+    const onActivity = () => {
+      const wasIdle = wasIdleRef.current;
+      lastActivityRef.current = Date.now();
+      wasIdleRef.current = false;
+      // Immediately resume the session when returning from idle
+      if (wasIdle) send();
+    };
+
+    // Periodic tick — skipped entirely when user is idle
+    const tick = () => {
+      const idleMs = Date.now() - lastActivityRef.current;
+      if (idleMs > IDLE_TIMEOUT) {
+        wasIdleRef.current = true;
+        return; // don't update lastSeen while idle
       }
+      send();
     };
 
-    if (user && user.role === 'employee') {
-      sendKeepAlive();
-      intervalId = setInterval(sendKeepAlive, HEARTBEAT_INTERVAL);
-    }
-    
-    const handleBeforeUnload = () => {
-        if (user && user.role === 'employee') {
-            keepAlive(user.id);
-        }
-    };
-    
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const;
+    events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+
+    // Fire immediately so the session is marked active on mount
+    send();
+    const intervalId = setInterval(tick, HEARTBEAT_INTERVAL);
+
+    const handleBeforeUnload = () => send();
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      clearInterval(intervalId);
+      events.forEach(e => window.removeEventListener(e, onActivity));
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [user, isMounted]);

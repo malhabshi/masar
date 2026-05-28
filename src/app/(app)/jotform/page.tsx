@@ -299,6 +299,7 @@ export default function JotformPage() {
         const defaultCountry = countryDefault[key] ?? 'Australia';
         for (const major of pick.addedMajors) {
           for (const uniName of pick.selectedUniNamesByMajor[major] || []) {
+            if (uniName === 'Best Option') continue;
             let appCountry: 'UK' | 'USA' | 'Australia' | 'New Zealand' = defaultCountry;
             if (key === 'AUNZ') {
               const dbUni = unis.find(u => u.name.toLowerCase().trim() === uniName.toLowerCase().trim());
