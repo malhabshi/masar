@@ -133,17 +133,27 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
   const getFinal = () => {
     let bestUniUsed = false;
     const uniParts: string[] = [];
-    for (const major of pick.addedMajors) {
-      const selected = pick.selectedUniNamesByMajor[major] || [];
+    const entries: { university: string; major: string }[] = [];
+    for (const m of pick.addedMajors) {
+      const selected = pick.selectedUniNamesByMajor[m] || [];
       for (const uni of selected) {
-        if (uni.toLowerCase().trim() === BEST_UNI.toLowerCase()) { bestUniUsed = true; }
-        else { uniParts.push(`${uni} (${major})`); }
+        if (uni.toLowerCase().trim() === BEST_UNI.toLowerCase()) {
+          bestUniUsed = true;
+          entries.push({ university: BEST_UNI, major: m });
+        } else {
+          uniParts.push(`${uni} (${m})`);
+          entries.push({ university: uni, major: m });
+        }
       }
     }
     const extras = pick.uniExtra.split(',').map(s => s.trim()).filter(Boolean);
+    for (const extra of extras) {
+      entries.push({ university: extra, major: pick.addedMajors[0] || '' });
+    }
     return {
       universities: [...(bestUniUsed ? [BEST_UNI] : []), ...uniParts, ...extras].join(', '),
       major: pick.addedMajors.join(', '),
+      entries,
     };
   };
 
@@ -155,26 +165,25 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
   };
 
   const handleSubmit = async () => {
-    const { universities, major } = getFinal();
+    const { universities, major, entries } = getFinal();
     if (!country || !major) return;
     if (country === 'USA' && !semester) return;
     if (country === 'USA' && !guardianDob && !jd?.guardianDob) return;
 
-    // For AU/NZ, look up the actual country from the approved universities list
-    let firestoreCountry: string | undefined;
-    if (countryKey === 'AUNZ') {
-      outer: for (const m of pick.addedMajors) {
-        for (const uniName of (pick.selectedUniNamesByMajor[m] || [])) {
-          if (uniName === BEST_UNI) continue;
-          const uni = unis.find(u => u.name === uniName);
-          if (uni) { firestoreCountry = uni.country; break outer; }
-        }
+    // Enrich each entry with the actual Firestore country
+    const applicationEntries = entries.map(e => {
+      let entryCountry: string;
+      if (countryKey === 'UK') entryCountry = 'UK';
+      else if (countryKey === 'USA') entryCountry = 'USA';
+      else {
+        const uniRecord = unis.find(u => u.name === e.university);
+        entryCountry = uniRecord?.country || 'Australia';
       }
-      if (!firestoreCountry) firestoreCountry = 'Australia';
-    }
+      return { ...e, country: entryCountry };
+    });
 
     setIsSubmitting(true);
-    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined, guardianDob || undefined, firestoreCountry);
+    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined, guardianDob || undefined, applicationEntries);
     if (result.success) {
       toast({ title: 'Application Submitted', description: result.message });
       onSuccess();

@@ -3013,7 +3013,7 @@ export async function addCountryApplication(
   userId: string,
   semesterOverride?: string,
   guardianDobOverride?: string,
-  firestoreCountry?: string
+  applicationEntries?: { university: string; major: string; country: string }[]
 ): Promise<{ success: boolean; message: string }> {
   'use server';
   if (!adminDb) return { success: false, message: 'Server not configured.' };
@@ -3246,28 +3246,26 @@ export async function addCountryApplication(
     return { success: false, message: `Jotform error (${jotformResult.status}): ${snippet}` };
   }
 
-  // Strip " (major)" suffix added for Jotform — store clean university names
-  const displayUniversities = universities
-    .split(', ')
-    .map(u => u.replace(/\s*\([^)]+\)\s*$/, '').trim())
-    .join(', ');
-
-  // Add application to student and update targetCountries
-  const newApplication = {
-    university: displayUniversities || '',
-    major,
-    country: firestoreCountry || (country === 'Australia / New Zealand' ? 'Australia' : country),
-    status: 'Pending',
-    updatedAt: new Date().toISOString(),
-  };
+  const now = new Date().toISOString();
   const existingApps: unknown[] = student.applications || [];
   const existingCountries: string[] = student.targetCountries || [];
   const updatedCountries = existingCountries.includes(country) ? existingCountries : [...existingCountries, country];
 
+  // Create one Application entry per university
+  const newApplications = applicationEntries && applicationEntries.length > 0
+    ? applicationEntries.map(e => ({ university: e.university, major: e.major, country: e.country, status: 'Pending', updatedAt: now }))
+    : [{
+        university: universities.split(', ').map(u => u.replace(/\s*\([^)]+\)\s*$/, '').trim()).join(', '),
+        major,
+        country: country === 'Australia / New Zealand' ? 'Australia' : country,
+        status: 'Pending',
+        updatedAt: now,
+      }];
+
   await adminDb.collection('students').doc(studentId).update({
-    applications: [...existingApps, newApplication],
+    applications: [...existingApps, ...newApplications],
     targetCountries: updatedCountries,
-    lastActivityAt: new Date().toISOString(),
+    lastActivityAt: now,
   });
 
   return { success: true, message: `Application for ${country} submitted successfully.` };
