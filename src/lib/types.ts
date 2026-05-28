@@ -156,6 +156,9 @@ export interface Student {
   jotform?: boolean;
   studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';
   uploadNote?: string;
+  isClosed?: boolean;
+  closedAt?: string;
+  closedReason?: string;
 }
 
 export interface ChatMessage {

@@ -14,7 +14,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { TaskList } from '@/components/dashboard/task-list';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
-import { Badge } from '@/components/ui/badge';
 import { DashboardRemindersCard } from '@/components/dashboard/dashboard-reminders-card';
 
 export default function EmployeeDashboard({ currentUser }: { currentUser: AppUser }) {
@@ -61,7 +60,7 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
         }, 0);
 
         const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
-        myStudents.forEach(s => {
+        myStudents.filter(s => !s.isClosed).forEach(s => {
             const status = s.pipelineStatus || 'none';
             if (status === 'green') pipeline.green++;
             else if (status === 'yellow') pipeline.yellow++;

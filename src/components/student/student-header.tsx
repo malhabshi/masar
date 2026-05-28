@@ -21,6 +21,7 @@ import { formatRelativeTime } from '@/lib/timestamp-utils';
 import { CreateStudentTaskDialog } from '../tasks/create-student-task-dialog';
 import { Button } from '@/components/ui/button';
 import { toggleChangeAgentStatus, forceInactivity, clearStudentFlagsForEveryone } from '@/lib/actions';
+import { CloseProfileButton } from './close-profile-button';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -413,6 +414,12 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               {student.name || 'Unknown Student'}
             </h1>
             
+            {student.isClosed && (
+              <BadgeComponent className="bg-black text-white border-white border font-black text-sm px-3 py-1 uppercase tracking-widest">
+                CLOSED
+              </BadgeComponent>
+            )}
+
             {student.changeAgentRequired && (
               <BadgeComponent className="bg-black text-red-50 border-red-500 border-2 font-black animate-pulse text-sm px-3 py-1">
                 CHANGE AGENT
@@ -528,6 +535,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
 
               {canApproveDeletion && <ApproveDeletionDialog student={student} currentUser={currentUser} />}
               {isAdmin && !canApproveDeletion && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}
+              {isAdmin && <CloseProfileButton student={student} currentUser={currentUser} />}
             </div>
           </div>
           {student.finalChoiceUniversity && (

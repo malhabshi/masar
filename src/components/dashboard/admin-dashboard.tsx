@@ -17,7 +17,6 @@ import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { DashboardRemindersCard } from '@/components/dashboard/dashboard-reminders-card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 
 export default function AdminDashboard({ currentUser }: { currentUser: AppUser }) {
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'adminplus';
@@ -68,9 +67,11 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
 
     students.forEach(s => {
+      if (s.isClosed) return;
+
       const hasAgent = !!s.employeeId;
       const isGhost = hasAgent && !validCivilIds.has(s.employeeId!) && !validUserIds.has(s.employeeId!);
-      
+
       if (!hasAgent) {
         unassigned++;
       } else if (!isGhost) {
@@ -117,6 +118,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     });
 
     students.forEach(s => {
+      if (s.isClosed) return;
       if (s.employeeId && statsMap.has(s.employeeId)) {
         const entry = statsMap.get(s.employeeId)!;
         entry.total++;

@@ -1786,6 +1786,7 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     await studentRef.update(updates);
 
     // 3. Trigger Targeted WhatsApp Notifications
+    if (studentData.isClosed) return { success: true };
     for (const staff of allUsers) {
       if (!mentionedUserIds.includes(staff.id)) continue;
       if (!staff.phone) continue;
@@ -1833,6 +1834,7 @@ export async function triggerDocumentUploadNotification(studentId: string, docum
     const studentDoc = await studentRef.get();
     if (!studentDoc.exists) return;
     const studentData = studentDoc.data() as Student;
+    if (studentData.isClosed) return;
     const isAdminDept = ['admin', 'department'].includes(author.role);
 
     if (isAdminDept) {
@@ -2052,7 +2054,7 @@ export async function processInactivityReminders() {
 
     for (const doc of snapshot.docs) {
       const student = doc.data() as Student;
-      if (student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel || !student.employeeId) continue;
+      if (student.isClosed || student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel || !student.employeeId) continue;
 
       if (student.lastInactivityReminderSentAt) {
         if (differenceInHours(now, parseISO(student.lastInactivityReminderSentAt)) < 48) {
@@ -2465,6 +2467,57 @@ export async function processStudentReminders(params: {
   } catch (e: any) {
     console.error('processStudentReminders failed:', e);
     return { triggered: [] };
+  }
+}
+
+export async function closeStudentProfile(studentId: string, reason: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'adminplus'].includes(admin.role)) {
+      return { success: false, message: 'Unauthorized. Only Admins can close profiles.' };
+    }
+
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+
+    if (studentData.isClosed) return { success: false, message: 'Profile is already closed.' };
+
+    const now = new Date().toISOString();
+    const closureNote = `${reason} (Closed: ${formatKuwaitTime(now)})`;
+
+    const existingNote = studentData.adminStatusNote || '';
+    const newAdminStatusNote = existingNote ? `${existingNote} | ${closureNote}` : closureNote;
+
+    const currentName = studentData.name || '';
+    const newName = currentName.endsWith('-Closed') ? currentName : `${currentName}-Closed`;
+
+    const updatedApplications = (studentData.applications || []).map(app => ({
+      ...app,
+      status: 'Rejected' as ApplicationStatus,
+      rejectionReason: 'change agent / the student do not work with us',
+      updatedAt: now,
+    }));
+
+    await studentRef.update({
+      isClosed: true,
+      closedAt: now,
+      closedReason: reason,
+      name: newName,
+      adminStatusNote: newAdminStatusNote,
+      pipelineStatus: 'black',
+      applications: updatedApplications,
+      employeeId: '123456789010',
+      changeAgentRequired: false,
+      changeAgentUniversities: FieldValue.delete(),
+      lastActivityAt: now,
+    });
+
+    return { success: true, message: 'Profile closed successfully.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
   }
 }
 

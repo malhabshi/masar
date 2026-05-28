@@ -100,6 +100,8 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         let unassignedStudents = 0;
 
         students.forEach(s => {
+            if (s.isClosed) return;
+
             const hasAgent = !!s.employeeId;
             const isGhost = hasAgent && !validCivilIds.has(s.employeeId!) && !validUserIds.has(s.employeeId!);
             
@@ -146,6 +148,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         });
 
         students.forEach(s => {
+            if (s.isClosed) return;
             if (s.employeeId && statsMap.has(s.employeeId)) {
                 const entry = statsMap.get(s.employeeId)!;
                 entry.total++;

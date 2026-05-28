@@ -225,6 +225,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     });
 
     return [...filtered].sort((a, b) => {
+        // Closed profiles always go last
+        if (!!a.isClosed !== !!b.isClosed) return a.isClosed ? 1 : -1;
+        if (a.isClosed && b.isClosed) return 0;
+
         if (!!a.changeAgentRequired !== !!b.changeAgentRequired) return a.changeAgentRequired ? -1 : 1;
         const getNotificationScore = (s: Student) => {
             let score = 0;
@@ -316,7 +320,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           <div className="flex items-center gap-2.5">
             <h2 className="text-xl font-bold tracking-tight">Applicants List</h2>
             <Badge variant="secondary" className="rounded-full bg-primary/10 text-primary border-primary/20 px-3 py-0.5 font-bold animate-in fade-in zoom-in duration-300">
-              {displayedStudents.length} Students
+              {displayedStudents.filter(s => !s.isClosed).length} Students
             </Badge>
           </div>
         </div>
@@ -522,7 +526,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 const isUnassigned = !student.employeeId;
 
                 return (
-                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20", selectedIds.includes(student.id) && "bg-primary/5")}>
+                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20", student.isClosed && "opacity-60 bg-gray-100/60", selectedIds.includes(student.id) && "bg-primary/5")}>
                   {isAdminDept && (
                     <TableCell>
                       <Checkbox 
@@ -539,6 +543,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         <div className="font-medium flex items-center gap-2 flex-wrap">
                           {student.internalNumber && <Badge variant="secondary" className="font-bold text-[10px] h-5 px-1 bg-muted">#{student.internalNumber}</Badge>}
                           <span>{student.name || 'Unknown Student'}</span>
+                          {student.isClosed && <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5">CLOSED</Badge>}
                           {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border animate-pulse uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
                           {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
                           {isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0 ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.chatUnreadCountByUser![currentUser.id]}</span></Badge> : null}
