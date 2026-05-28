@@ -81,6 +81,8 @@ export function StudentUploadedDocuments({ student, currentUser, allowGenerateLi
     if (!hasUnseen) return;
     updateDoc(doc(firestore, 'students', student.id), {
       publicUploadsViewedBy: arrayUnion(currentUser.id),
+      newPublicUploadsForAdmin: 0,
+      newPublicUploadsForEmployee: 0,
     }).catch(() => {});
   }, [student.id]);
 
