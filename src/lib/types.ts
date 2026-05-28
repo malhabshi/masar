@@ -174,6 +174,30 @@ export interface Student {
   hasChangeAgentHistory?: boolean;
   term?: string;
   jotform?: boolean;
+  jotformData?: {
+    dob?: string;
+    civilId?: string;
+    kuwaitAddress?: string;
+    schoolName?: string;
+    ieltsScore?: string;
+    scholarshipType?: string;
+    acceptanceType?: string;
+    semester?: string;
+    guardianName?: string;
+    guardianEmail?: string;
+    guardianPhone?: string;
+    guardianDob?: string;
+    followUpPerson?: string;
+    documents?: {
+      passport?: string[];
+      secondaryCerts?: string[];
+      ieltsFile?: string[];
+      otherFiles?: string[];
+      universityDegree?: string[];
+      recommendationLetter?: string[];
+      personalStatement?: string[];
+    };
+  };
   studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';
   uploadNote?: string;
   isClosed?: boolean;

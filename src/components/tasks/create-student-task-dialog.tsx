@@ -20,12 +20,16 @@ import { useCollection } from '@/firebase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { RequestType, Student } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Loader2, ClipboardList, ArrowLeft } from 'lucide-react';
+import { Loader2, ClipboardList, ArrowLeft, Globe } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '../ui/textarea';
 import { createStudentTask } from '@/lib/actions';
 import { DynamicTaskForm } from './dynamic-task-form';
+import { AddCountryForm } from './add-country-form';
+
+const ADD_COUNTRY_ID = '__add_country__';
 
 const selectionSchema = z.object({
   requestTypeId: z.string().min(1, 'Please select a request type.'),
@@ -40,6 +44,7 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedRequestType, setSelectedRequestType] = useState<RequestType | null>(null);
+  const [isAddCountry, setIsAddCountry] = useState(false);
   const { toast } = useToast();
 
   const { data: requestTypes, isLoading: requestTypesLoading } = useCollection<RequestType>('request_types');
@@ -53,6 +58,11 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
   });
 
   const handleTypeSelect = (typeId: string) => {
+    if (typeId === ADD_COUNTRY_ID) {
+      setIsAddCountry(true);
+      setSelectedRequestType(null);
+      return;
+    }
     const type = activeRequestTypes.find(rt => rt.id === typeId);
     setSelectedRequestType(type || null);
   };
@@ -104,6 +114,7 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
   const handleClose = () => {
     setIsOpen(false);
     setSelectedRequestType(null);
+    setIsAddCountry(false);
     selectionForm.reset();
   };
 
@@ -115,26 +126,33 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
           New Task
         </Button>
       </DialogTrigger>
-      <DialogContent className={selectedRequestType ? "max-w-3xl max-h-[90vh] overflow-y-auto" : "max-w-md"}>
+      <DialogContent className={(selectedRequestType || isAddCountry) ? "max-w-3xl max-h-[90vh] overflow-y-auto" : "max-w-md"}>
         <DialogHeader>
           <div className="flex items-center gap-2">
-            {selectedRequestType && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedRequestType(null)}>
+            {(selectedRequestType || isAddCountry) && (
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedRequestType(null); setIsAddCountry(false); }}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
             <DialogTitle>
-              {selectedRequestType ? `New ${selectedRequestType.name}` : 'Select Request Type'}
+              {isAddCountry ? 'Add Country Application' : selectedRequestType ? `New ${selectedRequestType.name}` : 'Select Request Type'}
             </DialogTitle>
           </div>
-          {!selectedRequestType && (
+          {!selectedRequestType && !isAddCountry && (
             <DialogDescription>
               Choose the type of request you want to submit for {student.name}.
             </DialogDescription>
           )}
         </DialogHeader>
 
-        {!selectedRequestType ? (
+        {isAddCountry ? (
+          <AddCountryForm
+            student={student}
+            currentUser={currentUser}
+            onSuccess={handleClose}
+            onCancel={() => setIsAddCountry(false)}
+          />
+        ) : !selectedRequestType ? (
           <Form {...selectionForm}>
             <form className="space-y-4 py-4">
               <FormField
@@ -153,6 +171,17 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
                         {activeRequestTypes.map(rt => (
                           <SelectItem key={rt.id} value={rt.id}>{rt.name}</SelectItem>
                         ))}
+                        {student.jotformData?.documents?.passport?.length ? (
+                          <>
+                            <Separator className="my-1" />
+                            <SelectItem value={ADD_COUNTRY_ID}>
+                              <span className="flex items-center gap-2 text-primary font-medium">
+                                <Globe className="h-3.5 w-3.5" />
+                                Add Country Application
+                              </span>
+                            </SelectItem>
+                          </>
+                        ) : null}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -165,9 +194,9 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
             </form>
           </Form>
         ) : (
-          <DynamicTaskForm 
-            student={student} 
-            requestType={selectedRequestType} 
+          <DynamicTaskForm
+            student={student}
+            requestType={selectedRequestType}
             onSubmit={handleDynamicSubmit}
             onCancel={() => setSelectedRequestType(null)}
             isSubmitting={isSubmitting}

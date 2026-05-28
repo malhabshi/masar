@@ -2894,23 +2894,46 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     try {
       const now = new Date().toISOString();
 
-      // Upload passport files to Storage using admin SDK
+      // Upload all document types to Storage and collect URLs
       const passportDocs: Record<string, unknown>[] = [];
+      const jotformDocUrls: Record<string, string[]> = {
+        passport: [], secondaryCerts: [], ieltsFile: [], otherFiles: [],
+        universityDegree: [], recommendationLetter: [], personalStatement: [],
+      };
+
       if (storage) {
         const bucketName = 'studio-9484431255-91d96.firebasestorage.app';
         const bucket = storage.bucket(bucketName);
-        for (let i = 0; i < passportData.length; i++) {
-          const f = passportData[i];
-          const storagePath = `students/${newStudentId}/documents/${Date.now()}_${i}_${f.name}`;
-          const downloadToken = crypto.randomUUID();
-          const fileRef = bucket.file(storagePath);
-          await fileRef.save(Buffer.from(f.buffer), {
-            metadata: { contentType: f.type, metadata: { firebaseStorageDownloadTokens: downloadToken } },
-          });
-          const encodedPath = encodeURIComponent(storagePath);
-          const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
-          passportDocs.push({ id: `passport-${Date.now()}-${i}`, name: 'Passport', originalName: f.name, size: f.buffer.byteLength, url, uploadedAt: now, authorId: creatingUserId });
-        }
+
+        const uploadDocSet = async (filesData: typeof passportData, docKey: string, docLabel: string) => {
+          const urls: string[] = [];
+          for (let i = 0; i < filesData.length; i++) {
+            const f = filesData[i];
+            const storagePath = `students/${newStudentId}/jotform/${docKey}/${Date.now()}_${i}_${f.name}`;
+            const downloadToken = crypto.randomUUID();
+            const fileRef = bucket.file(storagePath);
+            await fileRef.save(Buffer.from(f.buffer), {
+              metadata: { contentType: f.type, metadata: { firebaseStorageDownloadTokens: downloadToken } },
+            });
+            const encodedPath = encodeURIComponent(storagePath);
+            const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+            urls.push(url);
+            if (docKey === 'passport') {
+              passportDocs.push({ id: `passport-${Date.now()}-${i}`, name: docLabel, originalName: f.name, size: f.buffer.byteLength, url, uploadedAt: now, authorId: creatingUserId });
+            }
+          }
+          return urls;
+        };
+
+        await Promise.all([
+          uploadDocSet(passportData, 'passport', 'Passport').then(urls => { jotformDocUrls.passport = urls; }),
+          uploadDocSet(secondaryCertsData, 'secondaryCerts', 'Secondary Certs').then(urls => { jotformDocUrls.secondaryCerts = urls; }),
+          uploadDocSet(ieltsFileData, 'ieltsFile', 'IELTS File').then(urls => { jotformDocUrls.ieltsFile = urls; }),
+          uploadDocSet(otherFilesData, 'otherFiles', 'Other Files').then(urls => { jotformDocUrls.otherFiles = urls; }),
+          uploadDocSet(universityDegreeData, 'universityDegree', 'University Degree').then(urls => { jotformDocUrls.universityDegree = urls; }),
+          uploadDocSet(recommendationLetterData, 'recommendationLetter', 'Recommendation Letter').then(urls => { jotformDocUrls.recommendationLetter = urls; }),
+          uploadDocSet(personalStatementData, 'personalStatement', 'Personal Statement').then(urls => { jotformDocUrls.personalStatement = urls; }),
+        ]);
       }
 
       const builtApplicationsJson = (formData.get('builtApplications') as string) || '[]';
@@ -2936,6 +2959,22 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         pipelineStatus: 'none',
         isNewForEmployee: !!employeeCivilId,
         jotform: true,
+        jotformData: {
+          ...(dob && { dob }),
+          ...(civilId && { civilId }),
+          ...(kuwaitAddress && { kuwaitAddress }),
+          ...(schoolName && { schoolName }),
+          ...(ieltsScore && { ieltsScore }),
+          ...(scholarshipType && { scholarshipType }),
+          ...(acceptanceType && { acceptanceType }),
+          ...(semester && { semester }),
+          ...(guardianName && { guardianName }),
+          ...(guardianEmail && { guardianEmail }),
+          ...(guardianPhone && { guardianPhone }),
+          ...(guardianDob && { guardianDob }),
+          ...(followUpPerson && { followUpPerson }),
+          documents: jotformDocUrls,
+        },
         academicIntakeSemester: intakeSemester,
         academicIntakeYear: intakeYear,
         profileCompletionStatus: {
@@ -2964,5 +3003,223 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     jotformResults,
     studentCreated,
   };
+}
+
+export async function addCountryApplication(
+  studentId: string,
+  country: string,
+  major: string,
+  universities: string,
+  userId: string
+): Promise<{ success: boolean; message: string }> {
+  'use server';
+  if (!adminDb) return { success: false, message: 'Server not configured.' };
+
+  const userSnap = await adminDb.collection('users').doc(userId).get();
+  if (!userSnap.exists) return { success: false, message: 'User not found.' };
+  const user = userSnap.data()!;
+  const allowedRoles = ['admin', 'adminplus', 'department', 'employee'];
+  if (!allowedRoles.includes(user.role)) return { success: false, message: 'Unauthorized.' };
+
+  const studentSnap = await adminDb.collection('students').doc(studentId).get();
+  if (!studentSnap.exists) return { success: false, message: 'Student not found.' };
+  const student = studentSnap.data()!;
+
+  if (user.role === 'employee' && user.civilId !== student.employeeId) {
+    return { success: false, message: 'You are not assigned to this student.' };
+  }
+
+  const jd = student.jotformData;
+  if (!jd?.documents?.passport?.length) {
+    return { success: false, message: 'Student does not have stored Jotform documents.' };
+  }
+
+  // Download a file from a Firebase Storage URL and return as FileData
+  type FileData = { buffer: ArrayBuffer; name: string; type: string };
+  const downloadFile = async (url: string): Promise<FileData> => {
+    const res = await fetch(url);
+    const buffer = await res.arrayBuffer();
+    const contentType = res.headers.get('content-type') || 'application/octet-stream';
+    const rawName = url.split('/').pop()?.split('?')[0] || 'file';
+    const decoded = decodeURIComponent(rawName);
+    // Strip upload timestamp prefix (e.g. "1234567890_0_filename.pdf" → "filename.pdf")
+    const name = decoded.replace(/^\d+_\d+_/, '');
+    return { buffer, name, type: contentType };
+  };
+
+  const downloadAll = async (urls: string[] | undefined): Promise<FileData[]> => {
+    if (!urls?.length) return [];
+    return Promise.all(urls.map(downloadFile));
+  };
+
+  const [passportData, secondaryCertsData, ieltsFileData, otherFilesData, universityDegreeData, recommendationLetterData, personalStatementData] =
+    await Promise.all([
+      downloadAll(jd.documents.passport),
+      downloadAll(jd.documents.secondaryCerts),
+      downloadAll(jd.documents.ieltsFile),
+      downloadAll(jd.documents.otherFiles),
+      downloadAll(jd.documents.universityDegree),
+      downloadAll(jd.documents.recommendationLetter),
+      downloadAll(jd.documents.personalStatement),
+    ]);
+
+  const appendFiles = (fd: FormData, field: string, filesData: FileData[]) => {
+    for (const f of filesData) fd.append(field, new Blob([f.buffer], { type: f.type }), f.name);
+  };
+
+  const toDateParts = (iso: string) => {
+    if (!iso) return null;
+    const [year, month, day] = iso.split('-');
+    return { month, day, year };
+  };
+
+  const firstName = student.name?.split(' ')[0] || '';
+  const lastName = student.name?.split(' ').slice(1).join(' ') || '';
+  const email = student.email || '';
+  const kuwaitPhone = student.phone || '';
+  const dob = jd.dob || '';
+  const civilId = jd.civilId || '';
+  const kuwaitAddress = jd.kuwaitAddress || '';
+  const schoolName = jd.schoolName || '';
+  const ieltsScore = jd.ieltsScore || '';
+  const followUpPerson = jd.followUpPerson || '';
+  const guardianName = jd.guardianName || '';
+  const guardianEmail = jd.guardianEmail || '';
+  const guardianPhone = jd.guardianPhone || '';
+  const guardianDob = jd.guardianDob || '';
+  const scholarshipType = jd.scholarshipType || '';
+  const acceptanceType = jd.acceptanceType || '';
+  const semester = jd.semester || '';
+
+  const buildBase = (formId: string): FormData => {
+    const fd = new FormData();
+    fd.append('formID', formId);
+    fd.append('q3_input3[first]', firstName);
+    fd.append('q3_input3[last]', lastName);
+    const dobj = toDateParts(dob);
+    if (dobj) {
+      fd.append('q4_input4[month]', dobj.month);
+      fd.append('q4_input4[day]', dobj.day);
+      fd.append('q4_input4[year]', dobj.year);
+    }
+    if (email) fd.append('q5_input5', email);
+    if (kuwaitAddress) fd.append('q9_input9', kuwaitAddress);
+    if (ieltsScore) fd.append('q16_input16', ieltsScore);
+    if (followUpPerson) fd.append('q17_input17', followUpPerson);
+    if (guardianName) fd.append('q23_input23', guardianName);
+    if (guardianEmail) fd.append('q25_input25', guardianEmail);
+    if (guardianPhone) fd.append('q26_input26', guardianPhone);
+    appendFiles(fd, 'q12_input12[]', secondaryCertsData);
+    appendFiles(fd, 'q13_input13[]', ieltsFileData);
+    appendFiles(fd, 'q14_input14[]', otherFilesData);
+    appendFiles(fd, 'q15_input15[]', universityDegreeData);
+    appendFiles(fd, 'q28_input28[]', recommendationLetterData);
+    appendFiles(fd, 'q29_personalStatement[]', personalStatementData);
+    return fd;
+  };
+
+  const postToJotform = async (formId: string, fd: FormData) => {
+    const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, { method: 'POST', body: fd });
+    return res.ok;
+  };
+
+  let jotformSuccess = false;
+
+  try {
+    if (country === 'UK') {
+      const fd = buildBase(JOTFORM_UK_FORM_ID);
+      if (major) fd.append('q7_input7', major);
+      if (universities) fd.append('q8_input8', universities);
+      appendFiles(fd, 'q11_input11[]', passportData);
+      if (kuwaitPhone) fd.append('q48_input48', kuwaitPhone);
+      if (civilId) fd.append('q52_input52', civilId);
+      if (schoolName) fd.append('q62_input62', schoolName);
+      if (scholarshipType) fd.append('q37_input37', scholarshipType);
+      if (acceptanceType) fd.append('q38_input38', acceptanceType);
+      if (followUpPerson) fd.append('q39_input39', followUpPerson);
+      jotformSuccess = await postToJotform(JOTFORM_UK_FORM_ID, fd);
+    } else if (country === 'Australia / New Zealand') {
+      const fd = buildBase(JOTFORM_AUNZ_FORM_ID);
+      if (major) fd.append('q7_input7', major);
+      if (universities) fd.append('q8_input8', universities);
+      appendFiles(fd, 'q11_passportPhoto[]', passportData);
+      if (kuwaitPhone) fd.append('q10_input10[full]', kuwaitPhone);
+      if (civilId) fd.append('q36_input36', civilId);
+      const aunzProgramMap: Record<string, string> = {
+        'Foundation': 'I want to apply for foundation',
+        'First Year': 'I want to apply for first year',
+        'General English': 'General English معهد اللغة',
+        'ESL': 'General English معهد اللغة',
+        'ESL + Foundation': 'I want to apply for foundation',
+        'Masters': 'Masters',
+      };
+      const mappedProgram = acceptanceType ? aunzProgramMap[acceptanceType] : '';
+      if (mappedProgram) fd.append('q21_input21[]', mappedProgram);
+      jotformSuccess = await postToJotform(JOTFORM_AUNZ_FORM_ID, fd);
+    } else if (country === 'USA') {
+      const fd = new FormData();
+      fd.append('formID', JOTFORM_USA_FORM_ID);
+      fd.append('q3_input3[first]', firstName);
+      fd.append('q3_input3[last]', lastName);
+      const dobObj = toDateParts(dob);
+      if (dobObj) {
+        fd.append('q19_input19[month]', dobObj.month);
+        fd.append('q19_input19[day]', dobObj.day);
+        fd.append('q19_input19[year]', dobObj.year);
+      }
+      if (email) fd.append('q26_input26', email);
+      if (semester) fd.append('q5_input5', semester);
+      if (major) fd.append('q6_input6', major);
+      if (universities) fd.append('q7_input7', universities);
+      if (kuwaitAddress) fd.append('q8_input8', kuwaitAddress);
+      if (kuwaitPhone) fd.append('q10_input10[full]', kuwaitPhone);
+      if (guardianName) fd.append('q12_input12', guardianName);
+      const guardianDobObj = toDateParts(guardianDob);
+      if (guardianDobObj) {
+        fd.append('q34_input34[month]', guardianDobObj.month);
+        fd.append('q34_input34[day]', guardianDobObj.day);
+        fd.append('q34_input34[year]', guardianDobObj.year);
+      }
+      if (guardianPhone) fd.append('q13_input13[full]', guardianPhone);
+      if (guardianEmail) fd.append('q36_input36', guardianEmail);
+      if (ieltsScore) fd.append('q20_input20', ieltsScore);
+      if (followUpPerson) fd.append('q33_input33', followUpPerson);
+      fd.append('q22_typeA', 'Yes');
+      fd.append('q23_typeA23', 'Yes');
+      appendFiles(fd, 'q14_passport[]', passportData);
+      appendFiles(fd, 'q15_highSchool[]', secondaryCertsData);
+      appendFiles(fd, 'q16_input16[]', ieltsFileData);
+      appendFiles(fd, 'q17_input17[]', otherFilesData);
+      appendFiles(fd, 'q18_input18[]', universityDegreeData);
+      jotformSuccess = await postToJotform(JOTFORM_USA_FORM_ID, fd);
+    }
+  } catch (err) {
+    console.error('[addCountryApplication] Jotform submission failed:', err);
+    return { success: false, message: 'Failed to submit to Jotform.' };
+  }
+
+  if (!jotformSuccess) {
+    return { success: false, message: 'Jotform returned an error. Please try again.' };
+  }
+
+  // Add application to student and update targetCountries
+  const newApplication = {
+    university: universities || '',
+    major,
+    country,
+    status: 'Pending',
+    updatedAt: new Date().toISOString(),
+  };
+  const existingApps: unknown[] = student.applications || [];
+  const existingCountries: string[] = student.targetCountries || [];
+  const updatedCountries = existingCountries.includes(country) ? existingCountries : [...existingCountries, country];
+
+  await adminDb.collection('students').doc(studentId).update({
+    applications: [...existingApps, newApplication],
+    targetCountries: updatedCountries,
+    lastActivityAt: new Date().toISOString(),
+  });
+
+  return { success: true, message: `Application for ${country} submitted successfully.` };
 }
 
