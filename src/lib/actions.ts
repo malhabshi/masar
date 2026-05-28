@@ -3034,21 +3034,27 @@ export async function addCountryApplication(
     return { success: false, message: 'Student does not have stored Jotform documents.' };
   }
 
-  // Download a file from a Firebase Storage URL and return as FileData
-  type FileData = { buffer: ArrayBuffer; name: string; type: string };
+  if (!storage) return { success: false, message: 'Storage not configured.' };
+
+  // Download files via Firebase Admin SDK (authenticated, avoids URL-based fetch issues)
+  type FileData = { buffer: Buffer; name: string; type: string };
+  const BUCKET_NAME = 'studio-9484431255-91d96.firebasestorage.app';
+  const EXT_TYPE: Record<string, string> = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+    pdf: 'application/pdf', doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  };
+
   const downloadFile = async (url: string): Promise<FileData> => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Storage fetch failed: ${res.status}`);
-    const buffer = await res.arrayBuffer();
-    if (buffer.byteLength === 0) throw new Error('Downloaded file is empty');
-    const contentType = res.headers.get('content-type') || 'application/octet-stream';
-    // URL path segment after /o/ is fully encoded — decode it, then take only the filename
     const encodedPath = url.split('/o/')[1]?.split('?')[0] || '';
-    const decodedPath = decodeURIComponent(encodedPath);
-    const rawFilename = decodedPath.split('/').pop() || 'file';
-    // Strip the upload timestamp prefix added during storage (e.g. "1748447600000_0_passport.jpg" → "passport.jpg")
+    const storagePath = decodeURIComponent(encodedPath);
+    const rawFilename = storagePath.split('/').pop() || 'file';
     const name = rawFilename.replace(/^\d+_\d+_/, '');
-    return { buffer, name, type: contentType };
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    const type = EXT_TYPE[ext] || 'application/octet-stream';
+    const bucket = storage!.bucket(BUCKET_NAME);
+    const [nodeBuffer] = await bucket.file(storagePath).download();
+    return { buffer: nodeBuffer, name, type };
   };
 
   const downloadAll = async (urls: string[] | undefined): Promise<FileData[]> => {
@@ -3067,18 +3073,10 @@ export async function addCountryApplication(
       downloadAll(jd.documents.personalStatement),
     ]);
 
+  // Use Blob (same pattern as the working submitJotformApplications)
+  // Wrap in Uint8Array to satisfy TypeScript's BlobPart constraint (Buffer → Uint8Array)
   const appendFiles = (fd: FormData, field: string, filesData: FileData[]) => {
-    for (const f of filesData) {
-      const guessType = (name: string, fallback: string) => {
-        if (fallback && fallback !== 'application/octet-stream') return fallback;
-        const ext = name.split('.').pop()?.toLowerCase();
-        const map: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
-        return map[ext || ''] || 'application/octet-stream';
-      };
-      const type = guessType(f.name, f.type);
-      // Use File (extends Blob) for richer multipart metadata
-      fd.append(field, new File([f.buffer], f.name, { type }), f.name);
-    }
+    for (const f of filesData) fd.append(field, new Blob([new Uint8Array(f.buffer)], { type: f.type }), f.name);
   };
 
   const toDateParts = (iso: string) => {
