@@ -41,6 +41,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
   const { toast } = useToast();
   const [country, setCountry] = useState('');
   const [semester, setSemester] = useState('');
+  const [guardianDob, setGuardianDob] = useState('');
   const [pick, setPick] = useState<CountryPick>(emptyPick());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -149,6 +150,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
   const handleCountryChange = (val: string) => {
     setCountry(val);
     setSemester('');
+    setGuardianDob('');
     setPick(emptyPick());
   };
 
@@ -156,8 +158,9 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     const { universities, major } = getFinal();
     if (!country || !major) return;
     if (country === 'USA' && !semester) return;
+    if (country === 'USA' && !guardianDob && !jd?.guardianDob) return;
     setIsSubmitting(true);
-    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined);
+    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined, guardianDob || undefined);
     if (result.success) {
       toast({ title: 'Application Submitted', description: result.message });
       onSuccess();
@@ -245,20 +248,28 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
             {countryKey === 'AUNZ' ? 'AU / NZ' : countryKey}
           </div>
 
-          {/* Semester selector — USA only */}
+          {/* Semester + Guardian DOB — USA only */}
           {countryKey === 'USA' && (
-            <div className="space-y-1.5">
-              <Label>Academic Semester <span className="text-destructive">*</span></Label>
-              <Select value={semester} onValueChange={setSemester}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select semester..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {USA_SEMESTER_OPTIONS.map(opt => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Academic Semester <span className="text-destructive">*</span></Label>
+                <Select value={semester} onValueChange={setSemester}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select semester..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {USA_SEMESTER_OPTIONS.map(opt => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {!jd?.guardianDob && (
+                <div className="space-y-1.5">
+                  <Label>Guardian Date of Birth <span className="text-destructive">*</span></Label>
+                  <Input type="date" value={guardianDob} onChange={e => setGuardianDob(e.target.value)} />
+                </div>
+              )}
             </div>
           )}
 
@@ -371,7 +382,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
         </Button>
         <Button
           className="flex-1"
-          disabled={!country || !finalMajor || availableCountries.length === 0 || isSubmitting || (country === 'USA' && !semester)}
+          disabled={!country || !finalMajor || availableCountries.length === 0 || isSubmitting || (country === 'USA' && !semester) || (country === 'USA' && !jd?.guardianDob && !guardianDob)}
           onClick={handleSubmit}
         >
           {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}

@@ -3011,7 +3011,8 @@ export async function addCountryApplication(
   major: string,
   universities: string,
   userId: string,
-  semesterOverride?: string
+  semesterOverride?: string,
+  guardianDobOverride?: string
 ): Promise<{ success: boolean; message: string }> {
   'use server';
   if (!adminDb) return { success: false, message: 'Server not configured.' };
@@ -3100,10 +3101,10 @@ export async function addCountryApplication(
   const guardianName = jd.guardianName || '';
   const guardianEmail = jd.guardianEmail || '';
   const guardianPhone = jd.guardianPhone || '';
-  const guardianDob = jd.guardianDob || '';
   const scholarshipType = jd.scholarshipType || '';
   const acceptanceType = jd.acceptanceType || '';
   const semester = semesterOverride || jd.semester || '';
+  const guardianDob = guardianDobOverride || jd.guardianDob || '';
 
   const buildBase = (formId: string): FormData => {
     const fd = new FormData();
