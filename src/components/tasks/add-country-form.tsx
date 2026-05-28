@@ -1,18 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Globe, CheckCircle2, FileCheck } from 'lucide-react';
+import { Loader2, Globe, CheckCircle2, FileCheck, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useCollection } from '@/firebase/client';
 import { addCountryApplication } from '@/lib/actions';
-import type { Student } from '@/lib/types';
+import type { Student, ApprovedUniversity } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
+import { cn } from '@/lib/utils';
 
 const ALL_COUNTRIES = ['UK', 'Australia / New Zealand', 'USA'];
+const BEST_UNI = 'Best Option';
+
+interface CountryPick {
+  majorSearch: string;
+  showSugs: boolean;
+  addedMajors: string[];
+  selectedUniNamesByMajor: Record<string, string[]>;
+  uniExtra: string;
+}
+const emptyPick = (): CountryPick => ({
+  majorSearch: '', showSugs: false, addedMajors: [], selectedUniNamesByMajor: {}, uniExtra: '',
+});
 
 interface AddCountryFormProps {
   student: Student;
@@ -24,16 +39,132 @@ interface AddCountryFormProps {
 export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: AddCountryFormProps) {
   const { toast } = useToast();
   const [country, setCountry] = useState('');
-  const [major, setMajor] = useState('');
-  const [universities, setUniversities] = useState('');
+  const [pick, setPick] = useState<CountryPick>(emptyPick());
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { data: allApprovedUnis } = useCollection<ApprovedUniversity>('approved_universities');
 
   const alreadyApplied = new Set<string>(student.targetCountries || []);
   const availableCountries = ALL_COUNTRIES.filter(c => !alreadyApplied.has(c));
 
   const jd = student.jotformData;
-  const storedDocs = jd?.documents;
+  const acceptanceType = jd?.acceptanceType || '';
+  const countryKey = country === 'Australia / New Zealand' ? 'AUNZ' : country === 'UK' ? 'UK' : country === 'USA' ? 'USA' : '';
+  const showBestUni = countryKey !== 'USA';
 
+  // Filter approved universities for the selected country
+  const unis = useMemo((): ApprovedUniversity[] => {
+    if (!allApprovedUnis || !countryKey) return [];
+    if (countryKey === 'UK') {
+      if (acceptanceType !== 'Foundation') return [];
+      return allApprovedUnis.filter(u => {
+        if (!u.isAvailable || u.country !== 'UK') return false;
+        if (u.entryLevels && u.entryLevels.length > 0 && !u.entryLevels.includes('Foundation')) return false;
+        return true;
+      });
+    }
+    if (countryKey === 'AUNZ') {
+      return allApprovedUnis.filter(u => u.isAvailable && (u.country === 'Australia' || u.country === 'New Zealand'));
+    }
+    if (countryKey === 'USA') {
+      return allApprovedUnis.filter(u => u.isAvailable && u.country === 'USA');
+    }
+    return [];
+  }, [allApprovedUnis, countryKey, acceptanceType]);
+
+  const allMajorsInDB = useMemo(() => [...new Set(unis.map(u => u.major.trim()))].sort(), [unis]);
+  const majorSugs = pick.majorSearch.trim()
+    ? allMajorsInDB.filter(m => m.toLowerCase().includes(pick.majorSearch.toLowerCase()))
+    : allMajorsInDB;
+
+  const updPick = (update: Partial<CountryPick> | ((prev: CountryPick) => Partial<CountryPick>)) => {
+    setPick(prev => {
+      const changes = typeof update === 'function' ? update(prev) : update;
+      return { ...prev, ...changes };
+    });
+  };
+
+  const addMajor = (m: string) => {
+    const trimmed = m.trim();
+    if (!trimmed) return;
+    updPick(prev => ({
+      addedMajors: prev.addedMajors.includes(trimmed) ? prev.addedMajors : [...prev.addedMajors, trimmed],
+      majorSearch: '',
+      showSugs: false,
+    }));
+  };
+
+  const removeMajor = (major: string) => {
+    updPick(prev => {
+      const newByMajor = { ...prev.selectedUniNamesByMajor };
+      delete newByMajor[major];
+      return { addedMajors: prev.addedMajors.filter(m => m !== major), selectedUniNamesByMajor: newByMajor };
+    });
+  };
+
+  const toggleUni = (major: string, uniName: string) => {
+    updPick(prev => {
+      const current = prev.selectedUniNamesByMajor[major] || [];
+      const norm = uniName.toLowerCase().trim();
+      const isSelected = current.some(n => n.toLowerCase().trim() === norm);
+      if (norm === BEST_UNI.toLowerCase() && !isSelected) {
+        return { selectedUniNamesByMajor: { ...prev.selectedUniNamesByMajor, [major]: [BEST_UNI] } };
+      }
+      return {
+        selectedUniNamesByMajor: {
+          ...prev.selectedUniNamesByMajor,
+          [major]: isSelected
+            ? current.filter(n => n.toLowerCase().trim() !== norm)
+            : [...current, uniName],
+        },
+      };
+    });
+  };
+
+  const selectedElsewhere = (targetMajor: string) => new Set(
+    pick.addedMajors
+      .filter(m => m !== targetMajor)
+      .flatMap(m => (pick.selectedUniNamesByMajor[m] || []).map(n => n.toLowerCase().trim()))
+  );
+
+  const getFinal = () => {
+    let bestUniUsed = false;
+    const uniParts: string[] = [];
+    for (const major of pick.addedMajors) {
+      const selected = pick.selectedUniNamesByMajor[major] || [];
+      for (const uni of selected) {
+        if (uni.toLowerCase().trim() === BEST_UNI.toLowerCase()) { bestUniUsed = true; }
+        else { uniParts.push(`${uni} (${major})`); }
+      }
+    }
+    const extras = pick.uniExtra.split(',').map(s => s.trim()).filter(Boolean);
+    return {
+      universities: [...(bestUniUsed ? [BEST_UNI] : []), ...uniParts, ...extras].join(', '),
+      major: pick.addedMajors.join(', '),
+    };
+  };
+
+  const handleCountryChange = (val: string) => {
+    setCountry(val);
+    setPick(emptyPick());
+  };
+
+  const handleSubmit = async () => {
+    const { universities, major } = getFinal();
+    if (!country || !major) return;
+    setIsSubmitting(true);
+    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id);
+    if (result.success) {
+      toast({ title: 'Application Submitted', description: result.message });
+      onSuccess();
+    } else {
+      toast({ variant: 'destructive', title: 'Submission Failed', description: result.message });
+    }
+    setIsSubmitting(false);
+  };
+
+  const { universities: finalUnis, major: finalMajor } = getFinal();
+  const storedDocs = jd?.documents;
   const docSummary = [
     { label: 'Passport', has: !!storedDocs?.passport?.length },
     { label: 'Secondary Certs', has: !!storedDocs?.secondaryCerts?.length },
@@ -44,22 +175,9 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     { label: 'Other Files', has: !!storedDocs?.otherFiles?.length },
   ].filter(d => d.has);
 
-  const handleSubmit = async () => {
-    if (!country || !major.trim()) return;
-    setIsSubmitting(true);
-    const result = await addCountryApplication(student.id, country, major.trim(), universities.trim(), currentUser.id);
-    if (result.success) {
-      toast({ title: 'Application Submitted', description: result.message });
-      onSuccess();
-    } else {
-      toast({ variant: 'destructive', title: 'Submission Failed', description: result.message });
-    }
-    setIsSubmitting(false);
-  };
-
   return (
     <div className="space-y-5 py-2">
-      {/* Already applied countries */}
+      {/* Already applied */}
       {alreadyApplied.size > 0 && (
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground font-medium">Already applied to:</p>
@@ -74,12 +192,12 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
         </div>
       )}
 
-      {/* Pre-filled documents summary */}
+      {/* Pre-filled docs summary */}
       {docSummary.length > 0 && (
         <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
           <p className="text-xs font-medium flex items-center gap-1.5 text-muted-foreground">
             <FileCheck className="h-3.5 w-3.5" />
-            Documents that will be pre-filled from original submission:
+            Documents pre-filled from original submission:
           </p>
           <div className="flex flex-wrap gap-1.5">
             {docSummary.map(d => (
@@ -98,7 +216,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
         {availableCountries.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">All countries have already been applied to.</p>
         ) : (
-          <Select onValueChange={setCountry} value={country}>
+          <Select onValueChange={handleCountryChange} value={country}>
             <SelectTrigger>
               <SelectValue placeholder="Select a country" />
             </SelectTrigger>
@@ -116,40 +234,123 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
         )}
       </div>
 
-      {/* Major */}
-      <div className="space-y-2">
-        <Label htmlFor="add-country-major">Major <span className="text-destructive">*</span></Label>
-        <Input
-          id="add-country-major"
-          placeholder="e.g. Computer Science"
-          value={major}
-          onChange={e => setMajor(e.target.value)}
-        />
-      </div>
+      {/* Major + University picker (only when country is selected) */}
+      {country && (
+        <div className="border rounded-lg p-4 space-y-3 bg-muted/10">
+          <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            {countryKey === 'AUNZ' ? 'AU / NZ' : countryKey}
+          </div>
 
-      {/* Universities (optional) */}
-      <div className="space-y-2">
-        <Label htmlFor="add-country-unis">Universities <span className="text-xs text-muted-foreground">(optional)</span></Label>
-        <Input
-          id="add-country-unis"
-          placeholder="e.g. University of Toronto, McGill University"
-          value={universities}
-          onChange={e => setUniversities(e.target.value)}
-        />
-      </div>
+          {/* Major search */}
+          <div className="flex gap-2 items-start">
+            <div className="flex-1 relative">
+              <Input
+                placeholder={unis.length > 0 ? 'Search or type a major…' : 'Type a major and press Enter…'}
+                value={pick.majorSearch}
+                onChange={e => updPick({ majorSearch: e.target.value, showSugs: true })}
+                onFocus={() => updPick({ showSugs: true })}
+                onBlur={() => setTimeout(() => updPick({ showSugs: false }), 150)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMajor(pick.majorSearch); } }}
+              />
+              {pick.showSugs && majorSugs.length > 0 && (
+                <div className="absolute z-50 w-full border rounded-md bg-background shadow-md mt-0.5 max-h-48 overflow-auto">
+                  {majorSugs.map(m => (
+                    <button key={m} type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      onMouseDown={() => addMajor(m)}
+                    >{m}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button type="button" variant="outline" size="sm" className="shrink-0"
+              disabled={!pick.majorSearch.trim() || pick.addedMajors.includes(pick.majorSearch.trim())}
+              onClick={() => addMajor(pick.majorSearch)}
+            >+ Add</Button>
+          </div>
+
+          {/* Added majors — each shows its university list */}
+          {pick.addedMajors.map(major => {
+            const rawMatches = unis.filter(u => u.major.toLowerCase().trim() === major.toLowerCase().trim());
+            const seen = new Set<string>();
+            const matchingUniNames: string[] = [];
+            for (const u of rawMatches) {
+              const k = u.name.toLowerCase().trim();
+              if (!seen.has(k)) { seen.add(k); matchingUniNames.push(u.name); }
+            }
+            matchingUniNames.sort();
+
+            const elsewhere = selectedElsewhere(major);
+            const selectedForMajor = pick.selectedUniNamesByMajor[major] || [];
+            const bestActive = selectedForMajor.some(n => n.toLowerCase().trim() === BEST_UNI.toLowerCase());
+
+            return (
+              <div key={major} className="border rounded-md p-3 space-y-2 bg-background">
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-bold">{major}</span>
+                  <button type="button" onClick={() => removeMajor(major)}
+                    className="text-muted-foreground hover:text-destructive transition-colors">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid gap-1.5">
+                  {showBestUni && (() => {
+                    const bestSelected = selectedForMajor.some(n => n.toLowerCase().trim() === BEST_UNI.toLowerCase());
+                    return (
+                      <label className="flex items-center gap-2.5 text-sm cursor-pointer select-none">
+                        <Checkbox checked={bestSelected} onCheckedChange={() => toggleUni(major, BEST_UNI)} />
+                        <span className="font-bold">{BEST_UNI}</span>
+                        <span className="text-xs text-muted-foreground italic">(schools will be added manually)</span>
+                      </label>
+                    );
+                  })()}
+
+                  {matchingUniNames.length > 0 ? matchingUniNames.map(uniName => {
+                    const norm = uniName.toLowerCase().trim();
+                    const isSelected = selectedForMajor.some(n => n.toLowerCase().trim() === norm);
+                    const conflict = !isSelected && elsewhere.has(norm);
+                    const disabledByBest = bestActive && !isSelected;
+                    const disabled = conflict || disabledByBest;
+                    return (
+                      <label key={uniName} className={cn('flex items-center gap-2.5 text-sm select-none', disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer')}>
+                        <Checkbox checked={isSelected} disabled={disabled} onCheckedChange={() => !disabled && toggleUni(major, uniName)} />
+                        <span className="flex-1">{uniName}</span>
+                        {conflict && <span className="text-xs text-muted-foreground italic">taken</span>}
+                      </label>
+                    );
+                  }) : (
+                    <p className="text-xs text-muted-foreground italic">No approved universities for this major — add them below.</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Free-text extra universities */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Additional universities (comma-separated)</Label>
+            <Input value={pick.uniExtra} onChange={e => updPick({ uniExtra: e.target.value })}
+              placeholder="e.g. University of London, UCL" />
+          </div>
+
+          {/* Preview */}
+          {(finalUnis || finalMajor) && (
+            <div className="text-xs bg-muted/40 rounded p-2 space-y-0.5 text-muted-foreground">
+              {finalMajor && <div><span className="font-medium text-foreground">Major:</span> {finalMajor}</div>}
+              {finalUnis && <div><span className="font-medium text-foreground">Universities:</span> {finalUnis}</div>}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-2 pt-2">
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={onCancel}
-          disabled={isSubmitting}
-        >
+        <Button variant="outline" className="flex-1" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button
           className="flex-1"
-          disabled={!country || !major.trim() || availableCountries.length === 0 || isSubmitting}
+          disabled={!country || !finalMajor || availableCountries.length === 0 || isSubmitting}
           onClick={handleSubmit}
         >
           {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
