@@ -2513,6 +2513,12 @@ export async function closeStudentProfile(studentId: string, reason: string, adm
       changeAgentRequired: false,
       changeAgentUniversities: FieldValue.delete(),
       lastActivityAt: now,
+      adminNotes: FieldValue.arrayUnion({
+        id: `note-closed-${Date.now()}`,
+        authorId: adminId,
+        content: `🔒 Profile closed by ${admin.name}. Reason: "${reason}". Pipeline set to Black. All applications rejected with reason "change agent / the student do not work with us". Reassigned to TEST - Talal 2. Name updated to "${newName}".`,
+        createdAt: now,
+      }),
     });
 
     return { success: true, message: 'Profile closed successfully.' };
@@ -2563,6 +2569,12 @@ export async function reopenStudentProfile(studentId: string, adminId: string) {
       applications: updatedApplications,
       employeeId: null,
       lastActivityAt: now,
+      adminNotes: FieldValue.arrayUnion({
+        id: `note-reopened-${Date.now()}`,
+        authorId: adminId,
+        content: `🔓 Profile reopened by ${admin.name}. Pipeline reset to No Status. All applications reset to Pending. Student moved to Unassigned. Name restored to "${newName}".`,
+        createdAt: now,
+      }),
     });
 
     return { success: true, message: 'Profile reopened and moved to unassigned.' };
