@@ -14,9 +14,9 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2, Lock, LockOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { closeStudentProfile } from '@/lib/actions';
+import { closeStudentProfile, reopenStudentProfile } from '@/lib/actions';
 
 interface CloseProfileButtonProps {
   student: Student;
@@ -24,13 +24,14 @@ interface CloseProfileButtonProps {
 }
 
 export function CloseProfileButton({ student, currentUser }: CloseProfileButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isCloseOpen, setIsCloseOpen] = useState(false);
+  const [isReopenOpen, setIsReopenOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'adminplus';
-  if (!isAdmin || student.isClosed) return null;
+  if (!isAdmin) return null;
 
   const handleClose = async () => {
     if (!reason.trim()) {
@@ -41,7 +42,7 @@ export function CloseProfileButton({ student, currentUser }: CloseProfileButtonP
     const result = await closeStudentProfile(student.id, reason.trim(), currentUser.id);
     if (result.success) {
       toast({ title: 'Profile Closed', description: result.message });
-      setIsOpen(false);
+      setIsCloseOpen(false);
       setReason('');
     } else {
       toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
@@ -49,19 +50,80 @@ export function CloseProfileButton({ student, currentUser }: CloseProfileButtonP
     setIsLoading(false);
   };
 
+  const handleReopen = async () => {
+    setIsLoading(true);
+    const result = await reopenStudentProfile(student.id, currentUser.id);
+    if (result.success) {
+      toast({ title: 'Profile Reopened', description: result.message });
+      setIsReopenOpen(false);
+    } else {
+      toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
+    }
+    setIsLoading(false);
+  };
+
+  if (student.isClosed) {
+    return (
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsReopenOpen(true)}
+          className="bg-green-900 text-green-100 border-green-700 hover:bg-green-800 hover:text-white font-bold"
+        >
+          <LockOpen className="h-4 w-4 mr-2" />
+          Reopen Profile
+        </Button>
+
+        <Dialog open={isReopenOpen} onOpenChange={setIsReopenOpen}>
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reopen Student Profile</DialogTitle>
+              <DialogDescription>
+                This will reverse the closure:
+                <ul className="list-disc list-inside mt-2 space-y-1 text-[12px]">
+                  <li>Remove <strong>CLOSED</strong> status and name suffix</li>
+                  <li>Reset pipeline to <strong>No Status</strong></li>
+                  <li>Reset all applications back to <strong>Pending</strong></li>
+                  <li>Move to <strong>Unassigned</strong> list</li>
+                  <li>Resume notifications</li>
+                  <li>Note: documents deleted after 30 days must be re-uploaded manually</li>
+                </ul>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-2 pt-2 border-t">
+              <Button
+                onClick={handleReopen}
+                disabled={isLoading}
+                className="w-full bg-green-700 hover:bg-green-800 text-white font-bold gap-2"
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockOpen className="h-4 w-4" />}
+                Confirm Reopen Profile
+              </Button>
+              <DialogClose asChild>
+                <Button variant="ghost" className="w-full" disabled={isLoading}>Cancel</Button>
+              </DialogClose>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
   return (
     <>
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setIsOpen(true)}
+        onClick={() => setIsCloseOpen(true)}
         className="bg-gray-900 text-white border-gray-700 hover:bg-black hover:text-white font-bold"
       >
         <Lock className="h-4 w-4 mr-2" />
         Close Profile
       </Button>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isCloseOpen} onOpenChange={setIsCloseOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-md">
           <DialogHeader>
             <DialogTitle className="text-destructive">Close Student Profile</DialogTitle>

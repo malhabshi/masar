@@ -2521,6 +2521,56 @@ export async function closeStudentProfile(studentId: string, reason: string, adm
   }
 }
 
+export async function reopenStudentProfile(studentId: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'adminplus'].includes(admin.role)) {
+      return { success: false, message: 'Unauthorized. Only Admins can reopen profiles.' };
+    }
+
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+
+    if (!studentData.isClosed) return { success: false, message: 'Profile is not closed.' };
+
+    const now = new Date().toISOString();
+
+    // Remove -Closed suffix from name
+    const currentName = studentData.name || '';
+    const newName = currentName.endsWith('-Closed') ? currentName.slice(0, -7) : currentName;
+
+    // Append reopen note to adminStatusNote
+    const existingNote = studentData.adminStatusNote || '';
+    const reopenNote = `Reopened by ${admin.name} (${formatKuwaitTime(now)})`;
+    const newAdminStatusNote = existingNote ? `${existingNote} | ${reopenNote}` : reopenNote;
+
+    // Reset all applications back to Pending, clear the system rejection reason
+    const updatedApplications = (studentData.applications || []).map(app => {
+      const { rejectionReason, ...rest } = app as any;
+      return { ...rest, status: 'Pending' as ApplicationStatus, updatedAt: now };
+    });
+
+    await studentRef.update({
+      isClosed: FieldValue.delete(),
+      closedAt: FieldValue.delete(),
+      closedReason: FieldValue.delete(),
+      name: newName,
+      adminStatusNote: newAdminStatusNote,
+      pipelineStatus: 'none',
+      applications: updatedApplications,
+      employeeId: null,
+      lastActivityAt: now,
+    });
+
+    return { success: true, message: 'Profile reopened and moved to unassigned.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
 // ─── Jotform Application Submission ───────────────────────────────────────────
 
 const JOTFORM_UK_FORM_ID = '240775032170045';
