@@ -3068,7 +3068,17 @@ export async function addCountryApplication(
     ]);
 
   const appendFiles = (fd: FormData, field: string, filesData: FileData[]) => {
-    for (const f of filesData) fd.append(field, new Blob([f.buffer], { type: f.type }), f.name);
+    for (const f of filesData) {
+      const guessType = (name: string, fallback: string) => {
+        if (fallback && fallback !== 'application/octet-stream') return fallback;
+        const ext = name.split('.').pop()?.toLowerCase();
+        const map: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+        return map[ext || ''] || 'application/octet-stream';
+      };
+      const type = guessType(f.name, f.type);
+      // Use File (extends Blob) for richer multipart metadata
+      fd.append(field, new File([f.buffer], f.name, { type }), f.name);
+    }
   };
 
   const toDateParts = (iso: string) => {
@@ -3122,15 +3132,15 @@ export async function addCountryApplication(
     return fd;
   };
 
-  const postToJotform = async (formId: string, fd: FormData): Promise<{ ok: boolean; detail: string }> => {
+  const postToJotform = async (formId: string, fd: FormData): Promise<{ ok: boolean; status: number; detail: string }> => {
     const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, { method: 'POST', body: fd });
     let detail = '';
     try { detail = await res.text(); } catch { /* ignore */ }
-    if (!res.ok) console.error(`[Jotform] ${formId} returned ${res.status}: ${detail.substring(0, 500)}`);
-    return { ok: res.ok, detail };
+    console.log(`[Jotform] ${formId} → HTTP ${res.status}, body: ${detail.substring(0, 300)}`);
+    return { ok: res.ok, status: res.status, detail };
   };
 
-  let jotformResult: { ok: boolean; detail: string } = { ok: false, detail: '' };
+  let jotformResult: { ok: boolean; status: number; detail: string } = { ok: false, status: 0, detail: '' };
 
   try {
     if (country === 'UK') {
@@ -3206,7 +3216,9 @@ export async function addCountryApplication(
   }
 
   if (!jotformResult.ok) {
-    return { success: false, message: `Jotform error: ${jotformResult.detail.substring(0, 200) || 'Unknown error'}` };
+    const isHtml = jotformResult.detail.trimStart().startsWith('<');
+    const snippet = isHtml ? `HTTP ${jotformResult.status} (HTML response)` : jotformResult.detail.substring(0, 200);
+    return { success: false, message: `Jotform error: ${snippet || 'Unknown error'}` };
   }
 
   // Add application to student and update targetCountries
