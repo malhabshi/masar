@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, storage } from '@/lib/firebase/admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,6 +61,12 @@ export async function POST(req: NextRequest) {
 
     // Update lastUsedAt on the link
     await adminDb.collection('upload_links').doc(token).update({ lastUsedAt: now });
+
+    // Increment badge counters on the student document
+    await adminDb.collection('students').doc(linkData.studentId).update({
+      newPublicUploadsForAdmin: FieldValue.increment(1),
+      newPublicUploadsForEmployee: FieldValue.increment(1),
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
