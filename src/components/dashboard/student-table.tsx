@@ -13,9 +13,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from '@/components/ui/select';
 import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2, UserPlus, Users, Check, ChevronsUpDown, Loader2, Upload } from 'lucide-react';
-import type { Student, PipelineStatus, User, Note } from '@/lib/types';
+import type { Student, PipelineStatus, User, Note, ChecklistConfigItem } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
 import {
   DropdownMenu,
@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { updateStudentPipelineStatus, bulkAssignStudents } from '@/lib/actions';
+import { updateStudentPipelineStatus, bulkAssignStudents, getChecklistConfig, getAdminChecklistConfig } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
@@ -79,7 +79,13 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [countryFilter, setCountryFilter] = useState<string>('all');
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
-  
+
+  // Checklist filters
+  const [checklistItemFilter, setChecklistItemFilter] = useState('all');
+  const [checklistStatusFilter, setChecklistStatusFilter] = useState<'all' | 'checked' | 'unchecked'>('all');
+  const [readinessChecklistItems, setReadinessChecklistItems] = useState<ChecklistConfigItem[]>([]);
+  const [adminChecklistItems, setAdminChecklistItems] = useState<ChecklistConfigItem[]>([]);
+
   // Smart Routing Filter for Departments
   const [showAllStudents, setShowAllStudents] = useState(false);
 
@@ -88,6 +94,13 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    Promise.all([getChecklistConfig(), getAdminChecklistConfig()]).then(([readiness, admin]) => {
+      setReadinessChecklistItems(readiness);
+      setAdminChecklistItems(admin);
+    });
   }, []);
 
   useEffect(() => {
@@ -111,8 +124,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (f.genderFilter !== undefined)      setGenderFilter(f.genderFilter);
         if (f.studyLevelFilter !== undefined)  setStudyLevelFilter(f.studyLevelFilter);
         if (f.countryFilter !== undefined)     setCountryFilter(f.countryFilter);
-        if (f.ieltsFilter !== undefined)       setIeltsFilter(f.ieltsFilter);
-        if (f.showAllStudents !== undefined)   setShowAllStudents(f.showAllStudents);
+        if (f.ieltsFilter !== undefined)           setIeltsFilter(f.ieltsFilter);
+        if (f.showAllStudents !== undefined)       setShowAllStudents(f.showAllStudents);
+        if (f.checklistItemFilter !== undefined)   setChecklistItemFilter(f.checklistItemFilter);
+        if (f.checklistStatusFilter !== undefined) setChecklistStatusFilter(f.checklistStatusFilter);
       }
     } catch {}
   }, [currentUser?.id]);
@@ -141,9 +156,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
         genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents,
+        checklistItemFilter, checklistStatusFilter,
       }));
     } catch {}
-  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents]);
+  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
 
   // Identify duplicate phones across all currently loaded students
   const duplicatePhoneSet = useMemo(() => {
@@ -220,8 +236,18 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         
         const matchesGender = genderFilter === 'all' || student.gender === genderFilter;
         const matchesStudyLevel = studyLevelFilter === 'all' || student.studyLevel === studyLevelFilter;
-        
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender && matchesStudyLevel;
+
+        let matchesChecklist = true;
+        if (checklistItemFilter !== 'all' && checklistStatusFilter !== 'all') {
+          const [source, itemId] = checklistItemFilter.split(':');
+          const statusMap = source === 'admin'
+            ? (student.adminChecklistStatus || {})
+            : (student.profileCompletionStatus || {});
+          const isChecked = !!statusMap[itemId];
+          matchesChecklist = checklistStatusFilter === 'checked' ? isChecked : !isChecked;
+        }
+
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender && matchesStudyLevel && matchesChecklist;
     });
 
     return [...filtered].sort((a, b) => {
@@ -266,7 +292,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole]);
+  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
 
   useEffect(() => {
     if (!isClient || !currentUser?.id) return;
@@ -285,12 +311,14 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setStudyLevelFilter('all');
     setCountryFilter('all');
     setShowAllStudents(false);
+    setChecklistItemFilter('all');
+    setChecklistStatusFilter('all');
     try {
       sessionStorage.removeItem(`applicants_filters_${currentUser?.id}`);
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || studyLevelFilter !== 'all' || countryFilter !== 'all' || showAllStudents;
+  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || studyLevelFilter !== 'all' || countryFilter !== 'all' || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -424,6 +452,49 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 </Select>
                 {isFiltered && <Button variant="ghost" onClick={handleClearFilters} className="w-full md:w-auto"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
             </div>
+
+            {isClient && (readinessChecklistItems.length > 0 || adminChecklistItems.length > 0) && (
+              <div className="flex flex-col md:flex-row gap-2 items-center">
+                <Select value={checklistItemFilter} onValueChange={v => { setChecklistItemFilter(v); if (v === 'all') setChecklistStatusFilter('all'); }}>
+                  <SelectTrigger className="w-full md:w-[260px]">
+                    <SelectValue placeholder="Filter by Checklist Item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Checklist Items</SelectItem>
+                    {readinessChecklistItems.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Readiness Checklist</SelectLabel>
+                        {readinessChecklistItems.map(item => (
+                          <SelectItem key={`readiness:${item.id}`} value={`readiness:${item.id}`}>{item.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {readinessChecklistItems.length > 0 && adminChecklistItems.length > 0 && <SelectSeparator />}
+                    {adminChecklistItems.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Admin Checklist</SelectLabel>
+                        {adminChecklistItems.map(item => (
+                          <SelectItem key={`admin:${item.id}`} value={`admin:${item.id}`}>{item.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                  </SelectContent>
+                </Select>
+
+                {checklistItemFilter !== 'all' && (
+                  <Select value={checklistStatusFilter} onValueChange={v => setChecklistStatusFilter(v as any)}>
+                    <SelectTrigger className="w-full md:w-[180px]">
+                      <SelectValue placeholder="Item Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Any Status</SelectItem>
+                      <SelectItem value="checked">✓ Checked</SelectItem>
+                      <SelectItem value="unchecked">✗ Not Checked</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
         </div>
 
         {selectedIds.length > 0 && isAdminDept && (
