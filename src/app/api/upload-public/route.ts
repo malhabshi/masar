@@ -62,10 +62,11 @@ export async function POST(req: NextRequest) {
     // Update lastUsedAt on the link
     await adminDb.collection('upload_links').doc(token).update({ lastUsedAt: now });
 
-    // Increment badge counters on the student document
+    // Increment badge counters and clear viewed-by so everyone is re-notified
     await adminDb.collection('students').doc(linkData.studentId).update({
       newPublicUploadsForAdmin: FieldValue.increment(1),
       newPublicUploadsForEmployee: FieldValue.increment(1),
+      publicUploadsViewedBy: [],
     });
 
     return NextResponse.json({ success: true });

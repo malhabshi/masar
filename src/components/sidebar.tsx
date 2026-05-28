@@ -114,12 +114,14 @@ export function AppSidebar() {
         if (!isEmployeeView) {
           const ud = student.chatUnreadCountByUser?.[user.id] || 0;
           const nd = (student.newDocumentsForAdmin || 0) > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) ? student.newDocumentsForAdmin || 0 : 0;
-          return acc + ud + nd;
+          const pu = (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(user.id)) ? student.newPublicUploadsForAdmin || 0 : 0;
+          return acc + ud + nd + pu;
         } else {
           const um = (student.employeeUnreadMessages || 0) > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(user.id)) ? student.employeeUnreadMessages || 0 : 0;
           const ed = (student.newDocumentsForEmployee || 0) > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) ? student.newDocumentsForEmployee || 0 : 0;
           const mi = (student.newMissingItemsForEmployee || 0) > 0 && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(user.id)) ? student.newMissingItemsForEmployee || 0 : 0;
-          return acc + um + ed + mi;
+          const pu = (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(user.id)) ? student.newPublicUploadsForEmployee || 0 : 0;
+          return acc + um + ed + mi + pu;
         }
       }, 0);
     }, [students, user, isEmployeeView]);
