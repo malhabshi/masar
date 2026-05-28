@@ -3138,7 +3138,8 @@ export async function addCountryApplication(
     });
     let detail = '';
     try { detail = await res.text(); } catch { /* ignore */ }
-    console.log(`[Jotform] ${formId} → HTTP ${res.status}`);
+    const textPreview = detail.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
+    console.log(`[Jotform] ${formId} → HTTP ${res.status} | ${textPreview}`);
     return { ok: res.ok, status: res.status, detail };
   };
 
@@ -3218,9 +3219,9 @@ export async function addCountryApplication(
   }
 
   if (!jotformResult.ok) {
-    const isHtml = jotformResult.detail.trimStart().startsWith('<');
-    const snippet = isHtml ? `HTTP ${jotformResult.status} (HTML response)` : jotformResult.detail.substring(0, 200);
-    return { success: false, message: `Jotform error: ${snippet || 'Unknown error'}` };
+    const stripped = jotformResult.detail.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 300);
+    const snippet = stripped || `HTTP ${jotformResult.status}`;
+    return { success: false, message: `Jotform error (${jotformResult.status}): ${snippet}` };
   }
 
   // Add application to student and update targetCountries
