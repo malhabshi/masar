@@ -3038,12 +3038,16 @@ export async function addCountryApplication(
   type FileData = { buffer: ArrayBuffer; name: string; type: string };
   const downloadFile = async (url: string): Promise<FileData> => {
     const res = await fetch(url);
+    if (!res.ok) throw new Error(`Storage fetch failed: ${res.status}`);
     const buffer = await res.arrayBuffer();
+    if (buffer.byteLength === 0) throw new Error('Downloaded file is empty');
     const contentType = res.headers.get('content-type') || 'application/octet-stream';
-    const rawName = url.split('/').pop()?.split('?')[0] || 'file';
-    const decoded = decodeURIComponent(rawName);
-    // Strip upload timestamp prefix (e.g. "1234567890_0_filename.pdf" → "filename.pdf")
-    const name = decoded.replace(/^\d+_\d+_/, '');
+    // URL path segment after /o/ is fully encoded — decode it, then take only the filename
+    const encodedPath = url.split('/o/')[1]?.split('?')[0] || '';
+    const decodedPath = decodeURIComponent(encodedPath);
+    const rawFilename = decodedPath.split('/').pop() || 'file';
+    // Strip the upload timestamp prefix added during storage (e.g. "1748447600000_0_passport.jpg" → "passport.jpg")
+    const name = rawFilename.replace(/^\d+_\d+_/, '');
     return { buffer, name, type: contentType };
   };
 
@@ -3118,12 +3122,15 @@ export async function addCountryApplication(
     return fd;
   };
 
-  const postToJotform = async (formId: string, fd: FormData) => {
+  const postToJotform = async (formId: string, fd: FormData): Promise<{ ok: boolean; detail: string }> => {
     const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, { method: 'POST', body: fd });
-    return res.ok;
+    let detail = '';
+    try { detail = await res.text(); } catch { /* ignore */ }
+    if (!res.ok) console.error(`[Jotform] ${formId} returned ${res.status}: ${detail.substring(0, 500)}`);
+    return { ok: res.ok, detail };
   };
 
-  let jotformSuccess = false;
+  let jotformResult: { ok: boolean; detail: string } = { ok: false, detail: '' };
 
   try {
     if (country === 'UK') {
@@ -3137,7 +3144,7 @@ export async function addCountryApplication(
       if (scholarshipType) fd.append('q37_input37', scholarshipType);
       if (acceptanceType) fd.append('q38_input38', acceptanceType);
       if (followUpPerson) fd.append('q39_input39', followUpPerson);
-      jotformSuccess = await postToJotform(JOTFORM_UK_FORM_ID, fd);
+      jotformResult = await postToJotform(JOTFORM_UK_FORM_ID, fd);
     } else if (country === 'Australia / New Zealand') {
       const fd = buildBase(JOTFORM_AUNZ_FORM_ID);
       if (major) fd.append('q7_input7', major);
@@ -3155,7 +3162,7 @@ export async function addCountryApplication(
       };
       const mappedProgram = acceptanceType ? aunzProgramMap[acceptanceType] : '';
       if (mappedProgram) fd.append('q21_input21[]', mappedProgram);
-      jotformSuccess = await postToJotform(JOTFORM_AUNZ_FORM_ID, fd);
+      jotformResult = await postToJotform(JOTFORM_AUNZ_FORM_ID, fd);
     } else if (country === 'USA') {
       const fd = new FormData();
       fd.append('formID', JOTFORM_USA_FORM_ID);
@@ -3191,15 +3198,15 @@ export async function addCountryApplication(
       appendFiles(fd, 'q16_input16[]', ieltsFileData);
       appendFiles(fd, 'q17_input17[]', otherFilesData);
       appendFiles(fd, 'q18_input18[]', universityDegreeData);
-      jotformSuccess = await postToJotform(JOTFORM_USA_FORM_ID, fd);
+      jotformResult = await postToJotform(JOTFORM_USA_FORM_ID, fd);
     }
   } catch (err) {
     console.error('[addCountryApplication] Jotform submission failed:', err);
-    return { success: false, message: 'Failed to submit to Jotform.' };
+    return { success: false, message: `Failed to submit: ${err instanceof Error ? err.message : 'Unknown error'}` };
   }
 
-  if (!jotformSuccess) {
-    return { success: false, message: 'Jotform returned an error. Please try again.' };
+  if (!jotformResult.ok) {
+    return { success: false, message: `Jotform error: ${jotformResult.detail.substring(0, 200) || 'Unknown error'}` };
   }
 
   // Add application to student and update targetCountries
