@@ -3037,7 +3037,7 @@ export async function addCountryApplication(
   if (!storage) return { success: false, message: 'Storage not configured.' };
 
   // Download files via Firebase Admin SDK (authenticated, avoids URL-based fetch issues)
-  type FileData = { buffer: Buffer; name: string; type: string };
+  type FileData = { buffer: ArrayBuffer; name: string; type: string };
   const BUCKET_NAME = 'studio-9484431255-91d96.firebasestorage.app';
   const EXT_TYPE: Record<string, string> = {
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
@@ -3054,7 +3054,9 @@ export async function addCountryApplication(
     const type = EXT_TYPE[ext] || 'application/octet-stream';
     const bucket = storage!.bucket(BUCKET_NAME);
     const [nodeBuffer] = await bucket.file(storagePath).download();
-    return { buffer: nodeBuffer, name, type };
+    // Copy into a standalone ArrayBuffer (same structure as original submitJotformApplications)
+    const ab = nodeBuffer.buffer.slice(nodeBuffer.byteOffset, nodeBuffer.byteOffset + nodeBuffer.byteLength) as ArrayBuffer;
+    return { buffer: ab, name, type };
   };
 
   const downloadAll = async (urls: string[] | undefined): Promise<FileData[]> => {
@@ -3073,10 +3075,9 @@ export async function addCountryApplication(
       downloadAll(jd.documents.personalStatement),
     ]);
 
-  // Use Blob (same pattern as the working submitJotformApplications)
-  // Wrap in Uint8Array to satisfy TypeScript's BlobPart constraint (Buffer → Uint8Array)
+  // Identical to the working submitJotformApplications appendFiles
   const appendFiles = (fd: FormData, field: string, filesData: FileData[]) => {
-    for (const f of filesData) fd.append(field, new Blob([new Uint8Array(f.buffer)], { type: f.type }), f.name);
+    for (const f of filesData) fd.append(field, new Blob([f.buffer], { type: f.type }), f.name);
   };
 
   const toDateParts = (iso: string) => {
@@ -3131,10 +3132,18 @@ export async function addCountryApplication(
   };
 
   const postToJotform = async (formId: string, fd: FormData): Promise<{ ok: boolean; status: number; detail: string }> => {
-    const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, { method: 'POST', body: fd });
+    const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, {
+      method: 'POST',
+      body: fd,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': `https://www.jotform.com/`,
+        'Origin': 'https://www.jotform.com',
+      },
+    });
     let detail = '';
     try { detail = await res.text(); } catch { /* ignore */ }
-    console.log(`[Jotform] ${formId} → HTTP ${res.status}, body: ${detail.substring(0, 300)}`);
+    console.log(`[Jotform] ${formId} → HTTP ${res.status}`);
     return { ok: res.ok, status: res.status, detail };
   };
 
