@@ -51,6 +51,7 @@ const pipelineStatusStyles: { [key: string]: string } = {
   yellow: 'bg-yellow-400 text-black',
   orange: 'bg-orange-500 text-primary-foreground',
   red: 'bg-red-500 text-primary-foreground',
+  black: 'bg-black text-white',
   none: 'bg-gray-400 text-primary-foreground',
 };
 const pipelineStatusLabels: { [key: string]: string } = {
@@ -58,6 +59,7 @@ const pipelineStatusLabels: { [key: string]: string } = {
     yellow: 'Yellow',
     orange: 'Orange',
     red: 'Red',
+    black: 'Black',
     none: 'No Status',
 };
 
@@ -300,6 +302,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const updates: Partial<Student> = { pipelineStatus: status };
         updateDocumentNonBlocking(studentDocRef, updates);
         toast({ title: 'Status Updated', description: result.message });
+    } else {
+        toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
     }
   }
 
@@ -354,6 +358,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         <SelectItem value="yellow">Yellow</SelectItem>
                         <SelectItem value="orange">Orange</SelectItem>
                         <SelectItem value="red">Red</SelectItem>
+                        <SelectItem value="black">Black</SelectItem>
                     </SelectContent>
                 </Select>
                 {isClient && effectiveRole !== 'employee' && (
@@ -648,6 +653,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                                     <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'yellow')}>Move to Yellow</DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'orange')}>Move to Orange</DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'red')}>Move to Red</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handlePipelineStatusChange(student.id, 'black')}>Move to Black</DropdownMenuItem>
                                   </>
                                 )}
                             </DropdownMenuContent>

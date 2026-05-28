@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
             authorId: decodedToken.uid,
             uploadedAt: now,
             isNew: true,
+            viewedBy: [decodedToken.uid],
         };
         
         const updatedDocuments = [...(studentData.documents || []), newDocument];

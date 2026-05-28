@@ -6,7 +6,7 @@ import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileText, Download, Trash2, Loader2 } from 'lucide-react';
+import { FileText, Download, Trash2, Loader2, Eye } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { UploadDocumentDialog } from './upload-document-dialog';
@@ -17,8 +17,15 @@ import { updateDocumentNonBlocking } from '@/firebase/client';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { deleteStudentDocument, updateStudentDocumentNote } from '@/lib/actions';
+import { deleteStudentDocument, updateStudentDocumentNote, markDocumentViewed } from '@/lib/actions';
 import { Input } from '@/components/ui/input';
+
+function forceDownload(url: string, filename: string) {
+  const link = document.createElement('a');
+  link.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+  link.download = filename;
+  link.click();
+}
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return '0 Bytes';
@@ -43,6 +50,13 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [locallyViewedIds, setLocallyViewedIds] = useState<Set<string>>(new Set());
+
+  const markViewed = (docId: string, docIsNew: boolean | undefined, docViewedBy: string[] | undefined) => {
+    if (!docIsNew || docViewedBy?.includes(currentUser.id)) return;
+    setLocallyViewedIds(prev => new Set([...prev, docId]));
+    markDocumentViewed(student.id, docId, currentUser.id);
+  };
 
   const authorIds = useMemo(() => {
     return (student.documents || []).map(doc => doc.authorId);
@@ -130,7 +144,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                     <TableCell className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{doc.name}</span>
-                      {doc.isNew && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
+                      {doc.isNew && !doc.viewedBy?.includes(currentUser.id) && !locallyViewedIds.has(doc.id) && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
                     </TableCell>
                     <TableCell>
                       {author ? (
@@ -188,10 +202,16 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
                             </AlertDialogContent>
                           </AlertDialog>
                         )}
-                        <Button variant="ghost" size="icon" asChild>
-                          <a href={doc.url} download={doc.originalName || doc.name} target="_blank" rel="noopener noreferrer">
-                            <Download className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" asChild title="View" onClick={() => markViewed(doc.id, doc.isNew, doc.viewedBy)}>
+                          <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                            <Eye className="h-4 w-4" />
                           </a>
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Download" onClick={() => {
+                          markViewed(doc.id, doc.isNew, doc.viewedBy);
+                          forceDownload(doc.url, doc.originalName || doc.name);
+                        }}>
+                          <Download className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>

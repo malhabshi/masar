@@ -41,10 +41,11 @@ export interface Document {
   uploadedAt: string;
   authorId: string;
   isNew?: boolean;
+  viewedBy?: string[]; // User IDs who have viewed/downloaded this document
   note?: string;
 }
 
-export type PipelineStatus = 'green' | 'yellow' | 'orange' | 'red' | 'none';
+export type PipelineStatus = 'green' | 'yellow' | 'orange' | 'red' | 'black' | 'none';
 
 export interface ProfileCompletionStatus {
   submitUniversityApplication: boolean;
@@ -390,6 +391,7 @@ export interface EmployeeStats {
     yellow: number;
     orange: number;
     red: number;
+    black: number;
     none: number;
   };
 }

@@ -1352,6 +1352,29 @@ export async function deleteStudentDocument(studentId: string, documentId: strin
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+export async function markDocumentViewed(studentId: string, docId: string, userId: string) {
+  if (!checkAdminServices()) return { success: false };
+  try {
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false };
+    const studentData = studentDoc.data() as Student;
+
+    const updatedDocs = (studentData.documents || []).map(doc => {
+      if (doc.id === docId) {
+        const viewedBy = doc.viewedBy || [];
+        if (!viewedBy.includes(userId)) {
+          return { ...doc, viewedBy: [...viewedBy, userId] };
+        }
+      }
+      return doc;
+    });
+
+    await studentRef.update({ documents: updatedDocs });
+    return { success: true };
+  } catch { return { success: false }; }
+}
+
 export async function updateStudentDocumentNote(studentId: string, documentId: string, note: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
@@ -1557,6 +1580,7 @@ export async function getEmployeeStudentStats(): Promise<{ success: boolean; dat
         yellow: assigned.filter(s => s.pipelineStatus === 'yellow').length,
         orange: assigned.filter(s => s.pipelineStatus === 'orange').length,
         red: assigned.filter(s => s.pipelineStatus === 'red').length,
+        black: assigned.filter(s => s.pipelineStatus === 'black').length,
         none: assigned.filter(s => !s.pipelineStatus || s.pipelineStatus === 'none').length,
       };
 

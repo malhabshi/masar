@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Download, Trash2, Loader2, Link2, Copy, Check, PowerOff, Power, StickyNote, Pencil } from 'lucide-react';
+import { FileText, Download, Trash2, Loader2, Link2, Copy, Check, PowerOff, Power, StickyNote, Pencil, Eye } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -46,6 +46,13 @@ interface Props {
   student: Student;
   currentUser: AppUser;
   allowGenerateLink: boolean;
+}
+
+function forceDownload(url: string, filename: string) {
+  const link = document.createElement('a');
+  link.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+  link.download = filename;
+  link.click();
 }
 
 export function StudentUploadedDocuments({ student, currentUser, allowGenerateLink }: Props) {
@@ -220,10 +227,13 @@ export function StudentUploadedDocuments({ student, currentUser, allowGenerateLi
                       <span className="text-xs text-muted-foreground shrink-0">
                         {isClient ? formatDate(upload.uploadedAt) : '...'}
                       </span>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild title="View">
                         <a href={upload.url} target="_blank" rel="noopener noreferrer">
-                          <Download className="h-3.5 w-3.5" />
+                          <Eye className="h-3.5 w-3.5" />
                         </a>
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" title="Download" onClick={() => forceDownload(upload.url, upload.fileName)}>
+                        <Download className="h-3.5 w-3.5" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>

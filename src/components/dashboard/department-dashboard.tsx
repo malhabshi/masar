@@ -88,14 +88,14 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
           totalStudents: 0, 
           unassignedStudents: 0, 
           apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
-          pipeline: { green: 0, yellow: 0, orange: 0, red: 0, none: 0 }
+          pipeline: { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 }
         };
         
         const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
         const validUserIds = new Set(users.map(u => u.id));
         
         const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
-        const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, none: 0 };
+        const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
         let totalStudents = 0;
         let unassignedStudents = 0;
 
@@ -115,6 +115,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
               else if (status === 'yellow') pipeline.yellow++;
               else if (status === 'orange') pipeline.orange++;
               else if (status === 'red') pipeline.red++;
+              else if (status === 'black') pipeline.black++;
               else pipeline.none++;
             }
 
@@ -136,11 +137,11 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
     const agentBreakdown = useMemo(() => {
         if (!isClient || !users || !students) return [];
 
-        const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, orange: number, red: number, none: number }>();
-        
+        const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, orange: number, red: number, black: number, none: number }>();
+
         users.forEach(u => {
             if (u.civilId) {
-                statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, orange: 0, red: 0, none: 0 });
+                statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, orange: 0, red: 0, black: 0, none: 0 });
             }
         });
 
@@ -152,6 +153,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                 if (status === 'green') entry.green++;
                 else if (status === 'orange') entry.orange++;
                 else if (status === 'red') entry.red++;
+                else if (status === 'black') entry.black++;
                 else entry.none++;
             }
         });

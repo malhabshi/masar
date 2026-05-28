@@ -60,13 +60,14 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
             return acc + (s.applications?.filter(a => a.status === 'Pending').length || 0);
         }, 0);
 
-        const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, none: 0 };
+        const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
         myStudents.forEach(s => {
             const status = s.pipelineStatus || 'none';
             if (status === 'green') pipeline.green++;
             else if (status === 'yellow') pipeline.yellow++;
             else if (status === 'orange') pipeline.orange++;
             else if (status === 'red') pipeline.red++;
+            else if (status === 'black') pipeline.black++;
             else pipeline.none++;
         });
 
