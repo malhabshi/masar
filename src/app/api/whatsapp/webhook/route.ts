@@ -21,6 +21,84 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, '').replace(/^965/, '');
 }
 
+// Score how well a student name matches the query tokens
+function matchScore(studentName: string, tokens: string[]): number {
+  const name = studentName.toLowerCase();
+  let score = 0;
+  for (const token of tokens) {
+    if (name.includes(token)) score += token.length; // longer token matches worth more
+  }
+  return score;
+}
+
+async function searchStudent(query: string) {
+  if (!adminDb) return null;
+
+  // --- 1. Phone search ---
+  const isPhoneLike = /^[\d\s\-+()]{6,}$/.test(query);
+  if (isPhoneLike) {
+    const q = normalizePhone(query);
+    let snap = await adminDb.collection('students').where('phone', '==', q).limit(1).get();
+    if (snap.empty) snap = await adminDb.collection('students').where('phone', '==', `965${q}`).limit(1).get();
+    if (!snap.empty) return { found: [{ id: snap.docs[0].id, ...snap.docs[0].data() }] };
+  }
+
+  // --- 2. Internal number (pure digits or "NUMBER - ...") ---
+  const prefixPattern = query.match(/^(\d+)\s*[-–]\s*(.+)$/);
+  const internalNumberCandidate = prefixPattern ? prefixPattern[1] : (/^\d+$/.test(query.trim()) ? query.trim() : null);
+
+  if (internalNumberCandidate) {
+    const snap = await adminDb.collection('students').where('internalNumber', '==', internalNumberCandidate).limit(1).get();
+    if (!snap.empty) return { found: [{ id: snap.docs[0].id, ...snap.docs[0].data() }] };
+  }
+
+  // --- 3. Name search — fetch all, score, and rank ---
+  // Build name candidates: full query, stripped prefix, individual tokens
+  const nameCandidates: string[] = [query];
+  if (prefixPattern) nameCandidates.push(prefixPattern[2].trim()); // "NAME" part after "NUMBER - "
+  nameCandidates.push(query.replace(/^\d+\s*[-–]\s*/, '').trim()); // strip any leading "NUMBER - "
+
+  const allSnap = await adminDb.collection('students').get();
+  const scored: { score: number; doc: any }[] = [];
+
+  for (const doc of allSnap.docs) {
+    const name: string = (doc.data().name || '').toLowerCase();
+    let best = 0;
+
+    for (const candidate of nameCandidates) {
+      if (!candidate) continue;
+      const lower = candidate.toLowerCase();
+
+      // Full phrase match — highest priority
+      if (name.includes(lower)) {
+        best = Math.max(best, lower.length * 10);
+        continue;
+      }
+
+      // Token match — score by sum of matched token lengths
+      const tokens = lower.split(/[\s\-]+/).filter(t => t.length > 1);
+      const s = matchScore(name, tokens);
+      best = Math.max(best, s);
+    }
+
+    if (best > 0) scored.push({ score: best, doc });
+  }
+
+  if (scored.length === 0) return { found: [] };
+
+  // Sort descending by score
+  scored.sort((a, b) => b.score - a.score);
+
+  // If top score is clearly dominant (2x the second), return single result
+  if (scored.length === 1 || scored[0].score >= scored[1].score * 2) {
+    const d = scored[0].doc;
+    return { found: [{ id: d.id, ...d.data() }] };
+  }
+
+  // Return top matches for disambiguation
+  return { found: scored.slice(0, 5).map(s => ({ id: s.doc.id, ...s.doc.data() })), multiple: true };
+}
+
 async function handleMessageReceived(data: any) {
   if (!adminDb) return;
 
@@ -40,52 +118,24 @@ async function handleMessageReceived(data: any) {
     return userPhone === normalizedSender && userPhone.length > 0;
   });
 
-  if (!isAuthorized) return; // Silently ignore unauthorized senders
+  if (!isAuthorized) return;
 
-  // Search student — try phone, internalNumber, then partial name
-  let student: any = null;
-  const isPhoneLike = /^[\d\s\-+()]{6,}$/.test(messageText);
+  const result = await searchStudent(messageText);
 
-  if (isPhoneLike) {
-    const q = normalizePhone(messageText);
-    // Try exact match on stored phone
-    let snap = await adminDb.collection('students').where('phone', '==', q).limit(1).get();
-    if (snap.empty) {
-      // Try with 965 prefix stored
-      snap = await adminDb.collection('students').where('phone', '==', `965${q}`).limit(1).get();
-    }
-    if (!snap.empty) student = { id: snap.docs[0].id, ...snap.docs[0].data() };
-  }
-
-  if (!student) {
-    // Try internalNumber exact match
-    const snap = await adminDb.collection('students').where('internalNumber', '==', messageText).limit(1).get();
-    if (!snap.empty) student = { id: snap.docs[0].id, ...snap.docs[0].data() };
-  }
-
-  if (!student) {
-    // Partial name search — fetch all and filter in memory
-    const allSnap = await adminDb.collection('students').get();
-    const lower = messageText.toLowerCase();
-    const matches = allSnap.docs.filter(doc =>
-      (doc.data().name || '').toLowerCase().includes(lower)
-    );
-
-    if (matches.length === 1) {
-      student = { id: matches[0].id, ...matches[0].data() };
-    } else if (matches.length > 1) {
-      const list = matches.slice(0, 5).map(d => `• ${d.data().name}`).join('\n');
-      await sendReply(senderPhone, `Multiple students found:\n${list}\n\nPlease be more specific.`);
-      return;
-    }
-  }
-
-  if (!student) {
+  if (!result || result.found.length === 0) {
     await sendReply(senderPhone, `No student found for: "${messageText}"`);
     return;
   }
 
-  // Resolve employee name via civilId
+  if (result.multiple) {
+    const list = result.found.map((s: any) => `• ${s.name} (${s.phone})`).join('\n');
+    await sendReply(senderPhone, `Multiple students found:\n${list}\n\nPlease be more specific.`);
+    return;
+  }
+
+  const student = result.found[0];
+
+  // Resolve employee name
   let employeeName = '-';
   if (student.employeeId) {
     const empSnap = await adminDb.collection('users')
