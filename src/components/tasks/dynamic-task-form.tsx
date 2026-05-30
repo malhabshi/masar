@@ -92,7 +92,9 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       schemaFields.passportName = z.string().optional();
     }
     if (config.documents?.allowSelection) {
-      schemaFields.selectedDocuments = z.array(z.string()).default([]);
+      schemaFields.selectedDocuments = config.documents.requireAtLeastOne
+        ? z.array(z.string()).min(1, 'Please select at least one document')
+        : z.array(z.string()).default([]);
     }
     if (config.allowPortalReferenceSelection) {
       schemaFields.selectedPortalId = z.string().optional();
@@ -147,6 +149,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       unifiedExamDateId: '',
       unifiedExamDateLabel: '',
       unifiedExamDelivery: undefined,
+      amount: (config?.ielts?.showAmount) ? 94 : undefined,
     },
   });
 
@@ -489,7 +492,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     name="ieltsSubtype"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>IELTS Type *</FormLabel>
+                        <FormLabel className="font-bold">IELTS Type *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Select subtype" /></SelectTrigger></FormControl>
                           <SelectContent>
@@ -792,7 +795,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           <div className="space-y-4 border-t pt-4">
             <div className="flex items-center justify-between">
               <FormLabel>Select Documents</FormLabel>
-              {config.documents.allowUpload && <UploadDocumentDialog student={student} />}
+              {config.documents.allowUpload && <UploadDocumentDialog student={student} initialCustomName="IELTS Invoice" />}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 border rounded-md bg-muted/10">
               {student.documents?.length > 0 ? (

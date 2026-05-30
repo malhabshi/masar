@@ -45,7 +45,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -76,6 +76,7 @@ export function TaskDetailsDialog({
   const [localStatus, setLocalStatus] = useState<TaskStatus>(task.status);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [isPaid, setIsPaid] = useState<boolean | undefined>(task.data?.isPaid);
 
   useEffect(() => {
     setIsClient(true);
@@ -84,6 +85,15 @@ export function TaskDetailsDialog({
   useEffect(() => {
     setLocalStatus(task.status);
   }, [task.status, isOpen]);
+
+  useEffect(() => {
+    setIsPaid(task.data?.isPaid);
+  }, [task.id, task.data?.isPaid]);
+
+  const handleToggleIsPaid = async (value: boolean) => {
+    setIsPaid(value);
+    await updateDoc(doc(firestore, 'tasks', task.id), { 'data.isPaid': value });
+  };
 
   const author = userMap.get(task.authorId);
   const data = task.data || {};
@@ -304,6 +314,31 @@ export function TaskDetailsDialog({
                 {renderDataField('Retake Section', data.retakeSection)}
                 {renderDataField('Preferred Time', data.preferredTime)}
                 {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign)}
+                {data.amount != null && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Payment Status</p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant={isPaid === true ? 'default' : 'outline'}
+                        className={cn('h-7 text-xs flex-1', isPaid === true && 'bg-green-600 hover:bg-green-700 text-white')}
+                        onClick={() => handleToggleIsPaid(true)}
+                      >
+                        Paid
+                      </Button>
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant={isPaid === false ? 'default' : 'outline'}
+                        className={cn('h-7 text-xs flex-1', isPaid === false && 'bg-red-600 hover:bg-red-700 text-white')}
+                        onClick={() => handleToggleIsPaid(false)}
+                      >
+                        Not Paid
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {renderDataField('Original Exam', data.originalExamDate, Calendar)}
               </div>
             </section>
