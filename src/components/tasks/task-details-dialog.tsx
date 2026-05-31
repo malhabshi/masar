@@ -315,7 +315,7 @@ export function TaskDetailsDialog({
                 {renderDataField('Preferred Date', data.preferredDate, Calendar)}
                 {renderDataField('Preferred Time', data.preferredTime)}
                 {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign)}
-                {data.amount != null && (
+                {(data.amount != null || data.examType) && (
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Payment Status</p>
                     <div className="flex gap-2">
