@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import type { Task, TaskStatus, User as UserType } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { formatDateTime, formatRelativeTime } from '@/lib/timestamp-utils';
+import { formatDateTime, formatDate, formatRelativeTime } from '@/lib/timestamp-utils';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
@@ -144,18 +144,18 @@ export function TaskDetailsDialog({
     }
   };
 
-  const renderDataField = (label: string, value: any, icon?: any) => {
+  const renderDataField = (label: string, value: any, icon?: any, dateOnly?: boolean, valueClassName?: string) => {
     if (value === undefined || value === null || value === '') return null;
     const Icon = icon;
+    const isDateLike = value instanceof Date || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value));
+    const formatted = Array.isArray(value) ? value.join(', ')
+      : (isClient && isDateLike ? (dateOnly ? formatDate(value) : formatDateTime(value)) : String(value));
     return (
       <div className="space-y-1">
         <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">{label}</p>
         <div className="flex items-center gap-2 font-medium">
           {Icon && <Icon className="h-4 w-4 text-primary" />}
-          <span className="text-sm">
-            {Array.isArray(value) ? value.join(', ') : 
-             (isClient && (value instanceof Date || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value))) ? formatDateTime(value) : String(value))}
-          </span>
+          <span className={cn("text-sm", valueClassName)}>{formatted}</span>
         </div>
       </div>
     );
@@ -308,11 +308,11 @@ export function TaskDetailsDialog({
                 {renderDataField('Passport Name', data.passportName, ShieldCheck)}
                 {renderDataField('Exam Category', data.examType, Clock)}
                 {renderDataField('IELTS Type', data.ieltsSubtype)}
-                {renderDataField('Requested Date', data.requestedDate, Calendar)}
+                {renderDataField('Requested Date', data.requestedDate, Calendar, true)}
                 {renderDataField('Course Start', data.courseStartDate, Calendar)}
                 {renderDataField('Course Option', data.courseOption)}
                 {renderDataField('Retake Section', data.retakeSection)}
-                {renderDataField('Preferred Date', data.preferredDate, Calendar)}
+                {renderDataField('Preferred Date', data.preferredDate, Calendar, true, 'text-red-800 font-bold')}
                 {renderDataField('Preferred Time', data.preferredTime)}
                 {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign)}
                 {(data.amount != null || data.examType) && (
@@ -340,7 +340,7 @@ export function TaskDetailsDialog({
                     </div>
                   </div>
                 )}
-                {renderDataField('Original Exam', data.originalExamDate, Calendar)}
+                {renderDataField('Original Exam', data.originalExamDate, Calendar, true)}
               </div>
             </section>
 
