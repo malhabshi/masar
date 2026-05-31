@@ -312,6 +312,7 @@ export function TaskDetailsDialog({
                 {renderDataField('Course Start', data.courseStartDate, Calendar)}
                 {renderDataField('Course Option', data.courseOption)}
                 {renderDataField('Retake Section', data.retakeSection)}
+                {renderDataField('Preferred Date', data.preferredDate, Calendar)}
                 {renderDataField('Preferred Time', data.preferredTime)}
                 {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign)}
                 {data.amount != null && (
