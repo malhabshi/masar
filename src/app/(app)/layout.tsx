@@ -8,7 +8,7 @@ import { AppSidebar } from '@/components/sidebar';
 import { Loader2, Menu } from 'lucide-react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { NotificationListener } from '@/components/notifications/notification-listener';
-import { processInactivityReminders, processStudentReminders } from '@/lib/actions';
+import { processInactivityReminders, processStudentReminders, handleEmployeeLogin } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 
@@ -30,6 +30,9 @@ export default function AuthenticatedLayout({
 
     if (user && ['admin', 'employee'].includes(user.role)) {
       processInactivityReminders();
+    }
+    if (user && user.role === 'employee') {
+      handleEmployeeLogin(user.id);
     }
 
     return () => console.log('❌ Component unmounted:', 'AuthenticatedLayout');
