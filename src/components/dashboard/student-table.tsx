@@ -161,13 +161,13 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     } catch {}
   }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
 
-  // Identify duplicate phones across all currently loaded students
+  // Identify duplicate phones across all currently loaded students (all phone fields)
   const duplicatePhoneSet = useMemo(() => {
     const counts = new Map<string, number>();
     students.forEach(s => {
-      if (s.phone) {
-        counts.set(s.phone, (counts.get(s.phone) || 0) + 1);
-      }
+      [s.phone, s.phone2, s.phone3].filter(Boolean).forEach(p => {
+        counts.set(p!, (counts.get(p!) || 0) + 1);
+      });
     });
     const duplicates = new Set<string>();
     counts.forEach((count, phone) => {
@@ -207,6 +207,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
             student.name.toLowerCase().includes(searchLower) ||
             (student.email && student.email.toLowerCase().includes(searchLower)) ||
             (student.phone && student.phone.includes(debouncedSearchQuery)) ||
+            (student.phone2 && student.phone2.includes(debouncedSearchQuery)) ||
+            (student.phone3 && student.phone3.includes(debouncedSearchQuery)) ||
             (student.internalNumber && student.internalNumber.toLowerCase().includes(searchLower));
         
         const matchesPipeline = pipelineFilter === 'all' || student.pipelineStatus === pipelineFilter || (pipelineFilter === 'none' && !student.pipelineStatus);
@@ -593,7 +595,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 const transferRequester = student.transferRequest?.requestedBy ? requesterMap.get(student.transferRequest.requestedBy) : null;
                 const canAssign = isAdminDept && !student.employeeId;
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
-                const isDuplicate = duplicatePhoneSet.has(student.phone) || student.duplicatePhoneWarning;
+                const isDuplicate = [student.phone, student.phone2, student.phone3].some(p => p && duplicatePhoneSet.has(p)) || student.duplicatePhoneWarning;
                 const isUnassigned = !student.employeeId;
 
                 return (
@@ -654,6 +656,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       )}
                       <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
                       <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
+                      {student.phone2 && <div className="text-sm text-muted-foreground">{student.phone2}</div>}
+                      {student.phone3 && <div className="text-sm text-muted-foreground">{student.phone3}</div>}
                       {student.finalChoiceUniversity && <div className="flex items-center gap-1 text-lg text-success font-bold mt-1"><GraduationCap className="h-5 w-5" /><span>{student.finalChoiceUniversity}</span></div>}
                     </div>
                   </TableCell>

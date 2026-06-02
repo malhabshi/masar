@@ -105,6 +105,8 @@ export interface Student {
   name: string;
   email: string;
   phone: string;
+  phone2?: string;
+  phone3?: string;
   gender?: 'M' | 'F';
   internalNumber?: string;
   highSchoolGrade?: string; // High school % or GPA

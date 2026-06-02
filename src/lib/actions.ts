@@ -889,21 +889,26 @@ export async function createNewUser(userData: { name: string; email: string; pas
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
+export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-  const { studentName, studentEmail, phone, gender, internalNumber, highSchoolGrade, targetCountries, otherCountry, notes } = values;
+  const { studentName, studentEmail, phone, phone2, phone3, gender, internalNumber, highSchoolGrade, targetCountries, otherCountry, notes } = values;
   let finalTargetCountries = targetCountries;
   if (otherCountry && otherCountry.trim()) finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
   try {
-    const existingSnap = await adminDb!.collection('students').where('phone', '==', phone).get();
+    const newPhones = [phone, phone2, phone3].filter(Boolean) as string[];
+    const existingIds = new Set<string>();
+    await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
+      const snap = await adminDb!.collection('students').where(field, 'in', newPhones).get();
+      snap.docs.forEach(d => existingIds.add(d.id));
+    }));
     let duplicateInfo = {};
-    if (!existingSnap.empty) duplicateInfo = { duplicatePhoneWarning: true, duplicateOfStudentIds: existingSnap.docs.map(doc => doc.id) };
+    if (existingIds.size > 0) duplicateInfo = { duplicatePhoneWarning: true, duplicateOfStudentIds: [...existingIds] };
     const fallbackId = Math.random().toString(36).substring(2, 9);
     const idPrefix = creatingUserCivilId ? `U-${creatingUserCivilId}` : `S-${fallbackId}`;
     const studentId = `${idPrefix}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
-    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
     
     // Auto-post initial notes to chat if they exist
     if (notes && notes.trim()) {
@@ -1373,18 +1378,24 @@ export async function deleteStudent(studentId: string, adminId: string) {
     await adminDb!.collection('chats').doc(studentId).delete();
     await studentRef.delete();
 
-    // Check if we just resolved a duplicate phone issue
-    if (studentData.phone) {
-      const remainingWithPhoneSnap = await adminDb!.collection('students').where('phone', '==', studentData.phone).get();
-      if (remainingWithPhoneSnap.size === 1) {
-        await remainingWithPhoneSnap.docs[0].ref.update({ 
-          duplicatePhoneWarning: false, 
-          duplicateOfStudentIds: FieldValue.delete() 
+    // Check if we just resolved a duplicate phone issue (across all phone fields)
+    const deletedPhones = [studentData.phone, studentData.phone2, studentData.phone3].filter(Boolean) as string[];
+    if (deletedPhones.length > 0) {
+      const affectedIds = new Set<string>();
+      await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
+        const snap = await adminDb!.collection('students').where(field, 'in', deletedPhones).get();
+        snap.docs.forEach(d => affectedIds.add(d.id));
+      }));
+      if (affectedIds.size === 1) {
+        const [remainingId] = affectedIds;
+        await adminDb!.collection('students').doc(remainingId).update({
+          duplicatePhoneWarning: false,
+          duplicateOfStudentIds: FieldValue.delete()
         });
-      } else if (remainingWithPhoneSnap.size > 1) {
+      } else if (affectedIds.size > 1) {
         const batch = adminDb!.batch();
-        remainingWithPhoneSnap.docs.forEach(doc => {
-          batch.update(doc.ref, { duplicateOfStudentIds: FieldValue.arrayRemove(studentId) });
+        affectedIds.forEach(id => {
+          batch.update(adminDb!.collection('students').doc(id), { duplicateOfStudentIds: FieldValue.arrayRemove(studentId) });
         });
         await batch.commit();
       }
@@ -3272,5 +3283,62 @@ export async function addCountryApplication(
   });
 
   return { success: true, message: `Application for ${country} submitted successfully.` };
+}
+
+export async function refreshStudentDuplicateWarning(studentId: string): Promise<void> {
+  if (!adminDb) return;
+
+  const studentDoc = await adminDb.collection('students').doc(studentId).get();
+  if (!studentDoc.exists) return;
+
+  const data = studentDoc.data()!;
+  const phones = [data.phone, data.phone2, data.phone3].filter(Boolean) as string[];
+
+  const affectedIds = new Set<string>();
+
+  if (phones.length > 0) {
+    await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
+      const snap = await adminDb!.collection('students').where(field, 'in', phones).get();
+      snap.docs.forEach(d => { if (d.id !== studentId) affectedIds.add(d.id); });
+    }));
+  }
+
+  const hasDuplicate = affectedIds.size > 0;
+
+  // Update the edited student
+  await adminDb.collection('students').doc(studentId).update({
+    duplicatePhoneWarning: hasDuplicate,
+    ...(hasDuplicate
+      ? { duplicateOfStudentIds: [...affectedIds] }
+      : { duplicateOfStudentIds: FieldValue.delete() }),
+  });
+
+  // For each previously linked student, re-check if they still have duplicates
+  const previouslyLinked: string[] = (data.duplicateOfStudentIds || []) as string[];
+  const toRecheck = new Set([...affectedIds, ...previouslyLinked]);
+  toRecheck.delete(studentId);
+
+  await Promise.all([...toRecheck].map(async otherId => {
+    const otherDoc = await adminDb!.collection('students').doc(otherId).get();
+    if (!otherDoc.exists) return;
+    const otherData = otherDoc.data()!;
+    const otherPhones = [otherData.phone, otherData.phone2, otherData.phone3].filter(Boolean) as string[];
+
+    const otherConflicts = new Set<string>();
+    if (otherPhones.length > 0) {
+      await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
+        const snap = await adminDb!.collection('students').where(field, 'in', otherPhones).get();
+        snap.docs.forEach(d => { if (d.id !== otherId) otherConflicts.add(d.id); });
+      }));
+    }
+
+    const otherHasDuplicate = otherConflicts.size > 0;
+    await adminDb!.collection('students').doc(otherId).update({
+      duplicatePhoneWarning: otherHasDuplicate,
+      ...(otherHasDuplicate
+        ? { duplicateOfStudentIds: [...otherConflicts] }
+        : { duplicateOfStudentIds: FieldValue.delete() }),
+    });
+  }));
 }
 

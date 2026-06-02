@@ -15,23 +15,43 @@ interface DuplicateWarningBannerProps {
 }
 
 export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarningBannerProps) {
-  // Perform a dynamic real-time query for any other student with the same phone number
-  const samePhoneQuery = useMemoFirebase(() => {
-    if (!student.phone) return [];
-    return [where('phone', '==', student.phone)];
-  }, [student.phone]);
+  // All non-empty phones of the current student
+  const phonesKey = [student.phone, student.phone2, student.phone3].filter(Boolean).join(',');
+  const hasPhones = phonesKey.length > 0;
 
-  const { data: matches, isLoading: studentsLoading } = useCollection<Student>(
-    student.phone ? 'students' : '',
-    ...(samePhoneQuery || [])
-  );
+  // Query students where `phone` field matches any of the current student's phones
+  const q1 = useMemoFirebase(() => {
+    const phones = [student.phone, student.phone2, student.phone3].filter(Boolean) as string[];
+    return phones.length ? [where('phone', 'in', phones)] : [];
+  }, [phonesKey]);
 
-  // Filter out the current student from the results
+  // Query students where `phone2` field matches any of the current student's phones
+  const q2 = useMemoFirebase(() => {
+    const phones = [student.phone, student.phone2, student.phone3].filter(Boolean) as string[];
+    return phones.length ? [where('phone2', 'in', phones)] : [];
+  }, [phonesKey]);
+
+  // Query students where `phone3` field matches any of the current student's phones
+  const q3 = useMemoFirebase(() => {
+    const phones = [student.phone, student.phone2, student.phone3].filter(Boolean) as string[];
+    return phones.length ? [where('phone3', 'in', phones)] : [];
+  }, [phonesKey]);
+
+  const { data: byPhone, isLoading: l1 } = useCollection<Student>(hasPhones ? 'students' : '', ...(q1 || []));
+  const { data: byPhone2, isLoading: l2 } = useCollection<Student>(hasPhones ? 'students' : '', ...(q2 || []));
+  const { data: byPhone3, isLoading: l3 } = useCollection<Student>(hasPhones ? 'students' : '', ...(q3 || []));
+
+  // Merge results, deduplicate, exclude current student
   const duplicates = useMemo(() => {
-    return (matches || []).filter(s => s.id !== student.id);
-  }, [matches, student.id]);
+    const seen = new Set<string>();
+    const all = [...(byPhone || []), ...(byPhone2 || []), ...(byPhone3 || [])];
+    return all.filter(s => {
+      if (s.id === student.id || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [byPhone, byPhone2, byPhone3, student.id]);
 
-  // Fetch unique employee IDs assigned to those duplicates for context
   const employeeCivilIds = useMemo(() => {
     const ids = duplicates.map(s => s.employeeId).filter((id): id is string => !!id);
     return [...new Set(ids)];
@@ -39,7 +59,7 @@ export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarnin
 
   const { userMap: employeeMap, isLoading: employeesLoading } = useUserCacheByCivilId(employeeCivilIds);
 
-  const isLoading = studentsLoading || (employeeCivilIds.length > 0 && employeesLoading);
+  const isLoading = l1 || l2 || l3 || (employeeCivilIds.length > 0 && employeesLoading);
 
   if (isLoading) {
     return (
@@ -70,12 +90,12 @@ export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarnin
           <AlertDescription className="text-red-700 mt-1 font-medium">
             {conflicts.length === 1 ? (
               <>
-                ⚠️ Another student profile uses the same phone number: <strong>{conflicts[0].name}</strong>. 
+                ⚠️ Another student profile shares a phone number: <strong>{conflicts[0].name}</strong>.
                 They are currently assigned to <strong>{conflicts[0].employeeName}</strong>.
               </>
             ) : (
               <>
-                ⚠️ Multiple student profiles found with this phone number:
+                ⚠️ Multiple student profiles found with overlapping phone numbers:
                 <div className="mt-2 space-y-1">
                   {conflicts.map((c) => (
                     <div key={c.id} className="flex items-center gap-2">
@@ -90,7 +110,7 @@ export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarnin
             )}
           </AlertDescription>
         </div>
-        
+
         <p className="text-[10px] text-red-600 font-bold italic border-t border-red-200 pt-2 mt-1">
           This warning is permanent while the data remains duplicated. Please merge profiles or update the phone number to clear this alert.
         </p>

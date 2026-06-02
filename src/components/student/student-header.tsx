@@ -565,6 +565,38 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 )}
               </div>
             </div>
+            {student.phone2 && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                <span>{student.phone2}</span>
+                <div className="pdf-hide">
+                  <a
+                    href={`https://wa.me/965${student.phone2.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-500 hover:text-green-600"
+                  >
+                    <WhatsAppIcon className="h-5 w-5" />
+                  </a>
+                </div>
+              </div>
+            )}
+            {student.phone3 && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                <span>{student.phone3}</span>
+                <div className="pdf-hide">
+                  <a
+                    href={`https://wa.me/965${student.phone3.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-500 hover:text-green-600"
+                  >
+                    <WhatsAppIcon className="h-5 w-5" />
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

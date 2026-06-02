@@ -38,9 +38,13 @@ async function searchStudent(query: string) {
   const isPhoneLike = /^[\d\s\-+()]{6,}$/.test(query);
   if (isPhoneLike) {
     const q = normalizePhone(query);
-    let snap = await adminDb.collection('students').where('phone', '==', q).limit(1).get();
-    if (snap.empty) snap = await adminDb.collection('students').where('phone', '==', `965${q}`).limit(1).get();
-    if (!snap.empty) return { found: [{ id: snap.docs[0].id, ...snap.docs[0].data() }] };
+    const candidates = [q, `965${q}`];
+    for (const field of ['phone', 'phone2', 'phone3']) {
+      for (const val of candidates) {
+        const snap = await adminDb.collection('students').where(field, '==', val).limit(1).get();
+        if (!snap.empty) return { found: [{ id: snap.docs[0].id, ...snap.docs[0].data() }] };
+      }
+    }
   }
 
   // --- 2. Internal number (pure digits or "NUMBER - ...") ---

@@ -23,11 +23,14 @@ import type { Student } from '@/lib/types';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { refreshStudentDuplicateWarning } from '@/lib/actions';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email().or(z.literal('')),
   phone: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }),
+  phone2: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }).optional().or(z.literal('')),
+  phone3: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }).optional().or(z.literal('')),
   gender: z.enum(['M', 'F'], { required_error: 'Please select a gender.' }),
   internalNumber: z.string().optional(),
 });
@@ -47,6 +50,8 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
       name: student.name,
       email: student.email,
       phone: student.phone,
+      phone2: student.phone2 || '',
+      phone3: student.phone3 || '',
       gender: (student.gender as any) || 'M',
       internalNumber: student.internalNumber || '',
     },
@@ -58,6 +63,8 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
             name: student.name,
             email: student.email,
             phone: student.phone,
+            phone2: student.phone2 || '',
+            phone3: student.phone3 || '',
             gender: (student.gender as any) || 'M',
             internalNumber: student.internalNumber || '',
         });
@@ -68,6 +75,9 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
     setIsLoading(true);
     const studentDocRef = doc(firestore, 'students', student.id);
     updateDocumentNonBlocking(studentDocRef, values);
+
+    // Re-check duplicate warnings in the background after phone fields may have changed
+    refreshStudentDuplicateWarning(student.id).catch(() => {});
 
     // Simulate delay
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -168,6 +178,32 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
                   <FormLabel>Phone Number</FormLabel>
                   <FormControl>
                     <Input type="tel" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone2"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone Number 2 <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                  <FormControl>
+                    <Input type="tel" placeholder="e.g., 66123456" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone3"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone Number 3 <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                  <FormControl>
+                    <Input type="tel" placeholder="e.g., 77123456" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

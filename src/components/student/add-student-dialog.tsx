@@ -34,6 +34,8 @@ const formSchema = z.object({
   phone: z.string().min(8, {
     message: 'Please enter a valid phone number.',
   }),
+  phone2: z.string().min(8, { message: 'Please enter a valid phone number.' }).optional().or(z.literal('')),
+  phone3: z.string().min(8, { message: 'Please enter a valid phone number.' }).optional().or(z.literal('')),
   internalNumber: z.string().optional(),
   highSchoolGrade: z.string().optional(),
   targetCountries: z.array(z.string()).default([]),
@@ -66,6 +68,8 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
             studentName: '',
             studentEmail: '',
             phone: '',
+            phone2: '',
+            phone3: '',
             internalNumber: '',
             highSchoolGrade: '',
             notes: '',
@@ -247,6 +251,35 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
                                         <FormDescription>
                                             Kuwait (+965) assumed.
                                         </FormDescription>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="phone2"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Phone Number 2 <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                                        <FormControl>
+                                            <Input type="tel" placeholder="e.g., 66123456" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="phone3"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Phone Number 3 <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                                        <FormControl>
+                                            <Input type="tel" placeholder="e.g., 77123456" {...field} />
+                                        </FormControl>
                                         <FormMessage />
                                         </FormItem>
                                     )}
