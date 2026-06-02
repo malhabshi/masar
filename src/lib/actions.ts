@@ -1478,7 +1478,6 @@ export async function handleEmployeeLogin(userId: string) {
     const activeLogQuery = await timeLogsRef
       .where('employeeId', '==', userId)
       .where('clockOut', '==', null)
-      .orderBy('clockIn', 'desc')
       .limit(1)
       .get();
 
@@ -1521,7 +1520,7 @@ export async function handleEmployeeLogin(userId: string) {
 export async function handleEmployeeLogout(userId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    const activeLogQuery = await adminDb!.collection('time_logs').where('employeeId', '==', userId).where('clockOut', '==', null).orderBy('clockIn', 'desc').limit(1).get();
+    const activeLogQuery = await adminDb!.collection('time_logs').where('employeeId', '==', userId).where('clockOut', '==', null).limit(1).get();
     if (activeLogQuery.empty) return { success: true, message: 'No active session.' };
     await activeLogQuery.docs[0].ref.update({ clockOut: new Date().toISOString() });
     return { success: true, message: 'Session ended.' };
@@ -1531,7 +1530,7 @@ export async function handleEmployeeLogout(userId: string) {
 export async function keepAlive(userId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
-    const activeLogQuery = await adminDb!.collection('time_logs').where('employeeId', '==', userId).where('clockOut', '==', null).orderBy('clockIn', 'desc').limit(1).get();
+    const activeLogQuery = await adminDb!.collection('time_logs').where('employeeId', '==', userId).where('clockOut', '==', null).limit(1).get();
     if (!activeLogQuery.empty) await activeLogQuery.docs[0].ref.update({ lastSeen: new Date().toISOString() });
     return { success: true };
   } catch (error) { return { success: false, message: 'Failed.' }; }
@@ -1543,16 +1542,20 @@ export async function closeInactiveSessions() {
     // If a user stops working for a full 60 min, then count him as logged out
     const sixtyMinutesAgo = subMinutes(new Date(), 60).toISOString();
     
-    const inactiveSessionsQuery = await adminDb!.collection('time_logs')
+    const openSessionsQuery = await adminDb!.collection('time_logs')
       .where('clockOut', '==', null)
-      .where('lastSeen', '<', sixtyMinutesAgo)
       .get();
-      
-    if (inactiveSessionsQuery.empty) return { success: true, message: 'No inactive sessions to close.' };
-    
+
+    const inactiveDocs = openSessionsQuery.docs.filter(doc => {
+      const lastSeen = doc.data().lastSeen || doc.data().clockIn;
+      return lastSeen && lastSeen < sixtyMinutesAgo;
+    });
+
+    if (inactiveDocs.length === 0) return { success: true, message: 'No inactive sessions to close.' };
+
     const batch = adminDb!.batch();
-    
-    inactiveSessionsQuery.docs.forEach(doc => {
+
+    inactiveDocs.forEach(doc => {
       const data = doc.data() as TimeLog;
       const lastSeenStr = data.lastSeen || data.clockIn;
       const lastSeenDate = parseISO(lastSeenStr);
@@ -1567,7 +1570,7 @@ export async function closeInactiveSessions() {
     });
     
     await batch.commit();
-    return { success: true, message: `Closed ${inactiveSessionsQuery.size} inactive sessions (applied 5-minute buffer).` };
+    return { success: true, message: `Closed ${inactiveDocs.length} inactive sessions (applied 5-minute buffer).` };
   } catch (error) { 
     console.error("Error closing inactive sessions:", error);
     return { success: false, message: 'Failed to close sessions.' }; 
