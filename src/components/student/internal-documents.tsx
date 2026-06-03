@@ -92,9 +92,11 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
 
     if (isEmployee && student.newDocumentsForEmployee && student.newDocumentsForEmployee > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id))) {
       updates.newDocsViewedBy = arrayUnion(currentUser.id) as any;
+      updates.newDocumentsForEmployee = 0;
     }
     if (isAdminDept && student.newDocumentsForAdmin && student.newDocumentsForAdmin > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id))) {
       updates.newDocsViewedBy = arrayUnion(currentUser.id) as any;
+      updates.newDocumentsForAdmin = 0;
     }
 
     if (Object.keys(updates).length > 0) {

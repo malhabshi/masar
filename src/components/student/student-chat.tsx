@@ -70,7 +70,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     if (isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0) {
       updateDocumentNonBlocking(studentDocRef, { [`chatUnreadCountByUser.${currentUser.id}`]: 0 } as any);
     } else if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id))) {
-      updateDocumentNonBlocking(studentDocRef, { updatesViewedBy: arrayUnion(currentUser.id) as any });
+      updateDocumentNonBlocking(studentDocRef, { updatesViewedBy: arrayUnion(currentUser.id) as any, employeeUnreadMessages: 0 });
     }
   }, [student.id, student.chatUnreadCountByUser, student.employeeUnreadMessages, currentUser.role]);
 
