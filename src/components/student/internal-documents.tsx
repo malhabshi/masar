@@ -83,10 +83,10 @@ export function InternalDocuments({ student, currentUser, title, allowUpload, se
     if (!student || !currentUser) return;
     const studentDocRef = doc(firestore, 'students', student.id);
     const isAdminDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
-    const isEmployee = currentUser.role === 'employee';
+    const isAssignedEmployee = student.employeeId === currentUser.civilId;
     const updates: Partial<Student> = {};
 
-    if (isEmployee && student.newDocumentsForEmployee && student.newDocumentsForEmployee > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id))) {
+    if (isAssignedEmployee && student.newDocumentsForEmployee && student.newDocumentsForEmployee > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id))) {
       updates.newDocsViewedBy = arrayUnion(currentUser.id) as any;
       updates.newDocumentsForEmployee = 0;
     }
