@@ -44,9 +44,10 @@ interface InternalDocumentsProps {
   currentUser: AppUser;
   title: string;
   allowUpload: boolean;
+  section: 'employee' | 'admin';
 }
 
-export function InternalDocuments({ student, currentUser, title, allowUpload }: InternalDocumentsProps) {
+export function InternalDocuments({ student, currentUser, title, allowUpload, section }: InternalDocumentsProps) {
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -70,16 +71,11 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
   const managementRoles: UserRole[] = ['admin', 'adminplus', 'department'];
 
   const documents = (student.documents || []).filter(doc => {
-      const isEmployeeSection = title === 'Employee Documents';
+      // New docs have an explicit section tag; legacy docs fall back to author role
+      if (doc.section) return doc.section === section;
       const author = userMap.get(doc.authorId);
-
-      if (isEmployeeSection) {
-          // Show documents created by employees (or if author can't be determined, assume it might be older data)
-          return !author || author.role === 'employee';
-      } else {
-          // Admin/Dept section: show documents created by them
-          return author && managementRoles.includes(author.role);
-      }
+      if (section === 'employee') return !author || author.role === 'employee';
+      return author && managementRoles.includes(author.role);
   });
 
   // Effect to clear document notification counters upon viewing.
@@ -229,7 +225,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload }: 
       </CardContent>
       {allowUpload && (
         <CardFooter className="border-t pt-4">
-          <UploadDocumentDialog student={student} />
+          <UploadDocumentDialog student={student} section={section} />
         </CardFooter>
       )}
     </Card>

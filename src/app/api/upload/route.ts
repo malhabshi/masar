@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null;
     const destination = formData.get('destination') as 'student' | 'shared' | 'user_avatar' | null;
     const customName = formData.get('customName') as string | null;
+    const section = formData.get('section') as 'employee' | 'admin' | null;
 
 
     if (!file) {
@@ -77,26 +78,28 @@ export async function POST(req: NextRequest) {
             uploadedAt: now,
             isNew: true,
             viewedBy: [decodedToken.uid],
+            ...(section ? { section } : {}),
         };
-        
+
         const updatedDocuments = [...(studentData.documents || []), newDocument];
-        
-        // Update notification counters based on uploader role
+
+        // Route notification counter by section tag; fall back to uploader role for legacy uploads
         const uploaderDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
         const uploaderRole = uploaderDoc.data()?.role;
+        const effectiveSection = section || (uploaderRole === 'employee' ? 'employee' : 'admin');
 
         let counterUpdate: any = { lastActivityAt: now };
-        if (uploaderRole === 'employee') {
-          // Employee uploaded, notify admins
-          counterUpdate = { 
-            ...counterUpdate, 
+        if (effectiveSection === 'employee') {
+          // Uploaded in employee section → notify admins/depts
+          counterUpdate = {
+            ...counterUpdate,
             newDocumentsForAdmin: (studentData.newDocumentsForAdmin || 0) + 1,
             newDocsViewedBy: [decodedToken.uid]
           };
-        } else if (uploaderRole === 'admin' || uploaderRole === 'department') {
-          // Admin/Dept uploaded, notify employee
-          counterUpdate = { 
-            ...counterUpdate, 
+        } else {
+          // Uploaded in admin section → notify assigned employee
+          counterUpdate = {
+            ...counterUpdate,
             newDocumentsForEmployee: (studentData.newDocumentsForEmployee || 0) + 1,
             newDocsViewedBy: [decodedToken.uid]
           };

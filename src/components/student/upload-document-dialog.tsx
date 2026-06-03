@@ -22,11 +22,12 @@ import { validateFile, MAX_FILE_SIZE_MB, ALLOWED_FILE_EXTENSIONS } from '@/lib/f
 
 interface UploadDocumentDialogProps {
   student: Student;
+  section?: 'employee' | 'admin';
   initialCustomName?: string;
   trigger?: React.ReactNode;
 }
 
-export function UploadDocumentDialog({ student, initialCustomName = '', trigger }: UploadDocumentDialogProps) {
+export function UploadDocumentDialog({ student, section, initialCustomName = '', trigger }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [customName, setCustomName] = useState(initialCustomName);
@@ -75,6 +76,7 @@ export function UploadDocumentDialog({ student, initialCustomName = '', trigger 
     formData.append('file', file);
     formData.append('destination', 'student');
     formData.append('studentId', student.id);
+    if (section) formData.append('section', section);
     if (customName) {
         formData.append('customName', customName);
     }

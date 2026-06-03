@@ -40,6 +40,7 @@ export interface Document {
   url: string;
   uploadedAt: string;
   authorId: string;
+  section?: 'employee' | 'admin'; // which section it was uploaded from
   isNew?: boolean;
   viewedBy?: string[]; // User IDs who have viewed/downloaded this document
   note?: string;

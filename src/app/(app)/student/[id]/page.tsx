@@ -219,8 +219,8 @@ export default function StudentDetailPage() {
               <TargetCountriesCard student={student} currentUser={currentUser} />
               <StudentApplications student={student} />
               <StudentUsersCard student={student} currentUser={currentUser} />
-              <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} />
-              <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} />
+              <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} section="employee" />
+              <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} section="admin" />
               <StudentUploadedDocuments student={student} currentUser={currentUser} allowGenerateLink={isAssignedEmployee || isAdminOrDept} />
               
               {isAdminOrDept && (
