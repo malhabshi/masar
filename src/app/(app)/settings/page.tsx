@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Database, Download } from 'lucide-react';
+import { Loader2, Database, Download, ShieldOff } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { AvatarUpload } from '@/components/user-management/avatar-upload';
-import { getFullSystemBackup } from '@/lib/actions';
+import { getFullSystemBackup, clearStaleDuplicateWarnings } from '@/lib/actions';
 import { MissingItemsTemplateManager } from '@/components/settings/missing-items-template-manager';
 import { ChecklistItemsManager } from '@/components/settings/checklist-items-manager';
 import { AdminChecklistItemsManager } from '@/components/settings/admin-checklist-items-manager';
@@ -18,8 +18,8 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
   
-  // Backup state
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isClearingDuplicates, setIsClearingDuplicates] = useState(false);
 
   // Theme Settings
   const [primaryColor, setPrimaryColor] = useState('#5E60A4');
@@ -108,6 +108,16 @@ export default function SettingsPage() {
     }
   };
 
+  const handleClearStaleDuplicates = async () => {
+    setIsClearingDuplicates(true);
+    const { fixed } = await clearStaleDuplicateWarnings();
+    toast({
+      title: fixed > 0 ? `Cleared ${fixed} stale duplicate flag${fixed > 1 ? 's' : ''}` : 'No stale flags found',
+      description: fixed > 0 ? 'Duplicate profile badges have been removed from resolved profiles.' : 'All duplicate warnings are accurate.',
+    });
+    setIsClearingDuplicates(false);
+  };
+
   const handleDownloadBackup = async () => {
     if (!user) return;
     setIsBackingUp(true);
@@ -167,17 +177,33 @@ export default function SettingsPage() {
               <CardDescription>Secure your data by downloading a full system backup of all students, tasks, and settings.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                onClick={handleDownloadBackup} 
-                disabled={isBackingUp}
-                className="gap-2 font-bold"
-              >
-                {isBackingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Download Complete System Backup (.JSON)
-              </Button>
-              <p className="text-[10px] text-muted-foreground mt-2 italic">
-                Note: This file contains raw system data and can be used for manual auditing or offline records.
-              </p>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={handleDownloadBackup}
+                  disabled={isBackingUp}
+                  className="gap-2 font-bold w-fit"
+                >
+                  {isBackingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  Download Complete System Backup (.JSON)
+                </Button>
+                <p className="text-[10px] text-muted-foreground italic">
+                  Note: This file contains raw system data and can be used for manual auditing or offline records.
+                </p>
+                <div className="border-t pt-3">
+                  <Button
+                    variant="outline"
+                    onClick={handleClearStaleDuplicates}
+                    disabled={isClearingDuplicates}
+                    className="gap-2 w-fit border-orange-400 text-orange-700 hover:bg-orange-50"
+                  >
+                    {isClearingDuplicates ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldOff className="h-4 w-4" />}
+                    Clear Stale Duplicate Warnings
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground mt-1 italic">
+                    Removes "Duplicate Profile" badges from students whose phone conflicts have already been resolved.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

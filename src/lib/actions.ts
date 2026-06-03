@@ -3342,3 +3342,41 @@ export async function refreshStudentDuplicateWarning(studentId: string): Promise
   }));
 }
 
+export async function clearStaleDuplicateWarnings(): Promise<{ fixed: number }> {
+  if (!adminDb) return { fixed: 0 };
+
+  // Fetch all students that currently have the warning flag set
+  const flaggedSnap = await adminDb.collection('students').where('duplicatePhoneWarning', '==', true).get();
+  if (flaggedSnap.empty) return { fixed: 0 };
+
+  // Fetch ALL students once to build a full phone index
+  const allSnap = await adminDb.collection('students').get();
+  const phoneCounts = new Map<string, number>();
+  allSnap.docs.forEach(d => {
+    const data = d.data();
+    [data.phone, data.phone2, data.phone3].filter(Boolean).forEach((p: string) => {
+      phoneCounts.set(p, (phoneCounts.get(p) || 0) + 1);
+    });
+  });
+
+  const batch = adminDb.batch();
+  let fixed = 0;
+
+  for (const doc of flaggedSnap.docs) {
+    const data = doc.data();
+    const phones = [data.phone, data.phone2, data.phone3].filter(Boolean) as string[];
+    const stillHasDuplicate = phones.some(p => (phoneCounts.get(p) || 0) > 1);
+
+    if (!stillHasDuplicate) {
+      batch.update(adminDb.collection('students').doc(doc.id), {
+        duplicatePhoneWarning: false,
+        duplicateOfStudentIds: FieldValue.delete(),
+      });
+      fixed++;
+    }
+  }
+
+  if (fixed > 0) await batch.commit();
+  return { fixed };
+}
+
