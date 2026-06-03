@@ -41,6 +41,7 @@ interface FlattenedApplication {
   studentPhone: string;
   internalNumber?: string;
   employeeId: string | null;
+  studyLevel?: string;
   application: Application;
 }
 
@@ -59,6 +60,7 @@ export function AllApplicationsView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [countryFilter, setCountryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [studyLevelFilter, setStudyLevelFilter] = useState<string>('all');
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -67,9 +69,10 @@ export function AllApplicationsView() {
       const raw = sessionStorage.getItem('all_applications_filters');
       if (raw) {
         const f = JSON.parse(raw);
-        if (f.searchQuery !== undefined)   setSearchQuery(f.searchQuery);
-        if (f.countryFilter !== undefined) setCountryFilter(f.countryFilter);
-        if (f.statusFilter !== undefined)  setStatusFilter(f.statusFilter);
+        if (f.searchQuery !== undefined)      setSearchQuery(f.searchQuery);
+        if (f.countryFilter !== undefined)    setCountryFilter(f.countryFilter);
+        if (f.statusFilter !== undefined)     setStatusFilter(f.statusFilter);
+        if (f.studyLevelFilter !== undefined) setStudyLevelFilter(f.studyLevelFilter);
       }
     } catch {}
   }, []);
@@ -77,9 +80,9 @@ export function AllApplicationsView() {
   useEffect(() => {
     if (!isClient) return;
     try {
-      sessionStorage.setItem('all_applications_filters', JSON.stringify({ searchQuery, countryFilter, statusFilter }));
+      sessionStorage.setItem('all_applications_filters', JSON.stringify({ searchQuery, countryFilter, statusFilter, studyLevelFilter }));
     } catch {}
-  }, [isClient, searchQuery, countryFilter, statusFilter]);
+  }, [isClient, searchQuery, countryFilter, statusFilter, studyLevelFilter]);
 
   const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
 
@@ -117,6 +120,7 @@ export function AllApplicationsView() {
           studentPhone: student.phone,
           internalNumber: student.internalNumber,
           employeeId: student.employeeId,
+          studyLevel: student.studyLevel,
           application: app,
         });
       });
@@ -148,9 +152,12 @@ export function AllApplicationsView() {
       // 4. UI Status Filter
       const matchesStatus = statusFilter === 'all' || item.application.status === statusFilter;
 
-      return matchesSearch && matchesCountry && matchesStatus;
+      // 5. Study Level Filter
+      const matchesStudyLevel = studyLevelFilter === 'all' || item.studyLevel === studyLevelFilter;
+
+      return matchesSearch && matchesCountry && matchesStatus && matchesStudyLevel;
     }).sort((a, b) => new Date(b.application.updatedAt).getTime() - new Date(a.application.updatedAt).getTime());
-  }, [allFlattened, currentUser, effectiveRole, searchQuery, countryFilter, statusFilter]);
+  }, [allFlattened, currentUser, effectiveRole, searchQuery, countryFilter, statusFilter, studyLevelFilter]);
 
   // Fetch unique employee IDs for name mapping
   const employeeCivilIds = useMemo(() => {
@@ -161,7 +168,7 @@ export function AllApplicationsView() {
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
 
-  const isFiltered = searchQuery !== '' || (effectiveRole === 'admin' && countryFilter !== 'all') || statusFilter !== 'all';
+  const isFiltered = searchQuery !== '' || (effectiveRole === 'admin' && countryFilter !== 'all') || statusFilter !== 'all' || studyLevelFilter !== 'all';
 
   return (
     <div className="space-y-6">
@@ -203,6 +210,18 @@ export function AllApplicationsView() {
                 {ALL_STATUSES.map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={studyLevelFilter} onValueChange={setStudyLevelFilter}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="All Levels" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Levels</SelectItem>
+                <SelectItem value="Foundation">Foundation</SelectItem>
+                <SelectItem value="First Year">First Year</SelectItem>
+                <SelectItem value="Transfer Student">Transfer Student</SelectItem>
               </SelectContent>
             </Select>
 
