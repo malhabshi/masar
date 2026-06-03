@@ -314,7 +314,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                           "text-[9px] mt-1 text-right opacity-60",
                           isCurrentUser ? "text-primary-foreground" : "text-muted-foreground"
                       )}>
-                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(message.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>
