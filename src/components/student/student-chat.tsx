@@ -65,14 +65,14 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     if (!student || !currentUser) return;
     const studentDocRef = doc(firestore, 'students', student.id);
     const isAdminDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
-    const isEmployee = currentUser.role === 'employee';
+    const isAssignedEmployee = student.employeeId === currentUser.civilId;
 
     if (isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0) {
       updateDocumentNonBlocking(studentDocRef, { [`chatUnreadCountByUser.${currentUser.id}`]: 0 } as any);
-    } else if (isEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id))) {
+    } else if (isAssignedEmployee && student.employeeUnreadMessages && student.employeeUnreadMessages > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id))) {
       updateDocumentNonBlocking(studentDocRef, { updatesViewedBy: arrayUnion(currentUser.id) as any, employeeUnreadMessages: 0 });
     }
-  }, [student.id, student.chatUnreadCountByUser, student.employeeUnreadMessages, currentUser.role]);
+  }, [student.id, student.chatUnreadCountByUser, student.employeeUnreadMessages, currentUser.civilId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
