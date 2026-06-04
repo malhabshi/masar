@@ -7,13 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { MultiSelectFilter } from '@/components/ui/multi-select-filter';
 import { PlusCircle, Search, Loader2, X } from 'lucide-react';
 import { UniversitiesTable } from '@/components/universities/universities-table';
 import { AddUniversityDialog } from '@/components/universities/add-university-dialog';
@@ -34,19 +28,19 @@ export function ApprovedUniversitiesView() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
-  const [countryFilter, setCountryFilter] = useState('all');
-  const [availabilityFilter, setAvailabilityFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState<UniversityCategory | 'all'>('all');
+  const [countryFilter, setCountryFilter] = useState<string[]>([]);
+  const [availabilityFilter, setAvailabilityFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
 
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('universities_filters');
       if (raw) {
         const f = JSON.parse(raw);
-        if (f.searchQuery !== undefined)       { setSearchQuery(f.searchQuery); setDebouncedSearchQuery(f.searchQuery); }
-        if (f.countryFilter !== undefined)     setCountryFilter(f.countryFilter);
-        if (f.availabilityFilter !== undefined) setAvailabilityFilter(f.availabilityFilter);
-        if (f.categoryFilter !== undefined)    setCategoryFilter(f.categoryFilter);
+        if (f.searchQuery !== undefined)        { setSearchQuery(f.searchQuery); setDebouncedSearchQuery(f.searchQuery); }
+        if (Array.isArray(f.countryFilter))     setCountryFilter(f.countryFilter);
+        if (Array.isArray(f.availabilityFilter)) setAvailabilityFilter(f.availabilityFilter);
+        if (Array.isArray(f.categoryFilter))    setCategoryFilter(f.categoryFilter);
       }
     } catch {}
   }, []);
@@ -70,15 +64,15 @@ export function ApprovedUniversitiesView() {
   const handleClearFilters = () => {
     setSearchQuery('');
     setDebouncedSearchQuery('');
-    setCountryFilter('all');
-    setAvailabilityFilter('all');
-    setCategoryFilter('all');
+    setCountryFilter([]);
+    setAvailabilityFilter([]);
+    setCategoryFilter([]);
     try {
       sessionStorage.removeItem('universities_filters');
     } catch {}
   };
 
-  const isFiltered = searchQuery !== '' || countryFilter !== 'all' || availabilityFilter !== 'all' || categoryFilter !== 'all';
+  const isFiltered = searchQuery !== '' || countryFilter.length > 0 || availabilityFilter.length > 0 || categoryFilter.length > 0;
 
   const filteredUniversities = useMemo(() => {
     if (!universitiesData) return [];
@@ -100,14 +94,12 @@ export function ApprovedUniversitiesView() {
         uniImportant.includes(word)
       );
 
-      const matchesCountry = countryFilter === 'all' || uni.country === countryFilter;
-      
-      const matchesAvailability = 
-        availabilityFilter === 'all' || 
-        (availabilityFilter === 'available' && uni.isAvailable) ||
-        (availabilityFilter === 'unavailable' && !uni.isAvailable);
+      const matchesCountry = countryFilter.length === 0 || countryFilter.includes(uni.country);
 
-      const matchesCategory = categoryFilter === 'all' || uni.category === categoryFilter;
+      const matchesAvailability = availabilityFilter.length === 0 ||
+        availabilityFilter.some(f => f === 'available' ? uni.isAvailable : !uni.isAvailable);
+
+      const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(uni.category ?? '');
 
       return matchesSearch && matchesCountry && matchesAvailability && matchesCategory;
     });
@@ -157,7 +149,6 @@ export function ApprovedUniversitiesView() {
   }, [user, toast]);
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
-
   if (isLoading) {
     return (
       <Card>
@@ -226,37 +217,35 @@ export function ApprovedUniversitiesView() {
                     </Button>
                 )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <Select value={countryFilter} onValueChange={setCountryFilter}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="All Countries" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Countries</SelectItem>
-                        {countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-                <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as any)}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        <SelectItem value="MOHE">MOHE Only</SelectItem>
-                        <SelectItem value="Merit">Merit List Only</SelectItem>
-                        <SelectItem value="General">General Only</SelectItem>
-                    </SelectContent>
-                </Select>
-                <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="All Statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="available">Available</SelectItem>
-                        <SelectItem value="unavailable">Closed/Unavailable</SelectItem>
-                    </SelectContent>
-                </Select>
+            <div className="flex flex-wrap gap-2">
+                <MultiSelectFilter
+                    label="Countries"
+                    options={countries.map(c => ({ label: c, value: c }))}
+                    selected={countryFilter}
+                    onChange={setCountryFilter}
+                    className="flex-1 min-w-[120px]"
+                />
+                <MultiSelectFilter
+                    label="Categories"
+                    options={[
+                        { label: 'MOHE', value: 'MOHE' },
+                        { label: 'Merit List', value: 'Merit' },
+                        { label: 'General', value: 'General' },
+                    ]}
+                    selected={categoryFilter}
+                    onChange={setCategoryFilter}
+                    className="flex-1 min-w-[120px]"
+                />
+                <MultiSelectFilter
+                    label="Availability"
+                    options={[
+                        { label: 'Available', value: 'available' },
+                        { label: 'Closed/Unavailable', value: 'unavailable' },
+                    ]}
+                    selected={availabilityFilter}
+                    onChange={setAvailabilityFilter}
+                    className="flex-1 min-w-[120px]"
+                />
             </div>
         </div>
         <UniversitiesTable

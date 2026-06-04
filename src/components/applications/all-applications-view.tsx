@@ -20,22 +20,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Search, Globe, Loader2, User as UserIcon, Building2, Calendar, GraduationCap, AlertTriangle } from 'lucide-react';
 import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 import Link from 'next/link';
 import { formatDate } from '@/lib/timestamp-utils';
 import { cn } from '@/lib/utils';
+import { MultiSelectFilter } from '@/components/ui/multi-select-filter';
 
 interface FlattenedApplication {
-  id: string; // Unique key for row
+  id: string;
   studentId: string;
   studentName: string;
   studentPhone: string;
@@ -54,13 +48,20 @@ const statusColors: Record<string, string> = {
 };
 
 const ALL_STATUSES: ApplicationStatus[] = ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'];
+const COUNTRIES: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+const STUDY_LEVELS = [
+  { label: 'Foundation', value: 'Foundation' },
+  { label: 'First Year', value: 'First Year' },
+  { label: 'Transfer Student', value: 'Transfer Student' },
+  { label: 'Not Set', value: '__none__' },
+];
 
 export function AllApplicationsView() {
   const { user: currentUser, effectiveRole } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
-  const [countryFilter, setCountryFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [studyLevelFilter, setStudyLevelFilter] = useState<string>('all');
+  const [countryFilter, setCountryFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [studyLevelFilter, setStudyLevelFilter] = useState<string[]>([]);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -69,10 +70,10 @@ export function AllApplicationsView() {
       const raw = sessionStorage.getItem('all_applications_filters');
       if (raw) {
         const f = JSON.parse(raw);
-        if (f.searchQuery !== undefined)      setSearchQuery(f.searchQuery);
-        if (f.countryFilter !== undefined)    setCountryFilter(f.countryFilter);
-        if (f.statusFilter !== undefined)     setStatusFilter(f.statusFilter);
-        if (f.studyLevelFilter !== undefined) setStudyLevelFilter(f.studyLevelFilter);
+        if (Array.isArray(f.countryFilter))    setCountryFilter(f.countryFilter);
+        if (Array.isArray(f.statusFilter))     setStatusFilter(f.statusFilter);
+        if (Array.isArray(f.studyLevelFilter)) setStudyLevelFilter(f.studyLevelFilter);
+        if (f.searchQuery !== undefined)        setSearchQuery(f.searchQuery);
       }
     } catch {}
   }, []);
@@ -86,32 +87,22 @@ export function AllApplicationsView() {
 
   const { data: students, isLoading: studentsLoading } = useCollection<Student>('students');
 
-  // Identify duplicate phones across all students
   const duplicatePhoneSet = useMemo(() => {
     if (!students) return new Set<string>();
     const counts = new Map<string, number>();
     students.forEach(s => {
-      if (s.phone) {
-        counts.set(s.phone, (counts.get(s.phone) || 0) + 1);
-      }
+      if (s.phone) counts.set(s.phone, (counts.get(s.phone) || 0) + 1);
     });
     const duplicates = new Set<string>();
-    counts.forEach((count, phone) => {
-      if (count > 1) duplicates.add(phone);
-    });
+    counts.forEach((count, phone) => { if (count > 1) duplicates.add(phone); });
     return duplicates;
   }, [students]);
 
-  // Flatten students into a list of applications
   const allFlattened = useMemo(() => {
     if (!students) return [];
-    
     const flattened: FlattenedApplication[] = [];
     students.forEach(student => {
-      // ONLY show applications for students who have an assigned agent.
-      // Leads pending assignment stay in the unassigned pool.
-      if (!student.employeeId || student.employeeId.trim() === "") return;
-
+      if (!student.employeeId || student.employeeId.trim() === '') return;
       (student.applications || []).forEach((app, idx) => {
         flattened.push({
           id: `${student.id}-${idx}`,
@@ -128,48 +119,40 @@ export function AllApplicationsView() {
     return flattened;
   }, [students]);
 
-  // Apply Role-Based and UI Filters
   const filteredApplications = useMemo(() => {
     return allFlattened.filter(item => {
-      // 1. Regional Filtering for Departments
+      // 1. Regional filter for departments
       if (effectiveRole === 'department' && currentUser?.department) {
         const dept = currentUser.department;
         const country = item.application.country;
-        const isMatch = (dept === 'UK' && country === 'UK') || 
-                        (dept === 'USA' && country === 'USA') || 
+        const isMatch = (dept === 'UK' && country === 'UK') ||
+                        (dept === 'USA' && country === 'USA') ||
                         (dept === 'AU/NZ' && (country === 'Australia' || country === 'New Zealand'));
         if (!isMatch) return false;
       }
 
-      // 2. UI Search (Student Name)
-      const matchesSearch = !searchQuery || 
+      const matchesSearch = !searchQuery ||
         item.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.application.university.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // 3. UI Country Filter (Only for Admins, Departments are already filtered)
-      const matchesCountry = countryFilter === 'all' || item.application.country === countryFilter;
+      const matchesCountry = countryFilter.length === 0 || countryFilter.includes(item.application.country);
 
-      // 4. UI Status Filter
-      const matchesStatus = statusFilter === 'all' || item.application.status === statusFilter;
+      const matchesStatus = statusFilter.length === 0 || statusFilter.includes(item.application.status);
 
-      // 5. Study Level Filter
-      const matchesStudyLevel = studyLevelFilter === 'all' ||
-        (studyLevelFilter === '__none__' ? !item.studyLevel : item.studyLevel === studyLevelFilter);
+      const matchesStudyLevel = studyLevelFilter.length === 0 ||
+        studyLevelFilter.some(f => f === '__none__' ? !item.studyLevel : item.studyLevel === f);
 
       return matchesSearch && matchesCountry && matchesStatus && matchesStudyLevel;
     }).sort((a, b) => new Date(b.application.updatedAt).getTime() - new Date(a.application.updatedAt).getTime());
   }, [allFlattened, currentUser, effectiveRole, searchQuery, countryFilter, statusFilter, studyLevelFilter]);
 
-  // Fetch unique employee IDs for name mapping
   const employeeCivilIds = useMemo(() => {
     return [...new Set(filteredApplications.map(a => a.employeeId).filter((id): id is string => !!id))];
   }, [filteredApplications]);
 
   const { userMap: employeeMap } = useUserCacheByCivilId(employeeCivilIds);
 
-  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
-
-  const isFiltered = searchQuery !== '' || (effectiveRole === 'admin' && countryFilter !== 'all') || statusFilter !== 'all' || studyLevelFilter !== 'all';
+  const isFiltered = searchQuery !== '' || countryFilter.length > 0 || statusFilter.length > 0 || studyLevelFilter.length > 0;
 
   return (
     <div className="space-y-6">
@@ -186,13 +169,13 @@ export function AllApplicationsView() {
               )}
             </CardTitle>
             <CardDescription>
-              {effectiveRole === 'department' 
-                ? `Tracking all applications for the ${currentUser?.department} region.` 
+              {effectiveRole === 'department'
+                ? `Tracking all applications for the ${currentUser?.department} region.`
                 : 'A comprehensive log of every university application across all regions.'}
             </CardDescription>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            <div className="relative flex-1 sm:w-64">
+          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+            <div className="relative flex-1 min-w-[180px] sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search student or school..."
@@ -201,44 +184,31 @@ export function AllApplicationsView() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {ALL_STATUSES.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
 
-            <Select value={studyLevelFilter} onValueChange={setStudyLevelFilter}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="All Levels" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Levels</SelectItem>
-                <SelectItem value="Foundation">Foundation</SelectItem>
-                <SelectItem value="First Year">First Year</SelectItem>
-                <SelectItem value="Transfer Student">Transfer Student</SelectItem>
-                <SelectItem value="__none__">Not Set</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="Statuses"
+              options={ALL_STATUSES.map(s => ({ label: s, value: s }))}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              className="min-w-[130px]"
+            />
 
-            {effectiveRole === 'admin' && (
-              <Select value={countryFilter} onValueChange={setCountryFilter}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="All Countries" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Countries</SelectItem>
-                  {countries.map(c => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <MultiSelectFilter
+              label="Levels"
+              options={STUDY_LEVELS}
+              selected={studyLevelFilter}
+              onChange={setStudyLevelFilter}
+              className="min-w-[120px]"
+            />
+
+            {effectiveRole !== 'department' && (
+              <MultiSelectFilter
+                label="Countries"
+                options={COUNTRIES.map(c => ({ label: c, value: c }))}
+                selected={countryFilter}
+                onChange={setCountryFilter}
+                className="min-w-[130px]"
+              />
             )}
           </div>
         </CardHeader>
@@ -265,7 +235,6 @@ export function AllApplicationsView() {
                     filteredApplications.map((item) => {
                       const employee = item.employeeId ? employeeMap.get(item.employeeId) : null;
                       const isDuplicate = duplicatePhoneSet.has(item.studentPhone);
-                      
                       return (
                         <TableRow key={item.id} className="group">
                           <TableCell>
@@ -308,7 +277,7 @@ export function AllApplicationsView() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge className={cn("text-white text-[10px] font-bold uppercase", statusColors[item.application.status])}>
+                            <Badge className={cn('text-white text-[10px] font-bold uppercase', statusColors[item.application.status])}>
                               {item.application.status}
                             </Badge>
                           </TableCell>

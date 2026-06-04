@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from '@/components/ui/select';
+import { MultiSelectFilter } from '@/components/ui/multi-select-filter';
 import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2, UserPlus, Users, Check, ChevronsUpDown, Loader2, Upload } from 'lucide-react';
 import type { Student, PipelineStatus, User, Note, ChecklistConfigItem } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
@@ -72,11 +73,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [pipelineFilter, setPipelineFilter] = useState<PipelineStatus | 'all'>('all');
-  const [employeeFilter, setEmployeeFilter] = useState('all');
-  const [genderFilter, setGenderFilter] = useState<'all' | 'M' | 'F'>('all');
-  const [studyLevelFilter, setStudyLevelFilter] = useState<'all' | 'Foundation' | 'First Year' | 'Transfer Student'>('all');
-  const [countryFilter, setCountryFilter] = useState<string>('all');
+  const [pipelineFilter, setPipelineFilter] = useState<string[]>([]);
+  const [employeeFilter, setEmployeeFilter] = useState<string[]>([]);
+  const [genderFilter, setGenderFilter] = useState<string[]>([]);
+  const [studyLevelFilter, setStudyLevelFilter] = useState<string[]>([]);
+  const [countryFilter, setCountryFilter] = useState<string[]>([]);
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
 
@@ -107,11 +108,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     if (!currentUser?.id) return;
     setSearchQuery('');
     setDebouncedSearchQuery('');
-    setPipelineFilter('all');
-    setEmployeeFilter('all');
-    setGenderFilter('all');
-    setStudyLevelFilter('all');
-    setCountryFilter('all');
+    setPipelineFilter([]);
+    setEmployeeFilter([]);
+    setGenderFilter([]);
+    setStudyLevelFilter([]);
+    setCountryFilter([]);
     setIeltsFilter('all');
     setShowAllStudents(false);
     try {
@@ -119,11 +120,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       if (raw) {
         const f = JSON.parse(raw);
         if (f.searchQuery !== undefined)       { setSearchQuery(f.searchQuery); setDebouncedSearchQuery(f.searchQuery); }
-        if (f.pipelineFilter !== undefined)    setPipelineFilter(f.pipelineFilter);
-        if (f.employeeFilter !== undefined)    setEmployeeFilter(f.employeeFilter);
-        if (f.genderFilter !== undefined)      setGenderFilter(f.genderFilter);
-        if (f.studyLevelFilter !== undefined)  setStudyLevelFilter(f.studyLevelFilter);
-        if (f.countryFilter !== undefined)     setCountryFilter(f.countryFilter);
+        if (Array.isArray(f.pipelineFilter))   setPipelineFilter(f.pipelineFilter);
+        if (Array.isArray(f.employeeFilter))   setEmployeeFilter(f.employeeFilter);
+        if (Array.isArray(f.genderFilter))     setGenderFilter(f.genderFilter);
+        if (Array.isArray(f.studyLevelFilter)) setStudyLevelFilter(f.studyLevelFilter);
+        if (Array.isArray(f.countryFilter))    setCountryFilter(f.countryFilter);
         if (f.ieltsFilter !== undefined)           setIeltsFilter(f.ieltsFilter);
         if (f.showAllStudents !== undefined)       setShowAllStudents(f.showAllStudents);
         if (f.checklistItemFilter !== undefined)   setChecklistItemFilter(f.checklistItemFilter);
@@ -211,8 +212,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
             (student.phone3 && student.phone3.includes(debouncedSearchQuery)) ||
             (student.internalNumber && student.internalNumber.toLowerCase().includes(searchLower));
         
-        const matchesPipeline = pipelineFilter === 'all' || student.pipelineStatus === pipelineFilter || (pipelineFilter === 'none' && !student.pipelineStatus);
-        const matchesEmployee = employeeFilter === 'all' || (employeeFilter === 'unassigned' && !student.employeeId) || (student.employeeId && employeeMapByCivilId.get(student.employeeId)?.id === employeeFilter);
+        const matchesPipeline = pipelineFilter.length === 0 || pipelineFilter.some(f => f === 'none' ? !student.pipelineStatus : student.pipelineStatus === f);
+        const matchesEmployee = employeeFilter.length === 0 || employeeFilter.some(f => f === 'unassigned' ? !student.employeeId : (student.employeeId && employeeMapByCivilId.get(student.employeeId)?.id === f));
 
         const studentIelts = student.ieltsOverall ?? 0;
         let matchesIelts = true;
@@ -227,17 +228,14 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         }
 
         // Country filter
-        if (countryFilter !== 'all') {
+        if (countryFilter.length > 0) {
             const appCountries = (student.applications || []).map(a => a.country);
-            if (countryFilter === 'none') {
-                if (appCountries.length > 0) return false;
-            } else {
-                if (!appCountries.includes(countryFilter as any)) return false;
-            }
+            const matches = countryFilter.some(f => f === 'none' ? appCountries.length === 0 : appCountries.includes(f as any));
+            if (!matches) return false;
         }
-        
-        const matchesGender = genderFilter === 'all' || student.gender === genderFilter;
-        const matchesStudyLevel = studyLevelFilter === 'all' || student.studyLevel === studyLevelFilter;
+
+        const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
+        const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
 
         let matchesChecklist = true;
         if (checklistItemFilter !== 'all' && checklistStatusFilter !== 'all') {
@@ -306,12 +304,12 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const handleClearFilters = () => {
     setSearchQuery('');
     setDebouncedSearchQuery('');
-    setPipelineFilter('all');
-    setEmployeeFilter('all');
+    setPipelineFilter([]);
+    setEmployeeFilter([]);
     setIeltsFilter('all');
-    setGenderFilter('all');
-    setStudyLevelFilter('all');
-    setCountryFilter('all');
+    setGenderFilter([]);
+    setStudyLevelFilter([]);
+    setCountryFilter([]);
     setShowAllStudents(false);
     setChecklistItemFilter('all');
     setChecklistStatusFilter('all');
@@ -320,7 +318,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = searchQuery || pipelineFilter !== 'all' || employeeFilter !== 'all' || ieltsFilter !== 'all' || genderFilter !== 'all' || studyLevelFilter !== 'all' || countryFilter !== 'all' || showAllStudents || checklistItemFilter !== 'all';
+  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || genderFilter.length > 0 || studyLevelFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -382,64 +380,72 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
               )}
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2 items-center">
-                <Select value={pipelineFilter} onValueChange={(v) => setPipelineFilter(v as any)}>
-                    <SelectTrigger className="w-full flex-1"><SelectValue placeholder="Pipeline Status" /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Pipelines</SelectItem>
-                        <SelectItem value="none">No Status</SelectItem>
-                        <SelectItem value="green">Green</SelectItem>
-                        <SelectItem value="yellow">Yellow</SelectItem>
-                        <SelectItem value="orange">Orange</SelectItem>
-                        <SelectItem value="red">Red</SelectItem>
-                        <SelectItem value="black">Black</SelectItem>
-                    </SelectContent>
-                </Select>
+            <div className="flex flex-wrap gap-2 items-center">
+                <MultiSelectFilter
+                  label="Pipelines"
+                  options={[
+                    { label: 'No Status', value: 'none' },
+                    { label: 'Green', value: 'green' },
+                    { label: 'Yellow', value: 'yellow' },
+                    { label: 'Orange', value: 'orange' },
+                    { label: 'Red', value: 'red' },
+                    { label: 'Black', value: 'black' },
+                  ]}
+                  selected={pipelineFilter}
+                  onChange={setPipelineFilter}
+                  className="flex-1 min-w-[130px]"
+                />
                 {isClient && effectiveRole !== 'employee' && (
-                    <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
-                        <SelectTrigger className="w-full flex-1"><SelectValue placeholder="Assigned Agent" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Agents</SelectItem>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {employeeOptions.map(emp => (
-                                <SelectItem key={emp.id} value={emp.id}>{emp.name} {emp.role !== 'employee' ? `(${emp.role})` : ''}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                  <MultiSelectFilter
+                    label="Agents"
+                    options={[
+                      { label: 'Unassigned', value: 'unassigned' },
+                      ...employeeOptions.map(emp => ({ label: `${emp.name}${emp.role !== 'employee' ? ` (${emp.role})` : ''}`, value: emp.id })),
+                    ]}
+                    selected={employeeFilter}
+                    onChange={setEmployeeFilter}
+                    className="flex-1 min-w-[130px]"
+                  />
                 )}
                 {isClient && (
-                  <Select value={countryFilter} onValueChange={setCountryFilter}>
-                    <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Country" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Applied</SelectItem>
-                      <SelectItem value="none">No Application</SelectItem>
-                      <SelectItem value="UK">UK</SelectItem>
-                      <SelectItem value="USA">USA</SelectItem>
-                      <SelectItem value="Australia">Australia</SelectItem>
-                      <SelectItem value="New Zealand">New Zealand</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <MultiSelectFilter
+                    label="Countries"
+                    options={[
+                      { label: 'No Application', value: 'none' },
+                      { label: 'UK', value: 'UK' },
+                      { label: 'USA', value: 'USA' },
+                      { label: 'Australia', value: 'Australia' },
+                      { label: 'New Zealand', value: 'New Zealand' },
+                    ]}
+                    selected={countryFilter}
+                    onChange={setCountryFilter}
+                    className="flex-1 min-w-[120px]"
+                  />
                 )}
                 {isClient && (
-                  <Select value={genderFilter} onValueChange={(v) => setGenderFilter(v as any)}>
-                    <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Gender" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Genders</SelectItem>
-                      <SelectItem value="M">Male (M)</SelectItem>
-                      <SelectItem value="F">Female (F)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <MultiSelectFilter
+                    label="Genders"
+                    options={[
+                      { label: 'Male (M)', value: 'M' },
+                      { label: 'Female (F)', value: 'F' },
+                    ]}
+                    selected={genderFilter}
+                    onChange={setGenderFilter}
+                    className="flex-1 min-w-[110px]"
+                  />
                 )}
                 {isClient && (
-                  <Select value={studyLevelFilter} onValueChange={(v) => setStudyLevelFilter(v as any)}>
-                    <SelectTrigger className="w-full md:w-[150px]"><SelectValue placeholder="Study Level" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Levels</SelectItem>
-                      <SelectItem value="Foundation">Foundation</SelectItem>
-                      <SelectItem value="First Year">First Year</SelectItem>
-                      <SelectItem value="Transfer Student">Transfer Student</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <MultiSelectFilter
+                    label="Levels"
+                    options={[
+                      { label: 'Foundation', value: 'Foundation' },
+                      { label: 'First Year', value: 'First Year' },
+                      { label: 'Transfer Student', value: 'Transfer Student' },
+                    ]}
+                    selected={studyLevelFilter}
+                    onChange={setStudyLevelFilter}
+                    className="flex-1 min-w-[110px]"
+                  />
                 )}
                 <Select value={ieltsFilter} onValueChange={setIeltsFilter}>
                     <SelectTrigger className="w-full flex-1"><SelectValue placeholder="IELTS Score" /></SelectTrigger>
