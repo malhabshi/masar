@@ -153,7 +153,8 @@ export function AllApplicationsView() {
       const matchesStatus = statusFilter === 'all' || item.application.status === statusFilter;
 
       // 5. Study Level Filter
-      const matchesStudyLevel = studyLevelFilter === 'all' || item.studyLevel === studyLevelFilter;
+      const matchesStudyLevel = studyLevelFilter === 'all' ||
+        (studyLevelFilter === '__none__' ? !item.studyLevel : item.studyLevel === studyLevelFilter);
 
       return matchesSearch && matchesCountry && matchesStatus && matchesStudyLevel;
     }).sort((a, b) => new Date(b.application.updatedAt).getTime() - new Date(a.application.updatedAt).getTime());
@@ -222,6 +223,7 @@ export function AllApplicationsView() {
                 <SelectItem value="Foundation">Foundation</SelectItem>
                 <SelectItem value="First Year">First Year</SelectItem>
                 <SelectItem value="Transfer Student">Transfer Student</SelectItem>
+                <SelectItem value="__none__">Not Set</SelectItem>
               </SelectContent>
             </Select>
 
