@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/use-user';
 import { useDoc, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc, where, query, collection, or, and } from 'firebase/firestore';
+import { doc, where, query, collection, or, and, arrayRemove } from 'firebase/firestore';
 import type { Student, Task } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { addAdminNote, addEmployeeNote } from '@/lib/actions';
@@ -128,11 +128,15 @@ export default function StudentDetailPage() {
   const isLoading = isUserLoading || studentIsLoading || tasksLoading;
 
   useEffect(() => {
-    if (student?.isNewForEmployee && currentUser?.civilId === student?.employeeId) {
-        const studentDocRef = doc(firestore, 'students', student.id);
+    if (!student || !currentUser) return;
+    const studentDocRef = doc(firestore, 'students', student.id);
+    if (student.isNewForEmployee && currentUser.civilId === student.employeeId) {
         updateDocumentNonBlocking(studentDocRef, { isNewForEmployee: false });
     }
-  }, [student, currentUser]);
+    if (student.markedUnreadBy?.includes(currentUser.id)) {
+        updateDocumentNonBlocking(studentDocRef, { markedUnreadBy: arrayRemove(currentUser.id) });
+    }
+  }, [student?.id, currentUser?.id]);
 
   useEffect(() => {
     if (student?.changeAgentRequired) {

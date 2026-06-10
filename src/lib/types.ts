@@ -148,6 +148,7 @@ export interface Student {
   newDocsViewedBy?: string[];
   updatesViewedBy?: string[];
   chatUnreadCountByUser?: Record<string, number>;
+  markedUnreadBy?: string[];
   missingItemsViewedBy?: string[];
   finalChoiceUniversity?: string;
   finalizedAt?: string;

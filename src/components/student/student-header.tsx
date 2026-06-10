@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight, BellOff, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
@@ -12,7 +12,9 @@ import { Skeleton } from '../ui/skeleton';
 import { RequestTransferDialog } from './request-transfer-dialog';
 import { TransferStudentDialog } from './transfer-student-dialog';
 import { DeleteStudentDialog } from './delete-student-dialog';
-import { useCollection } from '@/firebase/client';
+import { useCollection, updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
+import { doc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { RequestDeletionDialog } from './request-deletion-dialog';
 import { ApproveDeletionDialog } from './approve-deletion-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -194,6 +196,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const [isForcingInactivity, setIsForcingInactivity] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isClearingFlags, setIsClearingFlags] = useState(false);
+  const [isMarkingUnread, setIsMarkingUnread] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [navIds, setNavIds] = useState<string[]>([]);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
@@ -280,6 +283,20 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
       toast({ variant: 'destructive', title: 'Action Failed', description: result.message });
     }
     setIsClearingFlags(false);
+  };
+
+  const isMarkedUnread = !!currentUser && (student.markedUnreadBy || []).includes(currentUser.id);
+
+  const handleToggleMarkUnread = async () => {
+    if (!currentUser) return;
+    setIsMarkingUnread(true);
+    const studentDocRef = doc(firestore, 'students', student.id);
+    if (isMarkedUnread) {
+      updateDocumentNonBlocking(studentDocRef, { markedUnreadBy: arrayRemove(currentUser.id) as any });
+    } else {
+      updateDocumentNonBlocking(studentDocRef, { markedUnreadBy: arrayUnion(currentUser.id) as any });
+    }
+    setIsMarkingUnread(false);
   };
 
   const handleForceInactivity = async () => {
@@ -432,6 +449,22 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 {student.academicIntakeSemester} {student.academicIntakeYear}
               </BadgeComponent>
             )}
+
+            <div className="pdf-hide">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleMarkUnread}
+                disabled={isMarkingUnread}
+                className={isMarkedUnread
+                  ? "bg-amber-50 text-amber-700 border-amber-400 hover:bg-amber-100 font-bold"
+                  : "text-muted-foreground hover:text-amber-700 hover:border-amber-400 hover:bg-amber-50"}
+              >
+                {isMarkedUnread
+                  ? <><Bell className="h-4 w-4 mr-2" />Marked as Unread</>
+                  : <><BellOff className="h-4 w-4 mr-2" />Mark as Unread</>}
+              </Button>
+            </div>
 
             <div className="pdf-hide flex flex-wrap gap-2 items-center">
               <Button 

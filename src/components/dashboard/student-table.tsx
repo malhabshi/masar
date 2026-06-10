@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from '@/components/ui/select';
 import { MultiSelectFilter } from '@/components/ui/multi-select-filter';
-import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2, UserPlus, Users, Check, ChevronsUpDown, Loader2, Upload } from 'lucide-react';
+import { MoreHorizontal, GraduationCap, ArrowRightLeft, Repeat, MessageSquare, FilePlus, AlertTriangle, Search, X, ShieldAlert, Calendar, StickyNote, Filter, Globe, ShieldCheck, CheckCircle2, UserPlus, Users, Check, ChevronsUpDown, Loader2, Upload, Bell } from 'lucide-react';
 import type { Student, PipelineStatus, User, Note, ChecklistConfigItem } from '@/lib/types';
 import { useUser } from '@/hooks/use-user';
 import {
@@ -258,6 +258,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (!!a.changeAgentRequired !== !!b.changeAgentRequired) return a.changeAgentRequired ? -1 : 1;
         const getNotificationScore = (s: Student) => {
             let score = 0;
+            if (s.markedUnreadBy?.includes(currentUser.id)) score += 200;
             if (currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department') {
                 if ((s.chatUnreadCountByUser?.[currentUser.id] || 0) > 0) score += s.chatUnreadCountByUser![currentUser.id];
                 if ((s.newDocumentsForAdmin || 0) > 0 && (!s.newDocsViewedBy || !s.newDocsViewedBy.includes(currentUser.id))) score += s.newDocumentsForAdmin || 0;
@@ -632,6 +633,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           {isAdminDept && (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForAdmin}</span></Badge> : null}
                           {isCurrentUserAssigned && (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForEmployee}</span></Badge> : null}
                           {isCurrentUserAssigned && student.newMissingItemsForEmployee && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 text-black"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
+                          {student.markedUnreadBy?.includes(currentUser.id) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-amber-500 text-white"><Bell className="h-3 w-3" /></Badge> : null}
                           {student.transferRequested && (
                             <TooltipProvider>
                               <Tooltip>
