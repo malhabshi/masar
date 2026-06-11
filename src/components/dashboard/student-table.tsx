@@ -239,7 +239,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
         const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
         const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
-        const matchesSchoolType = schoolTypeFilter.length === 0 || schoolTypeFilter.some(f => f === 'none' ? !student.schoolType : student.schoolType === f);
+        const matchesSchoolType = schoolTypeFilter.length === 0 || (student.studyLevel === 'Foundation' && schoolTypeFilter.some(f => f === 'none' ? !student.schoolType : student.schoolType === f));
 
         let matchesChecklist = true;
         if (checklistItemFilter !== 'all' && checklistStatusFilter !== 'all') {

@@ -456,7 +456,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               </BadgeComponent>
             )}
 
-            {canEdit && (
+            {canEdit && student.studyLevel === 'Foundation' && (
               <div className="pdf-hide">
                 <Select value={student.schoolType ?? 'none'} onValueChange={handleSetSchoolType}>
                   <SelectTrigger
@@ -478,7 +478,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               </div>
             )}
 
-            {!canEdit && student.schoolType && (
+            {!canEdit && student.studyLevel === 'Foundation' && student.schoolType && (
               <BadgeComponent
                 variant="outline"
                 className={cn(
