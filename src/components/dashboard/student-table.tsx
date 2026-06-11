@@ -77,6 +77,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [employeeFilter, setEmployeeFilter] = useState<string[]>([]);
   const [genderFilter, setGenderFilter] = useState<string[]>([]);
   const [studyLevelFilter, setStudyLevelFilter] = useState<string[]>([]);
+  const [schoolTypeFilter, setSchoolTypeFilter] = useState<string[]>([]);
   const [countryFilter, setCountryFilter] = useState<string[]>([]);
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
@@ -112,6 +113,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setEmployeeFilter([]);
     setGenderFilter([]);
     setStudyLevelFilter([]);
+    setSchoolTypeFilter([]);
     setCountryFilter([]);
     setIeltsFilter('all');
     setShowAllStudents(false);
@@ -123,8 +125,9 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (Array.isArray(f.pipelineFilter))   setPipelineFilter(f.pipelineFilter);
         if (Array.isArray(f.employeeFilter))   setEmployeeFilter(f.employeeFilter);
         if (Array.isArray(f.genderFilter))     setGenderFilter(f.genderFilter);
-        if (Array.isArray(f.studyLevelFilter)) setStudyLevelFilter(f.studyLevelFilter);
-        if (Array.isArray(f.countryFilter))    setCountryFilter(f.countryFilter);
+        if (Array.isArray(f.studyLevelFilter))   setStudyLevelFilter(f.studyLevelFilter);
+        if (Array.isArray(f.schoolTypeFilter))   setSchoolTypeFilter(f.schoolTypeFilter);
+        if (Array.isArray(f.countryFilter))      setCountryFilter(f.countryFilter);
         if (f.ieltsFilter !== undefined)           setIeltsFilter(f.ieltsFilter);
         if (f.showAllStudents !== undefined)       setShowAllStudents(f.showAllStudents);
         if (f.checklistItemFilter !== undefined)   setChecklistItemFilter(f.checklistItemFilter);
@@ -156,7 +159,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     try {
       sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
-        genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents,
+        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, showAllStudents,
         checklistItemFilter, checklistStatusFilter,
       }));
     } catch {}
@@ -236,6 +239,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
         const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
         const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
+        const matchesSchoolType = schoolTypeFilter.length === 0 || schoolTypeFilter.some(f => f === 'none' ? !student.schoolType : student.schoolType === f);
 
         let matchesChecklist = true;
         if (checklistItemFilter !== 'all' && checklistStatusFilter !== 'all') {
@@ -247,7 +251,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           matchesChecklist = checklistStatusFilter === 'checked' ? isChecked : !isChecked;
         }
 
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender && matchesStudyLevel && matchesChecklist;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
     });
 
     return [...filtered].sort((a, b) => {
@@ -293,7 +297,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
+  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
 
   useEffect(() => {
     if (!isClient || !currentUser?.id) return;
@@ -319,7 +323,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || genderFilter.length > 0 || studyLevelFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
+  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -445,6 +449,19 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                     ]}
                     selected={studyLevelFilter}
                     onChange={setStudyLevelFilter}
+                    className="flex-1 min-w-[110px]"
+                  />
+                )}
+                {isClient && (
+                  <MultiSelectFilter
+                    label="School"
+                    options={[
+                      { label: 'Not Set', value: 'none' },
+                      { label: 'Private School', value: 'Private' },
+                      { label: 'Public School', value: 'Public' },
+                    ]}
+                    selected={schoolTypeFilter}
+                    onChange={setSchoolTypeFilter}
                     className="flex-1 min-w-[110px]"
                   />
                 )}

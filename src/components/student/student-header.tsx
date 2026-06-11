@@ -22,6 +22,7 @@ import { useUserCacheById } from '@/hooks/use-user-cache';
 import { formatRelativeTime } from '@/lib/timestamp-utils';
 import { CreateStudentTaskDialog } from '../tasks/create-student-task-dialog';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toggleChangeAgentStatus, forceInactivity, clearStudentFlagsForEveryone } from '@/lib/actions';
 import { CloseProfileButton } from './close-profile-button';
 import { useToast } from '@/hooks/use-toast';
@@ -287,6 +288,11 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
 
   const isMarkedUnread = !!currentUser && (student.markedUnreadBy || []).includes(currentUser.id);
 
+  const handleSetSchoolType = (value: string) => {
+    const studentDocRef = doc(firestore, 'students', student.id);
+    updateDocumentNonBlocking(studentDocRef, { schoolType: value === 'none' ? null : value } as any);
+  };
+
   const handleToggleMarkUnread = async () => {
     if (!currentUser) return;
     setIsMarkingUnread(true);
@@ -447,6 +453,40 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               <BadgeComponent variant="default" className="bg-primary text-primary-foreground flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold shadow-sm rounded-full">
                 <Calendar className="h-4 w-4" />
                 {student.academicIntakeSemester} {student.academicIntakeYear}
+              </BadgeComponent>
+            )}
+
+            {canEdit && (
+              <div className="pdf-hide">
+                <Select value={student.schoolType ?? 'none'} onValueChange={handleSetSchoolType}>
+                  <SelectTrigger
+                    className={cn(
+                      "h-8 text-xs font-semibold border",
+                      student.schoolType === 'Private' && "bg-purple-50 text-purple-700 border-purple-300",
+                      student.schoolType === 'Public' && "bg-teal-50 text-teal-700 border-teal-300",
+                      !student.schoolType && "text-muted-foreground"
+                    )}
+                  >
+                    <SelectValue placeholder="School Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">School Type</SelectItem>
+                    <SelectItem value="Private">Private School</SelectItem>
+                    <SelectItem value="Public">Public School</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {!canEdit && student.schoolType && (
+              <BadgeComponent
+                variant="outline"
+                className={cn(
+                  "text-xs font-semibold",
+                  student.schoolType === 'Private' ? "bg-purple-50 text-purple-700 border-purple-300" : "bg-teal-50 text-teal-700 border-teal-300"
+                )}
+              >
+                {student.schoolType} School
               </BadgeComponent>
             )}
 

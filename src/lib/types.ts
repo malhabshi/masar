@@ -203,6 +203,7 @@ export interface Student {
     };
   };
   studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';
+  schoolType?: 'Private' | 'Public';
   uploadNote?: string;
   isClosed?: boolean;
   closedAt?: string;
