@@ -314,6 +314,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setIeltsFilter('all');
     setGenderFilter([]);
     setStudyLevelFilter([]);
+    setSchoolTypeFilter([]);
     setCountryFilter([]);
     setShowAllStudents(false);
     setChecklistItemFilter('all');
