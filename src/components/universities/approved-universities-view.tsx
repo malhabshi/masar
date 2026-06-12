@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser } from '@/hooks/use-user';
-import type { ApprovedUniversity, Country, UniversityCategory } from '@/lib/types';
+import type { ApprovedUniversity, Country, UniversityCategory, UniversityCompany } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ export function ApprovedUniversitiesView() {
   const [countryFilter, setCountryFilter] = useState<string[]>([]);
   const [availabilityFilter, setAvailabilityFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [companyFilter, setCompanyFilter] = useState<string[]>([]);
 
   useEffect(() => {
     try {
@@ -41,6 +42,7 @@ export function ApprovedUniversitiesView() {
         if (Array.isArray(f.countryFilter))     setCountryFilter(f.countryFilter);
         if (Array.isArray(f.availabilityFilter)) setAvailabilityFilter(f.availabilityFilter);
         if (Array.isArray(f.categoryFilter))    setCategoryFilter(f.categoryFilter);
+        if (Array.isArray(f.companyFilter))     setCompanyFilter(f.companyFilter);
       }
     } catch {}
   }, []);
@@ -57,7 +59,7 @@ export function ApprovedUniversitiesView() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem('universities_filters', JSON.stringify({ searchQuery, countryFilter, availabilityFilter, categoryFilter }));
+      sessionStorage.setItem('universities_filters', JSON.stringify({ searchQuery, countryFilter, availabilityFilter, categoryFilter, companyFilter }));
     } catch {}
   }, [searchQuery, countryFilter, availabilityFilter, categoryFilter]);
 
@@ -67,12 +69,13 @@ export function ApprovedUniversitiesView() {
     setCountryFilter([]);
     setAvailabilityFilter([]);
     setCategoryFilter([]);
+    setCompanyFilter([]);
     try {
       sessionStorage.removeItem('universities_filters');
     } catch {}
   };
 
-  const isFiltered = searchQuery !== '' || countryFilter.length > 0 || availabilityFilter.length > 0 || categoryFilter.length > 0;
+  const isFiltered = searchQuery !== '' || countryFilter.length > 0 || availabilityFilter.length > 0 || categoryFilter.length > 0 || companyFilter.length > 0;
 
   const filteredUniversities = useMemo(() => {
     if (!universitiesData) return [];
@@ -100,16 +103,30 @@ export function ApprovedUniversitiesView() {
         availabilityFilter.some(f => f === 'available' ? uni.isAvailable : !uni.isAvailable);
 
       const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(uni.category ?? '');
+      const matchesCompany = companyFilter.length === 0 || companyFilter.includes(uni.company ?? '');
 
-      return matchesSearch && matchesCountry && matchesAvailability && matchesCategory;
+      return matchesSearch && matchesCountry && matchesAvailability && matchesCategory && matchesCompany;
     });
+
+    const COMPANY_ORDER: Record<string, number> = {
+      Into: 0, Studygroup: 1, Kaplan: 2, OnCampus: 3, Navitas: 4, Other: 5, Inhouse: 6,
+    };
 
     return results.sort((a, b) => {
-        const nameCompare = (a.name || '').localeCompare(b.name || '');
-        if (nameCompare !== 0) return nameCompare;
-        return (a.major || '').localeCompare(b.major || '');
+      const aComp = a.company ? (COMPANY_ORDER[a.company] ?? 99) : 99;
+      const bComp = b.company ? (COMPANY_ORDER[b.company] ?? 99) : 99;
+      if (aComp !== bComp) return aComp - bComp;
+      const aSchool = a.schoolOrder ?? 999999;
+      const bSchool = b.schoolOrder ?? 999999;
+      if (aSchool !== bSchool) return aSchool - bSchool;
+      const aMajor = a.majorOrder ?? 999999;
+      const bMajor = b.majorOrder ?? 999999;
+      if (aMajor !== bMajor) return aMajor - bMajor;
+      const nameCompare = (a.name || '').localeCompare(b.name || '');
+      if (nameCompare !== 0) return nameCompare;
+      return (a.major || '').localeCompare(b.major || '');
     });
-  }, [debouncedSearchQuery, countryFilter, availabilityFilter, categoryFilter, universitiesData]);
+  }, [debouncedSearchQuery, countryFilter, availabilityFilter, categoryFilter, companyFilter, universitiesData]);
 
   const canManage = user?.role === 'admin' || user?.role === 'department';
 
@@ -149,6 +166,7 @@ export function ApprovedUniversitiesView() {
   }, [user, toast]);
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+  const companies: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
   if (isLoading) {
     return (
       <Card>
@@ -244,6 +262,13 @@ export function ApprovedUniversitiesView() {
                     ]}
                     selected={availabilityFilter}
                     onChange={setAvailabilityFilter}
+                    className="flex-1 min-w-[120px]"
+                />
+                <MultiSelectFilter
+                    label="Company"
+                    options={companies.map(c => ({ label: c, value: c }))}
+                    selected={companyFilter}
+                    onChange={setCompanyFilter}
                     className="flex-1 min-w-[120px]"
                 />
             </div>

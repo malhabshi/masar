@@ -4,7 +4,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, RequestType, Application, ApprovedUniversity, Country, StudentLogin, UnifiedExamDate } from '@/lib/types';
+import type { Student, RequestType, Application, ApprovedUniversity, Country, StudentLogin, UnifiedExamDate, UniversityCompany } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,18 @@ interface DynamicTaskFormProps {
   onCancel: () => void;
   isSubmitting: boolean;
 }
+
+const COMPANY_ORDER: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
+const COMPANY_LIMIT = 5;
+const COMPANY_COLORS: Record<string, string> = {
+  Into:       'bg-blue-100 text-blue-800 border-blue-300',
+  Studygroup: 'bg-violet-100 text-violet-800 border-violet-300',
+  Kaplan:     'bg-red-100 text-red-800 border-red-300',
+  OnCampus:   'bg-green-100 text-green-800 border-green-300',
+  Navitas:    'bg-teal-100 text-teal-800 border-teal-300',
+  Other:      'bg-gray-100 text-gray-700 border-gray-300',
+  Inhouse:    'bg-amber-100 text-amber-800 border-amber-300',
+};
 
 const IELTS_COURSE_OPTIONS = [
   'One week "ielts" In-Person',
@@ -157,6 +169,20 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   const watchDocs = form.watch('selectedDocuments') || [];
   const watchMultiUnis = form.watch('selectedGlobalUniversityIds') || [];
 
+  // Count distinct schools (by schoolOrder fallback to name) per company for Foundation students
+  const companySchoolCounts = useMemo(() => {
+    if (student.studyLevel !== 'Foundation' || !config?.allowMultipleUniversitySelection) return {} as Record<string, number>;
+    if (!globalUniversities || watchMultiUnis.length === 0) return {} as Record<string, number>;
+    const sets: Record<string, Set<string>> = {};
+    watchMultiUnis.forEach((id: string) => {
+      const u = globalUniversities.find(g => g.id === id);
+      if (!u || !u.company || u.company === 'Inhouse') return;
+      if (!sets[u.company]) sets[u.company] = new Set();
+      sets[u.company].add(u.schoolOrder != null ? String(u.schoolOrder) : u.name);
+    });
+    return Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, v.size]));
+  }, [watchMultiUnis, globalUniversities, student.studyLevel, config?.allowMultipleUniversitySelection]);
+
   const handleDocToggle = (docId: string) => {
     const current = form.getValues('selectedDocuments') || [];
     if (current.includes(docId)) {
@@ -169,18 +195,35 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   const handleMultiUniToggle = (uni: ApprovedUniversity) => {
     const currentIds = form.getValues('selectedGlobalUniversityIds') || [];
     const currentDetails = form.getValues('selectedGlobalUniversities') || [];
-    
+
     if (currentIds.includes(uni.id)) {
       form.setValue('selectedGlobalUniversityIds', currentIds.filter((id: string) => id !== uni.id));
       form.setValue('selectedGlobalUniversities', currentDetails.filter((d: any) => d.id !== uni.id));
     } else {
+      // Enforce company limit for Foundation students
+      if (student.studyLevel === 'Foundation' && uni.company && uni.company !== 'Inhouse') {
+        const thisSchoolKey = uni.schoolOrder != null ? String(uni.schoolOrder) : uni.name;
+        const isSchoolAlreadyIn = currentIds.some((id: string) => {
+          const u = globalUniversities?.find(g => g.id === id);
+          return !!u && u.company === uni.company && (u.schoolOrder != null ? String(u.schoolOrder) : u.name) === thisSchoolKey;
+        });
+        if (!isSchoolAlreadyIn) {
+          const schoolsForCompany = new Set<string>();
+          currentIds.forEach((id: string) => {
+            const u = globalUniversities?.find(g => g.id === id);
+            if (u && u.company === uni.company) schoolsForCompany.add(u.schoolOrder != null ? String(u.schoolOrder) : u.name);
+          });
+          if (schoolsForCompany.size >= COMPANY_LIMIT) return;
+        }
+      }
       form.setValue('selectedGlobalUniversityIds', [...currentIds, uni.id]);
       form.setValue('selectedGlobalUniversities', [...currentDetails, {
         id: uni.id,
         name: uni.name,
         major: uni.major,
         country: uni.country,
-        category: uni.category
+        category: uni.category,
+        company: uni.company,
       }]);
     }
   };
@@ -206,8 +249,18 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       });
     }
 
-    // Sort by name
-    return list.sort((a,b) => (a.name || '').localeCompare(b.name || '')).slice(0, 500); 
+    return list.sort((a, b) => {
+      const aComp = a.company ? COMPANY_ORDER.indexOf(a.company) : 99;
+      const bComp = b.company ? COMPANY_ORDER.indexOf(b.company) : 99;
+      if (aComp !== bComp) return aComp - bComp;
+      const aSchool = a.schoolOrder ?? 999999;
+      const bSchool = b.schoolOrder ?? 999999;
+      if (aSchool !== bSchool) return aSchool - bSchool;
+      const aMajor = a.majorOrder ?? 999999;
+      const bMajor = b.majorOrder ?? 999999;
+      if (aMajor !== bMajor) return aMajor - bMajor;
+      return (a.name || '').localeCompare(b.name || '');
+    }).slice(0, 500);
   }, [globalUniversities, uniSearch, config?.countryFilter]);
 
   const handleGlobalUniSelect = (uni: ApprovedUniversity) => {
@@ -408,38 +461,87 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             </div>
             
             <div className="space-y-3">
+              {/* Company quota summary — Foundation students only */}
+              {student.studyLevel === 'Foundation' && config.allowMultipleUniversitySelection && Object.keys(companySchoolCounts).length > 0 && (
+                <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-lg border text-xs">
+                  <span className="font-bold text-muted-foreground w-full text-[10px] uppercase tracking-wide">Company Limits</span>
+                  {COMPANY_ORDER.filter(c => c !== 'Inhouse').map(company => {
+                    const count = companySchoolCounts[company] || 0;
+                    if (count === 0) return null;
+                    const atLimit = count >= COMPANY_LIMIT;
+                    return (
+                      <Badge key={company} variant="outline" className={cn('text-[10px] font-bold', atLimit ? 'bg-red-100 text-red-800 border-red-400' : COMPANY_COLORS[company])}>
+                        {company}: {count}/{COMPANY_LIMIT}{atLimit ? ' FULL' : ''}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+
               {unisLoading ? (
                 <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
               ) : (
-                <div className="grid grid-cols-1 gap-3 max-h-80 overflow-y-auto p-1 border rounded-lg bg-muted/5">
+                <div className="grid grid-cols-1 gap-0 max-h-80 overflow-y-auto border rounded-lg bg-muted/5">
                   {filteredGlobalUnis.length > 0 ? (
-                    filteredGlobalUnis.map((uni) => (
-                      <div key={uni.id} className="flex items-center space-x-3 space-y-0 border p-3 rounded-lg bg-background hover:bg-muted/20 transition-colors">
-                        {config.allowMultipleUniversitySelection ? (
-                          <Checkbox 
-                            checked={watchMultiUnis.includes(uni.id)} 
-                            onCheckedChange={() => handleMultiUniToggle(uni)} 
-                          />
-                        ) : (
-                          <Checkbox 
-                            checked={form.watch('selectedGlobalUniversityId') === uni.id}
-                            onCheckedChange={() => handleGlobalUniSelect(uni)}
-                          />
-                        )}
-                        <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                          <div className="space-y-0.5">
-                            <span className="block text-sm font-bold">{uni.name}</span>
-                            <span className="block text-xs text-muted-foreground">{uni.major}</span>
-                            {uni.importantNote && <span className="block text-[10px] text-red-600 font-black uppercase">⚠️ {uni.importantNote}</span>}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[10px] font-mono">{uni.country}</Badge>
-                            {uni.category !== 'General' && <Badge className={cn("text-[10px] font-bold", uni.category === 'Merit' ? "bg-yellow-500 text-black" : "bg-blue-600 text-white")}>{uni.category}</Badge>}
-                            {!uni.isAvailable && <Badge variant="destructive" className="text-[10px]">CLOSED</Badge>}
+                    filteredGlobalUnis.map((uni, idx) => {
+                      const prevUni = filteredGlobalUnis[idx - 1];
+                      const showGroupHeader = !prevUni || prevUni.company !== uni.company;
+                      const isSelected = watchMultiUnis.includes(uni.id);
+
+                      // Determine if adding this uni would exceed company limit (Foundation only)
+                      let isDisabled = false;
+                      if (config.allowMultipleUniversitySelection && !isSelected && student.studyLevel === 'Foundation' && uni.company && uni.company !== 'Inhouse') {
+                        const thisSchoolKey = uni.schoolOrder != null ? String(uni.schoolOrder) : uni.name;
+                        const schoolAlreadyIn = watchMultiUnis.some((id: string) => {
+                          const u = globalUniversities?.find(g => g.id === id);
+                          return !!u && u.company === uni.company && (u.schoolOrder != null ? String(u.schoolOrder) : u.name) === thisSchoolKey;
+                        });
+                        if (!schoolAlreadyIn && (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT) {
+                          isDisabled = true;
+                        }
+                      }
+
+                      return (
+                        <div key={uni.id}>
+                          {showGroupHeader && uni.company && (
+                            <div className={cn('px-3 py-1.5 flex items-center justify-between border-b', COMPANY_COLORS[uni.company] || 'bg-muted/40')}>
+                              <span className="text-[10px] font-black uppercase tracking-wider">{uni.company}</span>
+                              {uni.company !== 'Inhouse' && student.studyLevel === 'Foundation' && config.allowMultipleUniversitySelection && (
+                                <span className={cn('text-[10px] font-bold', (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT ? 'text-red-700' : 'opacity-70')}>
+                                  {companySchoolCounts[uni.company] || 0}/{COMPANY_LIMIT} schools
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className={cn('flex items-center space-x-3 border-b last:border-b-0 p-3 bg-background transition-colors', isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/20')}>
+                            {config.allowMultipleUniversitySelection ? (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => !isDisabled && handleMultiUniToggle(uni)}
+                                disabled={isDisabled}
+                              />
+                            ) : (
+                              <Checkbox
+                                checked={form.watch('selectedGlobalUniversityId') === uni.id}
+                                onCheckedChange={() => handleGlobalUniSelect(uni)}
+                              />
+                            )}
+                            <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                              <div className="space-y-0.5">
+                                <span className="block text-sm font-bold">{uni.name}</span>
+                                <span className="block text-xs text-muted-foreground">{uni.major}</span>
+                                {uni.importantNote && <span className="block text-[10px] text-red-600 font-black uppercase">⚠️ {uni.importantNote}</span>}
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <Badge variant="outline" className="text-[10px] font-mono">{uni.country}</Badge>
+                                {uni.category !== 'General' && <Badge className={cn("text-[10px] font-bold", uni.category === 'Merit' ? "bg-yellow-500 text-black" : "bg-blue-600 text-white")}>{uni.category}</Badge>}
+                                {!uni.isAvailable && <Badge variant="destructive" className="text-[10px]">CLOSED</Badge>}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="text-center py-8 text-muted-foreground italic">
                       No matching universities found{config.countryFilter !== 'all' ? ` in ${config.countryFilter}` : ''}.

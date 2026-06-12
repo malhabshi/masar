@@ -30,9 +30,10 @@ import {
 } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
-import type { ApprovedUniversity, Country } from '@/lib/types';
+import type { ApprovedUniversity, Country, UniversityCompany } from '@/lib/types';
 
 const ENTRY_LEVELS = ['Foundation', 'First Year', 'Bachelor Degree'];
+const COMPANIES: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
 
 const formSchema = z.object({
   name: z.string().min(3, { message: 'University name is required.' }),
@@ -44,6 +45,15 @@ const formSchema = z.object({
   isAvailable: z.boolean().default(false),
   notes: z.string().optional(),
   importantNote: z.string().optional(),
+  company: z.enum(['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse']).optional(),
+  schoolOrder: z.preprocess(
+    (v) => (v === '' || v == null) ? undefined : Number(v),
+    z.number().int().min(1).optional()
+  ),
+  majorOrder: z.preprocess(
+    (v) => (v === '' || v == null) ? undefined : Number(v),
+    z.number().int().min(1).optional()
+  ),
 });
 
 interface AddUniversityDialogProps {
@@ -67,6 +77,9 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
       isAvailable: true,
       notes: '',
       importantNote: '',
+      company: undefined,
+      schoolOrder: undefined,
+      majorOrder: undefined,
     },
   });
 
@@ -245,6 +258,70 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
                   </FormItem>
                 )}
             />
+
+            <FormField
+                control={form.control}
+                name="company"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company / Provider</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select company" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {COMPANIES.map(c => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="schoolOrder"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>School Order #</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 1"
+                        value={field.value ?? ''}
+                        onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
+                      />
+                    </FormControl>
+                    <FormDescription>Internal use only</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="majorOrder"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Major Order #</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 1"
+                        value={field.value ?? ''}
+                        onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
+                      />
+                    </FormControl>
+                    <FormDescription>Internal use only</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
                 control={form.control}

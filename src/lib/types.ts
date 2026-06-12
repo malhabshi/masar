@@ -487,6 +487,7 @@ export interface NotificationTemplate {
 }
 
 export type UniversityCategory = 'MOHE' | 'Merit' | 'General';
+export type UniversityCompany = 'Into' | 'Studygroup' | 'Kaplan' | 'OnCampus' | 'Navitas' | 'Other' | 'Inhouse';
 
 export interface ApprovedUniversity {
   id: string;
@@ -499,6 +500,9 @@ export interface ApprovedUniversity {
   importantNote?: string; // High-priority red note
   category?: UniversityCategory;
   entryLevels?: string[]; // Foundation, First Year, Bachelor Degree
+  company?: UniversityCompany;
+  schoolOrder?: number;
+  majorOrder?: number;
 }
 
 export interface AcademicTerm {

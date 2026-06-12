@@ -27,6 +27,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+const COMPANY_COLORS: Record<string, string> = {
+  Into:       'bg-blue-100 text-blue-800 border-blue-300',
+  Studygroup: 'bg-violet-100 text-violet-800 border-violet-300',
+  Kaplan:     'bg-red-100 text-red-800 border-red-300',
+  OnCampus:   'bg-green-100 text-green-800 border-green-300',
+  Navitas:    'bg-teal-100 text-teal-800 border-teal-300',
+  Other:      'bg-gray-100 text-gray-700 border-gray-300',
+  Inhouse:    'bg-amber-100 text-amber-800 border-amber-300',
+};
+
 interface UniversitiesTableProps {
   universities: ApprovedUniversity[];
   onUpdateUniversity?: (university: ApprovedUniversity) => void;
@@ -35,7 +45,7 @@ interface UniversitiesTableProps {
 }
 
 export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUniversity, isLoading }: UniversitiesTableProps) {
-  const numColumns = onUpdateUniversity ? 7 : 6;
+  const numColumns = onUpdateUniversity ? 8 : 7;
   
   if (isLoading) {
     return (
@@ -70,6 +80,7 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
             <TableHead>University</TableHead>
             <TableHead>Major</TableHead>
             <TableHead>Country</TableHead>
+            <TableHead>Company</TableHead>
             <TableHead>Entry Levels</TableHead>
             <TableHead>IELTS Score</TableHead>
             <TableHead>Available</TableHead>
@@ -117,6 +128,15 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                 </TableCell>
                 <TableCell className="align-top">
                   <Badge variant="outline" className="font-mono text-[10px]">{uni.country}</Badge>
+                </TableCell>
+                <TableCell className="align-top">
+                  {uni.company ? (
+                    <Badge variant="outline" className={cn('text-[10px] font-bold', COMPANY_COLORS[uni.company])}>
+                      {uni.company}
+                    </Badge>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="align-top">
                   <div className="flex flex-wrap gap-1">
