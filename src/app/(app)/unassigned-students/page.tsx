@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
+import { ImportListDialog } from '@/components/student/import-list-dialog';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import type { Student, User } from '@/lib/types';
@@ -109,7 +110,12 @@ export default function UnassignedStudentsPage() {
               {descriptionText}
             </CardDescription>
           </div>
-          <AddStudentDialog source="unassigned" />
+          <div className="flex gap-2">
+            {isAdminOrDept && (
+              <ImportListDialog creatingUserId={currentUser.id} />
+            )}
+            <AddStudentDialog source="unassigned" />
+          </div>
         </CardHeader>
         <CardContent>
           {studentsError ? (

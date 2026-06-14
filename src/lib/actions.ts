@@ -3380,3 +3380,60 @@ export async function clearStaleDuplicateWarnings(): Promise<{ fixed: number }> 
   return { fixed };
 }
 
+export async function bulkImportStudents(
+  listName: string,
+  toUpdate: Array<{ studentId: string; acceptedInfo: { country: string; major: string } }>,
+  toCreate: Array<{ arabicName: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; acceptedInfo: { country: string; major: string }; importListName: string }>,
+  creatingUserId: string
+) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const now = new Date().toISOString();
+    const batch = adminDb!.batch();
+
+    for (const u of toUpdate) {
+      const ref = adminDb!.collection('students').doc(u.studentId);
+      batch.update(ref, { acceptedInfo: u.acceptedInfo });
+    }
+
+    for (const s of toCreate) {
+      const fallbackId = Math.random().toString(36).substring(2, 9);
+      const studentId = `B-${fallbackId}-${Date.now()}`;
+      const ref = adminDb!.collection('students').doc(studentId);
+      batch.set(ref, {
+        id: studentId,
+        name: s.arabicName,
+        arabicName: s.arabicName,
+        email: '',
+        phone: s.phone,
+        ...(s.phone2 ? { phone2: s.phone2 } : {}),
+        ...(s.phone3 ? { phone3: s.phone3 } : {}),
+        gender: s.gender || null,
+        employeeId: null,
+        applications: [],
+        employeeNotes: [],
+        adminNotes: [],
+        documents: [],
+        createdAt: now,
+        lastActivityAt: now,
+        createdBy: creatingUserId,
+        targetCountries: [],
+        missingItems: [],
+        pipelineStatus: 'none',
+        acceptedInfo: s.acceptedInfo,
+        importListName: s.importListName,
+        profileCompletionStatus: {
+          submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false,
+          receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false,
+          readyToTravel: false, financialStatementsProvided: false, visaGranted: false,
+          medicalFitnessSubmitted: false,
+        },
+      });
+    }
+
+    await batch.commit();
+    return { success: true, updated: toUpdate.length, created: toCreate.length };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}

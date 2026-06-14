@@ -637,6 +637,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                   )}
                   <TableCell>
                     <div className="flex flex-col gap-1">
+                      {student.importListName && (
+                        <Badge className="mb-1 bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-semibold px-1.5 h-4 w-fit">
+                          {student.importListName}
+                        </Badge>
+                      )}
                       <Link href={`/student/${student.id}`} className="hover:underline">
                         <div className="font-medium flex items-center gap-2 flex-wrap">
                           {student.internalNumber && <Badge variant="secondary" className="font-bold text-[10px] h-5 px-1 bg-muted">#{student.internalNumber}</Badge>}

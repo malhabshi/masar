@@ -208,6 +208,9 @@ export interface Student {
   isClosed?: boolean;
   closedAt?: string;
   closedReason?: string;
+  arabicName?: string;
+  acceptedInfo?: { country: string; major: string };
+  importListName?: string;
 }
 
 export interface ChatMessage {
