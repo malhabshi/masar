@@ -227,7 +227,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
 
                 <div className="flex items-start justify-between pr-8">
                   <div>
-                    <p className="font-medium">{task.content}</p>
+                    <p className="font-medium whitespace-pre-wrap">{task.content}</p>
                     <p className="text-sm text-muted-foreground">
                       From: {getUserName(task.authorId)} • {isClient ? formatRelativeTime(task.createdAt) : '...'}
                     </p>
@@ -238,7 +238,7 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
                   <div className="ml-4 space-y-2 border-l-2 pl-4">
                     {visibleReplies.map((reply) => (
                       <div key={reply.id} className="text-sm bg-muted/30 p-2 rounded">
-                        <p>{reply.content}</p>
+                        <p className="whitespace-pre-wrap">{reply.content}</p>
                         <p className="text-[10px] text-muted-foreground mt-1 font-bold uppercase">
                           {getUserName(reply.authorId)} • {isClient ? formatRelativeTime(reply.createdAt) : '...'}
                         </p>
