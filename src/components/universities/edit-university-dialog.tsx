@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -82,24 +82,29 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
     },
   });
 
+  const universityRef = useRef(university);
+  universityRef.current = university;
+
   useEffect(() => {
     if (isOpen) {
+      const u = universityRef.current;
       form.reset({
-          name: university.name,
-          major: university.major,
-          country: university.country,
-          category: university.category || 'General',
-          entryLevels: university.entryLevels || [],
-          ieltsScore: university.ieltsScore,
-          isAvailable: university.isAvailable,
-          notes: university.notes || '',
-          importantNote: university.importantNote || '',
-          company: university.company || undefined,
-          schoolOrder: university.schoolOrder || undefined,
-          majorOrder: university.majorOrder || undefined,
+          name: u.name,
+          major: u.major,
+          country: u.country,
+          category: u.category || 'General',
+          entryLevels: u.entryLevels || [],
+          ieltsScore: u.ieltsScore,
+          isAvailable: u.isAvailable,
+          notes: u.notes || '',
+          importantNote: u.importantNote || '',
+          company: u.company || undefined,
+          schoolOrder: u.schoolOrder || undefined,
+          majorOrder: u.majorOrder || undefined,
       });
     }
-  }, [university, form, isOpen]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, form]);
 
   const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
 
