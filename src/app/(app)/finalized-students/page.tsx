@@ -6,6 +6,7 @@ import type { Student, User, Country } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
 import { where } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { FinalizedStudentsTable } from '@/components/dashboard/finalized-students-table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -87,29 +88,28 @@ export default function FinalizedStudentsPage() {
   const finalizedStudents = useMemo(() => {
     if (!fetchedStudents) return [];
 
-    let studentsToFilter = fetchedStudents;
+    let result: Student[];
 
-    // For employees, client-side filter for finalized status from their list of all students.
     if (currentUser?.role === 'employee') {
-      return studentsToFilter.filter(s => s.finalChoiceUniversity && s.finalChoiceUniversity.length > 0);
+      result = fetchedStudents.filter(s => s.finalChoiceUniversity && s.finalChoiceUniversity.length > 0);
+    } else if (currentUser?.role === 'admin' || currentUser?.role === 'adminplus' || currentUser?.role === 'department') {
+      result = fetchedStudents.filter(student => {
+        const matchesUniversity = !universityFilter || (student.finalChoiceUniversity && student.finalChoiceUniversity.toLowerCase().includes(universityFilter.toLowerCase()));
+        const application = student.applications.find(app => app.university === student.finalChoiceUniversity);
+        const studentCountry = application?.country;
+        const matchesCountry = countryFilter === 'all' || studentCountry === countryFilter;
+        const matchesEmployee = employeeFilter === 'all' || student.employeeId === employeeFilter;
+        return matchesUniversity && matchesCountry && matchesEmployee;
+      });
+    } else {
+      result = fetchedStudents;
     }
-    
-    // For admins/depts, apply the UI filters.
-    if (currentUser?.role === 'admin' || currentUser?.role === 'adminplus' || currentUser?.role === 'department') {
-        return studentsToFilter.filter(student => {
-            const matchesUniversity = !universityFilter || (student.finalChoiceUniversity && student.finalChoiceUniversity.toLowerCase().includes(universityFilter.toLowerCase()));
 
-            const application = student.applications.find(app => app.university === student.finalChoiceUniversity);
-            const studentCountry = application?.country;
-            const matchesCountry = countryFilter === 'all' || studentCountry === countryFilter;
-            
-            const matchesEmployee = employeeFilter === 'all' || student.employeeId === employeeFilter;
-
-            return matchesUniversity && matchesCountry && matchesEmployee;
-        });
-    }
-    
-    return studentsToFilter;
+    return result.sort((a, b) => {
+      const dateA = a.finalizedAt ? new Date(a.finalizedAt).getTime() : 0;
+      const dateB = b.finalizedAt ? new Date(b.finalizedAt).getTime() : 0;
+      return dateB - dateA;
+    });
   }, [fetchedStudents, currentUser?.role, universityFilter, countryFilter, employeeFilter]);
 
   // Mark students as viewed when they land on the page (Admin/Department only)
@@ -179,7 +179,12 @@ export default function FinalizedStudentsPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Finalized Students</CardTitle>
+        <div className="flex items-center gap-2.5">
+          <CardTitle>Finalized Students</CardTitle>
+          <Badge variant="secondary" className="rounded-full bg-primary/10 text-primary border-primary/20 px-3 py-0.5 font-bold animate-in fade-in zoom-in duration-300">
+            {finalizedStudents.length} Students
+          </Badge>
+        </div>
         <CardDescription>
           {pageDescription}
         </CardDescription>
