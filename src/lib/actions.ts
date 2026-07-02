@@ -2703,7 +2703,9 @@ const STAFF_CIVIL_ID_MAP: Record<string, string> = {
   'حنان الكندري':      '301042901113',
   'فاطمه الشمري':      '299021001191',
   'خالد الهدهود':      '300072600069',
-  // يوسف سليمان: left the company — no entry, resolves to null
+  'يوسف سليمان':       '304052500624',
+  'ابراهيم':           '305061500954',
+  'دلال':              '306021400064',
 };
 
 export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean }[]; studentCreated: boolean }> {
