@@ -1166,7 +1166,9 @@ export async function updateChecklistItem(studentId: string, itemKey: string, va
     const studentDoc = await adminDb!.collection('students').doc(studentId).get();
     if (!studentDoc.exists) return { success: false, message: "Student found." };
     const author = await getUser(authorId);
-    if (!author || author.civilId !== studentDoc.data()!.employeeId) return { success: false, message: 'Unauthorized.' };
+    const isAssignedEmployee = !!author && author.civilId === studentDoc.data()!.employeeId;
+    const isAdmin = !!author && ['admin', 'adminplus'].includes(author.role);
+    if (!author || (!isAssignedEmployee && !isAdmin)) return { success: false, message: 'Unauthorized.' };
     await adminDb!.collection('students').doc(studentId).update({ [`profileCompletionStatus.${itemKey}`]: value, lastActivityAt: new Date().toISOString() });
     return { success: true, message: 'Checklist updated.' };
   } catch (error: any) { return { success: false, message: error.message }; }

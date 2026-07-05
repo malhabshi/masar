@@ -29,7 +29,8 @@ export function ReadinessChecklist({ student, currentUser }: ReadinessChecklistP
     });
   }, []);
 
-  const canManage = currentUser.civilId === student.employeeId;
+  const canManage = currentUser.civilId === student.employeeId
+    || ['admin', 'adminplus'].includes(currentUser.role);
   const status: Record<string, boolean> = student.profileCompletionStatus || {};
 
   const regularItems = useMemo(() => configItems.filter(i => !i.isFinal), [configItems]);
