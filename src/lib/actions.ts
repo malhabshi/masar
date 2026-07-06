@@ -2811,27 +2811,24 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         body: fd,
       });
       const bodyText = await res.text().catch(() => '');
-      // A genuine JotForm submission redirects to / returns a thank-you page containing
-      // the new submission id; a validation or spam rejection returns the form page (no id).
-      const submissionId =
-        res.url.match(/\/(\d{15,})(?:$|[/?])/)?.[1] ||
-        bodyText.match(/submissionID["'\s:=]+(\d{15,})/)?.[1] ||
-        null;
-      const accepted = res.ok && !!submissionId;
-      console.log(`[jotform:${formId}] status=${res.status} finalUrl=${res.url} submissionId=${submissionId ?? 'NONE'} bodyLen=${bodyText.length}`);
+      // JotForm rejects with an error "message" and/or an error <title> ("Incomplete
+      // Values", file-size errors, etc.) — often still with HTTP 200. Treat the PRESENCE
+      // of such an error as failure; a clean response means it was accepted. (Do NOT read
+      // a submission id out of res.url — that URL just echoes the form id.)
+      const jfError = (
+        bodyText.match(/"message"\s*:\s*"([^"]+)"/)?.[1] ||
+        /<title>\s*(Incomplete Values|Unable[^<]*|Submission Error[^<]*|[^<]*cannot be bigger[^<]*)\s*<\/title>/i.exec(bodyText)?.[1] ||
+        ''
+      ).replace(/\\u0026lt;/g, '<').replace(/\\u0026gt;/g, '>').replace(/\\\//g, '/').replace(/<[^>]+>/g, '').trim();
+      const accepted = res.ok && !jfError;
+      console.log(`[jotform:${formId}] status=${res.status} accepted=${accepted} bodyLen=${bodyText.length}${jfError ? ` error="${jfError}"` : ''}`);
       if (!accepted) {
         console.error(`[jotform:${formId}] NOT accepted — body snippet:`, bodyText.slice(0, 1000));
       }
-      // JotForm returns a JSON-ish "message" (e.g. "There are incomplete fields in
-      // your submission") and an <title> (e.g. "Incomplete Values") when it rejects.
-      const jfMessage =
-        bodyText.match(/"message"\s*:\s*"([^"]+)"/)?.[1] ||
-        bodyText.match(/<title>([^<]+)<\/title>/)?.[1] ||
-        '';
       const detail = accepted
-        ? `submissionId=${submissionId}`
-        : `HTTP ${res.status}${jfMessage ? ` — ${jfMessage}` : ' — JotForm did not save it'}`;
-      return { responseCode: accepted ? 200 : res.status || 502, detail };
+        ? 'accepted'
+        : jfError || `HTTP ${res.status} — JotForm did not save it`;
+      return { responseCode: accepted ? 200 : (res.status === 200 ? 422 : res.status || 502), detail };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[jotform:${formId}] fetch threw:`, msg);
