@@ -2710,8 +2710,8 @@ const STAFF_CIVIL_ID_MAP: Record<string, string> = {
   'دلال':              '306021400064',
 };
 
-export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean }[]; studentCreated: boolean }> {
-  const jotformResults: { country: string; success: boolean }[] = [];
+export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean; detail?: string }[]; studentCreated: boolean }> {
+  const jotformResults: { country: string; success: boolean; detail?: string }[] = [];
 
   const selectedCountries = JSON.parse((formData.get('selectedCountries') as string) || '[]') as string[];
   const firstName = (formData.get('firstName') as string) || '';
@@ -2805,11 +2805,38 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   };
 
   const postToJotform = async (formId: string, fd: FormData) => {
-    const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, {
-      method: 'POST',
-      body: fd,
-    });
-    return { responseCode: res.ok ? 200 : res.status };
+    try {
+      const res = await fetch(`https://submit.jotform.com/submit/${formId}/`, {
+        method: 'POST',
+        body: fd,
+      });
+      const bodyText = await res.text().catch(() => '');
+      // A genuine JotForm submission redirects to / returns a thank-you page containing
+      // the new submission id; a validation or spam rejection returns the form page (no id).
+      const submissionId =
+        res.url.match(/\/(\d{15,})(?:$|[/?])/)?.[1] ||
+        bodyText.match(/submissionID["'\s:=]+(\d{15,})/)?.[1] ||
+        null;
+      const accepted = res.ok && !!submissionId;
+      console.log(`[jotform:${formId}] status=${res.status} finalUrl=${res.url} submissionId=${submissionId ?? 'NONE'} bodyLen=${bodyText.length}`);
+      if (!accepted) {
+        console.error(`[jotform:${formId}] NOT accepted — body snippet:`, bodyText.slice(0, 1000));
+      }
+      // JotForm returns a JSON-ish "message" (e.g. "There are incomplete fields in
+      // your submission") and an <title> (e.g. "Incomplete Values") when it rejects.
+      const jfMessage =
+        bodyText.match(/"message"\s*:\s*"([^"]+)"/)?.[1] ||
+        bodyText.match(/<title>([^<]+)<\/title>/)?.[1] ||
+        '';
+      const detail = accepted
+        ? `submissionId=${submissionId}`
+        : `HTTP ${res.status}${jfMessage ? ` — ${jfMessage}` : ' — JotForm did not save it'}`;
+      return { responseCode: accepted ? 200 : res.status || 502, detail };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[jotform:${formId}] fetch threw:`, msg);
+      return { responseCode: 500, detail: `request failed: ${msg}` };
+    }
   };
 
   if (selectedCountries.includes('UK')) {
@@ -2823,11 +2850,38 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     if (scholarshipType) fd.append('q37_input37', scholarshipType);
     if (acceptanceType) fd.append('q38_input38', acceptanceType);
     if (followUpPerson) fd.append('q39_input39', followUpPerson);
+    // q21 (program) and q36 (scholarship) are REQUIRED checkboxes on the UK form —
+    // JotForm rejects the whole submission with HTTP 400 if they are missing.
+    const ukProgramMap: Record<string, string> = {
+      'Foundation': 'I want to apply for foundation',
+      'First Year': 'I want to apply for first year',
+      'General English': 'General English معهد اللغة',
+      'ESL': 'General English معهد اللغة',
+      'ESL + Foundation': 'I want to apply for foundation',
+      'Masters': 'Masters',
+    };
+    const ukProgram = acceptanceType ? ukProgramMap[acceptanceType] : '';
+    if (ukProgram) fd.append('q21_input21[]', ukProgram);
+    const ukScholarshipMap: Record<string, string> = {
+      'MOHE - التعليم العالي': 'بعثة التعليم العالي',
+      'خطة الايفاد':          'بعثة الإيفاد',
+      'بعثه متميزه':          'بعثة متميزة',
+      'Self Funded - حساب الخاص': 'حساب خاص',
+    };
+    if (scholarshipType) {
+      const mappedScholarship = ukScholarshipMap[scholarshipType];
+      if (mappedScholarship) {
+        fd.append('q36_input36[]', mappedScholarship);
+      } else {
+        // No matching option (e.g. طلبة الثانويه العامه, PAEET) — send as "Other" + text.
+        fd.append('q36_input36[other]', scholarshipType);
+      }
+    }
     try {
       const res = await postToJotform(JOTFORM_UK_FORM_ID, fd);
-      jotformResults.push({ country: 'UK', success: res.responseCode === 200 });
-    } catch {
-      jotformResults.push({ country: 'UK', success: false });
+      jotformResults.push({ country: 'UK', success: res.responseCode === 200, detail: res.detail });
+    } catch (e: unknown) {
+      jotformResults.push({ country: 'UK', success: false, detail: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -2851,9 +2905,9 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     if (mappedProgram) fd.append('q21_input21[]', mappedProgram);
     try {
       const res = await postToJotform(JOTFORM_AUNZ_FORM_ID, fd);
-      jotformResults.push({ country: 'AU/NZ', success: res.responseCode === 200 });
-    } catch {
-      jotformResults.push({ country: 'AU/NZ', success: false });
+      jotformResults.push({ country: 'AU/NZ', success: res.responseCode === 200, detail: res.detail });
+    } catch (e: unknown) {
+      jotformResults.push({ country: 'AU/NZ', success: false, detail: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -2895,9 +2949,9 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     appendFiles(fd, 'q18_input18[]', universityDegreeData);
     try {
       const res = await postToJotform(JOTFORM_USA_FORM_ID, fd);
-      jotformResults.push({ country: 'USA', success: res.responseCode === 200 });
-    } catch {
-      jotformResults.push({ country: 'USA', success: false });
+      jotformResults.push({ country: 'USA', success: res.responseCode === 200, detail: res.detail });
+    } catch (e: unknown) {
+      jotformResults.push({ country: 'USA', success: false, detail: e instanceof Error ? e.message : String(e) });
     }
   }
 

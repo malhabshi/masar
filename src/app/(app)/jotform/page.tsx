@@ -331,7 +331,12 @@ export default function JotformPage() {
           description: `Sent to: ${jotformResults.map(r => r.country).join(', ')}${studentCreated ? ' — Student profile created.' : ''}`,
         });
       } else {
-        toast({ variant: 'destructive', title: 'Partial failure', description: `Failed for: ${failed.join(', ')}` });
+        const details = jotformResults
+          .filter(r => !r.success)
+          .map(r => `${r.country}: ${r.detail ?? 'unknown error'}`)
+          .join(' | ');
+        console.error('[jotform] submission failures:', jotformResults);
+        toast({ variant: 'destructive', title: 'Not sent to JotForm', description: `Failed for ${failed.join(', ')} — ${details}` });
       }
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Something went wrong. Please try again.' });
