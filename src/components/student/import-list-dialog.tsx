@@ -95,7 +95,13 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
     reader.onload = (evt) => {
       try {
         const data = new Uint8Array(evt.target!.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: 'array' });
+        // CSV files carry no encoding metadata, so SheetJS guesses the codepage and
+        // defaults to Latin-1 — which turns UTF-8 Arabic into mojibake ("Ø§Ù..."). Decode
+        // CSV explicitly as UTF-8. XLSX/XLS embed their own encoding, so keep the byte path.
+        const isCsv = /\.csv$/i.test(file.name) || file.type === 'text/csv';
+        const wb = isCsv
+          ? XLSX.read(new TextDecoder('utf-8').decode(data), { type: 'string' })
+          : XLSX.read(data, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
@@ -170,7 +176,7 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
     setIsLoading(true);
     const result = await bulkImportStudents(
       listName,
-      matched.map(m => ({ studentId: m.studentId, acceptedInfo: m.acceptedInfo })),
+      matched.map(m => ({ studentId: m.studentId, acceptedInfo: m.acceptedInfo, importListName: listName })),
       newStudents.map(s => ({
         arabicName: s.arabicName,
         phone: s.phone,

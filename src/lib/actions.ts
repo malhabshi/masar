@@ -3437,7 +3437,7 @@ export async function clearStaleDuplicateWarnings(): Promise<{ fixed: number }> 
 
 export async function bulkImportStudents(
   listName: string,
-  toUpdate: Array<{ studentId: string; acceptedInfo: { country: string; major: string } }>,
+  toUpdate: Array<{ studentId: string; acceptedInfo: { country: string; major: string }; importListName?: string }>,
   toCreate: Array<{ arabicName: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; acceptedInfo: { country: string; major: string }; importListName: string }>,
   creatingUserId: string
 ) {
@@ -3448,7 +3448,10 @@ export async function bulkImportStudents(
 
     for (const u of toUpdate) {
       const ref = adminDb!.collection('students').doc(u.studentId);
-      batch.update(ref, { acceptedInfo: u.acceptedInfo });
+      batch.update(ref, {
+        acceptedInfo: u.acceptedInfo,
+        ...(u.importListName ? { importListName: u.importListName } : {}),
+      });
     }
 
     for (const s of toCreate) {
