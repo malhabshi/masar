@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toggleChangeAgentStatus, forceInactivity, clearStudentFlagsForEveryone } from '@/lib/actions';
 import { CloseProfileButton } from './close-profile-button';
+import { EditAcceptedInfoDialog } from './edit-accepted-info-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -620,9 +621,13 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           {student.acceptedInfo && (
             <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-md bg-purple-50 border border-purple-200 w-fit">
               <BadgeComponent className="bg-purple-600 text-white text-[10px] font-bold px-1.5 h-4 shrink-0">ACCEPTED</BadgeComponent>
+              {student.importListName && (
+                <BadgeComponent className="bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-semibold px-1.5 h-4 shrink-0">{student.importListName}</BadgeComponent>
+              )}
               <span className="text-sm font-semibold text-purple-800">{student.acceptedInfo.country}</span>
               <span className="text-muted-foreground text-sm">·</span>
               <span className="text-sm text-purple-700">{student.acceptedInfo.major}</span>
+              {canManage && currentUser && <EditAcceptedInfoDialog student={student} currentUser={currentUser} />}
             </div>
           )}
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground mt-2">

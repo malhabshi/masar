@@ -3495,3 +3495,40 @@ export async function bulkImportStudents(
     return { success: false, message: error.message };
   }
 }
+
+// Edit or remove a student's accepted-list info (the ACCEPTED badge + list name).
+// Pass data=null to remove it entirely.
+export async function updateAcceptedInfo(
+  studentId: string,
+  data: { country: string; major: string; importListName?: string } | null,
+  authorId: string
+) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const author = await getUser(authorId);
+    if (!author || !['admin', 'adminplus', 'department'].includes(author.role)) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+    const ref = adminDb!.collection('students').doc(studentId);
+    if (data === null) {
+      await ref.update({
+        acceptedInfo: FieldValue.delete(),
+        importListName: FieldValue.delete(),
+        lastActivityAt: new Date().toISOString(),
+      });
+      return { success: true, message: 'Accepted info removed.' };
+    }
+    const country = (data.country || '').trim();
+    const major = (data.major || '').trim();
+    if (!country || !major) return { success: false, message: 'Country and Major are required.' };
+    const listName = (data.importListName || '').trim();
+    await ref.update({
+      acceptedInfo: { country, major },
+      importListName: listName ? listName : FieldValue.delete(),
+      lastActivityAt: new Date().toISOString(),
+    });
+    return { success: true, message: 'Accepted info updated.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
