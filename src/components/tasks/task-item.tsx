@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, Phone, User, Eye, Save, Bell } from 'lucide-react';
+import { Loader2, Send, Phone, User, Eye, Save, Bell, DollarSign } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -83,6 +83,16 @@ export function TaskItem({
                     <Badge className={cn("capitalize text-[10px] px-2 h-5", statusVariants[task.status])}>
                         {task.status.replace('-', ' ')}
                     </Badge>
+                    {task.data?.isPaid === true && (
+                        <Badge className="gap-1 text-[10px] px-2 h-5 bg-green-600 hover:bg-green-700 text-white">
+                            <DollarSign className="h-3 w-3" />PAID
+                        </Badge>
+                    )}
+                    {task.data?.isPaid === false && (
+                        <Badge className="gap-1 text-[10px] px-2 h-5 bg-red-600 hover:bg-red-700 text-white">
+                            <DollarSign className="h-3 w-3" />NOT PAID
+                        </Badge>
+                    )}
                     {canManage && (
                         <Button 
                             variant="ghost" 
