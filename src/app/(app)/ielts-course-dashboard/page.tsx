@@ -176,7 +176,12 @@ export default function IeltsCourseDashboard() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">IELTS Course Dashboard</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-3xl font-bold">IELTS Course Dashboard</h1>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-sm font-semibold">
+              {filteredTasks.length} {filteredTasks.length === 1 ? 'student' : 'students'}
+            </span>
+          </div>
           <p className="text-muted-foreground mt-1">Track and manage specialized IELTS training registrations.</p>
         </div>
         <Button onClick={handleDownloadExcel} variant="outline" className="gap-2 border-green-600 text-green-700 hover:bg-green-50">
