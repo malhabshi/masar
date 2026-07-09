@@ -646,6 +646,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         <div className="font-medium flex items-center gap-2 flex-wrap">
                           {student.internalNumber && <Badge variant="secondary" className="font-bold text-[10px] h-5 px-1 bg-muted">#{student.internalNumber}</Badge>}
                           <span>{student.name || 'Unknown Student'}</span>
+                          {student.acceptedInfo && (
+                            <span title={`Accepted: ${student.acceptedInfo.country} · ${student.acceptedInfo.major}`} className="inline-flex shrink-0">
+                              <CheckCircle2 className="h-4 w-4 text-green-600 stroke-[3]" />
+                            </span>
+                          )}
                           {student.isClosed && <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5">CLOSED</Badge>}
                           {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border animate-pulse uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
                           {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
