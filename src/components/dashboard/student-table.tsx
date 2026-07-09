@@ -80,6 +80,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [schoolTypeFilter, setSchoolTypeFilter] = useState<string[]>([]);
   const [countryFilter, setCountryFilter] = useState<string[]>([]);
   const [ieltsFilter, setIeltsFilter] = useState('all');
+  const [importTypeFilter, setImportTypeFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
 
   // Checklist filters
@@ -116,6 +117,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setSchoolTypeFilter([]);
     setCountryFilter([]);
     setIeltsFilter('all');
+    setImportTypeFilter('all');
     setShowAllStudents(false);
     try {
       const raw = sessionStorage.getItem(`applicants_filters_${currentUser.id}`);
@@ -129,6 +131,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (Array.isArray(f.schoolTypeFilter))   setSchoolTypeFilter(f.schoolTypeFilter);
         if (Array.isArray(f.countryFilter))      setCountryFilter(f.countryFilter);
         if (f.ieltsFilter !== undefined)           setIeltsFilter(f.ieltsFilter);
+        if (f.importTypeFilter !== undefined)      setImportTypeFilter(f.importTypeFilter);
         if (f.showAllStudents !== undefined)       setShowAllStudents(f.showAllStudents);
         if (f.checklistItemFilter !== undefined)   setChecklistItemFilter(f.checklistItemFilter);
         if (f.checklistStatusFilter !== undefined) setChecklistStatusFilter(f.checklistStatusFilter);
@@ -159,11 +162,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     try {
       sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
-        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, showAllStudents,
+        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, showAllStudents,
         checklistItemFilter, checklistStatusFilter,
       }));
     } catch {}
-  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
+  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
 
   // Identify duplicate phones across all currently loaded students (all phone fields)
   const duplicatePhoneSet = useMemo(() => {
@@ -237,6 +240,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
             if (!matches) return false;
         }
 
+        const matchesImportType = importTypeFilter === 'all' || student.importMatchType === importTypeFilter;
+
         const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
         const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
         const matchesSchoolType = schoolTypeFilter.length === 0 || (student.studyLevel === 'Foundation' && schoolTypeFilter.some(f => f === 'none' ? !student.schoolType : student.schoolType === f));
@@ -251,7 +256,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           matchesChecklist = checklistStatusFilter === 'checked' ? isChecked : !isChecked;
         }
 
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
     });
 
     return [...filtered].sort((a, b) => {
@@ -324,7 +329,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
+  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -475,6 +480,14 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         <SelectItem value="5.5">5.5</SelectItem>
                         <SelectItem value="6.0">6.0</SelectItem>
                         <SelectItem value=">=6.5">6.5+</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={importTypeFilter} onValueChange={setImportTypeFilter}>
+                    <SelectTrigger className="w-full flex-1"><SelectValue placeholder="Import Type" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Profiles</SelectItem>
+                        <SelectItem value="new">Imported — New</SelectItem>
+                        <SelectItem value="existing">Imported — Existing</SelectItem>
                     </SelectContent>
                 </Select>
                 {isFiltered && <Button variant="ghost" onClick={handleClearFilters} className="w-full md:w-auto"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
@@ -637,10 +650,22 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                   )}
                   <TableCell>
                     <div className="flex flex-col gap-1">
-                      {student.importListName && (
-                        <Badge className="mb-1 bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-semibold px-1.5 h-4 w-fit">
-                          {student.importListName}
-                        </Badge>
+                      {(student.importListName || student.importMatchType) && (
+                        <div className="flex items-center gap-1 flex-wrap mb-1">
+                          {student.importListName && (
+                            <Badge className="bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-semibold px-1.5 h-4 w-fit">
+                              {student.importListName}
+                            </Badge>
+                          )}
+                          {student.importMatchType && (
+                            <Badge className={cn("text-[10px] font-semibold px-1.5 h-4 w-fit border",
+                              student.importMatchType === 'new'
+                                ? "bg-green-100 text-green-800 border-green-300"
+                                : "bg-slate-100 text-slate-700 border-slate-300")}>
+                              {student.importMatchType === 'new' ? 'NEW IMPORT' : 'EXISTING'}
+                            </Badge>
+                          )}
+                        </div>
                       )}
                       <Link href={`/student/${student.id}`} className="hover:underline">
                         <div className="font-medium flex items-center gap-2 flex-wrap">

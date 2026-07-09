@@ -211,6 +211,7 @@ export interface Student {
   arabicName?: string;
   acceptedInfo?: { country: string; major: string };
   importListName?: string;
+  importMatchType?: 'new' | 'existing'; // set by bulk import: 'new' = created by import, 'existing' = matched an existing profile
 }
 
 export interface ChatMessage {

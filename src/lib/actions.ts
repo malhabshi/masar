@@ -3450,6 +3450,7 @@ export async function bulkImportStudents(
       const ref = adminDb!.collection('students').doc(u.studentId);
       batch.update(ref, {
         acceptedInfo: u.acceptedInfo,
+        importMatchType: 'existing',
         ...(u.importListName ? { importListName: u.importListName } : {}),
       });
     }
@@ -3480,6 +3481,7 @@ export async function bulkImportStudents(
         pipelineStatus: 'none',
         acceptedInfo: s.acceptedInfo,
         importListName: s.importListName,
+        importMatchType: 'new',
         profileCompletionStatus: {
           submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false,
           receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false,
