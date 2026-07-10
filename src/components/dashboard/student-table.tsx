@@ -81,6 +81,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [countryFilter, setCountryFilter] = useState<string[]>([]);
   const [ieltsFilter, setIeltsFilter] = useState('all');
   const [importTypeFilter, setImportTypeFilter] = useState('all');
+  const [acceptedFilter, setAcceptedFilter] = useState('all');
   const [isClient, setIsClient] = useState(false);
 
   // Checklist filters
@@ -118,6 +119,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setCountryFilter([]);
     setIeltsFilter('all');
     setImportTypeFilter('all');
+    setAcceptedFilter('all');
     setShowAllStudents(false);
     try {
       const raw = sessionStorage.getItem(`applicants_filters_${currentUser.id}`);
@@ -132,6 +134,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (Array.isArray(f.countryFilter))      setCountryFilter(f.countryFilter);
         if (f.ieltsFilter !== undefined)           setIeltsFilter(f.ieltsFilter);
         if (f.importTypeFilter !== undefined)      setImportTypeFilter(f.importTypeFilter);
+        if (f.acceptedFilter !== undefined)        setAcceptedFilter(f.acceptedFilter);
         if (f.showAllStudents !== undefined)       setShowAllStudents(f.showAllStudents);
         if (f.checklistItemFilter !== undefined)   setChecklistItemFilter(f.checklistItemFilter);
         if (f.checklistStatusFilter !== undefined) setChecklistStatusFilter(f.checklistStatusFilter);
@@ -162,11 +165,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     try {
       sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
-        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, showAllStudents,
+        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, showAllStudents,
         checklistItemFilter, checklistStatusFilter,
       }));
     } catch {}
-  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
+  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
 
   // Identify duplicate phones across all currently loaded students (all phone fields)
   const duplicatePhoneSet = useMemo(() => {
@@ -241,6 +244,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         }
 
         const matchesImportType = importTypeFilter === 'all' || student.importMatchType === importTypeFilter;
+        const matchesAccepted = acceptedFilter === 'all' || (acceptedFilter === 'accepted' ? !!student.acceptedInfo : !student.acceptedInfo);
 
         const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
         const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
@@ -256,7 +260,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           matchesChecklist = checklistStatusFilter === 'checked' ? isChecked : !isChecked;
         }
 
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
     });
 
     return [...filtered].sort((a, b) => {
@@ -329,7 +333,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
+  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || acceptedFilter !== 'all' || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -488,6 +492,14 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         <SelectItem value="all">All Profiles</SelectItem>
                         <SelectItem value="new">Imported — New</SelectItem>
                         <SelectItem value="existing">Imported — Existing</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={acceptedFilter} onValueChange={setAcceptedFilter}>
+                    <SelectTrigger className="w-full flex-1"><SelectValue placeholder="Acceptance" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All (Accepted or Not)</SelectItem>
+                        <SelectItem value="accepted">Accepted</SelectItem>
+                        <SelectItem value="not-accepted">Not Accepted</SelectItem>
                     </SelectContent>
                 </Select>
                 {isFiltered && <Button variant="ghost" onClick={handleClearFilters} className="w-full md:w-auto"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
