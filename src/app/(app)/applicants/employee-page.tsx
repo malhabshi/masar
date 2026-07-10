@@ -57,10 +57,14 @@ export function EmployeeApplicantsPage() {
 
     // Excel/CSV Headers
     const headers = [
-      "Student Name", 
-      "Phone", 
-      "Email", 
-      "Internal ID", 
+      "Student Name",
+      "Phone",
+      "Phone 2",
+      "Phone 3",
+      "Email",
+      "Accepted Country",
+      "Accepted Major",
+      "Internal ID",
       "Pipeline Status", 
       "Target Countries",
       "University Applications",
@@ -77,7 +81,11 @@ export function EmployeeApplicantsPage() {
     const rows = myStudents.map(s => [
       s.name || '',
       s.phone || '',
+      s.phone2 || '',
+      s.phone3 || '',
       s.email || '',
+      s.acceptedInfo?.country || '',
+      s.acceptedInfo?.major || '',
       s.internalNumber || '',
       s.pipelineStatus || 'none',
       (s.targetCountries || []).join('; '),
@@ -96,7 +104,7 @@ export function EmployeeApplicantsPage() {
       ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);

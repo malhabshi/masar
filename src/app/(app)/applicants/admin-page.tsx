@@ -55,10 +55,14 @@ export function AdminApplicantsPage() {
     if (displayedStudents.length === 0) return;
 
     const headers = [
-      "Student Name", 
-      "Phone", 
-      "Email", 
-      "Internal ID", 
+      "Student Name",
+      "Phone",
+      "Phone 2",
+      "Phone 3",
+      "Email",
+      "Accepted Country",
+      "Accepted Major",
+      "Internal ID",
       "Assigned Employee", 
       "Pipeline Status", 
       "Target Countries",
@@ -75,7 +79,11 @@ export function AdminApplicantsPage() {
     const rows = displayedStudents.map(s => [
       s.name || '',
       s.phone || '',
+      s.phone2 || '',
+      s.phone3 || '',
       s.email || '',
+      s.acceptedInfo?.country || '',
+      s.acceptedInfo?.major || '',
       s.internalNumber || '',
       s.employeeId ? (employeeMap.get(s.employeeId) || s.employeeId) : 'Unassigned',
       s.pipelineStatus || 'none',
@@ -95,7 +103,7 @@ export function AdminApplicantsPage() {
       ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
