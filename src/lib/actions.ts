@@ -3437,7 +3437,7 @@ export async function clearStaleDuplicateWarnings(): Promise<{ fixed: number }> 
 
 export async function bulkImportStudents(
   listName: string,
-  toUpdate: Array<{ studentId: string; acceptedInfo: { country: string; major: string }; importListName?: string }>,
+  toUpdate: Array<{ studentId: string; acceptedInfo: { country: string; major: string }; importListName?: string; phone2?: string; phone3?: string }>,
   toCreate: Array<{ arabicName: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; acceptedInfo: { country: string; major: string }; importListName: string }>,
   creatingUserId: string
 ) {
@@ -3452,6 +3452,9 @@ export async function bulkImportStudents(
         acceptedInfo: u.acceptedInfo,
         importMatchType: 'existing',
         ...(u.importListName ? { importListName: u.importListName } : {}),
+        // Add newly-imported extra numbers; the original primary phone is never touched.
+        ...(u.phone2 ? { phone2: u.phone2 } : {}),
+        ...(u.phone3 ? { phone3: u.phone3 } : {}),
       });
     }
 

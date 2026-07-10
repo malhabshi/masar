@@ -34,6 +34,8 @@ interface MatchedStudent {
   studentId: string;
   systemName: string;
   acceptedInfo: { country: string; major: string };
+  phone2?: string; // merged extra numbers (original primary is kept untouched)
+  phone3?: string;
 }
 
 interface NewStudent extends ImportRow {
@@ -151,10 +153,19 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
           if (foundStudent) {
             if (!seenStudentIds.has(foundStudent.id)) {
               seenStudentIds.add(foundStudent.id);
+              // Keep the student's ORIGINAL primary number (foundStudent.phone) as-is.
+              // Add any new numbers from the import as extra numbers, without duplicates.
+              const primaryNorm = normalizePhone(foundStudent.phone);
+              const existingExtras = [foundStudent.phone2, foundStudent.phone3].map(normalizePhone).filter(Boolean);
+              const importExtras = importPhones.map(normalizePhone).filter(Boolean);
+              const mergedExtras = Array.from(new Set([...existingExtras, ...importExtras]))
+                .filter(p => p && p !== primaryNorm);
               matchedList.push({
                 studentId: foundStudent.id,
                 systemName: foundStudent.name,
                 acceptedInfo: { country: row.country, major: row.major },
+                phone2: mergedExtras[0],
+                phone3: mergedExtras[1],
               });
             }
           } else {
@@ -176,7 +187,7 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
     setIsLoading(true);
     const result = await bulkImportStudents(
       listName,
-      matched.map(m => ({ studentId: m.studentId, acceptedInfo: m.acceptedInfo, importListName: listName })),
+      matched.map(m => ({ studentId: m.studentId, acceptedInfo: m.acceptedInfo, importListName: listName, phone2: m.phone2, phone3: m.phone3 })),
       newStudents.map(s => ({
         arabicName: s.arabicName,
         phone: s.phone,

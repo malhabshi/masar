@@ -716,7 +716,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                         </div>
                       )}
                       <div className="text-sm text-muted-foreground">{student.email || 'No Email'}</div>
-                      <div className="text-sm text-muted-foreground">{student.phone || 'No Phone'}</div>
+                      <div className="text-sm font-bold text-black">{student.phone || 'No Phone'}</div>
                       {student.phone2 && <div className="text-sm text-muted-foreground">{student.phone2}</div>}
                       {student.phone3 && <div className="text-sm text-muted-foreground">{student.phone3}</div>}
                       {student.finalChoiceUniversity && <div className="flex items-center gap-1 text-lg text-success font-bold mt-1"><GraduationCap className="h-5 w-5" /><span>{student.finalChoiceUniversity}</span></div>}
