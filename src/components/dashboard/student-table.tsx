@@ -306,7 +306,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
+  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
 
   useEffect(() => {
     if (!isClient || !currentUser?.id) return;
