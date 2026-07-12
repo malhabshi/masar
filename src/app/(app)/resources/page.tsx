@@ -205,7 +205,7 @@ export default function ResourcesPage() {
     );
   }
 
-  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 
   return (
     <div className="space-y-6">

@@ -48,7 +48,7 @@ export default function GpaPage() {
   const [labelQualifiedMajors, setLabelQualifiedMajors] = useState('Qualified Majors');
   const [labelExamBadge, setLabelExamBadge] = useState('EXAM');
   const [selectedCountries, setSelectedCountries] = useState<Set<string>>(
-    () => new Set(['UK', 'USA', 'Australia', 'New Zealand'])
+    () => new Set(['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'])
   );
 
   useEffect(() => {
@@ -468,7 +468,7 @@ export default function GpaPage() {
               </div>
             </div>
             <div className="flex gap-1.5 flex-wrap">
-              {['UK', 'USA', 'Australia', 'New Zealand'].map(c => (
+              {['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'].map(c => (
                 <button
                   key={c}
                   type="button"

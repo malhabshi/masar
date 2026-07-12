@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, Plus, Trash2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-const COUNTRIES: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+const COUNTRIES: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 
 export default function GpaSettingsPage() {
   const { user } = useUser();

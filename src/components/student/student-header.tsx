@@ -255,6 +255,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     USA: '🇺🇸',
     Australia: '🇦🇺',
     'New Zealand': '🇳🇿',
+    Ireland: '🇮🇪',
   };
 
   const handleToggleChangeAgent = async (universities?: string[]) => {

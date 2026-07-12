@@ -48,7 +48,7 @@ const statusColors: Record<string, string> = {
 };
 
 const ALL_STATUSES: ApplicationStatus[] = ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'];
-const COUNTRIES: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+const COUNTRIES: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 const STUDY_LEVELS = [
   { label: 'Foundation', value: 'Foundation' },
   { label: 'First Year', value: 'First Year' },

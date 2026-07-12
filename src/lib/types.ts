@@ -14,7 +14,7 @@ export interface User {
 }
 
 export type ApplicationStatus = 'Pending' | 'Submitted' | 'Missing Items' | 'Accepted' | 'Rejected';
-export type Country = 'UK' | 'USA' | 'Australia' | 'New Zealand';
+export type Country = 'UK' | 'USA' | 'Australia' | 'New Zealand' | 'Ireland';
 
 export interface Application {
   university: string;

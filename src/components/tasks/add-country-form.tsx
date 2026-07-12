@@ -15,7 +15,7 @@ import type { Student, ApprovedUniversity } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { cn } from '@/lib/utils';
 
-const ALL_COUNTRIES = ['UK', 'Australia / New Zealand', 'USA'];
+const ALL_COUNTRIES = ['UK', 'Australia / New Zealand', 'USA', 'Ireland'];
 const BEST_UNI = 'Best Option';
 const USA_SEMESTER_OPTIONS = ['Spring 2026 / 1', 'Summer 2026 / 6', 'Fall 2026/9'];
 
@@ -52,7 +52,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
 
   const jd = student.jotformData;
   const acceptanceType = jd?.acceptanceType || '';
-  const countryKey = country === 'Australia / New Zealand' ? 'AUNZ' : country === 'UK' ? 'UK' : country === 'USA' ? 'USA' : '';
+  const countryKey = country === 'Australia / New Zealand' ? 'AUNZ' : country === 'UK' ? 'UK' : country === 'USA' ? 'USA' : country === 'Ireland' ? 'Ireland' : '';
   const showBestUni = countryKey !== 'USA';
 
   // Filter approved universities for the selected country
@@ -71,6 +71,9 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     }
     if (countryKey === 'USA') {
       return allApprovedUnis.filter(u => u.isAvailable && u.country === 'USA');
+    }
+    if (countryKey === 'Ireland') {
+      return allApprovedUnis.filter(u => u.isAvailable && u.country === 'Ireland');
     }
     return [];
   }, [allApprovedUnis, countryKey, acceptanceType]);

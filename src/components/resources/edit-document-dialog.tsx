@@ -86,7 +86,7 @@ export function EditDocumentDialog({ document: sharedDoc }: EditDocumentDialogPr
     setIsSubmitting(false);
   }
 
-  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

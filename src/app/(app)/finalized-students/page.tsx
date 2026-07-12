@@ -83,7 +83,7 @@ export default function FinalizedStudentsPage() {
     return allUsers.filter(u => u.civilId && (u.role === 'employee' || u.role === 'admin' || u.role === 'adminplus' || u.role === 'department'));
   }, [allUsers]);
 
-  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 
   const finalizedStudents = useMemo(() => {
     if (!fetchedStudents) return [];

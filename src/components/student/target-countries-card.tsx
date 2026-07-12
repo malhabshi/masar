@@ -39,13 +39,14 @@ interface TargetCountriesCardProps {
   currentUser: AppUser;
 }
 
-const countryList: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+const countryList: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 
 const countryEmojis: Record<Country, string> = {
   UK: '🇬🇧',
   USA: '🇺🇸',
   Australia: '🇦🇺',
   'New Zealand': '🇳🇿',
+  Ireland: '🇮🇪',
 };
 
 export function TargetCountriesCard({ student, currentUser }: TargetCountriesCardProps) {

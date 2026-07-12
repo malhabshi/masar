@@ -60,7 +60,7 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     
-    const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+    const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),

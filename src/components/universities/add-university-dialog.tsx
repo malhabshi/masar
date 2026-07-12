@@ -38,7 +38,7 @@ const COMPANIES: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampu
 const formSchema = z.object({
   name: z.string().min(3, { message: 'University name is required.' }),
   major: z.string().min(3, { message: 'Major is required.' }),
-  country: z.enum(['UK', 'USA', 'Australia', 'New Zealand']),
+  country: z.enum(['UK', 'USA', 'Australia', 'New Zealand', 'Ireland']),
   category: z.enum(['MOHE', 'Merit', 'General']),
   entryLevels: z.array(z.string()).default([]),
   ieltsScore: z.coerce.number().min(0).max(9),
@@ -83,7 +83,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
     },
   });
 
-  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);

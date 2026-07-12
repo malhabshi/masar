@@ -3303,6 +3303,9 @@ export async function addCountryApplication(
         return { success: false, message: `Missing required fields for USA: ${missingUSA.join(', ')}` };
       }
       jotformResult = await postToJotform(JOTFORM_USA_FORM_ID, fd);
+    } else if (country === 'Ireland') {
+      // No JotForm intake form exists for Ireland — store the application directly.
+      jotformResult = { ok: true, status: 200, detail: 'No JotForm form for Ireland (stored directly).' };
     }
   } catch (err) {
     console.error('[addCountryApplication] Jotform submission failed:', err);

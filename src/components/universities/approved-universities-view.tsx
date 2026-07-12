@@ -165,7 +165,7 @@ export function ApprovedUniversitiesView() {
     }
   }, [user, toast]);
 
-  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand'];
+  const countries: Country[] = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
   const companies: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
   if (isLoading) {
     return (
