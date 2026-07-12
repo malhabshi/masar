@@ -14,6 +14,7 @@ import { StudentHeader } from '@/components/student/student-header';
 import { StudentApplications } from '@/components/student/student-applications';
 import { InternalDocuments } from '@/components/student/internal-documents';
 import { NotesSection } from '@/components/student/notes-section';
+import { ChangeAgentHistory } from '@/components/student/change-agent-history';
 import { TaskHistory } from '@/components/student/task-history';
 import { TransferHistory } from '@/components/student/transfer-history';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -236,6 +237,7 @@ export default function StudentDetailPage() {
                       placeholder="Add a new internal note..."
                   />
               )}
+              {isAdminOrDept && <ChangeAgentHistory student={student} />}
           </div>
 
           <div className="space-y-6">
