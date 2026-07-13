@@ -908,7 +908,9 @@ export async function createStudent(values: { studentName: string; studentEmail?
     const studentId = `${idPrefix}-${Date.now()}`;
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
-    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    // If this person is on a previously-imported accepted list, inherit their acceptance.
+    const acceptedMatch = await lookupAcceptedList([phone, phone2, phone3]);
+    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, ...(acceptedMatch ? { acceptedInfo: { country: acceptedMatch.country, major: acceptedMatch.major }, ...(acceptedMatch.listName ? { importListName: acceptedMatch.listName } : {}) } : {}), profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
     
     // Auto-post initial notes to chat if they exist
     if (notes && notes.trim()) {
@@ -3061,6 +3063,13 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
       };
       if (studyLevel) studentDoc.studyLevel = studyLevel;
 
+      // If this applicant is on a previously-imported accepted list, inherit their acceptance.
+      const acceptedMatch = await lookupAcceptedList([kuwaitPhone], civilId);
+      if (acceptedMatch) {
+        studentDoc.acceptedInfo = { country: acceptedMatch.country, major: acceptedMatch.major };
+        if (acceptedMatch.listName) studentDoc.importListName = acceptedMatch.listName;
+      }
+
       await adminDb.collection('students').doc(newStudentId).set(studentDoc);
       studentCreated = true;
     } catch (err) {
@@ -3438,11 +3447,71 @@ export async function clearStaleDuplicateWarnings(): Promise<{ fixed: number }> 
   return { fixed };
 }
 
+// --- Accepted-list registry -------------------------------------------------
+// A phone/civil-id keyed store of accepted-list entries, so students added LATER
+// (via JotForm or manual add) automatically inherit the accepted country/major and
+// the list name. Written by bulkImportStudents; read at student-creation time.
+function normalizeAcceptedPhone(p?: string): string {
+  if (!p) return '';
+  return p.toString().replace(/\D/g, '').replace(/^965/, '');
+}
+
+async function lookupAcceptedList(
+  phones: (string | undefined)[],
+  civilId?: string,
+): Promise<{ country: string; major: string; listName?: string } | null> {
+  if (!adminDb) return null;
+  const cid = normalizeAcceptedPhone(civilId);
+  const ids = [...new Set([
+    ...phones.map(normalizeAcceptedPhone).filter(Boolean),
+    ...(cid ? [`cid_${cid}`] : []),
+  ])];
+  for (const id of ids) {
+    try {
+      const snap = await adminDb.collection('accepted_list').doc(id).get();
+      if (snap.exists) {
+        const d = snap.data()!;
+        if (d.country && d.major) {
+          return { country: d.country as string, major: d.major as string, listName: (d.listName as string) || undefined };
+        }
+      }
+    } catch { /* ignore lookup errors, never block creation */ }
+  }
+  return null;
+}
+
+async function writeAcceptedListRegistry(
+  entries: Array<{ phones?: string[]; civilId?: string; country: string; major: string }>,
+  listName: string,
+) {
+  if (!adminDb || entries.length === 0) return;
+  const now = new Date().toISOString();
+  let batch = adminDb.batch();
+  let ops = 0;
+  for (const e of entries) {
+    if (!e.country || !e.major) continue;
+    const cid = normalizeAcceptedPhone(e.civilId);
+    const ids = [...new Set([
+      ...(e.phones || []).map(normalizeAcceptedPhone).filter(Boolean),
+      ...(cid ? [`cid_${cid}`] : []),
+    ])];
+    for (const id of ids) {
+      batch.set(adminDb.collection('accepted_list').doc(id), {
+        key: id, country: e.country, major: e.major, listName: listName || '', updatedAt: now,
+      }, { merge: true });
+      ops++;
+      if (ops >= 450) { await batch.commit(); batch = adminDb.batch(); ops = 0; }
+    }
+  }
+  if (ops > 0) await batch.commit();
+}
+
 export async function bulkImportStudents(
   listName: string,
   toUpdate: Array<{ studentId: string; acceptedInfo: { country: string; major: string }; importListName?: string; phone2?: string; phone3?: string }>,
   toCreate: Array<{ arabicName: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; acceptedInfo: { country: string; major: string }; importListName: string }>,
-  creatingUserId: string
+  creatingUserId: string,
+  listEntries?: Array<{ phones: string[]; civilId?: string; country: string; major: string }>
 ) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
@@ -3498,6 +3567,13 @@ export async function bulkImportStudents(
     }
 
     await batch.commit();
+
+    // Persist the accepted-list registry so students added LATER (JotForm / manual)
+    // inherit the accepted country/major and the list name by phone or civil id.
+    if (listEntries && listEntries.length) {
+      await writeAcceptedListRegistry(listEntries, listName);
+    }
+
     return { success: true, updated: toUpdate.length, created: toCreate.length };
   } catch (error: any) {
     return { success: false, message: error.message };

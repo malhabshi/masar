@@ -71,6 +71,7 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [matched, setMatched] = useState<MatchedStudent[]>([]);
   const [newStudents, setNewStudents] = useState<NewStudent[]>([]);
+  const [allRows, setAllRows] = useState<ImportRow[]>([]);
   const [parseError, setParseError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -79,6 +80,7 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
     setListName('');
     setMatched([]);
     setNewStudents([]);
+    setAllRows([]);
     setParseError('');
     if (fileRef.current) fileRef.current.value = '';
   }
@@ -175,6 +177,7 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
 
         setMatched(matchedList);
         setNewStudents(newList);
+        setAllRows(importRows);
         setStep(3);
       } catch (err) {
         setParseError('Failed to read the file. Please make sure it is a valid Excel (.xlsx) or CSV file.');
@@ -198,6 +201,13 @@ export function ImportListDialog({ creatingUserId }: ImportListDialogProps) {
         importListName: s.importListName,
       })),
       creatingUserId,
+      // Registry entries for EVERY imported row, so future arrivals (JotForm / manual) inherit acceptance.
+      allRows.map(r => ({
+        phones: [r.phone, r.phone2, r.phone3].filter(Boolean) as string[],
+        civilId: r.civilId,
+        country: r.country,
+        major: r.major,
+      })),
     );
     setIsLoading(false);
 
