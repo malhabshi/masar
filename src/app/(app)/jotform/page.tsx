@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { submitJotformApplications } from '@/lib/actions';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase';
-import type { ApprovedUniversity, Application } from '@/lib/types';
+import type { ApprovedUniversity, Application, Country } from '@/lib/types';
 
 const STAFF_NAMES = [
   'طلال', 'محمد سليمان', 'خالد الشمري', 'يوسف سليمان', 'عبدالرحمن العنزي',
@@ -300,7 +300,7 @@ export default function JotformPage() {
         for (const major of pick.addedMajors) {
           for (const uniName of pick.selectedUniNamesByMajor[major] || []) {
             if (uniName === 'Best Option') continue;
-            let appCountry: 'UK' | 'USA' | 'Australia' | 'New Zealand' = defaultCountry;
+            let appCountry: Country = defaultCountry;
             if (key === 'AUNZ') {
               const dbUni = unis.find(u => u.name.toLowerCase().trim() === uniName.toLowerCase().trim());
               if (dbUni) appCountry = dbUni.country;
