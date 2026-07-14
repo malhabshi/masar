@@ -1409,6 +1409,26 @@ export async function deleteStudent(studentId: string, adminId: string) {
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+export async function bulkDeleteStudents(studentIds: string[], adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  const adminUser = await getUser(adminId);
+  if (!adminUser || adminUser.role !== 'admin') return { success: false, message: 'Unauthorized.' };
+  let deleted = 0;
+  const failed: string[] = [];
+  for (const id of studentIds) {
+    const res = await deleteStudent(id, adminId);
+    if (res.success) deleted++;
+    else failed.push(id);
+  }
+  return {
+    success: failed.length === 0,
+    deleted,
+    message: failed.length === 0
+      ? `Deleted ${deleted} student${deleted === 1 ? '' : 's'}.`
+      : `Deleted ${deleted}; ${failed.length} failed.`,
+  };
+}
+
 export async function deleteStudentDocument(studentId: string, documentId: string, documentUrl: string, deleterId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {

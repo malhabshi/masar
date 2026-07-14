@@ -27,7 +27,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { updateStudentPipelineStatus, bulkAssignStudents, getChecklistConfig, getAdminChecklistConfig } from '@/lib/actions';
+import { updateStudentPipelineStatus, bulkAssignStudents, bulkDeleteStudents, getChecklistConfig, getAdminChecklistConfig } from '@/lib/actions';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
@@ -97,6 +99,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -639,6 +642,44 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                   </div>
                 </PopoverContent>
               </Popover>
+
+              {currentUser.role === 'admin' && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" className="gap-2" disabled={isDeleting || isAssigning}>
+                      {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      Delete Selected
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete {selectedIds.length} student{selectedIds.length === 1 ? '' : 's'}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This permanently deletes the selected student profile{selectedIds.length === 1 ? '' : 's'} and all associated data (applications, documents, chat history). This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive hover:bg-destructive/90"
+                        onClick={async () => {
+                          setIsDeleting(true);
+                          const result = await bulkDeleteStudents(selectedIds, currentUser.id!);
+                          setIsDeleting(false);
+                          if (result.success) {
+                            toast({ title: 'Deleted', description: result.message });
+                            setSelectedIds([]);
+                          } else {
+                            toast({ variant: 'destructive', title: 'Error', description: result.message });
+                          }
+                        }}
+                      >
+                        Yes, delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </div>
         )}
