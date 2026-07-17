@@ -243,7 +243,7 @@ export default function StudentDetailPage() {
           <div className="space-y-6">
               {isAdminOrDept && (
                 <div>
-                  <AssignmentCard student={student} />
+                  <AssignmentCard student={student} currentUser={currentUser} />
                 </div>
               )}
               <RemindersCard student={student} currentUser={currentUser} />

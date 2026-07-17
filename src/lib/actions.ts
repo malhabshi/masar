@@ -980,6 +980,30 @@ export async function transferStudent(studentId: string, newEmployee: User, admi
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+export async function unassignStudent(studentId: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'adminplus', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+    if (!studentData.employeeId) return { success: false, message: 'Student is already unassigned.' };
+    const now = new Date().toISOString();
+    await studentRef.update({
+      employeeId: null,
+      isNewForEmployee: false,
+      transferRequested: false,
+      transferRequest: FieldValue.delete(),
+      lastActivityAt: now,
+      transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId, toEmployeeId: null, date: now, transferredBy: adminId }],
+      adminNotes: [...(studentData.adminNotes || []), { id: `note-unassign-${Date.now()}`, authorId: adminId, content: `Unassigned from agent. Student is now an unassigned lead.`, createdAt: now }],
+    });
+    return { success: true, message: 'Student unassigned.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
 export async function requestTransfer(studentId: string, reason: string, requestingEmployeeId: string, studentName: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
