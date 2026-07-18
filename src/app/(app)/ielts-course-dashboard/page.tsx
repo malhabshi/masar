@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useUser } from '@/hooks/use-user';
 import { useCollection, useMemoFirebase } from '@/firebase/client';
 import { where } from 'firebase/firestore';
-import type { Task } from '@/lib/types';
+import type { Task, Student } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -71,6 +71,14 @@ export default function IeltsCourseDashboard() {
     currentUser ? 'tasks' : '',
     ...ieltsCourseConstraints
   );
+
+  // Load students to surface each student's change-agent / closed status.
+  const { data: students } = useCollection<Student>(currentUser ? 'students' : '');
+  const studentById = useMemo(() => {
+    const m = new Map<string, Student>();
+    (students || []).forEach(s => m.set(s.id, s));
+    return m;
+  }, [students]);
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
@@ -267,12 +275,25 @@ export default function IeltsCourseDashboard() {
                     filteredTasks.map((task) => (
                       <TableRow key={task.id}>
                         <TableCell className="font-bold">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {task.data?.sentToIdp
                               ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
                               : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                             }
                             {task.studentName}
+                            {(() => {
+                              const student = task.studentId ? studentById.get(task.studentId) : undefined;
+                              return (
+                                <>
+                                  {student?.changeAgentRequired && (
+                                    <span className="bg-red-100 text-red-700 border border-red-300 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">Change Agent</span>
+                                  )}
+                                  {student?.isClosed && (
+                                    <span className="bg-black text-white px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">Closed</span>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </TableCell>
                         <TableCell>{task.studentPhone}</TableCell>
