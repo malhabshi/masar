@@ -61,11 +61,13 @@ export default function InternalChatPage() {
   const displayedStudents = useMemo(() => {
     if (!rawStudents) return [];
     
+    // 0. Never show closed profiles in the Chat Inbox
+    let filtered = rawStudents.filter(s => !s.isClosed);
+
     // 1. Filter for department regions if applicable (Only in management mode)
-    let filtered = rawStudents;
     if (effectiveRole === 'department' && currentUser?.department) {
       const dept = currentUser.department;
-      filtered = rawStudents.filter(student => {
+      filtered = filtered.filter(student => {
         const appCountries = (student.applications || []).map(a => a.country);
         const isMatch = (dept === 'UK' && appCountries.includes('UK')) || 
                         (dept === 'USA' && appCountries.includes('USA')) || 
