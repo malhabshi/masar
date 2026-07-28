@@ -204,6 +204,7 @@ export interface Student {
   };
   studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';
   schoolType?: 'Private' | 'Public';
+  foundationCategory?: 'تميز' | 'شواغر'; // Foundation students only
   uploadNote?: string;
   isClosed?: boolean;
   closedAt?: string;

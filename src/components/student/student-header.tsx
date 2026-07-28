@@ -295,6 +295,11 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
     updateDocumentNonBlocking(studentDocRef, { schoolType: value === 'none' ? null : value } as any);
   };
 
+  const handleSetFoundationCategory = (value: string) => {
+    const studentDocRef = doc(firestore, 'students', student.id);
+    updateDocumentNonBlocking(studentDocRef, { foundationCategory: value === 'none' ? null : value } as any);
+  };
+
   const handleToggleMarkUnread = async () => {
     if (!currentUser) return;
     setIsMarkingUnread(true);
@@ -489,6 +494,40 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 )}
               >
                 {student.schoolType} School
+              </BadgeComponent>
+            )}
+
+            {canEdit && student.studyLevel === 'Foundation' && (
+              <div className="pdf-hide">
+                <Select value={student.foundationCategory ?? 'none'} onValueChange={handleSetFoundationCategory}>
+                  <SelectTrigger
+                    className={cn(
+                      "h-8 text-xs font-semibold border",
+                      student.foundationCategory === 'تميز' && "bg-amber-50 text-amber-700 border-amber-300",
+                      student.foundationCategory === 'شواغر' && "bg-blue-50 text-blue-700 border-blue-300",
+                      !student.foundationCategory && "text-muted-foreground"
+                    )}
+                  >
+                    <SelectValue placeholder="التميز / شواغر" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">التميز / شواغر</SelectItem>
+                    <SelectItem value="تميز">تميز</SelectItem>
+                    <SelectItem value="شواغر">شواغر</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {!canEdit && student.studyLevel === 'Foundation' && student.foundationCategory && (
+              <BadgeComponent
+                variant="outline"
+                className={cn(
+                  "text-xs font-semibold",
+                  student.foundationCategory === 'تميز' ? "bg-amber-50 text-amber-700 border-amber-300" : "bg-blue-50 text-blue-700 border-blue-300"
+                )}
+              >
+                {student.foundationCategory}
               </BadgeComponent>
             )}
 

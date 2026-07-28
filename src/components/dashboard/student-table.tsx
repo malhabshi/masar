@@ -86,6 +86,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [acceptedFilter, setAcceptedFilter] = useState('all');
   const [acceptedCountryFilter, setAcceptedCountryFilter] = useState<string[]>([]);
   const [acceptedMajorFilter, setAcceptedMajorFilter] = useState<string[]>([]);
+  const [foundationCategoryFilter, setFoundationCategoryFilter] = useState<string[]>([]);
   const [isClient, setIsClient] = useState(false);
 
   // Checklist filters
@@ -127,6 +128,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setAcceptedFilter('all');
     setAcceptedCountryFilter([]);
     setAcceptedMajorFilter([]);
+    setFoundationCategoryFilter([]);
     setShowAllStudents(false);
     try {
       const raw = sessionStorage.getItem(`applicants_filters_${currentUser.id}`);
@@ -144,6 +146,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (f.acceptedFilter !== undefined)        setAcceptedFilter(f.acceptedFilter);
         if (Array.isArray(f.acceptedCountryFilter)) setAcceptedCountryFilter(f.acceptedCountryFilter);
         if (Array.isArray(f.acceptedMajorFilter))   setAcceptedMajorFilter(f.acceptedMajorFilter);
+        if (Array.isArray(f.foundationCategoryFilter)) setFoundationCategoryFilter(f.foundationCategoryFilter);
         if (f.showAllStudents !== undefined)       setShowAllStudents(f.showAllStudents);
         if (f.checklistItemFilter !== undefined)   setChecklistItemFilter(f.checklistItemFilter);
         if (f.checklistStatusFilter !== undefined) setChecklistStatusFilter(f.checklistStatusFilter);
@@ -174,11 +177,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     try {
       sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
-        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, showAllStudents,
+        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, showAllStudents,
         checklistItemFilter, checklistStatusFilter,
       }));
     } catch {}
-  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
+  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
 
   // Identify duplicate phones across all currently loaded students (all phone fields)
   const duplicatePhoneSet = useMemo(() => {
@@ -267,6 +270,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const matchesAccepted = acceptedFilter === 'all' || (acceptedFilter === 'accepted' ? !!student.acceptedInfo : !student.acceptedInfo);
         const matchesAcceptedCountry = acceptedCountryFilter.length === 0 || (!!student.acceptedInfo?.country && acceptedCountryFilter.includes(student.acceptedInfo.country.trim()));
         const matchesAcceptedMajor = acceptedMajorFilter.length === 0 || (!!student.acceptedInfo?.major && acceptedMajorFilter.includes(student.acceptedInfo.major.trim()));
+        const matchesFoundationCategory = foundationCategoryFilter.length === 0 || (!!student.foundationCategory && foundationCategoryFilter.includes(student.foundationCategory));
 
         const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
         const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
@@ -282,7 +286,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           matchesChecklist = checklistStatusFilter === 'checked' ? isChecked : !isChecked;
         }
 
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesAcceptedCountry && matchesAcceptedMajor && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesAcceptedCountry && matchesAcceptedMajor && matchesFoundationCategory && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
     });
 
     return [...filtered].sort((a, b) => {
@@ -328,7 +332,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
+  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
 
   useEffect(() => {
     if (!isClient || !currentUser?.id) return;
@@ -355,7 +359,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || acceptedFilter !== 'all' || acceptedCountryFilter.length > 0 || acceptedMajorFilter.length > 0 || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
+  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || acceptedFilter !== 'all' || acceptedCountryFilter.length > 0 || acceptedMajorFilter.length > 0 || foundationCategoryFilter.length > 0 || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -540,6 +544,15 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                     selected={acceptedMajorFilter}
                     onChange={setAcceptedMajorFilter}
                     className="flex-1 min-w-[130px]"
+                  />
+                )}
+                {isClient && (
+                  <MultiSelectFilter
+                    label="التميز / شواغر"
+                    options={[{ label: 'تميز', value: 'تميز' }, { label: 'شواغر', value: 'شواغر' }]}
+                    selected={foundationCategoryFilter}
+                    onChange={setFoundationCategoryFilter}
+                    className="flex-1 min-w-[120px]"
                   />
                 )}
                 {isFiltered && <Button variant="ghost" onClick={handleClearFilters} className="w-full md:w-auto"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
@@ -765,6 +778,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             <span title={`Accepted: ${student.acceptedInfo.country} · ${student.acceptedInfo.major}`} className="inline-flex shrink-0">
                               <CheckCircle2 className="h-4 w-4 text-green-600 stroke-[3]" />
                             </span>
+                          )}
+                          {student.foundationCategory && (
+                            <Badge className={cn("text-[10px] font-semibold px-1.5 h-4 border", student.foundationCategory === 'تميز' ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-blue-100 text-blue-800 border-blue-300")}>
+                              {student.foundationCategory}
+                            </Badge>
                           )}
                           {student.isClosed && <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5">CLOSED</Badge>}
                           {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border animate-pulse uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
