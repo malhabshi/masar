@@ -8,3 +8,15 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: MCP_OWNER_SECRET
+    value: InqpKIlBJ8Yo1eREveEGen4ZjFoo4J0n
+    availability:
+      - RUNTIME
+  - variable: MCP_OWNER_USER_ID
+    value: mcp-owner
+    availability:
+      - RUNTIME
+  - variable: MCP_OWNER_USER_NAME
+    value: "Claude (MCP)"
+    availability:
+      - RUNTIME
