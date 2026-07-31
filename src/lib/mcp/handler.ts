@@ -68,15 +68,44 @@ export function getMcpHandler() {
 
     // ---------------------------------------------------------------- Tasks
     s.registerTool('list_tasks', {
-      description: 'List tasks, newest first. Optionally filter by status (new, in-progress, completed, denied) or by recipient (assignee) id.',
-      inputSchema: { status: statusEnum.optional(), recipientId: z.string().optional(), limit: z.number().int().min(1).max(100).optional() },
-    }, async ({ status, recipientId, limit }: { status?: TaskStatus; recipientId?: string; limit?: number }) =>
-      text(JSON.stringify(await tasks.listTasks({ status, recipientId, limit }), null, 2)));
+      description:
+        'List genuine request tasks (the /tasks page), newest first by createdAt. Excludes the activity-feed/notification records. ' +
+        'Filters: status (new|in-progress|completed|denied), recipientId (tasks addressed to that user — this is "My Tasks"), ' +
+        'taskType (exact type, trailing-space/case tolerant, e.g. "New IELTS/TOFEL Exam"). ' +
+        'Pagination: pass limit (default 25, max 100) and cursor (use nextCursor from the previous page). ' +
+        'Response includes totalCount, hasMore, nextCursor, and each task\'s data object + resolved recipient/author names. ' +
+        'If hasMore is true your view is incomplete — page with cursor or use count_tasks to verify totals. To find "is there a new X request?", filter by status="new" (+recipientId) and check totalCount.',
+      inputSchema: {
+        status: statusEnum.optional(),
+        recipientId: z.string().optional(),
+        taskType: z.string().optional(),
+        cursor: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+    }, async ({ status, recipientId, taskType, cursor, limit }: { status?: TaskStatus; recipientId?: string; taskType?: string; cursor?: string; limit?: number }) =>
+      json(await tasks.listTasks({ status, recipientId, taskType, cursor, limit })));
 
-    s.registerTool('get_task', { description: 'Get a single task by id, including its replies.', inputSchema: { taskId: z.string() } },
+    s.registerTool('count_tasks', {
+      description: 'Count genuine request tasks matching status / recipientId / taskType (same filters and exclusions as list_tasks). Returns { count }. Use this to confirm a listing is complete before answering.',
+      inputSchema: { status: statusEnum.optional(), recipientId: z.string().optional(), taskType: z.string().optional() },
+    }, async ({ status, recipientId, taskType }: { status?: TaskStatus; recipientId?: string; taskType?: string }) =>
+      json(await tasks.countTasks({ status, recipientId, taskType })));
+
+    s.registerTool('get_tasks_for_student', {
+      description: 'List all request tasks attached to a specific student id (newest first), including each task\'s data object (exam type, price, requested date, etc.).',
+      inputSchema: { studentId: z.string() },
+    }, async ({ studentId }: { studentId: string }) => json(await tasks.getTasksForStudent(studentId)));
+
+    s.registerTool('list_notifications', {
+      description: 'List the activity-feed/notification records (category system/update) — status updates, new-student/university additions, bulk assignments, etc. These are NOT tasks; use list_tasks for real requests. Filter by recipientId; paginate with limit/cursor.',
+      inputSchema: { recipientId: z.string().optional(), cursor: z.string().optional(), limit: z.number().int().min(1).max(100).optional() },
+    }, async ({ recipientId, cursor, limit }: { recipientId?: string; cursor?: string; limit?: number }) =>
+      json(await tasks.listNotifications({ recipientId, cursor, limit })));
+
+    s.registerTool('get_task', { description: 'Get a single task by id, including its full replies and data object (timestamps normalized to ISO).', inputSchema: { taskId: z.string() } },
       async ({ taskId }: { taskId: string }) => {
         const t = await tasks.getTask(taskId);
-        return text(t ? JSON.stringify(t, null, 2) : 'Task not found.');
+        return t ? json(t) : text('Task not found.');
       });
 
     s.registerTool('create_task', {
@@ -174,9 +203,20 @@ export function getMcpHandler() {
       json(await runAction({ action, args, confirm }, await resolveActor(extra))));
 
     s.registerTool('whoami', {
-      description: 'Show which user identity the MCP is acting as (id, name, civilId, role). Useful to confirm actions are attributed to you.',
+      description: 'Show which user identity the MCP is acting as, and whether that id resolves to a real user record with admin rights (authoritative — role-gated actions check this).',
       inputSchema: {},
-    }, async (_args: unknown, extra: Extra) => json({ actor: await resolveActor(extra) }));
+    }, async (_args: unknown, extra: Extra) => {
+      const actor = await resolveActor(extra);
+      let userExists = false;
+      let dbRole: string | null = null;
+      if (adminDb && actor.id) {
+        const snap = await adminDb.collection('users').doc(actor.id).get();
+        userExists = snap.exists;
+        dbRole = snap.exists ? ((snap.data() as { role?: string }).role ?? null) : null;
+      }
+      const canActAsAdmin = userExists && (dbRole === 'admin' || dbRole === 'adminplus');
+      return json({ actor, userExists, dbRole, canActAsAdmin });
+    });
   }, {
     serverInfo: { name: 'masar-tasks', version: '2.0.0' },
   });
