@@ -2,7 +2,9 @@
 // lazily so Next's build-time "page data collection" never imports this heavy graph
 // (mcp-handler + MCP SDK) — that was causing a build timeout on /api/mcp.
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
-import { z } from 'zod';
+// The MCP SDK bundled in mcp-handler requires Zod v4 schemas for tool inputSchema.
+// Use the aliased v4 here only; the rest of the app stays on Zod v3.
+import { z } from 'zod-v4';
 import { adminDb } from '@/lib/firebase/admin';
 import * as tasks from '@/lib/mcp/task-tools';
 import type { TaskStatus } from '@/lib/types';
