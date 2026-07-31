@@ -8,6 +8,10 @@ export const OWNER = {
   secret: process.env.MCP_OWNER_SECRET || '',
   userId: process.env.MCP_OWNER_USER_ID || 'mcp-owner',
   userName: process.env.MCP_OWNER_USER_NAME || 'Owner',
+  // Real admin user doc id's civilId — some server actions need it (e.g. createStudent).
+  civilId: process.env.MCP_OWNER_USER_CIVILID || '',
+  // Role the MCP acts as; admin so all role-gated actions pass.
+  role: process.env.MCP_OWNER_USER_ROLE || 'admin',
 };
 
 export const ACCESS_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 180; // 180 days
@@ -46,7 +50,7 @@ export async function getClient(clientId: string) {
 export async function issueAuthCode(input: { clientId: string; redirectUri: string; codeChallenge: string; scope: string }) {
   const code = randToken(24);
   await db().collection('mcp_auth_codes').doc(code).set({
-    ...input, userId: OWNER.userId, userName: OWNER.userName,
+    ...input, userId: OWNER.userId, userName: OWNER.userName, civilId: OWNER.civilId, role: OWNER.role,
     expiresAt: new Date(Date.now() + AUTH_CODE_TTL_MS).toISOString(),
   });
   return code;
@@ -56,24 +60,26 @@ export async function consumeAuthCode(code: string) {
   const ref = db().collection('mcp_auth_codes').doc(code);
   const snap = await ref.get();
   if (!snap.exists) return null;
-  const d = snap.data() as { clientId: string; redirectUri: string; codeChallenge: string; scope: string; userId: string; userName: string; expiresAt: string };
+  const d = snap.data() as { clientId: string; redirectUri: string; codeChallenge: string; scope: string; userId: string; userName: string; civilId?: string; role?: string; expiresAt: string };
   await ref.delete(); // one-time use
   if (Date.parse(d.expiresAt) < Date.now()) return null;
   return d;
 }
 
 // --- Access + refresh tokens ---
-export async function issueAccessToken(input: { userId: string; userName: string; clientId: string; scope: string }) {
+export async function issueAccessToken(input: { userId: string; userName: string; civilId?: string; role?: string; clientId: string; scope: string }) {
   const accessToken = randToken(32);
   const refreshToken = randToken(32);
   const now = Date.now();
   await db().collection('mcp_tokens').doc(accessToken).set({
-    userId: input.userId, userName: input.userName, clientId: input.clientId,
+    userId: input.userId, userName: input.userName, civilId: input.civilId || '', role: input.role || 'admin',
+    clientId: input.clientId,
     scopes: input.scope ? input.scope.split(' ') : ['tasks'],
     expiresAt: new Date(now + ACCESS_TOKEN_TTL_MS).toISOString(),
   });
   await db().collection('mcp_refresh_tokens').doc(refreshToken).set({
-    userId: input.userId, userName: input.userName, clientId: input.clientId, scope: input.scope || 'tasks',
+    userId: input.userId, userName: input.userName, civilId: input.civilId || '', role: input.role || 'admin',
+    clientId: input.clientId, scope: input.scope || 'tasks',
     createdAt: new Date(now).toISOString(),
   });
   return { accessToken, refreshToken, expiresIn: Math.floor(ACCESS_TOKEN_TTL_MS / 1000) };
@@ -82,7 +88,7 @@ export async function issueAccessToken(input: { userId: string; userName: string
 export async function consumeRefreshToken(refreshToken: string, clientId: string) {
   const snap = await db().collection('mcp_refresh_tokens').doc(refreshToken).get();
   if (!snap.exists) return null;
-  const d = snap.data() as { userId: string; userName: string; clientId: string; scope: string };
+  const d = snap.data() as { userId: string; userName: string; civilId?: string; role?: string; clientId: string; scope: string };
   if (d.clientId !== clientId) return null;
   return d;
 }

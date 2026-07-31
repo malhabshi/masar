@@ -13,10 +13,18 @@ env:
     availability:
       - RUNTIME
   - variable: MCP_OWNER_USER_ID
-    value: mcp-owner
+    value: IZr1zv5ePQb0bKNVXS4xGjERmE62
     availability:
       - RUNTIME
   - variable: MCP_OWNER_USER_NAME
-    value: "Claude (MCP)"
+    value: "mohammad alhabshi"
+    availability:
+      - RUNTIME
+  - variable: MCP_OWNER_USER_CIVILID
+    value: "298032500418"
+    availability:
+      - RUNTIME
+  - variable: MCP_OWNER_USER_ROLE
+    value: admin
     availability:
       - RUNTIME

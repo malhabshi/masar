@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     if (stored.redirectUri !== redirectUri) return err('invalid_grant', 'redirect_uri mismatch.');
     if (!verifyPkceS256(codeVerifier, stored.codeChallenge)) return err('invalid_grant', 'PKCE verification failed.');
 
-    const t = await issueAccessToken({ userId: stored.userId, userName: stored.userName, clientId, scope: stored.scope });
+    const t = await issueAccessToken({ userId: stored.userId, userName: stored.userName, civilId: stored.civilId, role: stored.role, clientId, scope: stored.scope });
     return Response.json(
       { access_token: t.accessToken, token_type: 'Bearer', expires_in: t.expiresIn, refresh_token: t.refreshToken, scope: stored.scope },
       { headers: CORS },
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     if (!refreshToken) return err('invalid_request', 'refresh_token is required.');
     const stored = await consumeRefreshToken(refreshToken, clientId);
     if (!stored) return err('invalid_grant', 'Refresh token invalid.');
-    const t = await issueAccessToken({ userId: stored.userId, userName: stored.userName, clientId, scope: stored.scope });
+    const t = await issueAccessToken({ userId: stored.userId, userName: stored.userName, civilId: stored.civilId, role: stored.role, clientId, scope: stored.scope });
     return Response.json(
       { access_token: t.accessToken, token_type: 'Bearer', expires_in: t.expiresIn, refresh_token: t.refreshToken, scope: stored.scope },
       { headers: CORS },
