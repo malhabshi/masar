@@ -13,10 +13,37 @@ import type { TaskStatus } from '@/lib/types';
 
 const statusEnum = z.enum(['new', 'in-progress', 'completed', 'denied']);
 
-type Extra = { authInfo?: { extra?: { userId?: string; userName?: string; civilId?: string; role?: string } } };
-function actorFrom(extra: Extra): Actor {
-  const e = extra?.authInfo?.extra ?? {};
-  return { id: e.userId || 'mcp', name: e.userName || 'MCP User', civilId: e.civilId, role: e.role || 'admin' };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Extra = any;
+
+// The @modelcontextprotocol/server version bundled by mcp-handler v2 does NOT thread
+// authInfo into the tool `extra` — but it exposes the raw request at extra.http.req.
+// So recover the bearer token from the request headers and re-resolve the identity from
+// the mcp_tokens doc (same source verifyToken already validated against).
+function bearerFrom(extra: Extra): string | undefined {
+  try {
+    const h =
+      extra?.http?.req?.headers?.get?.('authorization') ??
+      extra?.requestInfo?.headers?.authorization ??
+      extra?.requestInfo?.headers?.get?.('authorization');
+    if (typeof h === 'string' && h) return h.replace(/^Bearer\s+/i, '').trim();
+  } catch { /* ignore */ }
+  return undefined;
+}
+
+async function resolveActor(extra: Extra): Promise<Actor> {
+  // First honor authInfo.extra if a transport ever provides it.
+  const e = extra?.authInfo?.extra;
+  if (e?.userId) return { id: e.userId, name: e.userName || 'MCP User', civilId: e.civilId, role: e.role || 'admin' };
+  const bearer = bearerFrom(extra);
+  if (bearer && adminDb) {
+    const snap = await adminDb.collection('mcp_tokens').doc(bearer).get();
+    if (snap.exists) {
+      const d = snap.data() as { userId?: string; userName?: string; civilId?: string; role?: string };
+      return { id: d.userId || 'mcp', name: d.userName || 'MCP User', civilId: d.civilId, role: d.role || 'admin' };
+    }
+  }
+  return { id: 'mcp', name: 'MCP User', role: 'admin' };
 }
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 const json = (v: unknown) => text(JSON.stringify(v, null, 2));
@@ -56,7 +83,7 @@ export function getMcpHandler() {
       description: 'Create a new task. recipientId is the assignee user id (omit for everyone).',
       inputSchema: { content: z.string(), recipientId: z.string().optional(), studentId: z.string().optional(), studentName: z.string().optional(), taskType: z.string().optional() },
     }, async (args: { content: string; recipientId?: string; studentId?: string; studentName?: string; taskType?: string }, extra: Extra) => {
-      const r = await tasks.createTask(args, actorFrom(extra));
+      const r = await tasks.createTask(args, await resolveActor(extra));
       return text(`Created task ${r.id}.`);
     });
 
@@ -68,7 +95,7 @@ export function getMcpHandler() {
 
     s.registerTool('reply_to_task', { description: 'Add a reply to a task (also moves it to in-progress).', inputSchema: { taskId: z.string(), content: z.string() } },
       async ({ taskId, content }: { taskId: string; content: string }, extra: Extra) => {
-        const r = await tasks.replyToTask(taskId, content, actorFrom(extra));
+        const r = await tasks.replyToTask(taskId, content, await resolveActor(extra));
         return text(`Replied to task ${r.id} (${r.replies} replies).`);
       });
 
@@ -144,7 +171,12 @@ export function getMcpHandler() {
         confirm: z.boolean().optional(),
       },
     }, async ({ action, args, confirm }: { action: string; args?: Record<string, unknown>; confirm?: boolean }, extra: Extra) =>
-      json(await runAction({ action, args, confirm }, actorFrom(extra))));
+      json(await runAction({ action, args, confirm }, await resolveActor(extra))));
+
+    s.registerTool('whoami', {
+      description: 'Show which user identity the MCP is acting as (id, name, civilId, role). Useful to confirm actions are attributed to you.',
+      inputSchema: {},
+    }, async (_args: unknown, extra: Extra) => json({ actor: await resolveActor(extra) }));
   }, {
     serverInfo: { name: 'masar-tasks', version: '2.0.0' },
   });
