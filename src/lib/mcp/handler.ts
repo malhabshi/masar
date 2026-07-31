@@ -77,7 +77,18 @@ export function getMcpHandler() {
         await tasks.deleteTask(taskId);
         return text(`Deleted task ${taskId}.`);
       });
-  }, { serverInfo: { name: 'masar-tasks', version: '1.0.0' } });
+  }, {
+    serverInfo: { name: 'masar-tasks', version: '1.0.0' },
+    // TEMP DEBUG: persist internal errors to Firestore (App Hosting logs aren't accessible here).
+    onEvent: (event) => {
+      const ev = event as { type?: string; error?: unknown; context?: string };
+      if (ev.type === 'ERROR') {
+        const e = ev.error;
+        const msg = e instanceof Error ? (e.stack || e.message) : String(e);
+        adminDb?.collection('mcp_debug').add({ at: new Date().toISOString(), context: ev.context ?? null, error: msg }).catch(() => {});
+      }
+    },
+  });
 
   cached = withMcpAuth(base, verifyToken, { required: true });
   return cached;
