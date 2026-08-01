@@ -953,30 +953,55 @@ export async function resolveDuplicate(studentId: string, adminId: string) {
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function transferStudent(studentId: string, newEmployee: User, adminId: string, studentName: string, fromEmployeeName: string | null) {
+export async function transferStudent(studentId: string, newEmployee: User | string, adminId: string, studentName?: string, fromEmployeeName?: string | null) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-  if (!newEmployee.civilId) return { success: false, message: 'Employee missing Civil ID.' };
+  // MCP-friendly: `newEmployee` may be a full User object (UI) OR a string identifier
+  // (civil id, user doc id, or exact name) which we resolve to the User here.
+  let emp: User | null = null;
+  if (typeof newEmployee === 'string') {
+    const key = newEmployee.trim();
+    const byCivil = await adminDb!.collection('users').where('civilId', '==', key).limit(1).get();
+    if (!byCivil.empty) emp = { id: byCivil.docs[0].id, ...byCivil.docs[0].data() } as User;
+    if (!emp) emp = await getUser(key);
+    if (!emp) {
+      const byName = await adminDb!.collection('users').where('name', '==', key).get();
+      if (byName.size === 1) emp = { id: byName.docs[0].id, ...byName.docs[0].data() } as User;
+      else if (byName.size > 1) return { success: false, message: `Multiple employees named "${key}"; pass a civil id or user id instead.` };
+    }
+    if (!emp) return { success: false, message: `No employee found for "${key}" (tried civil id, user id, then exact name).` };
+  } else {
+    emp = newEmployee;
+  }
+  if (!emp.civilId) return { success: false, message: 'Employee missing Civil ID.' };
   try {
     const studentRef = adminDb!.collection('students').doc(studentId);
     const studentDoc = await studentRef.get();
     if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
     const studentData = studentDoc.data() as Student;
+    // Derive names when the caller (e.g. MCP) didn't supply them.
+    const resolvedStudentName = studentName || studentData.name || '';
+    let resolvedFromName: string | null = fromEmployeeName ?? null;
+    if (fromEmployeeName === undefined && studentData.employeeId) {
+      const cur = await adminDb!.collection('users').where('civilId', '==', studentData.employeeId).limit(1).get();
+      resolvedFromName = cur.empty ? null : ((cur.docs[0].data() as User).name ?? null);
+    }
+    const newEmployeeObj = emp;
     const updates = {
-      employeeId: newEmployee.civilId,
+      employeeId: newEmployeeObj.civilId,
       transferRequested: false,
       transferRequest: FieldValue.delete(),
       isNewForEmployee: true,
       lastActivityAt: new Date().toISOString(),
-      transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId, toEmployeeId: newEmployee.civilId, date: new Date().toISOString(), transferredBy: adminId }],
-      adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-${Date.now()}`, authorId: adminId, content: `Transferred from ${fromEmployeeName || 'Unassigned'} to ${newEmployee.name}.`, createdAt: new Date().toISOString() }]
+      transferHistory: [...(studentData.transferHistory || []), { fromEmployeeId: studentData.employeeId, toEmployeeId: newEmployeeObj.civilId, date: new Date().toISOString(), transferredBy: adminId }],
+      adminNotes: [...(studentData.adminNotes || []), { id: `note-transfer-${Date.now()}`, authorId: adminId, content: `Transferred from ${resolvedFromName || 'Unassigned'} to ${newEmployeeObj.name}.`, createdAt: new Date().toISOString() }]
     };
     await studentRef.update(updates);
-    if (newEmployee.id) {
+    if (newEmployeeObj.id) {
       const admin = await getUser(adminId);
-      await adminDb!.collection('tasks').add({ authorId: adminId, createdBy: adminId, recipientId: newEmployee.id, recipientIds: [newEmployee.id], content: `The student '${studentName}' has been transferred to you.`, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
-      await triggerWhatsAppNotification('student_assigned', { employeeName: newEmployee.name, studentName: studentName, assignedBy: admin?.name || 'Administrator', studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` }, newEmployee.phone);
+      await adminDb!.collection('tasks').add({ authorId: adminId, createdBy: adminId, recipientId: newEmployeeObj.id, recipientIds: [newEmployeeObj.id], content: `The student '${resolvedStudentName}' has been transferred to you.`, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
+      await triggerWhatsAppNotification('student_assigned', { employeeName: newEmployeeObj.name, studentName: resolvedStudentName, assignedBy: admin?.name || 'Administrator', studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}` }, newEmployeeObj.phone);
     }
-    return { success: true, message: `Student transferred.` };
+    return { success: true, message: `Student transferred to ${newEmployeeObj.name}.` };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 

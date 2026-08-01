@@ -795,7 +795,7 @@ export const ACTION_CATALOG: CatalogAction[] = [
       },
       {
         "name": "newEmployee",
-        "type": "User",
+        "type": "User | string",
         "optional": false
       },
       {
@@ -806,12 +806,12 @@ export const ACTION_CATALOG: CatalogAction[] = [
       {
         "name": "studentName",
         "type": "string",
-        "optional": false
+        "optional": true
       },
       {
         "name": "fromEmployeeName",
         "type": "string | null",
-        "optional": false
+        "optional": true
       }
     ]
   },
