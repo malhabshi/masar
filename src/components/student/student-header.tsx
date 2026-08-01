@@ -11,6 +11,7 @@ import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
 import { RequestTransferDialog } from './request-transfer-dialog';
 import { TransferStudentDialog } from './transfer-student-dialog';
+import { DeclineTransferDialog } from './decline-transfer-dialog';
 import { DeleteStudentDialog } from './delete-student-dialog';
 import { useCollection, updateDocumentNonBlocking } from '@/firebase/client';
 import { firestore } from '@/firebase';
@@ -646,6 +647,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
 
               {canAssign && <TransferStudentDialog student={student} employees={staffOptions} currentUser={currentUser} actionType="assign" />}
               {canApproveTransfer && <TransferStudentDialog student={student} employees={staffOptions} currentUser={currentUser} actionType="transfer" />}
+              {canApproveTransfer && <DeclineTransferDialog student={student} currentUser={currentUser} />}
 
               {canApproveDeletion && <ApproveDeletionDialog student={student} currentUser={currentUser} />}
               {isAdmin && !canApproveDeletion && <DeleteStudentDialog studentId={student.id} studentName={student.name} currentUser={currentUser} />}

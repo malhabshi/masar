@@ -816,6 +816,31 @@ export const ACTION_CATALOG: CatalogAction[] = [
     ]
   },
   {
+    "name": "declineTransfer",
+    "domain": "Students",
+    "destructive": false,
+    "actorParam": "adminId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "studentId",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "adminId",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "optional": true
+      }
+    ]
+  },
+  {
     "name": "unassignStudent",
     "domain": "Students",
     "destructive": true,

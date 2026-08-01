@@ -1005,6 +1005,48 @@ export async function transferStudent(studentId: string, newEmployee: User | str
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+// Decline a pending transfer request: clears the request WITHOUT moving the student,
+// logs an admin note, and notifies the employee who requested it.
+export async function declineTransfer(studentId: string, adminId: string, reason?: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'adminplus', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+    const studentData = studentDoc.data() as Student;
+    if (!studentData.transferRequested) return { success: false, message: 'No pending transfer request for this student.' };
+
+    const requesterId = studentData.transferRequest?.requestedBy;
+    const reasonText = reason && reason.trim() ? reason.trim() : 'No reason provided.';
+
+    await studentRef.update({
+      transferRequested: false,
+      transferRequest: FieldValue.delete(),
+      lastActivityAt: new Date().toISOString(),
+      adminNotes: [...(studentData.adminNotes || []), {
+        id: `note-decline-transfer-${Date.now()}`,
+        authorId: adminId,
+        content: `${admin.name} declined the transfer request. Reason: ${reasonText}`,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+
+    // Notify the requesting employee that their request was declined.
+    if (requesterId) {
+      await adminDb!.collection('tasks').add({
+        authorId: adminId, createdBy: adminId, authorName: admin.name,
+        recipientId: requesterId, recipientIds: [requesterId],
+        content: `Your transfer request for '${studentData.name}' was declined. Reason: ${reasonText}`,
+        createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [],
+      });
+    }
+
+    return { success: true, message: 'Transfer request declined.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
 export async function unassignStudent(studentId: string, adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {
