@@ -2596,6 +2596,36 @@ export const ACTION_CATALOG: CatalogAction[] = [
         "optional": false
       }
     ]
+  },
+  {
+    "name": "getStudentStats",
+    "domain": "Reports",
+    "destructive": false,
+    "actorParam": null,
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "groupBy",
+        "type": "string",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "name": "countStudentsByAdminChecklist",
+    "domain": "Checklist",
+    "destructive": false,
+    "actorParam": null,
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "itemKey",
+        "type": "string",
+        "optional": false
+      }
+    ]
   }
 ];
 export const ACTION_MAP: Record<string, CatalogAction> = Object.fromEntries(ACTION_CATALOG.map(a => [a.name, a]));

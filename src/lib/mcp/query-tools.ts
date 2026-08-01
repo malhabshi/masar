@@ -31,6 +31,8 @@ function studentSummary(id: string, d: Record<string, unknown>) {
     targetCountries: d.targetCountries ?? null,
     acceptedInfo: (d as { acceptedInfo?: unknown }).acceptedInfo ?? null,
     importListName: (d as { importListName?: unknown }).importListName ?? null,
+    adminChecklistStatus: (d as { adminChecklistStatus?: unknown }).adminChecklistStatus ?? {},
+    isClosed: (d as { isClosed?: unknown }).isClosed ?? false,
     changeAgentRequired: d.changeAgentRequired ?? false,
     ieltsOverall: d.ieltsOverall ?? null,
     term: d.term ?? null,
@@ -106,7 +108,10 @@ export async function searchStudents(query: string, limit = 20) {
 export async function getStudent(studentId: string) {
   const snap = await db().collection('students').doc(studentId).get();
   if (!snap.exists) return null;
-  return scrub({ id: snap.id, ...snap.data() });
+  const d = snap.data() as Record<string, unknown>;
+  // Ensure the admin checklist state is always present (it's a map field written by
+  // updateAdminChecklistItem; absent entirely when nothing is checked yet).
+  return scrub({ id: snap.id, ...d, adminChecklistStatus: d.adminChecklistStatus ?? {} });
 }
 
 export async function getStudentChat(studentId: string, limit = 50) {

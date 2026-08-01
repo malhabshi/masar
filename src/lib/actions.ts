@@ -3660,3 +3660,65 @@ export async function updateAcceptedInfo(
     return { success: false, message: error.message };
   }
 }
+
+// Per-employee student stats for the Reports domain. One pass over the students
+// collection. Applies the SAME ghost-student exclusion as getReportStats (drop students
+// assigned to a deleted employee id) so the totalStudents figures reconcile. Groups by
+// employeeId — which on a student is the employee's CIVIL ID — and includes the
+// 'unassigned' bucket so the row totals sum to getReportStats.totalStudents.
+export async function getStudentStats(groupBy: string = 'employee'): Promise<{ success: boolean; data?: Array<{ employeeId: string; employeeName: string; totalStudents: number; mohesAccepted: number; mohesAcceptedWithApplications: number }>; message?: string }> {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  if (groupBy !== 'employee') return { success: false, message: `Unsupported groupBy "${groupBy}". Only "employee" is supported.` };
+  try {
+    const [studentsSnap, usersSnap] = await Promise.all([adminDb!.collection('students').get(), adminDb!.collection('users').get()]);
+    const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+    const validCivilIds = new Set(allUsers.map(u => u.civilId).filter(Boolean));
+    const validUserIds = new Set(allUsers.map(u => u.id));
+    const allStudents = studentsSnap.docs.map(d => d.data() as Student).filter(s => {
+      if (!s.employeeId) return true; // unassigned is valid
+      return validCivilIds.has(s.employeeId) || validUserIds.has(s.employeeId);
+    });
+
+    const byEmp = new Map<string, { totalStudents: number; mohesAccepted: number; mohesAcceptedWithApplications: number }>();
+    for (const s of allStudents) {
+      const key = s.employeeId || 'unassigned';
+      let r = byEmp.get(key);
+      if (!r) { r = { totalStudents: 0, mohesAccepted: 0, mohesAcceptedWithApplications: 0 }; byEmp.set(key, r); }
+      r.totalStudents++;
+      const info = s.acceptedInfo as unknown;
+      const accepted = info != null && (typeof info !== 'object' || Object.keys(info as object).length > 0);
+      if (accepted) {
+        r.mohesAccepted++;
+        if ((s.applications?.length || 0) > 0) r.mohesAcceptedWithApplications++;
+      }
+    }
+
+    const resolveName = (empId: string) => empId === 'unassigned'
+      ? 'Unassigned'
+      : (allUsers.find(u => u.civilId === empId)?.name || allUsers.find(u => u.id === empId)?.name || 'Unknown');
+    const data = Array.from(byEmp.entries())
+      .map(([employeeId, c]) => ({ employeeId, employeeName: resolveName(employeeId), ...c }))
+      .sort((a, b) => b.totalStudents - a.totalStudents);
+    return scrub({ success: true, data });
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+// Count students whose admin-checklist item `itemKey` is checked vs not, within an
+// active/relevant scope: only students with applications, excluding unassigned and closed
+// profiles. `unchecked` includes both explicit false and missing values.
+export async function countStudentsByAdminChecklist(itemKey: string): Promise<{ success: boolean; checked?: number; unchecked?: number; totalConsidered?: number; message?: string }> {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const studentsSnap = await adminDb!.collection('students').get();
+    let checked = 0, unchecked = 0;
+    for (const doc of studentsSnap.docs) {
+      const s = doc.data() as Student;
+      if ((s.applications?.length || 0) === 0) continue;          // must have applications
+      if (!s.employeeId || s.employeeId === 'unassigned') continue; // exclude unassigned
+      if (s.isClosed === true) continue;                          // exclude closed
+      if (s.adminChecklistStatus?.[itemKey] === true) checked++;
+      else unchecked++;
+    }
+    return { success: true, checked, unchecked, totalConsidered: checked + unchecked };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
