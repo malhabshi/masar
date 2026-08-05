@@ -910,7 +910,7 @@ export async function createStudent(values: { studentName: string; studentEmail?
     const now = new Date().toISOString();
     // If this person is on a previously-imported accepted list, inherit their acceptance.
     const acceptedMatch = await lookupAcceptedList([phone, phone2, phone3]);
-    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isNewForEmployee: !!assignedEmployeeId, ...(acceptedMatch ? { acceptedInfo: { country: acceptedMatch.country, major: acceptedMatch.major }, ...(acceptedMatch.listName ? { importListName: acceptedMatch.listName } : {}) } : {}), profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isClosed: false, isNewForEmployee: !!assignedEmployeeId, ...(acceptedMatch ? { acceptedInfo: { country: acceptedMatch.country, major: acceptedMatch.major }, ...(acceptedMatch.listName ? { importListName: acceptedMatch.listName } : {}) } : {}), profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
     
     // Auto-post initial notes to chat if they exist
     if (notes && notes.trim()) {
@@ -2775,7 +2775,7 @@ export async function reopenStudentProfile(studentId: string, adminId: string) {
     });
 
     await studentRef.update({
-      isClosed: FieldValue.delete(),
+      isClosed: false,
       closedAt: FieldValue.delete(),
       closedReason: FieldValue.delete(),
       name: newName,

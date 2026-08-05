@@ -31,9 +31,9 @@ import { updateStudentPipelineStatus, bulkAssignStudents, bulkDeleteStudents, ge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { updateDocumentNonBlocking } from '@/firebase/client';
+import { updateDocumentNonBlocking, useCollection } from '@/firebase/client';
 import { firestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, where } from 'firebase/firestore';
 import { formatRelativeTime, toDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
 import { TransferStudentDialog } from '@/components/student/transfer-student-dialog';
@@ -44,9 +44,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 interface StudentTableProps {
   students: Student[];
-  currentUser: any; 
+  currentUser: any;
   allUsers: User[];
   emptyStateMessage?: string;
+  // When true, closed profiles (excluded from the default query for speed) are loaded
+  // on demand and merged in as soon as the user types a search — so they can be found.
+  revealClosedOnSearch?: boolean;
 }
 
 const pipelineStatusStyles: { [key: string]: string } = {
@@ -66,7 +69,7 @@ const pipelineStatusLabels: { [key: string]: string } = {
     none: 'No Status',
 };
 
-export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found." }: StudentTableProps) {
+export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found.", revealClosedOnSearch = false }: StudentTableProps) {
   const { toast } = useToast();
   const { user: authUser, effectiveRole } = useUser();
   
@@ -220,8 +223,20 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     return map;
   }, [allUsers]);
 
+  // Closed profiles are excluded from the parent query for speed. When this table opts in
+  // (revealClosedOnSearch) and the user is actively searching, load them on demand and
+  // merge them so a search can still surface a closed student.
+  const closedSearchActive = revealClosedOnSearch && debouncedSearchQuery.trim().length > 0;
+  const { data: closedStudents } = useCollection<Student>(closedSearchActive ? 'students' : '', where('isClosed', '==', true));
+
+  const sourceStudents = useMemo(() => {
+    if (!closedStudents || closedStudents.length === 0) return students;
+    const seen = new Set(students.map(s => s.id));
+    return [...students, ...closedStudents.filter(s => !seen.has(s.id))];
+  }, [students, closedStudents]);
+
   const displayedStudents = useMemo(() => {
-    const filtered = students.filter(student => {
+    const filtered = sourceStudents.filter(student => {
         // Department Routing Logic
         if (effectiveRole === 'department' && !showAllStudents && currentUser.department) {
           const appCountries = (student.applications || []).map(a => a.country);
@@ -332,7 +347,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [students, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
+  }, [sourceStudents, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
 
   useEffect(() => {
     if (!isClient || !currentUser?.id) return;

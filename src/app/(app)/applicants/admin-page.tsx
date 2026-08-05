@@ -3,6 +3,7 @@
 import { useUser } from '@/hooks/use-user';
 import type { Student, User, MissingItem } from '@/lib/types';
 import { useCollection } from '@/firebase/client';
+import { where } from 'firebase/firestore';
 import { StudentTable } from '@/components/dashboard/student-table';
 import {
   Card,
@@ -30,8 +31,9 @@ export function AdminApplicantsPage() {
   const studentsPath = (isMounted && isManagementMode) ? 'students' : '';
   const usersPath = (isMounted && currentUser) ? 'users' : '';
 
-  // Fetch students
-  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath);
+  // Fetch students — exclude closed profiles by default (they're revealed on search
+  // inside StudentTable). This avoids downloading ~20% dead-weight closed records.
+  const { data: allStudents, isLoading: studentsAreLoading } = useCollection<Student>(studentsPath, where('isClosed', '==', false));
   const { data: allUsers, isLoading: usersAreLoading } = useCollection<User>(usersPath);
 
   const employeeMap = useMemo(() => {
@@ -164,6 +166,7 @@ export function AdminApplicantsPage() {
             students={displayedStudents}
             currentUser={currentUser}
             allUsers={allUsers || []}
+            revealClosedOnSearch
           />
         </CardContent>
       </Card>
