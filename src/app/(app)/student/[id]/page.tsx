@@ -250,7 +250,7 @@ export default function StudentDetailPage() {
               <div>
                 <TaskStatsCard tasks={tasks || []} />
               </div>
-              <ReadinessChecklist student={student} currentUser={currentUser} />
+              {student.studyLevel === 'Foundation' && <ReadinessChecklist student={student} currentUser={currentUser} />}
               <AdminChecklist student={student} currentUser={currentUser} />
               <MissingItemsSection student={student} currentUser={currentUser} />
               <JotformCard student={student} currentUser={currentUser} />
