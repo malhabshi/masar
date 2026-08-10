@@ -2651,6 +2651,31 @@ export const ACTION_CATALOG: CatalogAction[] = [
         "optional": false
       }
     ]
+  },
+  {
+    "name": "addUniversity",
+    "domain": "Universities",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      { "name": "data", "type": "Record<string, unknown>", "optional": false },
+      { "name": "userId", "type": "string", "optional": false }
+    ]
+  },
+  {
+    "name": "updateUniversity",
+    "domain": "Universities",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      { "name": "id", "type": "string", "optional": false },
+      { "name": "data", "type": "Record<string, unknown>", "optional": false },
+      { "name": "userId", "type": "string", "optional": false }
+    ]
   }
 ];
 export const ACTION_MAP: Record<string, CatalogAction> = Object.fromEntries(ACTION_CATALOG.map(a => [a.name, a]));

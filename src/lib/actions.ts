@@ -2309,6 +2309,33 @@ export async function deleteUniversity(id: string, adminId: string) {
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+// Add an approved university. Server-side (admin SDK) so it never depends on client
+// Firestore rules — client writes were failing silently, so add/close did nothing.
+export async function addUniversity(data: Record<string, unknown>, userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const user = await getUser(userId);
+    if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
+    const clean = Object.fromEntries(Object.entries(data || {}).filter(([, v]) => v !== undefined));
+    const ref = await adminDb!.collection('approved_universities').add(clean);
+    return { success: true, id: ref.id, message: 'University added.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+// Update an approved university (incl. the isAvailable "open/close" toggle).
+export async function updateUniversity(id: string, data: Record<string, unknown>, userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const user = await getUser(userId);
+    if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
+    const ref = adminDb!.collection('approved_universities').doc(id);
+    if (!(await ref.get()).exists) return { success: false, message: 'University not found.' };
+    const clean = Object.fromEntries(Object.entries(data || {}).filter(([k, v]) => k !== 'id' && v !== undefined));
+    await ref.update(clean);
+    return { success: true, message: 'University updated.' };
+  } catch (error: any) { return { success: false, message: error.message }; }
+}
+
 export async function bulkTransferStudents(fromEmployeeId: string, toEmployeeId: string, adminId: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {

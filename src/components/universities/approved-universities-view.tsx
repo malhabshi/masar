@@ -11,10 +11,8 @@ import { MultiSelectFilter } from '@/components/ui/multi-select-filter';
 import { PlusCircle, Search, Loader2, X } from 'lucide-react';
 import { UniversitiesTable } from '@/components/universities/universities-table';
 import { AddUniversityDialog } from '@/components/universities/add-university-dialog';
-import { sendTask, deleteUniversity } from '@/lib/actions';
-import { useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { sendTask, deleteUniversity, addUniversity, updateUniversity } from '@/lib/actions';
+import { useCollection } from '@/firebase/client';
 import { Skeleton } from '../ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 
@@ -132,9 +130,11 @@ export function ApprovedUniversitiesView() {
 
   const handleAddUniversity = useCallback(async (newUniversity: Omit<ApprovedUniversity, 'id'>) => {
     if (!user) return;
-    const universitiesCollection = collection(firestore, 'approved_universities');
-    addDocumentNonBlocking(universitiesCollection, newUniversity);
-
+    const result = await addUniversity(newUniversity as unknown as Record<string, unknown>, user.id);
+    if (!result.success) {
+      toast({ variant: 'destructive', title: 'Add Failed', description: result.message });
+      return;
+    }
     toast({
         title: "University Added",
         description: `${newUniversity.name} (${newUniversity.major}) has been added.`
@@ -146,9 +146,12 @@ export function ApprovedUniversitiesView() {
 
   const handleUpdateUniversity = useCallback(async (updatedUniversity: ApprovedUniversity) => {
     if (!user) return;
-    const uniDocRef = doc(firestore, 'approved_universities', updatedUniversity.id);
-    updateDocumentNonBlocking(uniDocRef, updatedUniversity);
-
+    const { id, ...data } = updatedUniversity;
+    const result = await updateUniversity(id, data as unknown as Record<string, unknown>, user.id);
+    if (!result.success) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
+      return;
+    }
     toast({
         title: "University Updated",
         description: `${updatedUniversity.name} has been updated.`
