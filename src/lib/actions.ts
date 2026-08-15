@@ -3166,6 +3166,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         targetCountries: selectedCountries,
         missingItems: [],
         pipelineStatus: 'none',
+        isClosed: false,
         isNewForEmployee: !!employeeCivilId,
         jotform: true,
         jotformData: {
@@ -3692,6 +3693,7 @@ export async function bulkImportStudents(
         targetCountries: [],
         missingItems: [],
         pipelineStatus: 'none',
+        isClosed: false,
         acceptedInfo: s.acceptedInfo,
         importListName: s.importListName,
         importMatchType: 'new',
