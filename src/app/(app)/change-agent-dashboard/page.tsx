@@ -15,6 +15,36 @@ import { useUserCacheByCivilId } from '@/hooks/use-user-cache';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
+// System sentinel account that closed change-agent profiles get reassigned to.
+const SYSTEM_AGENT_ID = '123456789010';
+
+// The current employeeId no longer reflects who "owned" the student when the change
+// agent was placed — closing/transferring moves them off the original agent (often onto
+// the system sentinel). Reconstruct the original agent from transferHistory so the
+// permanent record credits the employee the change was actually placed against.
+function originalEmployeeId(student: Student): string | null {
+  const transfers = [...(student.transferHistory || [])].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  if (transfers.length === 0) return student.employeeId;
+
+  const flagTimes = (student.changeAgentLog || [])
+    .map(e => new Date(e.flaggedAt).getTime())
+    .filter(t => !Number.isNaN(t));
+  const flaggedTime = flagTimes.length ? Math.min(...flagTimes) : null;
+
+  // Unknown flag time: credit whoever the student was last moved away from.
+  if (flaggedTime === null) return transfers[transfers.length - 1].fromEmployeeId;
+
+  // Known flag time: who held the student at that exact moment.
+  let current = transfers[0].fromEmployeeId; // owner before the first transfer
+  for (const t of transfers) {
+    if (new Date(t.date).getTime() <= flaggedTime) current = t.toEmployeeId;
+    else break;
+  }
+  return current;
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -296,7 +326,9 @@ export default function ChangeAgentDashboard() {
     const ids = [
       ...filteredStudents.map(s => s.employeeId),
       ...activeHistoryStudents.map(s => s.employeeId),
+      ...activeHistoryStudents.map(originalEmployeeId),
       ...closedHistoryStudents.map(s => s.employeeId),
+      ...closedHistoryStudents.map(originalEmployeeId),
     ].filter((id): id is string => !!id);
     return [...new Set(ids)];
   }, [filteredStudents, activeHistoryStudents, closedHistoryStudents]);
@@ -313,15 +345,17 @@ export default function ChangeAgentDashboard() {
       entry[key] += 1;
       map.set(id, entry);
     };
-    activeHistoryStudents.forEach(s => bump(s.employeeId, 'active'));
-    closedHistoryStudents.forEach(s => bump(s.employeeId, 'closed'));
+    activeHistoryStudents.forEach(s => bump(originalEmployeeId(s), 'active'));
+    closedHistoryStudents.forEach(s => bump(originalEmployeeId(s), 'closed'));
 
     return [...map.values()]
       .map(e => ({
         civilId: e.civilId,
         name: e.civilId === '__unassigned__'
           ? 'Unassigned'
-          : (employeeMap.get(e.civilId)?.name || e.civilId),
+          : e.civilId === SYSTEM_AGENT_ID
+            ? 'System / Closed Bucket'
+            : (employeeMap.get(e.civilId)?.name || e.civilId),
         active: e.active,
         closed: e.closed,
         total: e.active + e.closed,
