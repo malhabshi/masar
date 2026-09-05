@@ -308,6 +308,7 @@ export function TaskDetailsDialog({
                 {renderDataField('Passport Name', data.passportName, ShieldCheck)}
                 {renderDataField('Exam Category', data.examType, Clock)}
                 {renderDataField('IELTS Type', data.ieltsSubtype)}
+                {renderDataField('LRW Time', data.lrwTime)}
                 {renderDataField('Requested Date', data.requestedDate, Calendar, true)}
                 {renderDataField('Course Start', data.courseStartDate, Calendar)}
                 {renderDataField('Course Option', data.courseOption)}

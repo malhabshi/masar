@@ -81,6 +81,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     if (config.examTypes?.includes('ielts') || config.examTypes?.includes('toefl')) {
       schemaFields.examType = z.enum(['ielts', 'toefl', 'ielts_retake', 'ielts_course'] as any).optional();
       schemaFields.ieltsSubtype = z.string().optional();
+      // LRW (Listening/Reading/Writing) sitting time for a new IELTS/TOEFL exam.
+      schemaFields.lrwTime = z.enum(['10:00 AM', '1:30 PM', '5:00 PM']).optional();
       schemaFields.requestedDate = z.date().optional();
       schemaFields.amount = z.coerce.number().optional();
       // Parent/guardian details (required at runtime for under-18 students).
@@ -154,6 +156,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     message: "Please fill in all required exam details.",
     path: ["examType"]
   }).refine(data => {
+    // New IELTS/TOEFL exams must specify the LRW sitting time.
+    if (data.examType !== 'ielts' && data.examType !== 'toefl') return true;
+    return !!data.lrwTime;
+  }, {
+    message: "Please select the LRW time.",
+    path: ["lrwTime"]
+  }).refine(data => {
     // For under-18 students, parent/guardian info is mandatory on IELTS/TOEFL exams.
     if (!isMinor) return true;
     if (data.examType !== 'ielts' && data.examType !== 'toefl') return true;
@@ -174,6 +183,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       idpUsername: '',
       idpPassword: '',
       preferredTime: undefined,
+      lrwTime: undefined,
       originalExamDate: undefined,
       preferredDate: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
@@ -713,6 +723,28 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 />
               </div>
             )}
+
+            <FormField
+              control={form.control}
+              name="lrwTime"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormLabel className="font-bold">LRW Time (Listening / Reading / Writing) *</FormLabel>
+                  <FormControl>
+                    <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-wrap gap-4">
+                      {['10:00 AM', '1:30 PM', '5:00 PM'].map((time) => (
+                        <FormItem key={time} className="flex items-center space-x-2 space-y-0 border p-3 rounded-md">
+                          <FormControl><RadioGroupItem value={time} /></FormControl>
+                          <FormLabel className="font-medium cursor-pointer">{time}</FormLabel>
+                        </FormItem>
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormDescription>Preferred time for the Listening, Reading &amp; Writing sitting.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {isMinor && (
               <div className="space-y-4 rounded-md border border-amber-300 bg-amber-50 p-4">
