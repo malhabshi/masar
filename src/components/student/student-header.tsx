@@ -5,7 +5,7 @@ import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight, BellOff, Bell } from 'lucide-react';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, calculateAge } from '@/lib/utils';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
 import { EditStudentDialog } from './edit-student-dialog';
 import { Skeleton } from '../ui/skeleton';
@@ -673,6 +673,10 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             </div>
           )}
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground mt-2">
+            <div className="flex items-center gap-2 font-bold text-red-600">
+              <Calendar className="h-4 w-4" />
+              <span>Age: {calculateAge(student.jotformData?.dob) ?? 'N/A'}</span>
+            </div>
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
               <span>{student.email || 'No Email'}</span>
