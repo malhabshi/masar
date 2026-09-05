@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { Loader2, FileSpreadsheet } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 
@@ -53,8 +53,15 @@ export function AdminApplicantsPage() {
     });
   }, [allStudents]);
 
+  // The StudentTable owns the filters/search; it reports its filtered+sorted list here so
+  // Download Excel exports exactly what the user currently sees.
+  // null until the table first reports; [] is a real "filtered to zero" result.
+  const [filteredStudents, setFilteredStudents] = useState<Student[] | null>(null);
+  const handleFilteredChange = useCallback((s: Student[]) => setFilteredStudents(s), []);
+
   const handleDownloadExcel = () => {
-    if (displayedStudents.length === 0) return;
+    const exportStudents = filteredStudents ?? displayedStudents;
+    if (exportStudents.length === 0) return;
 
     const headers = [
       "Student Name",
@@ -78,7 +85,7 @@ export function AdminApplicantsPage() {
       "Created Date"
     ];
     
-    const rows = displayedStudents.map(s => [
+    const rows = exportStudents.map(s => [
       s.name || '',
       s.phone || '',
       s.phone2 || '',
@@ -167,6 +174,7 @@ export function AdminApplicantsPage() {
             currentUser={currentUser}
             allUsers={allUsers || []}
             revealClosedOnSearch
+            onFilteredStudentsChange={handleFilteredChange}
           />
         </CardContent>
       </Card>

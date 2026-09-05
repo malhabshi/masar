@@ -50,6 +50,9 @@ interface StudentTableProps {
   // When true, closed profiles (excluded from the default query for speed) are loaded
   // on demand and merged in as soon as the user types a search — so they can be found.
   revealClosedOnSearch?: boolean;
+  // Reports the currently filtered + sorted list so a parent (e.g. Download Excel) can
+  // export exactly what the user sees after applying filters/search.
+  onFilteredStudentsChange?: (students: Student[]) => void;
 }
 
 const pipelineStatusStyles: { [key: string]: string } = {
@@ -69,7 +72,7 @@ const pipelineStatusLabels: { [key: string]: string } = {
     none: 'No Status',
 };
 
-export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found.", revealClosedOnSearch = false }: StudentTableProps) {
+export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found.", revealClosedOnSearch = false, onFilteredStudentsChange }: StudentTableProps) {
   const { toast } = useToast();
   const { user: authUser, effectiveRole } = useUser();
   
@@ -355,6 +358,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.setItem(`applicants_nav_ids_${currentUser.id}`, JSON.stringify(displayedStudents.map(s => s.id)));
     } catch {}
   }, [isClient, currentUser?.id, displayedStudents]);
+
+  useEffect(() => {
+    onFilteredStudentsChange?.(displayedStudents);
+  }, [displayedStudents, onFilteredStudentsChange]);
 
   const handleClearFilters = () => {
     setSearchQuery('');

@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { AddStudentDialog } from '@/components/student/add-student-dialog';
 import { Loader2, AlertTriangle, Sparkles, FileSpreadsheet } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
@@ -52,8 +52,21 @@ export function EmployeeApplicantsPage() {
   const newlyAssigned = useMemo(() => (myStudents || []).filter(s => s.isNewForEmployee), [myStudents]);
   const portfolio = useMemo(() => (myStudents || []).filter(s => !s.isNewForEmployee), [myStudents]);
 
+  // Each StudentTable owns its own filters/search and reports its filtered+sorted list.
+  // Download Excel exports the union (deduped) so it respects filters in either table.
+  const [filteredNew, setFilteredNew] = useState<Student[] | null>(null);
+  const [filteredPortfolio, setFilteredPortfolio] = useState<Student[] | null>(null);
+  const handleFilteredNew = useCallback((s: Student[]) => setFilteredNew(s), []);
+  const handleFilteredPortfolio = useCallback((s: Student[]) => setFilteredPortfolio(s), []);
+
   const handleDownloadExcel = () => {
-    if (!myStudents || myStudents.length === 0) return;
+    const combined = [
+      ...(filteredNew ?? newlyAssigned),
+      ...(filteredPortfolio ?? portfolio),
+    ];
+    const seen = new Set<string>();
+    const exportStudents = combined.filter(s => (seen.has(s.id) ? false : (seen.add(s.id), true)));
+    if (exportStudents.length === 0) return;
 
     // Excel/CSV Headers
     const headers = [
@@ -78,7 +91,7 @@ export function EmployeeApplicantsPage() {
     ];
     
     // Excel/CSV Rows
-    const rows = myStudents.map(s => [
+    const rows = exportStudents.map(s => [
       s.name || '',
       s.phone || '',
       s.phone2 || '',
@@ -193,6 +206,7 @@ export function EmployeeApplicantsPage() {
               students={newlyAssigned}
               currentUser={currentUser}
               allUsers={allUsers || []}
+              onFilteredStudentsChange={handleFilteredNew}
             />
           </CardContent>
         </Card>
@@ -224,6 +238,7 @@ export function EmployeeApplicantsPage() {
             currentUser={currentUser}
             allUsers={allUsers || []}
             emptyStateMessage={newlyAssigned.length > 0 ? "All your students are in the 'Newly Assigned' section." : "No students assigned to your portfolio."}
+            onFilteredStudentsChange={handleFilteredPortfolio}
           />
         </CardContent>
       </Card>
