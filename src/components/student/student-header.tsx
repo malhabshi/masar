@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight, BellOff, Bell } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight, BellOff, Bell, Pencil, Check } from 'lucide-react';
 import Link from 'next/link';
 import { cn, calculateAge } from '@/lib/utils';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
@@ -200,6 +200,9 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isClearingFlags, setIsClearingFlags] = useState(false);
   const [isMarkingUnread, setIsMarkingUnread] = useState(false);
+  const [isEditingDob, setIsEditingDob] = useState(false);
+  const [dobDraft, setDobDraft] = useState('');
+  const [isSavingDob, setIsSavingDob] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [navIds, setNavIds] = useState<string[]>([]);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
@@ -299,6 +302,25 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const handleSetFoundationCategory = (value: string) => {
     const studentDocRef = doc(firestore, 'students', student.id);
     updateDocumentNonBlocking(studentDocRef, { foundationCategory: value === 'none' ? null : value } as any);
+  };
+
+  const handleStartEditDob = () => {
+    setDobDraft(student.jotformData?.dob ?? '');
+    setIsEditingDob(true);
+  };
+
+  const handleSaveDob = async () => {
+    if (!canEdit) return;
+    setIsSavingDob(true);
+    try {
+      const studentDocRef = doc(firestore, 'students', student.id);
+      // Dot-path update so the rest of jotformData is preserved (and created if absent).
+      updateDocumentNonBlocking(studentDocRef, { 'jotformData.dob': dobDraft || null } as any);
+      toast({ title: 'Date of Birth Updated', description: dobDraft ? `DOB set to ${dobDraft}.` : 'DOB cleared.' });
+      setIsEditingDob(false);
+    } finally {
+      setIsSavingDob(false);
+    }
   };
 
   const handleToggleMarkUnread = async () => {
@@ -675,7 +697,50 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground mt-2">
             <div className="flex items-center gap-2 font-bold text-red-600">
               <Calendar className="h-4 w-4" />
-              <span>Age: {calculateAge(student.jotformData?.dob) ?? 'N/A'}</span>
+              {isEditingDob ? (
+                <div className="flex items-center gap-1.5 pdf-hide">
+                  <Input
+                    type="date"
+                    value={dobDraft}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setDobDraft(e.target.value)}
+                    className="h-7 w-[150px] text-red-600 font-bold"
+                    autoFocus
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                    onClick={handleSaveDob}
+                    disabled={isSavingDob}
+                  >
+                    {isSavingDob ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsEditingDob(false)}
+                    disabled={isSavingDob}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <span>Age: {calculateAge(student.jotformData?.dob) ?? 'N/A'}</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={handleStartEditDob}
+                      title="Edit date of birth"
+                      className="pdf-hide text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
