@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 echo "Fixing date handling in all components..."

@@ -16,7 +16,7 @@ import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search, Ke
 import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
+import { cn, calculateAge } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { Badge } from '../ui/badge';
 import { useCollection } from '@/firebase/client';
@@ -56,6 +56,10 @@ const IELTS_COURSE_OPTIONS = [
 export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSubmitting }: DynamicTaskFormProps) {
   const config = requestType.specialConfig;
   const [uniSearch, setUniSearch] = useState('');
+
+  // Under-18 students need a parent/guardian on the IELTS/TOEFL exam registration.
+  const studentAge = calculateAge(student.jotformData?.dob);
+  const isMinor = studentAge != null && studentAge < 18;
   
   // Fetch master universities list
   const { data: globalUniversities, isLoading: unisLoading } = useCollection<ApprovedUniversity>(
@@ -79,6 +83,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       schemaFields.ieltsSubtype = z.string().optional();
       schemaFields.requestedDate = z.date().optional();
       schemaFields.amount = z.coerce.number().optional();
+      // Parent/guardian details (required at runtime for under-18 students).
+      schemaFields.guardianFirstNameEn = z.string().optional();
+      schemaFields.guardianLastNameEn = z.string().optional();
+      schemaFields.guardianDob = z.string().optional();
+      schemaFields.guardianPhone = z.string().optional();
     }
 
     if (config.examTypes?.includes('ielts_retake')) {
@@ -144,6 +153,14 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   }, {
     message: "Please fill in all required exam details.",
     path: ["examType"]
+  }).refine(data => {
+    // For under-18 students, parent/guardian info is mandatory on IELTS/TOEFL exams.
+    if (!isMinor) return true;
+    if (data.examType !== 'ielts' && data.examType !== 'toefl') return true;
+    return !!(data.guardianFirstNameEn?.trim() && data.guardianLastNameEn?.trim() && data.guardianDob && data.guardianPhone?.trim());
+  }, {
+    message: "Parent/guardian details are required for students under 18.",
+    path: ["guardianFirstNameEn"]
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -167,6 +184,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       unifiedExamDateLabel: '',
       unifiedExamDelivery: undefined,
       amount: (config?.ielts?.showAmount) ? IELTS_EXAM_PRICE : undefined,
+      // Pre-fill parent/guardian info from the student record so a returning
+      // under-18 student doesn't need it re-entered every time.
+      guardianFirstNameEn: student.jotformData?.guardianFirstNameEn ?? '',
+      guardianLastNameEn: student.jotformData?.guardianLastNameEn ?? '',
+      guardianDob: student.jotformData?.guardianDob ?? '',
+      guardianPhone: student.jotformData?.guardianPhone ?? '',
     },
   });
 
@@ -688,6 +711,67 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     </FormItem>
                   )}
                 />
+              </div>
+            )}
+
+            {isMinor && (
+              <div className="space-y-4 rounded-md border border-amber-300 bg-amber-50 p-4">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-bold text-amber-800">
+                    Parent / Guardian details required (student is {studentAge})
+                  </p>
+                  <p className="text-xs text-amber-700">
+                    The student is under 18. Enter the parent/guardian information in English for the exam registration.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="guardianFirstNameEn"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Parent First Name (English) *</FormLabel>
+                        <FormControl><Input placeholder="First name" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="guardianLastNameEn"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Parent Last Name (English) *</FormLabel>
+                        <FormControl><Input placeholder="Last name" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="guardianDob"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Parent Date of Birth *</FormLabel>
+                        <FormControl>
+                          <Input type="date" max={new Date().toISOString().slice(0, 10)} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="guardianPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Parent Phone Number *</FormLabel>
+                        <FormControl><Input type="tel" inputMode="tel" placeholder="Phone number" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             )}
           </div>

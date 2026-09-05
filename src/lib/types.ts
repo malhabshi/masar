@@ -191,6 +191,10 @@ export interface Student {
     guardianEmail?: string;
     guardianPhone?: string;
     guardianDob?: string;
+    // Parent/guardian info in English, collected for under-18 IELTS/TOEFL exam
+    // registration and reused for future tasks while the student is still a minor.
+    guardianFirstNameEn?: string;
+    guardianLastNameEn?: string;
     followUpPerson?: string;
     documents?: {
       passport?: string[];

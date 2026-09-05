@@ -315,6 +315,9 @@ export function TaskDetailsDialog({
                 {renderDataField('Preferred Date', data.preferredDate, Calendar, true, 'text-red-800 font-bold')}
                 {renderDataField('Preferred Time', data.preferredTime)}
                 {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign)}
+                {renderDataField('Parent Name (EN)', [data.guardianFirstNameEn, data.guardianLastNameEn].filter(Boolean).join(' ') || null, User)}
+                {renderDataField('Parent DOB', data.guardianDob, Calendar, true)}
+                {renderDataField('Parent Phone', data.guardianPhone)}
                 {(data.amount != null || data.examType) && (
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Payment Status</p>

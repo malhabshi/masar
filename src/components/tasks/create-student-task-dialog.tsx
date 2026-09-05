@@ -16,7 +16,9 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useCollection } from '@/firebase/client';
+import { useCollection, updateDocumentNonBlocking } from '@/firebase/client';
+import { firestore } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RequestType, Student } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
@@ -91,9 +93,23 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
     if (!selectedRequestType) return;
     
     setIsSubmitting(true);
+
+    // Persist under-18 parent/guardian info to the student so future tasks pre-fill it.
+    if (data.guardianFirstNameEn || data.guardianLastNameEn || data.guardianDob || data.guardianPhone) {
+      try {
+        const studentDocRef = doc(firestore, 'students', student.id);
+        updateDocumentNonBlocking(studentDocRef, {
+          'jotformData.guardianFirstNameEn': data.guardianFirstNameEn || null,
+          'jotformData.guardianLastNameEn': data.guardianLastNameEn || null,
+          'jotformData.guardianDob': data.guardianDob || null,
+          'jotformData.guardianPhone': data.guardianPhone || null,
+        } as any);
+      } catch { /* best-effort; task creation still proceeds */ }
+    }
+
     // Dynamic forms usually have their own summary/description or we generate one
     const description = data.notes || `Dynamic request: ${selectedRequestType.name}`;
-    
+
     const result = await createStudentTask(
       currentUser.id,
       student.id,
