@@ -293,10 +293,41 @@ export default function ChangeAgentDashboard() {
   }, [rawHistoryStudents, filteredStudents, currentUser, effectiveRole]);
 
   const employeeCivilIds = useMemo(() => {
-    return [...new Set(filteredStudents.map(s => s.employeeId).filter((id): id is string => !!id))];
-  }, [filteredStudents]);
+    const ids = [
+      ...filteredStudents.map(s => s.employeeId),
+      ...activeHistoryStudents.map(s => s.employeeId),
+      ...closedHistoryStudents.map(s => s.employeeId),
+    ].filter((id): id is string => !!id);
+    return [...new Set(ids)];
+  }, [filteredStudents, activeHistoryStudents, closedHistoryStudents]);
 
   const { userMap: employeeMap } = useUserCacheByCivilId(employeeCivilIds);
+
+  // Per-employee breakdown of the permanent record: how many of their change-agent
+  // students are still with us (active) vs closed/gone.
+  const employeeSummary = useMemo(() => {
+    const map = new Map<string, { civilId: string; active: number; closed: number }>();
+    const bump = (civilId: string | null | undefined, key: 'active' | 'closed') => {
+      const id = civilId || '__unassigned__';
+      const entry = map.get(id) || { civilId: id, active: 0, closed: 0 };
+      entry[key] += 1;
+      map.set(id, entry);
+    };
+    activeHistoryStudents.forEach(s => bump(s.employeeId, 'active'));
+    closedHistoryStudents.forEach(s => bump(s.employeeId, 'closed'));
+
+    return [...map.values()]
+      .map(e => ({
+        civilId: e.civilId,
+        name: e.civilId === '__unassigned__'
+          ? 'Unassigned'
+          : (employeeMap.get(e.civilId)?.name || e.civilId),
+        active: e.active,
+        closed: e.closed,
+        total: e.active + e.closed,
+      }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  }, [activeHistoryStudents, closedHistoryStudents, employeeMap]);
 
   const isLoading = isUserLoading || studentsLoading || historyLoading;
 
@@ -427,6 +458,58 @@ export default function ChangeAgentDashboard() {
         <p className="text-xs text-muted-foreground -mt-1">
           A full history of every change agent event. Each student can have multiple entries across different universities and dates. Click a student name to open their profile.
         </p>
+
+        {/* Per-employee breakdown: still with us vs closed/gone */}
+        <Card className="border-slate-200">
+          <CardHeader className="bg-slate-50/50 border-b py-3">
+            <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2">
+              <UserIcon className="h-4 w-4" />
+              By Employee
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead>Employee</TableHead>
+                  <TableHead className="text-center">Still With Us</TableHead>
+                  <TableHead className="text-center">Closed / Gone</TableHead>
+                  <TableHead className="text-center">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {employeeSummary.length > 0 ? (
+                  employeeSummary.map(emp => (
+                    <TableRow key={emp.civilId} className="hover:bg-muted/20">
+                      <TableCell className="font-bold text-sm">{emp.name}</TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-black px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                          {emp.active}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-black px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                          {emp.closed}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-800">
+                          {emp.total}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-16 text-center text-muted-foreground italic">
+                      No records found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         <HistorySection
           title="Active Students"
