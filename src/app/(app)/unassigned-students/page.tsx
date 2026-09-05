@@ -132,6 +132,7 @@ export default function UnassignedStudentsPage() {
               currentUser={currentUser}
               allUsers={allUsers || []}
               emptyStateMessage="No unassigned students at this time."
+              showDaysSinceCreated
             />
           )}
         </CardContent>

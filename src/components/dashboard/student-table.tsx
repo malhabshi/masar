@@ -53,6 +53,9 @@ interface StudentTableProps {
   // Reports the currently filtered + sorted list so a parent (e.g. Download Excel) can
   // export exactly what the user sees after applying filters/search.
   onFilteredStudentsChange?: (students: Student[]) => void;
+  // When true, shows how many days ago each profile was originally created (e.g. on the
+  // Unassigned Students page, so admins can see how long a lead has been waiting).
+  showDaysSinceCreated?: boolean;
 }
 
 const pipelineStatusStyles: { [key: string]: string } = {
@@ -72,7 +75,7 @@ const pipelineStatusLabels: { [key: string]: string } = {
     none: 'No Status',
 };
 
-export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found.", revealClosedOnSearch = false, onFilteredStudentsChange }: StudentTableProps) {
+export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found.", revealClosedOnSearch = false, onFilteredStudentsChange, showDaysSinceCreated = false }: StudentTableProps) {
   const { toast } = useToast();
   const { user: authUser, effectiveRole } = useUser();
   
@@ -765,6 +768,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 const appCountries = [...new Set(student.applications?.map(app => app.country) || [])];
                 const isDuplicate = [student.phone, student.phone2, student.phone3].some(p => p && duplicatePhoneSet.has(p)) || student.duplicatePhoneWarning;
                 const isUnassigned = !student.employeeId;
+                const createdDate = toDate(student.createdAt);
+                const daysSinceCreated = createdDate ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 86400000)) : null;
 
                 return (
                 <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20", student.isClosed && "opacity-60 bg-gray-100/60", selectedIds.includes(student.id) && "bg-primary/5")}>
@@ -842,6 +847,14 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           {wasTransferred && <Badge variant="outline" className="border-blue-500 text-blue-600"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
                         </div>
                       </Link>
+                      {showDaysSinceCreated && daysSinceCreated !== null && (
+                        <div className="flex">
+                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 text-[10px] h-5 px-1.5 gap-1 font-semibold">
+                            <Calendar className="h-2.5 w-2.5" />
+                            {daysSinceCreated === 0 ? 'Added today' : `Added ${daysSinceCreated} day${daysSinceCreated === 1 ? '' : 's'} ago`}
+                          </Badge>
+                        </div>
+                      )}
                       {isDuplicate && (
                         <div className="flex">
                           <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-black uppercase tracking-tighter gap-1">
