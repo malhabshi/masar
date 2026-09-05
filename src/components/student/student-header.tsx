@@ -203,6 +203,9 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
   const [isEditingDob, setIsEditingDob] = useState(false);
   const [dobDraft, setDobDraft] = useState('');
   const [isSavingDob, setIsSavingDob] = useState(false);
+  const [isEditingCivilId, setIsEditingCivilId] = useState(false);
+  const [civilIdDraft, setCivilIdDraft] = useState('');
+  const [isSavingCivilId, setIsSavingCivilId] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [navIds, setNavIds] = useState<string[]>([]);
   const { data: users, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
@@ -320,6 +323,26 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
       setIsEditingDob(false);
     } finally {
       setIsSavingDob(false);
+    }
+  };
+
+  const handleStartEditCivilId = () => {
+    setCivilIdDraft(student.jotformData?.civilId ?? '');
+    setIsEditingCivilId(true);
+  };
+
+  const handleSaveCivilId = async () => {
+    if (!canEdit) return;
+    setIsSavingCivilId(true);
+    try {
+      const cleaned = civilIdDraft.replace(/\D/g, '');
+      const studentDocRef = doc(firestore, 'students', student.id);
+      // Dot-path update so the rest of jotformData is preserved (and created if absent).
+      updateDocumentNonBlocking(studentDocRef, { 'jotformData.civilId': cleaned || null } as any);
+      toast({ title: 'Civil ID Updated', description: cleaned ? `Civil ID set to ${cleaned}.` : 'Civil ID cleared.' });
+      setIsEditingCivilId(false);
+    } finally {
+      setIsSavingCivilId(false);
     }
   };
 
@@ -746,10 +769,63 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               <Mail className="h-4 w-4" />
               <span>{student.email || 'No Email'}</span>
             </div>
-            {student.jotformData?.civilId && (
+            {(student.jotformData?.civilId || canEdit) && (
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4" />
-                <span>Civil ID: {student.jotformData.civilId}</span>
+                {isEditingCivilId ? (
+                  <div className="flex items-center gap-1.5 pdf-hide">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={12}
+                      value={civilIdDraft}
+                      onChange={(e) => setCivilIdDraft(e.target.value)}
+                      placeholder="12-digit Civil ID"
+                      className="h-7 w-[170px]"
+                      autoFocus
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={handleSaveCivilId}
+                      disabled={isSavingCivilId}
+                    >
+                      {isSavingCivilId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => setIsEditingCivilId(false)}
+                      disabled={isSavingCivilId}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : student.jotformData?.civilId ? (
+                  <>
+                    <span>Civil ID: {student.jotformData.civilId}</span>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={handleStartEditCivilId}
+                        title="Edit Civil ID"
+                        className="pdf-hide text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartEditCivilId}
+                    className="pdf-hide text-primary hover:underline text-sm font-medium"
+                  >
+                    Add Civil ID
+                  </button>
+                )}
               </div>
             )}
             <div className="flex items-center gap-2">
