@@ -584,6 +584,38 @@ export async function updateApplicationMajor(studentId: string, university: stri
   }
 }
 
+export async function updateApplicationSubmissionMethod(studentId: string, university: string, major: string, submissionMethod: string, adminId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const admin = await getUser(adminId);
+    if (!admin || !['admin', 'adminplus', 'department'].includes(admin.role)) return { success: false, message: 'Unauthorized.' };
+
+    const studentRef = adminDb!.collection('students').doc(studentId);
+    const studentDoc = await studentRef.get();
+    if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
+
+    const studentData = studentDoc.data() as Student;
+    const appIndex = studentData.applications.findIndex(
+      app => app.university === university && app.major === major
+    );
+
+    if (appIndex === -1) return { success: false, message: 'Application not found.' };
+
+    const updatedApplications = [...studentData.applications];
+    updatedApplications[appIndex].submissionMethod = submissionMethod as Application['submissionMethod'];
+    updatedApplications[appIndex].updatedAt = new Date().toISOString();
+
+    await studentRef.update({
+      applications: updatedApplications,
+      lastActivityAt: new Date().toISOString()
+    });
+
+    return { success: true, message: 'Submission method updated.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
 export async function updateStudentPipelineStatus(studentId: string, status: string, userName: string, studentName: string) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
   try {

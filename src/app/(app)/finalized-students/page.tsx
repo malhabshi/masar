@@ -26,6 +26,7 @@ export default function FinalizedStudentsPage() {
   const [universityFilter, setUniversityFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
+  const [studyLevelFilter, setStudyLevelFilter] = useState('all');
 
   useEffect(() => {
     setIsMounted(true);
@@ -36,6 +37,7 @@ export default function FinalizedStudentsPage() {
         if (f.universityFilter !== undefined) setUniversityFilter(f.universityFilter);
         if (f.countryFilter !== undefined)    setCountryFilter(f.countryFilter);
         if (f.employeeFilter !== undefined)   setEmployeeFilter(f.employeeFilter);
+        if (f.studyLevelFilter !== undefined) setStudyLevelFilter(f.studyLevelFilter);
       }
     } catch {}
   }, []);
@@ -43,9 +45,9 @@ export default function FinalizedStudentsPage() {
   useEffect(() => {
     if (!isMounted) return;
     try {
-      sessionStorage.setItem('finalized_filters', JSON.stringify({ universityFilter, countryFilter, employeeFilter }));
+      sessionStorage.setItem('finalized_filters', JSON.stringify({ universityFilter, countryFilter, employeeFilter, studyLevelFilter }));
     } catch {}
-  }, [isMounted, universityFilter, countryFilter, employeeFilter]);
+  }, [isMounted, universityFilter, countryFilter, employeeFilter, studyLevelFilter]);
 
   const studentsQuery = useMemo(() => {
     if (!isMounted || !currentUser) {
@@ -99,7 +101,8 @@ export default function FinalizedStudentsPage() {
         const studentCountry = application?.country;
         const matchesCountry = countryFilter === 'all' || studentCountry === countryFilter;
         const matchesEmployee = employeeFilter === 'all' || student.employeeId === employeeFilter;
-        return matchesUniversity && matchesCountry && matchesEmployee;
+        const matchesStudyLevel = studyLevelFilter === 'all' || student.studyLevel === studyLevelFilter;
+        return matchesUniversity && matchesCountry && matchesEmployee && matchesStudyLevel;
       });
     } else {
       result = fetchedStudents;
@@ -110,7 +113,7 @@ export default function FinalizedStudentsPage() {
       const dateB = b.finalizedAt ? new Date(b.finalizedAt).getTime() : 0;
       return dateB - dateA;
     });
-  }, [fetchedStudents, currentUser?.role, universityFilter, countryFilter, employeeFilter]);
+  }, [fetchedStudents, currentUser?.role, universityFilter, countryFilter, employeeFilter, studyLevelFilter]);
 
   // Mark students as viewed when they land on the page (Admin/Department only)
   useEffect(() => {
@@ -216,6 +219,17 @@ export default function FinalizedStudentsPage() {
                         {staffOptions.map(emp => (
                             <SelectItem key={emp.id} value={emp.civilId!}>{emp.name}</SelectItem>
                         ))}
+                    </SelectContent>
+                </Select>
+                <Select value={studyLevelFilter} onValueChange={setStudyLevelFilter}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Filter by study level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Study Levels</SelectItem>
+                        <SelectItem value="Foundation">Foundation</SelectItem>
+                        <SelectItem value="First Year">First Year</SelectItem>
+                        <SelectItem value="Transfer Student">Transfer Student</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

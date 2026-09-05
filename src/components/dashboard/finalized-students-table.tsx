@@ -72,6 +72,7 @@ export function FinalizedStudentsTable({ students, showEmployee = true, currentU
             <TableHead>Student</TableHead>
             <TableHead>Final Choice University</TableHead>
             <TableHead>Country</TableHead>
+            <TableHead>Study Level</TableHead>
             <TableHead>Finalized Date</TableHead>
             {showEmployee && <TableHead>Intake Term</TableHead>}
             {showEmployee && <TableHead>Assigned Employee</TableHead>}
@@ -106,6 +107,13 @@ export function FinalizedStudentsTable({ students, showEmployee = true, currentU
                 </TableCell>
                 <TableCell className="font-medium">{student.finalChoiceUniversity}</TableCell>
                 <TableCell>{getUniversityCountry(student)}</TableCell>
+                <TableCell>
+                  {student.studyLevel ? (
+                    <Badge variant="secondary" className="font-medium whitespace-nowrap">{student.studyLevel}</Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">N/A</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
                    {student.finalizedAt ? new Date(student.finalizedAt).toLocaleDateString() : 'N/A'}
                 </TableCell>
@@ -162,7 +170,7 @@ export function FinalizedStudentsTable({ students, showEmployee = true, currentU
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={showEmployee ? 7 : 5} className="h-24 text-center">
+              <TableCell colSpan={showEmployee ? 8 : 6} className="h-24 text-center">
                 No students match your filters.
               </TableCell>
             </TableRow>

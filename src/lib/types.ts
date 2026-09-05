@@ -16,6 +16,8 @@ export interface User {
 export type ApplicationStatus = 'Pending' | 'Submitted' | 'Missing Items' | 'Accepted' | 'Rejected';
 export type Country = 'UK' | 'USA' | 'Australia' | 'New Zealand' | 'Ireland';
 
+export type ApplicationSubmissionMethod = 'Direct' | 'Merit' | 'IGEC' | 'Applyboard' | 'alshamlan' | 'acceptiex' | 'Other';
+
 export interface Application {
   university: string;
   major: string;
@@ -23,6 +25,8 @@ export interface Application {
   status: ApplicationStatus;
   updatedAt: string;
   rejectionReason?: string;
+  // How the application was submitted (agency/portal/direct).
+  submissionMethod?: ApplicationSubmissionMethod;
 }
 
 export interface Note {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useMemo } from 'react';
-import type { Student, Application, ApplicationStatus } from '@/lib/types';
+import type { Student, Application, ApplicationStatus, ApplicationSubmissionMethod } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -16,13 +16,15 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, CheckCircle, Loader2, Trash2, Pencil, AlertCircle, CheckSquare, Layers, UploadCloud } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  updateApplicationStatus, 
-  setStudentFinalChoice, 
-  deleteApplication, 
+import {
+  updateApplicationStatus,
+  setStudentFinalChoice,
+  deleteApplication,
   updateApplicationMajor,
+  updateApplicationSubmissionMethod,
   bulkUpdateApplicationStatuses
 } from '@/lib/actions';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AddApplicationDialog } from './add-application-dialog';
 import { UploadDocumentDialog } from './upload-document-dialog';
 import { cn } from '@/lib/utils';
@@ -63,6 +65,8 @@ const statusColors: Record<ApplicationStatus, string> = {
 };
 
 const ALL_STATUSES: ApplicationStatus[] = ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'];
+
+const SUBMISSION_METHODS: ApplicationSubmissionMethod[] = ['Direct', 'Merit', 'IGEC', 'Applyboard', 'alshamlan', 'acceptiex', 'Other'];
 
 export function StudentApplications({ student }: StudentApplicationsProps) {
   const { user: currentUser } = useUser();
@@ -124,6 +128,16 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
     }
     setIsProcessing(false);
   }, [student, toast]);
+
+  const handleSubmissionMethodUpdate = useCallback(async (university: string, major: string, method: ApplicationSubmissionMethod) => {
+    if (!currentUser) return;
+    const result = await updateApplicationSubmissionMethod(student.id, university, major, method, currentUser.id);
+    if (result.success) {
+      toast({ title: 'Submission Method Updated', description: `${university} marked as submitted via ${method}.` });
+    } else {
+      toast({ variant: 'destructive', title: 'Update Failed', description: result.message });
+    }
+  }, [student.id, currentUser, toast]);
 
   const handleBulkStatusUpdate = async () => {
     if (!bulkStatusDialog || selectedApps.size === 0 || !currentUser) return;
@@ -285,6 +299,21 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
                       </TableCell>
                       <TableCell className="text-right align-top">
                           <div className="flex items-center justify-end gap-2">
+                            {isAdminDept && (
+                                <Select
+                                    value={app.submissionMethod || ''}
+                                    onValueChange={(val) => handleSubmissionMethodUpdate(app.university, app.major, val as ApplicationSubmissionMethod)}
+                                >
+                                    <SelectTrigger className="h-9 w-[150px]" title="How was the application submitted?">
+                                        <SelectValue placeholder="Submitted via..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {SUBMISSION_METHODS.map(m => (
+                                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                             {isAdminDept && (
                                 <UploadDocumentDialog
                                     student={student}
