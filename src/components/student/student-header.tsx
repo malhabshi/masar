@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { Student, Country, User } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
-import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight, BellOff, Bell, Pencil, Check } from 'lucide-react';
+import { Phone, Mail, GraduationCap, ArrowRightLeft, ShieldAlert, ClipboardList, Calendar, UserRoundX, Loader2, FlaskConical, FileDown, X, CheckCircle, ChevronLeft, ChevronRight, BellOff, Bell, Pencil, Check, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 import { cn, calculateAge } from '@/lib/utils';
 import { Badge as BadgeComponent } from '@/components/ui/badge';
@@ -746,6 +746,12 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               <Mail className="h-4 w-4" />
               <span>{student.email || 'No Email'}</span>
             </div>
+            {student.jotformData?.civilId && (
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                <span>Civil ID: {student.jotformData.civilId}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4" />
               <span>{student.phone || 'No Phone'}</span>

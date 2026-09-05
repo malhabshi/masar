@@ -3199,11 +3199,17 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         derivedIntakeYear = 2027;
       }
 
+      // USA / AU / NZ students use their Civil ID as the internal number. UK uses a separate
+      // number, so when UK is one of the destinations we leave the internal number blank for
+      // staff to assign manually (the Civil ID is still stored on the profile either way).
+      const derivedInternalNumber = (!hasUK && civilId) ? civilId : '';
+
       const studentDoc: Record<string, unknown> = {
         id: newStudentId,
         name: `${firstName} ${lastName}`.trim(),
         email,
         phone: kuwaitPhone,
+        internalNumber: derivedInternalNumber,
         ...(gender && { gender }),
         employeeId: employeeCivilId,
         applications: builtApplications,
