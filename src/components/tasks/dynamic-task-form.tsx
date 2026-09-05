@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { Badge } from '../ui/badge';
 import { useCollection } from '@/firebase/client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 interface DynamicTaskFormProps {
   student: Student;
@@ -41,6 +41,10 @@ const COMPANY_COLORS: Record<string, string> = {
   Other:      'bg-gray-100 text-gray-700 border-gray-300',
   Inhouse:    'bg-amber-100 text-amber-800 border-amber-300',
 };
+
+// Default exam prices (KWD). TOEFL costs more than IELTS.
+const IELTS_EXAM_PRICE = 94;
+const TOEFL_EXAM_PRICE = 108;
 
 const IELTS_COURSE_OPTIONS = [
   'One week "ielts" In-Person',
@@ -135,6 +139,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       if (config.ielts.showDates && !data.requestedDate) return false;
       if (config.ielts.showAmount && !data.amount) return false;
     }
+    if (data.examType === 'toefl' && config?.ielts?.showAmount && !data.amount) return false;
     return true;
   }, {
     message: "Please fill in all required exam details.",
@@ -161,11 +166,23 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       unifiedExamDateId: '',
       unifiedExamDateLabel: '',
       unifiedExamDelivery: undefined,
-      amount: (config?.ielts?.showAmount) ? 94 : undefined,
+      amount: (config?.ielts?.showAmount) ? IELTS_EXAM_PRICE : undefined,
     },
   });
 
   const watchExamType = form.watch('examType');
+
+  // Keep the exam price aligned with the chosen exam: TOEFL is 108 KWD, IELTS is 94 KWD.
+  useEffect(() => {
+    if (!config?.ielts?.showAmount) return;
+    if (watchExamType === 'toefl') {
+      form.setValue('amount', TOEFL_EXAM_PRICE);
+    } else if (watchExamType === 'ielts') {
+      form.setValue('amount', IELTS_EXAM_PRICE);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchExamType]);
+
   const watchDocs = form.watch('selectedDocuments') || [];
   const watchMultiUnis = form.watch('selectedGlobalUniversityIds') || [];
 
@@ -656,6 +673,21 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     )}
                   />
                 )}
+              </div>
+            )}
+            {watchExamType === 'toefl' && config.ielts?.showAmount && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Exam Price ({config.ielts.amountCurrency || 'KWD'}) *</FormLabel>
+                      <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             )}
           </div>
