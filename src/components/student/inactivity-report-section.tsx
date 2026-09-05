@@ -26,8 +26,8 @@ export function InactivityReportSection({ student, currentUser }: InactivityRepo
   const isAssignedEmployee = currentUser.civilId === student.employeeId;
   
   const isStagnant = useMemo(() => {
-    // 1. Exclude high-priority or finalized students
-    if (student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel) {
+    // 1. Exclude high-priority or finalized students (final university choice set)
+    if (student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel || student.finalChoiceUniversity) {
       return false;
     }
 

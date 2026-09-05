@@ -2268,7 +2268,8 @@ export async function processInactivityReminders() {
 
     for (const doc of snapshot.docs) {
       const student = doc.data() as Student;
-      if (student.isClosed || student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel || !student.employeeId) continue;
+      // Skip finalized students (a final university choice was set) — they no longer need chasing.
+      if (student.isClosed || student.changeAgentRequired || student.profileCompletionStatus?.readyToTravel || student.finalChoiceUniversity || !student.employeeId) continue;
 
       if (student.lastInactivityReminderSentAt) {
         if (differenceInHours(now, parseISO(student.lastInactivityReminderSentAt)) < 48) {
