@@ -191,6 +191,10 @@ export default function StudentDetailPage() {
   const isAssignedEmployee = student.employeeId === currentUser.civilId;
   const isAdminOrDept = ['admin', 'adminplus', 'department'].includes(currentUser.role);
   const isAdminOnly = ['admin', 'adminplus'].includes(currentUser.role);
+
+  // A profile only "activates" its operational sections once it has a Study Level or
+  // Jotform intake data. Until then (bare/lead profiles) these sections stay hidden.
+  const hasProfileData = !!student.studyLevel || !!student.jotformData || student.jotform === true;
   
   const handleAddEmployeeNote = async (content: string) => {
     if (!student || !currentUser) return { success: false, message: 'Missing context' };
@@ -222,11 +226,11 @@ export default function StudentDetailPage() {
                 <InactivityReportSection student={student} currentUser={currentUser} />
               </div>
               <TargetCountriesCard student={student} currentUser={currentUser} />
-              <StudentApplications student={student} />
-              <StudentUsersCard student={student} currentUser={currentUser} />
-              <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} section="employee" />
-              <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} section="admin" />
-              <StudentUploadedDocuments student={student} currentUser={currentUser} allowGenerateLink={isAssignedEmployee || isAdminOrDept} />
+              {hasProfileData && <StudentApplications student={student} />}
+              {hasProfileData && <StudentUsersCard student={student} currentUser={currentUser} />}
+              {hasProfileData && <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} section="employee" />}
+              {hasProfileData && <InternalDocuments student={student} currentUser={currentUser} title="Admin/Dept Documents" allowUpload={isAdminOrDept} section="admin" />}
+              {hasProfileData && <StudentUploadedDocuments student={student} currentUser={currentUser} allowGenerateLink={isAssignedEmployee || isAdminOrDept} />}
               
               {isAdminOrDept && (
                   <NotesSection
@@ -246,18 +250,18 @@ export default function StudentDetailPage() {
                   <AssignmentCard student={student} currentUser={currentUser} />
                 </div>
               )}
-              <RemindersCard student={student} currentUser={currentUser} />
+              {hasProfileData && <RemindersCard student={student} currentUser={currentUser} />}
               <div>
                 <TaskStatsCard tasks={tasks || []} />
               </div>
               {student.studyLevel === 'Foundation' && <ReadinessChecklist student={student} currentUser={currentUser} />}
               <AdminChecklist student={student} currentUser={currentUser} />
-              <MissingItemsSection student={student} currentUser={currentUser} />
+              {hasProfileData && <MissingItemsSection student={student} currentUser={currentUser} />}
               <JotformCard student={student} currentUser={currentUser} />
-              <AcademicIntakeCard student={student} currentUser={currentUser} />
+              {hasProfileData && <AcademicIntakeCard student={student} currentUser={currentUser} />}
               <StudyLevelCard student={student} currentUser={currentUser} />
               <GradeCard student={student} currentUser={currentUser} />
-              <IeltsCard student={student} currentUser={currentUser} />
+              {hasProfileData && <IeltsCard student={student} currentUser={currentUser} />}
               
               <NotesSection
                   title="Employee Notes"
