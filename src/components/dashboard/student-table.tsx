@@ -369,6 +369,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setPipelineFilter([]);
     setEmployeeFilter([]);
     setIeltsFilter('all');
+    setImportTypeFilter('all');
+    setAcceptedFilter('all');
+    setAcceptedCountryFilter([]);
+    setAcceptedMajorFilter([]);
+    setFoundationCategoryFilter([]);
     setGenderFilter([]);
     setStudyLevelFilter([]);
     setSchoolTypeFilter([]);
