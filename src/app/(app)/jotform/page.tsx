@@ -99,6 +99,21 @@ export default function JotformPage() {
     }
   }, [user?.name]);
 
+  // Academic term follows the destination country: UK → Fall 2027, USA & AU/NZ → Spring 2027
+  // (UK takes priority if combined). This mirrors the server-side rule in submitJotformApplications.
+  useEffect(() => {
+    const hasUK = selectedCountries.includes('UK');
+    const hasUSA = selectedCountries.includes('USA');
+    const hasAUNZ = selectedCountries.includes('Australia / New Zealand');
+    if (hasUK) {
+      setIntakeSemester('FALL (8/9)');
+      setIntakeYear('2027');
+    } else if (hasUSA || hasAUNZ) {
+      setIntakeSemester('SPRING (1/2)');
+      setIntakeYear('2027');
+    }
+  }, [selectedCountries]);
+
   const { data: allApprovedUnis } = useCollection<ApprovedUniversity>('approved_universities');
 
   // Per-country approved university lists (UK only when Foundation)

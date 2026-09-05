@@ -3147,7 +3147,24 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
 
       const builtApplicationsJson = (formData.get('builtApplications') as string) || '[]';
       const builtApplications = JSON.parse(builtApplicationsJson);
-      const studyLevel = acceptanceType ? (studyLevelMap[acceptanceType] ?? null) : null;
+      // Study level defaults to Foundation for every country unless a different level
+      // (e.g. First Year) was explicitly selected.
+      const studyLevel = (acceptanceType && studyLevelMap[acceptanceType]) || 'Foundation';
+
+      // Academic term is driven by the destination country: UK → Fall, USA & AU/NZ → Spring,
+      // both for 2027. If UK is combined with another country, UK (Fall) takes priority.
+      const hasUK = selectedCountries.includes('UK');
+      const hasUSA = selectedCountries.includes('USA');
+      const hasAUNZ = selectedCountries.some(c => c === 'Australia / New Zealand' || c === 'Australia' || c === 'New Zealand');
+      let derivedIntakeSemester = intakeSemester;
+      let derivedIntakeYear = intakeYear;
+      if (hasUK) {
+        derivedIntakeSemester = 'FALL (8/9)';
+        derivedIntakeYear = 2027;
+      } else if (hasUSA || hasAUNZ) {
+        derivedIntakeSemester = 'SPRING (1/2)';
+        derivedIntakeYear = 2027;
+      }
 
       const studentDoc: Record<string, unknown> = {
         id: newStudentId,
@@ -3185,8 +3202,8 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
           ...(followUpPerson && { followUpPerson }),
           documents: jotformDocUrls,
         },
-        academicIntakeSemester: intakeSemester,
-        academicIntakeYear: intakeYear,
+        academicIntakeSemester: derivedIntakeSemester,
+        academicIntakeYear: derivedIntakeYear,
         profileCompletionStatus: {
           submitUniversityApplication: false,
           applyMoheScholarship: false,
