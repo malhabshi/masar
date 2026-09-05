@@ -195,6 +195,10 @@ export default function StudentDetailPage() {
   // A profile only "activates" its operational sections once it has a Study Level or
   // Jotform intake data. Until then (bare/lead profiles) these sections stay hidden.
   const hasProfileData = !!student.studyLevel || !!student.jotformData || student.jotform === true;
+
+  // First Year / Transfer students don't need Target Countries or the checklists
+  // (Readiness is already Foundation-only below).
+  const isFirstYearOrTransfer = student.studyLevel === 'First Year' || student.studyLevel === 'Transfer Student';
   
   const handleAddEmployeeNote = async (content: string) => {
     if (!student || !currentUser) return { success: false, message: 'Missing context' };
@@ -225,7 +229,7 @@ export default function StudentDetailPage() {
               <div>
                 <InactivityReportSection student={student} currentUser={currentUser} />
               </div>
-              <TargetCountriesCard student={student} currentUser={currentUser} />
+              {!isFirstYearOrTransfer && <TargetCountriesCard student={student} currentUser={currentUser} />}
               {hasProfileData && <StudentApplications student={student} />}
               {hasProfileData && <StudentUsersCard student={student} currentUser={currentUser} />}
               {hasProfileData && <InternalDocuments student={student} currentUser={currentUser} title="Employee Documents" allowUpload={isAssignedEmployee} section="employee" />}
@@ -255,7 +259,7 @@ export default function StudentDetailPage() {
                 <TaskStatsCard tasks={tasks || []} />
               </div>
               {student.studyLevel === 'Foundation' && <ReadinessChecklist student={student} currentUser={currentUser} />}
-              <AdminChecklist student={student} currentUser={currentUser} />
+              {!isFirstYearOrTransfer && <AdminChecklist student={student} currentUser={currentUser} />}
               {hasProfileData && <MissingItemsSection student={student} currentUser={currentUser} />}
               <JotformCard student={student} currentUser={currentUser} />
               {hasProfileData && <AcademicIntakeCard student={student} currentUser={currentUser} />}
