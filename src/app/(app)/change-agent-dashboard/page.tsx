@@ -82,20 +82,25 @@ function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
   }, [sortedLog, student.changeAgentUniversities, student.changeAgentRequired]);
 
   const totalEvents = sortedLog.length || syntheticUnis.length;
-  if (totalEvents === 0) return null;
+  const hasEvents = totalEvents > 0;
 
   const latestFlaggedAt = sortedLog[0]?.flaggedAt;
 
   return (
     <div className="border-b last:border-b-0">
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
+        className={cn(
+          "flex items-center justify-between px-4 py-3 transition-colors",
+          hasEvents ? "cursor-pointer hover:bg-muted/30" : "cursor-default"
+        )}
+        onClick={() => { if (hasEvents) setIsExpanded(!isExpanded); }}
       >
         <div className="flex items-center gap-2 min-w-0">
-          {isExpanded
-            ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-            : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          {hasEvents
+            ? (isExpanded
+                ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />)
+            : <span className="w-4 shrink-0" />
           }
           <Link
             href={`/student/${student.id}`}
@@ -118,7 +123,7 @@ function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
             </Badge>
           )}
           <Badge variant="outline" className="text-[10px] h-5 shrink-0">
-            {totalEvents} {totalEvents === 1 ? 'event' : 'events'}
+            {hasEvents ? `${totalEvents} ${totalEvents === 1 ? 'event' : 'events'}` : 'No events'}
           </Badge>
         </div>
         <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
@@ -126,7 +131,7 @@ function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
         </span>
       </div>
 
-      {isExpanded && (
+      {isExpanded && hasEvents && (
         <div className="bg-muted/10 border-t">
           <table className="w-full text-xs">
             <thead>
