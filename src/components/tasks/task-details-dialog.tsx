@@ -144,22 +144,49 @@ export function TaskDetailsDialog({
     }
   };
 
-  const renderDataField = (label: string, value: any, icon?: any, dateOnly?: boolean, valueClassName?: string) => {
+  const renderDataField = (label: string, value: any, icon?: any, dateOnly?: boolean, valueClassName?: string, important?: boolean) => {
     if (value === undefined || value === null || value === '') return null;
     const Icon = icon;
     const isDateLike = value instanceof Date || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value));
     const formatted = Array.isArray(value) ? value.join(', ')
       : (isClient && isDateLike ? (dateOnly ? formatDate(value) : formatDateTime(value)) : String(value));
     return (
-      <div className="space-y-1">
-        <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">{label}</p>
+      <div className={cn("space-y-1", important && "rounded-md border border-amber-300 bg-amber-50 p-2.5 -m-0.5")}>
+        <p className={cn("text-[10px] font-bold uppercase tracking-widest", important ? "text-amber-700" : "text-muted-foreground")}>{label}</p>
         <div className="flex items-center gap-2 font-medium">
-          {Icon && <Icon className="h-4 w-4 text-primary" />}
-          <span className={cn("text-sm", valueClassName)}>{formatted}</span>
+          {Icon && <Icon className={cn("h-4 w-4", important ? "text-amber-600" : "text-primary")} />}
+          <span className={cn("text-sm", important && "font-bold text-amber-900", valueClassName)}>{formatted}</span>
         </div>
       </div>
     );
   };
+
+  // Keys already surfaced explicitly in the dialog (either in Request Details or in a
+  // dedicated section). Anything NOT in this set is shown in the catch-all "Additional
+  // Details" section so no employee-entered value is ever silently dropped.
+  const HANDLED_DATA_KEYS = new Set<string>([
+    'internalNumber', 'passportName', 'examType', 'ieltsSubtype', 'lrwTime', 'requestedDate',
+    'courseStartDate', 'courseOption', 'retakeSection', 'preferredDate', 'preferredTime', 'amount',
+    'guardianFirstNameEn', 'guardianLastNameEn', 'guardianDob', 'guardianPhone', 'originalExamDate',
+    'idpUsername', 'idpPassword', 'notes', 'isPaid',
+    'unifiedExamDateId', 'unifiedExamDateLabel', 'unifiedExamDelivery',
+    'selectedApplicationDetails', 'selectedApplicationId',
+    'selectedGlobalUniversityDetails', 'selectedGlobalUniversityId',
+    'selectedGlobalUniversities', 'selectedGlobalUniversityIds',
+    'selectedPortalDetails', 'selectedPortalId', 'selectedDocuments',
+  ]);
+
+  const prettifyKey = (key: string) =>
+    key.replace(/([A-Z])/g, ' $1').replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase()).trim();
+
+  const extraDataEntries = Object.entries(data).filter(([key, value]) => {
+    if (HANDLED_DATA_KEYS.has(key)) return false;
+    if (value === undefined || value === null || value === '') return false;
+    // Skip nested objects (handled/complex); allow Dates and primitive arrays.
+    if (typeof value === 'object' && !(value instanceof Date) && !Array.isArray(value)) return false;
+    if (Array.isArray(value) && value.some(v => typeof v === 'object')) return false;
+    return true;
+  });
 
   const hasStatusChanged = localStatus !== task.status;
   const selectedApp = data.selectedApplicationDetails;
@@ -306,16 +333,18 @@ export function TaskDetailsDialog({
                 {renderDataField('Requested By', task.authorName || author?.name, User)}
                 {renderDataField('Internal Number', data.internalNumber)}
                 {renderDataField('Passport Name', data.passportName, ShieldCheck)}
-                {renderDataField('Exam Category', data.examType, Clock)}
+                {renderDataField('Exam Category', data.examType, Clock, false, undefined, true)}
                 {renderDataField('IELTS Type', data.ieltsSubtype)}
-                {renderDataField('LRW Time', data.lrwTime)}
-                {renderDataField('Requested Date', data.requestedDate, Calendar, true)}
+                {renderDataField('LRW Time', data.lrwTime, Clock, false, undefined, true)}
+                {renderDataField('Requested Date', data.requestedDate, Calendar, true, undefined, true)}
                 {renderDataField('Course Start', data.courseStartDate, Calendar)}
                 {renderDataField('Course Option', data.courseOption)}
                 {renderDataField('Retake Section', data.retakeSection)}
-                {renderDataField('Preferred Date', data.preferredDate, Calendar, true, 'text-red-800 font-bold')}
-                {renderDataField('Preferred Time', data.preferredTime)}
-                {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign)}
+                {renderDataField('Preferred Date', data.preferredDate, Calendar, true, 'text-red-800 font-bold', true)}
+                {renderDataField('Preferred Time', data.preferredTime, Clock, false, undefined, true)}
+                {renderDataField('Exam Date', data.unifiedExamDateLabel, Calendar)}
+                {renderDataField('Delivery', data.unifiedExamDelivery)}
+                {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign, false, undefined, true)}
                 {renderDataField('Parent Name (EN)', [data.guardianFirstNameEn, data.guardianLastNameEn].filter(Boolean).join(' ') || null, User)}
                 {renderDataField('Parent DOB', data.guardianDob, Calendar, true)}
                 {renderDataField('Parent Phone', data.guardianPhone)}
@@ -347,6 +376,20 @@ export function TaskDetailsDialog({
                 {renderDataField('Original Exam', data.originalExamDate, Calendar, true)}
               </div>
             </section>
+
+            {extraDataEntries.length > 0 && (
+              <section className="space-y-4">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  Additional Details
+                </h3>
+                <div className="grid grid-cols-2 gap-y-6 bg-muted/20 p-4 rounded-lg border border-dashed">
+                  {extraDataEntries.map(([key, value]) => (
+                    <div key={key}>{renderDataField(prettifyKey(key), value)}</div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {data.idpUsername && (
               <section className="space-y-4">
