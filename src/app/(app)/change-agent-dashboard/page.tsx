@@ -104,6 +104,14 @@ function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
           >
             {student.name}
           </Link>
+          {student.acceptedInfo && (
+            <span
+              title={`Accepted (Scholarship): ${student.acceptedInfo.country} · ${student.acceptedInfo.major}`}
+              className="inline-flex shrink-0"
+            >
+              <CheckCircle2 className="h-4 w-4 text-green-600 stroke-[3]" />
+            </span>
+          )}
           {isClosed && (
             <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5 shrink-0">
               CLOSED
