@@ -609,6 +609,18 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           </div>
         )}
 
+        {/* Student age — important for IELTS/TOEFL (under-18 needs a guardian). */}
+        {requestType.isSpecialTask && config?.examTypes && (
+          <div className={cn(
+            "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold",
+            isMinor ? "border-amber-300 bg-amber-50 text-amber-800" : "border-muted bg-muted/30 text-foreground"
+          )}>
+            <CalendarIcon className="h-4 w-4" />
+            Student Age: {studentAge != null ? `${studentAge} years` : 'N/A (no date of birth on file)'}
+            {isMinor && <span className="uppercase tracking-wide text-[11px]">· Under 18 — guardian required</span>}
+          </div>
+        )}
+
         {/* Exam Type Selection */}
         {requestType.isSpecialTask && config?.examTypes && config.examTypes.length > 1 && (
           <FormField

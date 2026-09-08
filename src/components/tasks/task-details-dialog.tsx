@@ -42,7 +42,7 @@ import type { Task, TaskStatus, User as UserType } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { formatDateTime, formatDate, formatRelativeTime } from '@/lib/timestamp-utils';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, calculateAge } from '@/lib/utils';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -104,6 +104,8 @@ export function TaskDetailsDialog({
   }, [task.studentId]);
 
   const { data: student, isLoading: isStudentLoading } = useDoc<any>(studentRef);
+
+  const studentAge = calculateAge(student?.jotformData?.dob);
 
   const uniLookupId = (data.selectedGlobalUniversityDetails?.id || data.selectedGlobalUniversityId) && !data.selectedGlobalUniversityDetails?.name
     ? (data.selectedGlobalUniversityDetails?.id || data.selectedGlobalUniversityId)
@@ -331,6 +333,11 @@ export function TaskDetailsDialog({
               </h3>
               <div className="grid grid-cols-2 gap-y-6 bg-muted/20 p-4 rounded-lg border border-dashed">
                 {renderDataField('Requested By', task.authorName || author?.name, User)}
+                {data.examType && renderDataField(
+                  'Student Age',
+                  studentAge != null ? `${studentAge} years${studentAge < 18 ? ' · Under 18 (guardian required)' : ''}` : 'N/A',
+                  User, false, undefined, studentAge != null && studentAge < 18
+                )}
                 {renderDataField('Internal Number', data.internalNumber)}
                 {renderDataField('Passport Name', data.passportName, ShieldCheck)}
                 {renderDataField('Exam Category', data.examType, Clock, false, undefined, true)}

@@ -876,6 +876,15 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 </div>
               </div>
             )}
+            {student.createdAt && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                <span>
+                  Added on {new Date(student.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {' '}({formatRelativeTime(student.createdAt)})
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
