@@ -6,7 +6,7 @@
 import * as actions from '@/lib/actions';
 import { ACTION_CATALOG, ACTION_MAP, type CatalogAction } from './action-catalog';
 
-export type Actor = { id: string; name: string; civilId?: string; role?: string };
+export type Actor = { id: string; name: string; civilId?: string; role?: string; readonly?: boolean };
 
 // Resolve an @sentinel used by extraInject to a concrete value from the caller identity.
 function resolveInject(sentinel: string, actor: Actor): unknown {
@@ -58,6 +58,11 @@ export async function runAction(
   input: { action: string; args?: Record<string, unknown>; confirm?: boolean },
   actor: Actor,
 ): Promise<RunResult> {
+  // Read-only viewer tokens can discover capabilities but never execute an action.
+  if (actor.readonly) {
+    return { ok: false, error: 'This is a read-only viewer token. Write/execute actions are disabled; only read tools are available.' };
+  }
+
   const meta = ACTION_MAP[input.action];
   if (!meta) return { ok: false, error: `Unknown action "${input.action}". Call list_capabilities to see valid actions.` };
   if (meta.excluded) return { ok: false, error: `Action "${input.action}" is not available via run_action (needs in-app file upload).` };

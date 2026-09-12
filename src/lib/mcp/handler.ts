@@ -34,17 +34,20 @@ function bearerFrom(extra: Extra): string | undefined {
 async function resolveActor(extra: Extra): Promise<Actor> {
   // First honor authInfo.extra if a transport ever provides it.
   const e = extra?.authInfo?.extra;
-  if (e?.userId) return { id: e.userId, name: e.userName || 'MCP User', civilId: e.civilId, role: e.role || 'admin' };
+  if (e?.userId) return { id: e.userId, name: e.userName || 'MCP User', civilId: e.civilId, role: e.role || 'admin', readonly: !!e.readonly };
   const bearer = bearerFrom(extra);
   if (bearer && adminDb) {
     const snap = await adminDb.collection('mcp_tokens').doc(bearer).get();
     if (snap.exists) {
-      const d = snap.data() as { userId?: string; userName?: string; civilId?: string; role?: string };
-      return { id: d.userId || 'mcp', name: d.userName || 'MCP User', civilId: d.civilId, role: d.role || 'admin' };
+      const d = snap.data() as { userId?: string; userName?: string; civilId?: string; role?: string; readonly?: boolean };
+      return { id: d.userId || 'mcp', name: d.userName || 'MCP User', civilId: d.civilId, role: d.role || 'admin', readonly: !!d.readonly };
     }
   }
   return { id: 'mcp', name: 'MCP User', role: 'admin' };
 }
+
+// A shared read-only refusal for write tools when the token is a viewer token.
+const READONLY_MSG = 'This is a read-only viewer token. Write actions are disabled; use the read/list/get tools instead.';
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 const json = (v: unknown) => text(JSON.stringify(v, null, 2));
 
@@ -52,9 +55,9 @@ async function verifyToken(_req: Request, bearer?: string) {
   if (!bearer || !adminDb) return undefined;
   const snap = await adminDb.collection('mcp_tokens').doc(bearer).get();
   if (!snap.exists) return undefined;
-  const d = snap.data() as { userId?: string; userName?: string; civilId?: string; role?: string; clientId?: string; scopes?: string[]; expiresAt?: string };
+  const d = snap.data() as { userId?: string; userName?: string; civilId?: string; role?: string; clientId?: string; scopes?: string[]; expiresAt?: string; readonly?: boolean };
   if (d.expiresAt && Date.parse(d.expiresAt) < Date.now()) return undefined;
-  return { token: bearer, clientId: d.clientId || 'claude', scopes: d.scopes || ['tasks'], extra: { userId: d.userId, userName: d.userName, civilId: d.civilId, role: d.role } };
+  return { token: bearer, clientId: d.clientId || 'claude', scopes: d.scopes || ['tasks'], extra: { userId: d.userId, userName: d.userName, civilId: d.civilId, role: d.role, readonly: !!d.readonly } };
 }
 
 let cached: ((req: Request) => Promise<Response>) | null = null;
@@ -112,30 +115,37 @@ export function getMcpHandler() {
       description: 'Create a new task. recipientId is the assignee user id (omit for everyone).',
       inputSchema: { content: z.string(), recipientId: z.string().optional(), studentId: z.string().optional(), studentName: z.string().optional(), taskType: z.string().optional() },
     }, async (args: { content: string; recipientId?: string; studentId?: string; studentName?: string; taskType?: string }, extra: Extra) => {
-      const r = await tasks.createTask(args, await resolveActor(extra));
+      const actor = await resolveActor(extra);
+      if (actor.readonly) return text(READONLY_MSG);
+      const r = await tasks.createTask(args, actor);
       return text(`Created task ${r.id}.`);
     });
 
     s.registerTool('update_task_status', { description: 'Set a task status to new, in-progress, completed, or denied.', inputSchema: { taskId: z.string(), status: statusEnum } },
-      async ({ taskId, status }: { taskId: string; status: TaskStatus }) => {
+      async ({ taskId, status }: { taskId: string; status: TaskStatus }, extra: Extra) => {
+        if ((await resolveActor(extra)).readonly) return text(READONLY_MSG);
         const r = await tasks.updateTaskStatus(taskId, status);
         return text(`Task ${r.id} is now ${r.status}.`);
       });
 
     s.registerTool('reply_to_task', { description: 'Add a reply to a task (also moves it to in-progress).', inputSchema: { taskId: z.string(), content: z.string() } },
       async ({ taskId, content }: { taskId: string; content: string }, extra: Extra) => {
-        const r = await tasks.replyToTask(taskId, content, await resolveActor(extra));
+        const actor = await resolveActor(extra);
+        if (actor.readonly) return text(READONLY_MSG);
+        const r = await tasks.replyToTask(taskId, content, actor);
         return text(`Replied to task ${r.id} (${r.replies} replies).`);
       });
 
     s.registerTool('assign_task', { description: 'Assign a task to a recipient (assignee) user id.', inputSchema: { taskId: z.string(), recipientId: z.string() } },
-      async ({ taskId, recipientId }: { taskId: string; recipientId: string }) => {
+      async ({ taskId, recipientId }: { taskId: string; recipientId: string }, extra: Extra) => {
+        if ((await resolveActor(extra)).readonly) return text(READONLY_MSG);
         const r = await tasks.assignTask(taskId, recipientId);
         return text(`Task ${r.id} assigned to ${r.recipientId}.`);
       });
 
     s.registerTool('delete_task', { description: 'Permanently delete a task by id.', inputSchema: { taskId: z.string() } },
-      async ({ taskId }: { taskId: string }) => {
+      async ({ taskId }: { taskId: string }, extra: Extra) => {
+        if ((await resolveActor(extra)).readonly) return text(READONLY_MSG);
         await tasks.deleteTask(taskId);
         return text(`Deleted task ${taskId}.`);
       });
