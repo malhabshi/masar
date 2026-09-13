@@ -41,6 +41,7 @@ interface DocField {
 const DOC_FIELDS: DocField[] = [
   { key: 'passport',           label: 'Passport Photo *',                  labelAr: 'صورة الجواز' },
   { key: 'secondaryCerts',     label: 'Secondary Certificates (English) *', labelAr: 'صورة شهادات الثانوية' },
+  { key: 'transcript',         label: 'Transcript',                        labelAr: 'كشف الدرجات' },
   { key: 'ieltsFile',          label: 'IELTS Test File',                   labelAr: 'اختبار الأيلتس' },
   { key: 'universityDegree',   label: 'University Degree / Diploma',       labelAr: 'الشهادة الجامعية أو الدبلوم' },
   { key: 'recommendationLetter', label: 'Recommendation Letter',           labelAr: 'رسالة تزكية' },

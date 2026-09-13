@@ -1,6 +1,7 @@
 'use server';
 
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
+import { jsPDF } from 'jspdf';
 import { formatKuwaitTime } from '@/lib/timestamp-utils';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ChecklistConfigItem, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry } from './types';
@@ -2861,6 +2862,128 @@ export async function reopenStudentProfile(studentId: string, adminId: string) {
 
 // ─── Jotform Application Submission ───────────────────────────────────────────
 
+// Builds a filled PDF summary of a Jotform submission (student + guardian info, chosen
+// countries/majors/universities, and the list of uploaded documents) so there is a
+// permanent record even if the live JotForm submission itself later fails or changes.
+function buildApplicationSummaryPdf(input: {
+  studentName: string;
+  dob: string;
+  gender: string;
+  email: string;
+  kuwaitPhone: string;
+  kuwaitAddress: string;
+  civilId: string;
+  schoolName: string;
+  ieltsScore: string;
+  scholarshipType: string;
+  acceptanceType: string;
+  followUpPerson: string;
+  guardianName: string;
+  guardianEmail: string;
+  guardianPhone: string;
+  guardianDob: string;
+  countries: string[];
+  perCountry: { label: string; major: string; universities: string }[];
+  intakeSemester: string;
+  intakeYear: number;
+  documentNames: string[];
+  generatedAt: string;
+}): Buffer {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const marginX = 18;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const lineHeight = 6;
+  let y = 20;
+
+  const ensureSpace = (needed = lineHeight) => {
+    if (y + needed > pageHeight - 15) { doc.addPage(); y = 20; }
+  };
+  const addSectionTitle = (text: string) => {
+    ensureSpace(10);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(text, marginX, y);
+    y += 5;
+    doc.setDrawColor(200);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 6;
+  };
+  const addRow = (label: string, value?: string) => {
+    if (!value) return;
+    ensureSpace();
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${label}:`, marginX, y);
+    doc.setFont('helvetica', 'normal');
+    const wrapped = doc.splitTextToSize(value, pageWidth - marginX * 2 - 48) as string[];
+    doc.text(wrapped, marginX + 48, y);
+    y += Math.max(lineHeight, wrapped.length * lineHeight);
+  };
+
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Application Summary', marginX, y);
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120);
+  doc.text(`Generated ${input.generatedAt}`, marginX, y);
+  doc.setTextColor(0);
+  y += 10;
+
+  addSectionTitle('Student Information');
+  addRow('Full Name', input.studentName);
+  addRow('Date of Birth', input.dob);
+  addRow('Gender', input.gender === 'M' ? 'Male' : input.gender === 'F' ? 'Female' : input.gender);
+  addRow('Email', input.email);
+  addRow('Kuwait Phone', input.kuwaitPhone);
+  addRow('Kuwait Address', input.kuwaitAddress);
+  addRow('Civil ID', input.civilId);
+  addRow('School Name', input.schoolName);
+  addRow('IELTS Score', input.ieltsScore);
+  y += 3;
+
+  addSectionTitle('Application Details');
+  addRow('Target Countries', input.countries.join(', '));
+  addRow('Scholarship Type', input.scholarshipType);
+  addRow('Application Type', input.acceptanceType);
+  addRow('Intake', input.intakeSemester ? `${input.intakeSemester} ${input.intakeYear}` : undefined);
+  addRow('Follow-up Person', input.followUpPerson);
+  y += 3;
+
+  for (const pc of input.perCountry) {
+    if (!pc.major && !pc.universities) continue;
+    addSectionTitle(pc.label);
+    addRow('Major(s)', pc.major);
+    addRow('University/Universities', pc.universities);
+    y += 3;
+  }
+
+  addSectionTitle('Guardian Information');
+  addRow('Guardian Name', input.guardianName);
+  addRow('Guardian Email', input.guardianEmail);
+  addRow('Guardian Phone', input.guardianPhone);
+  addRow('Guardian DOB', input.guardianDob);
+  y += 3;
+
+  addSectionTitle('Documents Submitted');
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  if (input.documentNames.length === 0) {
+    doc.text('No documents attached.', marginX, y);
+    y += lineHeight;
+  } else {
+    for (const name of input.documentNames) {
+      ensureSpace();
+      doc.text(`- ${name}`, marginX, y);
+      y += lineHeight;
+    }
+  }
+
+  return Buffer.from(doc.output('arraybuffer') as ArrayBuffer);
+}
+
 const JOTFORM_UK_FORM_ID = '240775032170045';
 const JOTFORM_AUNZ_FORM_ID = '241203903610442';
 const JOTFORM_USA_FORM_ID = '242303620566450';
@@ -2924,6 +3047,19 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   const universityDegreeFiles = getFiles('universityDegree');
   const recommendationLetterFiles = getFiles('recommendationLetter');
   const personalStatementFiles = getFiles('personalStatement');
+  const transcriptFiles = getFiles('transcript');
+
+  // Human-readable list of every uploaded file, for the application summary PDF.
+  const documentNames: string[] = [];
+  const collectNames = (label: string, arr: File[]) => arr.forEach(f => documentNames.push(`${label}: ${f.name}`));
+  collectNames('Passport', passportFiles);
+  collectNames('Secondary Certificates', secondaryCertsFiles);
+  collectNames('Transcript', transcriptFiles);
+  collectNames('IELTS File', ieltsFileFiles);
+  collectNames('University Degree', universityDegreeFiles);
+  collectNames('Recommendation Letter', recommendationLetterFiles);
+  collectNames('Personal Statement', personalStatementFiles);
+  collectNames('Other Files', otherFilesFiles);
 
   const toDateParts = (iso: string) => {
     if (!iso) return null;
@@ -2935,16 +3071,21 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   const readFilesData = async (files: File[]): Promise<FileData[]> =>
     Promise.all(files.map(async f => ({ buffer: await f.arrayBuffer(), name: f.name, type: f.type || 'application/octet-stream' })));
 
-  const [passportData, secondaryCertsData, ieltsFileData, otherFilesData, universityDegreeData, recommendationLetterData, personalStatementData] =
+  const [passportData, secondaryCertsData, ieltsFileData, otherFilesData, universityDegreeData, recommendationLetterData, personalStatementData, transcriptData] =
     await Promise.all([
       readFilesData(passportFiles), readFilesData(secondaryCertsFiles), readFilesData(ieltsFileFiles),
       readFilesData(otherFilesFiles), readFilesData(universityDegreeFiles), readFilesData(recommendationLetterFiles),
-      readFilesData(personalStatementFiles),
+      readFilesData(personalStatementFiles), readFilesData(transcriptFiles),
     ]);
 
   const appendFiles = (fd: FormData, field: string, filesData: FileData[]) => {
     for (const f of filesData) fd.append(field, new Blob([f.buffer], { type: f.type }), f.name);
   };
+
+  // No JotForm form has a dedicated "Transcript" question id, so transcript files ride
+  // along with "Other Files" on the actual JotForm submission (safe — an existing field).
+  // They're still tracked as their own labeled document set internally (see jotformDocUrls).
+  const otherFilesForJotform = [...otherFilesData, ...transcriptData];
 
   // Build FormData using the browser-style q{id}_{name} format for direct form submission.
   // Passport field name differs between forms: UK uses 'input11', AU/NZ uses 'passportPhoto'.
@@ -2969,7 +3110,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
 
     appendFiles(fd,'q12_input12[]', secondaryCertsData);
     appendFiles(fd,'q13_input13[]', ieltsFileData);
-    appendFiles(fd,'q14_input14[]', otherFilesData);
+    appendFiles(fd,'q14_input14[]', otherFilesForJotform);
     appendFiles(fd,'q15_input15[]', universityDegreeData);
     appendFiles(fd,'q28_input28[]', recommendationLetterData);
     appendFiles(fd,'q29_personalStatement[]', personalStatementData);
@@ -3115,7 +3256,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     appendFiles(fd, 'q14_passport[]', passportData);
     appendFiles(fd, 'q15_highSchool[]', secondaryCertsData);
     appendFiles(fd, 'q16_input16[]', ieltsFileData);
-    appendFiles(fd, 'q17_input17[]', otherFilesData);
+    appendFiles(fd, 'q17_input17[]', otherFilesForJotform);
     appendFiles(fd, 'q18_input18[]', universityDegreeData);
     try {
       const res = await postToJotform(JOTFORM_USA_FORM_ID, fd);
@@ -3140,7 +3281,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
       const passportDocs: Record<string, unknown>[] = [];
       const jotformDocUrls: Record<string, string[]> = {
         passport: [], secondaryCerts: [], ieltsFile: [], otherFiles: [],
-        universityDegree: [], recommendationLetter: [], personalStatement: [],
+        universityDegree: [], recommendationLetter: [], personalStatement: [], transcript: [],
       };
 
       if (storage) {
@@ -3175,7 +3316,12 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
           uploadDocSet(universityDegreeData, 'universityDegree', 'University Degree').then(urls => { jotformDocUrls.universityDegree = urls; }),
           uploadDocSet(recommendationLetterData, 'recommendationLetter', 'Recommendation Letter').then(urls => { jotformDocUrls.recommendationLetter = urls; }),
           uploadDocSet(personalStatementData, 'personalStatement', 'Personal Statement').then(urls => { jotformDocUrls.personalStatement = urls; }),
+          uploadDocSet(transcriptData, 'transcript', 'Transcript').then(urls => { jotformDocUrls.transcript = urls; }),
         ]);
+
+        // Fold transcript URLs into "otherFiles" so a later resend (addCountryApplication,
+        // which only re-downloads jd.documents.otherFiles) also carries the transcript.
+        jotformDocUrls.otherFiles = [...jotformDocUrls.otherFiles, ...jotformDocUrls.transcript];
       }
 
       const builtApplicationsJson = (formData.get('builtApplications') as string) || '[]';
@@ -3203,6 +3349,48 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
       // number, so when UK is one of the destinations we leave the internal number blank for
       // staff to assign manually (the Civil ID is still stored on the profile either way).
       const derivedInternalNumber = (!hasUK && civilId) ? civilId : '';
+
+      // Generate a filled PDF summary of everything submitted, and attach it to the
+      // student profile like any other document (best-effort — never blocks creation).
+      if (storage) {
+        try {
+          const bucketName = 'studio-9484431255-91d96.firebasestorage.app';
+          const pdfBuffer = buildApplicationSummaryPdf({
+            studentName: `${firstName} ${lastName}`.trim(),
+            dob, gender, email, kuwaitPhone, kuwaitAddress, civilId, schoolName, ieltsScore,
+            scholarshipType, acceptanceType, followUpPerson,
+            guardianName, guardianEmail, guardianPhone, guardianDob,
+            countries: selectedCountries,
+            perCountry: [
+              { label: 'UK', major: ukMajor, universities: ukUniversities },
+              { label: 'Australia / New Zealand', major: aunzMajor, universities: aunzUniversities },
+              { label: 'USA', major: usaMajor, universities: usaUniversities },
+            ],
+            intakeSemester: derivedIntakeSemester,
+            intakeYear: derivedIntakeYear,
+            documentNames,
+            generatedAt: formatKuwaitTime(now),
+          });
+          const pdfPath = `students/${newStudentId}/jotform/application-summary/${Date.now()}_application-summary.pdf`;
+          const downloadToken = crypto.randomUUID();
+          const pdfFileRef = storage.bucket(bucketName).file(pdfPath);
+          await pdfFileRef.save(pdfBuffer, {
+            metadata: { contentType: 'application/pdf', metadata: { firebaseStorageDownloadTokens: downloadToken } },
+          });
+          const pdfUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(pdfPath)}?alt=media&token=${downloadToken}`;
+          passportDocs.push({
+            id: `application-summary-${Date.now()}`,
+            name: 'Application Summary (PDF)',
+            originalName: 'application-summary.pdf',
+            size: pdfBuffer.byteLength,
+            url: pdfUrl,
+            uploadedAt: now,
+            authorId: creatingUserId,
+          });
+        } catch (pdfErr) {
+          console.error('[Jotform] Failed to generate/upload application summary PDF:', pdfErr);
+        }
+      }
 
       const studentDoc: Record<string, unknown> = {
         id: newStudentId,

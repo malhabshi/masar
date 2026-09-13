@@ -208,6 +208,7 @@ export interface Student {
       universityDegree?: string[];
       recommendationLetter?: string[];
       personalStatement?: string[];
+      transcript?: string[];
     };
   };
   studyLevel?: 'Foundation' | 'First Year' | 'Transfer Student';
