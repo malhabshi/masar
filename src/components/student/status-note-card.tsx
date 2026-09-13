@@ -52,7 +52,7 @@ export function StatusNoteCard({ student, currentUser }: StatusNoteCardProps) {
       <CardHeader className="py-3 flex flex-row items-center justify-between space-y-0">
         <div className="flex items-center gap-2">
           <StickyNote className="h-4 w-4 text-primary" />
-          <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Current Status Note</CardTitle>
+          <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Current Status Note and what&apos;s next?</CardTitle>
         </div>
         {isAssignedEmployee && !isEditing && (
           <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} className="h-7 text-[10px] font-bold">

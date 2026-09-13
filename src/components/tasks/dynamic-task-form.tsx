@@ -90,6 +90,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       schemaFields.guardianLastNameEn = z.string().optional();
       schemaFields.guardianDob = z.string().optional();
       schemaFields.guardianPhone = z.string().optional();
+      // Employee can supply the student DOB here when it's missing from the profile.
+      schemaFields.studentDob = z.string().optional();
     }
 
     if (config.examTypes?.includes('ielts_retake')) {
@@ -200,10 +202,39 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       guardianLastNameEn: student.jotformData?.guardianLastNameEn ?? '',
       guardianDob: student.jotformData?.guardianDob ?? '',
       guardianPhone: student.jotformData?.guardianPhone ?? '',
+      studentDob: student.jotformData?.dob ?? '',
     },
   });
 
   const watchExamType = form.watch('examType');
+
+  // Age handling: the profile DOB may be missing. If so, the employee enters it here and
+  // we derive age reactively from the entered value.
+  const profileDob = student.jotformData?.dob;
+  const watchStudentDob = form.watch('studentDob');
+  const effectiveDob = profileDob || watchStudentDob;
+  const effectiveAge = calculateAge(effectiveDob);
+  const effectiveIsMinor = effectiveAge != null && effectiveAge < 18;
+  const isExamTask = !!(requestType.isSpecialTask && config?.examTypes);
+  const needsDobEntry = isExamTask && !profileDob;
+
+  // Block submission of an exam task until DOB is known, and require guardian info for minors.
+  const handleGuardedSubmit = (values: any) => {
+    if (isExamTask) {
+      if (!effectiveDob) {
+        form.setError('studentDob', { type: 'manual', message: "Please add the student's date of birth." });
+        return;
+      }
+      if (effectiveIsMinor) {
+        const ok = values.guardianFirstNameEn?.trim() && values.guardianLastNameEn?.trim() && values.guardianDob && values.guardianPhone?.trim();
+        if (!ok) {
+          form.setError('guardianFirstNameEn', { type: 'manual', message: 'Parent/guardian details are required for students under 18.' });
+          return;
+        }
+      }
+    }
+    onSubmit(values);
+  };
 
   // Keep the exam price aligned with the chosen exam: TOEFL is 108 KWD, IELTS is 94 KWD.
   useEffect(() => {
@@ -326,7 +357,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+      <form onSubmit={form.handleSubmit(handleGuardedSubmit)} className="space-y-6 py-4">
         {/* Student Info Read-Only Section */}
         <div className="bg-muted/30 p-4 rounded-lg border border-dashed space-y-3">
           <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Student Information</h4>
@@ -610,15 +641,35 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         )}
 
         {/* Student age — important for IELTS/TOEFL (under-18 needs a guardian). */}
-        {requestType.isSpecialTask && config?.examTypes && (
+        {isExamTask && (
           <div className={cn(
             "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold",
-            isMinor ? "border-amber-300 bg-amber-50 text-amber-800" : "border-muted bg-muted/30 text-foreground"
+            effectiveIsMinor ? "border-amber-300 bg-amber-50 text-amber-800" : "border-muted bg-muted/30 text-foreground"
           )}>
             <CalendarIcon className="h-4 w-4" />
-            Student Age: {studentAge != null ? `${studentAge} years` : 'N/A (no date of birth on file)'}
-            {isMinor && <span className="uppercase tracking-wide text-[11px]">· Under 18 — guardian required</span>}
+            Student Age: {effectiveAge != null ? `${effectiveAge} years` : 'N/A (no date of birth on file)'}
+            {effectiveIsMinor && <span className="uppercase tracking-wide text-[11px]">· Under 18 — guardian required</span>}
           </div>
+        )}
+
+        {/* Prompt the employee to add DOB when it's missing from the profile. */}
+        {needsDobEntry && (
+          <FormField
+            control={form.control}
+            name="studentDob"
+            render={({ field }) => (
+              <FormItem className="rounded-md border border-amber-300 bg-amber-50 p-3">
+                <FormLabel className="font-bold text-amber-800">Student Date of Birth * (missing from profile)</FormLabel>
+                <FormControl>
+                  <Input type="date" max={new Date().toISOString().slice(0, 10)} className="max-w-[220px]" {...field} />
+                </FormControl>
+                <FormDescription className="text-amber-700">
+                  This student has no date of birth on file. Add it to confirm their age{effectiveAge != null ? ` (currently ${effectiveAge})` : ''}. If under 18, parent/guardian details are required below. It will be saved to the profile.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         )}
 
         {/* Exam Type Selection */}
@@ -758,11 +809,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
               )}
             />
 
-            {isMinor && (
+            {effectiveIsMinor && (
               <div className="space-y-4 rounded-md border border-amber-300 bg-amber-50 p-4">
                 <div className="space-y-0.5">
                   <p className="text-sm font-bold text-amber-800">
-                    Parent / Guardian details required (student is {studentAge})
+                    Parent / Guardian details required (student is {effectiveAge})
                   </p>
                   <p className="text-xs text-amber-700">
                     The student is under 18. Enter the parent/guardian information in English for the exam registration.

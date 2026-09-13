@@ -171,6 +171,8 @@ export function TaskDetailsDialog({
     'courseStartDate', 'courseOption', 'retakeSection', 'preferredDate', 'preferredTime', 'amount',
     'guardianFirstNameEn', 'guardianLastNameEn', 'guardianDob', 'guardianPhone', 'originalExamDate',
     'idpUsername', 'idpPassword', 'notes', 'isPaid',
+    // Auto-added to every task's data (createStudentTask) and already shown in the header.
+    'studentName', 'studentEmail', 'studentPhone', 'requestedBy', 'requestedByName',
     'unifiedExamDateId', 'unifiedExamDateLabel', 'unifiedExamDelivery',
     'selectedApplicationDetails', 'selectedApplicationId',
     'selectedGlobalUniversityDetails', 'selectedGlobalUniversityId',
@@ -352,9 +354,6 @@ export function TaskDetailsDialog({
                 {renderDataField('Exam Date', data.unifiedExamDateLabel, Calendar)}
                 {renderDataField('Delivery', data.unifiedExamDelivery)}
                 {renderDataField('Amount', data.amount ? `${data.amount} KWD` : null, DollarSign, false, undefined, true)}
-                {renderDataField('Parent Name (EN)', [data.guardianFirstNameEn, data.guardianLastNameEn].filter(Boolean).join(' ') || null, User)}
-                {renderDataField('Parent DOB', data.guardianDob, Calendar, true)}
-                {renderDataField('Parent Phone', data.guardianPhone)}
                 {(data.amount != null || data.examType) && (
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Payment Status</p>
@@ -383,6 +382,20 @@ export function TaskDetailsDialog({
                 {renderDataField('Original Exam', data.originalExamDate, Calendar, true)}
               </div>
             </section>
+
+            {(data.guardianFirstNameEn || data.guardianLastNameEn || data.guardianDob || data.guardianPhone) && (
+              <section className="space-y-4">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-amber-700">
+                  <User className="h-5 w-5" />
+                  Parent / Guardian
+                </h3>
+                <div className="grid grid-cols-2 gap-y-6 bg-amber-50 p-4 rounded-lg border border-amber-200">
+                  {renderDataField('Parent Name (EN)', [data.guardianFirstNameEn, data.guardianLastNameEn].filter(Boolean).join(' ') || null, User)}
+                  {renderDataField('Parent DOB', data.guardianDob, Calendar, true)}
+                  {renderDataField('Parent Phone', data.guardianPhone)}
+                </div>
+              </section>
+            )}
 
             {extraDataEntries.length > 0 && (
               <section className="space-y-4">

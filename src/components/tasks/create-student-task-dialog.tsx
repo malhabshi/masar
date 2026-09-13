@@ -94,6 +94,13 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
     
     setIsSubmitting(true);
 
+    // Persist a newly-entered student DOB back to the profile (was missing before).
+    if (data.studentDob && data.studentDob !== student.jotformData?.dob) {
+      try {
+        updateDocumentNonBlocking(doc(firestore, 'students', student.id), { 'jotformData.dob': data.studentDob } as any);
+      } catch { /* best-effort */ }
+    }
+
     // Persist under-18 parent/guardian info to the student so future tasks pre-fill it.
     if (data.guardianFirstNameEn || data.guardianLastNameEn || data.guardianDob || data.guardianPhone) {
       try {
