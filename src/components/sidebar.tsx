@@ -45,7 +45,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase';
-import { where, orderBy, collection, query } from 'firebase/firestore';
+import { where, orderBy, collection, query, limit } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { Student, Task } from '@/lib/types';
 import { Button } from './ui/button';
@@ -64,45 +64,64 @@ export function AppSidebar() {
     const isManagementRole = user?.role === 'admin' || user?.role === 'adminplus' || user?.role === 'department';
     const isEmployeeView = effectiveRole === 'employee';
     
-    // 1. Memoize constraints for real-time student monitoring
+    // 1. Memoize constraints for real-time student monitoring.
+    // Management view only needs the MOST RECENTLY ACTIVE students for these badges (any
+    // real activity — a message, a document, a flag — bumps lastActivityAt), so capping to
+    // a generous recent window avoids downloading the entire collection on every page while
+    // still catching anything that actually needs attention. The two badges that must be
+    // exact regardless of recency (Change Agent, Finalized) get their own dedicated
+    // server-filtered queries below instead of relying on this capped list.
+    const BADGE_STUDENT_WINDOW = 300;
     const studentQuery = useMemoFirebase(() => {
       if (!user) return null;
-      
+
       // In Employee view, we monitor the assigned portfolio
       if (isEmployeeView && user.civilId) {
           return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
       }
-      
-      // In Management view, monitor everything for badges
+
+      // In Management view, monitor the most recently active students for badges
       if (isManagementRole) {
-          return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
+          return query(collection(firestore, 'students'), orderBy('lastActivityAt', 'desc'), limit(BADGE_STUDENT_WINDOW));
       }
-      
+
       return null;
     }, [user?.civilId, user?.role, effectiveRole, isManagementRole, isEmployeeView]);
 
     const { data: students } = useCollection<Student>(studentQuery);
 
-    // 2. Listen to tasks targeted at the user or their department
+    // 1b. Change Agent badge — a dedicated, server-filtered query instead of scanning every
+    // student, so it's both cheap AND exact (a flag from months ago still counts).
+    const changeAgentQuery = useMemoFirebase(() => {
+      if (!user || isEmployeeView) return null;
+      return query(collection(firestore, 'students'), where('changeAgentRequired', '==', true));
+    }, [user?.id, isEmployeeView]);
+    const { data: changeAgentStudents } = useCollection<Student>(changeAgentQuery);
+
+    // 1c. Finalized badge — same idea: a dedicated, server-filtered query.
+    const finalizedQuery = useMemoFirebase(() => {
+      if (!user || !isManagementRole || isEmployeeView) return null;
+      return query(collection(firestore, 'students'), where('finalChoiceUniversity', '>', ''));
+    }, [user?.id, isManagementRole, isEmployeeView]);
+    const { data: finalizedStudents } = useCollection<Student>(finalizedQuery);
+
+    // 2. Listen to tasks targeted at the user or their department.
+    // (Admins used to load the ENTIRE tasks collection here "for oversight," but this badge
+    // only ever counts tasks addressed to this specific user — so scope the query the same
+    // way for everyone.)
     const taskQuery = useMemoFirebase(() => {
         if (!user) return null;
-        
-        // Admins and adminplus see all tasks for oversight
-        if ((user.role === 'admin' || user.role === 'adminplus') && viewMode === 'management') {
-            return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
-        }
 
-        // Employee View or Department View: Match targeting logic
         const groups = [user.id, 'all'];
         if (user.department) {
             groups.push(`dept:${user.department}`);
         }
 
         return query(
-            collection(firestore, 'tasks'), 
+            collection(firestore, 'tasks'),
             where('recipientIds', 'array-contains-any', groups)
         );
-    }, [user?.id, user?.role, user?.department, viewMode]);
+    }, [user?.id, user?.department]);
 
     const { data: tasks } = useCollection<Task>(taskQuery);
 
@@ -160,10 +179,10 @@ export function AppSidebar() {
 
     // 6. Change Agent Count for Management (With Precision Regional Routing)
     const changeAgentCount = useMemo(() => {
-      if (!students || isEmployeeView) return 0;
-      
-      let flaggedStudents = students.filter(s => s.changeAgentRequired);
-      
+      if (!changeAgentStudents || isEmployeeView) return 0;
+
+      let flaggedStudents = changeAgentStudents;
+
       if (effectiveRole === 'department' && user?.department) {
         const dept = user.department;
         flaggedStudents = flaggedStudents.filter(student => {
@@ -180,18 +199,16 @@ export function AppSidebar() {
       }
       
       return flaggedStudents.length;
-    }, [students, isEmployeeView, effectiveRole, user?.department]);
-    
+    }, [changeAgentStudents, isEmployeeView, effectiveRole, user?.department]);
+
     // 7. Unread Finalized Students for Admin/Department
     const unreadFinalizedCount = useMemo(() => {
-        if (!students || !user || !isManagementRole) return 0;
-        
-        return students.filter(s => 
-            s.finalChoiceUniversity && 
-            s.finalChoiceUniversity.length > 0 && 
+        if (!finalizedStudents || !user || !isManagementRole) return 0;
+
+        return finalizedStudents.filter(s =>
             (!s.finalizedViewedBy || !s.finalizedViewedBy.includes(user.id))
         ).length;
-    }, [students, user, isManagementRole]);
+    }, [finalizedStudents, user, isManagementRole]);
 
     const userHasRole = (roles: string[]) => roles.includes(effectiveRole);
     
