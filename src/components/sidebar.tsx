@@ -40,6 +40,7 @@ import {
   Link2,
   Calculator,
   Send,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -258,6 +259,7 @@ export function AppSidebar() {
     ];
 
     const adminNav = [
+        { href: '/ai-assistant', label: 'AI Assistant', icon: Sparkles, roles: ['admin'] },
         { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin'] },
         { href: '/employee-activity', label: 'User Activity', icon: LineChart, roles: ['admin'] },
         { href: '/employee-students-count', label: 'Employee Stats', icon: BarChart, roles: ['admin'] },
