@@ -2862,6 +2862,39 @@ export async function reopenStudentProfile(studentId: string, adminId: string) {
 
 // ─── Jotform Application Submission ───────────────────────────────────────────
 
+// jsPDF's core fonts only support WinAnsi encoding — Arabic text renders as mojibake.
+// scholarshipType and followUpPerson are closed-vocabulary Select values that include
+// Arabic (see SCHOLARSHIP_OPTIONS / STAFF_NAMES in the Jotform page); map them to plain
+// English labels for the PDF only. The actual JotForm submission still uses the raw
+// (Arabic) values — this affects display in this PDF alone.
+const SCHOLARSHIP_LABELS_EN: Record<string, string> = {
+  'MOHE - التعليم العالي': 'MOHE (Higher Education)',
+  'خطة الايفاد': 'Ayfad Plan',
+  'بعثه متميزه': 'Distinguished Scholarship',
+  'طلبة الثانويه العامه': 'General Secondary Students',
+  'PAEET - التطبيقي': 'PAEET (Applied Education)',
+  'Self Funded - حساب الخاص': 'Self Funded',
+};
+const STAFF_NAME_LABELS_EN: Record<string, string> = {
+  'طلال': 'Talal',
+  'محمد سليمان': 'Mohammed Sulaiman',
+  'خالد الشمري': 'Khaled Alshammari',
+  'يوسف سليمان': 'Yousef Sulaiman',
+  'عبدالرحمن العنزي': 'Abdulrahman Alanzi',
+  'طلال العنزي': 'Talal Alanzi',
+  'زينب دشتي': 'Zainab Dashti',
+  'دنيا': 'Donia',
+  'عايشه': 'Aisha',
+  'مريم العنزي': 'Maryam Alanzi',
+  'حنان الكندري': 'Hanan Alkandari',
+  'فاطمه الشمري': 'Fatima Alshammari',
+  'خالد الهدهود': 'Khaled Alhadhoud',
+  'ابراهيم': 'Ibrahim',
+  'دلال': 'Dalal',
+};
+const toDisplayLabel = (map: Record<string, string>, raw?: string): string | undefined =>
+  raw ? (map[raw] || raw) : raw;
+
 // Builds a filled PDF summary of a Jotform submission (student + guardian info, chosen
 // countries/majors/universities, and the list of uploaded documents) so there is a
 // permanent record even if the live JotForm submission itself later fails or changes.
@@ -2946,10 +2979,10 @@ function buildApplicationSummaryPdf(input: {
 
   addSectionTitle('Application Details');
   addRow('Target Countries', input.countries.join(', '));
-  addRow('Scholarship Type', input.scholarshipType);
+  addRow('Scholarship Type', toDisplayLabel(SCHOLARSHIP_LABELS_EN, input.scholarshipType));
   addRow('Application Type', input.acceptanceType);
   addRow('Intake', input.intakeSemester ? `${input.intakeSemester} ${input.intakeYear}` : undefined);
-  addRow('Follow-up Person', input.followUpPerson);
+  addRow('Follow-up Person', toDisplayLabel(STAFF_NAME_LABELS_EN, input.followUpPerson));
   y += 3;
 
   for (const pc of input.perCountry) {
