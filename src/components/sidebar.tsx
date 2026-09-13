@@ -45,7 +45,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { useCollection, useMemoFirebase } from '@/firebase';
-import { where, orderBy, collection, query } from 'firebase/firestore';
+import { where, collection, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import type { Student, Task } from '@/lib/types';
 import { Button } from './ui/button';
@@ -64,76 +64,111 @@ export function AppSidebar() {
     const isManagementRole = user?.role === 'admin' || user?.role === 'adminplus' || user?.role === 'department';
     const isEmployeeView = effectiveRole === 'employee';
     
-    // 1. Memoize constraints for real-time student monitoring
-    const studentQuery = useMemoFirebase(() => {
-      if (!user) return null;
-      
-      // In Employee view, we monitor the assigned portfolio
-      if (isEmployeeView && user.civilId) {
-          return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
-      }
-      
-      // In Management view, monitor everything for badges
-      if (isManagementRole) {
-          return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
-      }
-      
-      return null;
-    }, [user?.civilId, user?.role, effectiveRole, isManagementRole, isEmployeeView]);
+    // Every badge below used to work by downloading the ENTIRE students/tasks collection
+    // and counting in JavaScript. Verified against real production data (see conversation)
+    // that switching to targeted, field-specific queries — asking the database directly
+    // "which students have unread chat for ME" instead of "give me everyone, I'll check
+    // myself" — produces IDENTICAL numbers while fetching a tiny fraction of the documents.
+    // Employee-view portfolio query — already narrow, unchanged.
+    const employeeStudentQuery = useMemoFirebase(() => {
+      if (!user || !isEmployeeView || !user.civilId) return null;
+      return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
+    }, [user?.civilId, isEmployeeView]);
+    const { data: employeeStudents } = useCollection<Student>(employeeStudentQuery);
 
-    const { data: students } = useCollection<Student>(studentQuery);
+    // Management-view badges: one small targeted query per notification TYPE, instead of
+    // one giant query for every student.
+    const chatUnreadQuery = useMemoFirebase(() => {
+      if (!user || isEmployeeView || !isManagementRole) return null;
+      return query(collection(firestore, 'students'), where(`chatUnreadCountByUser.${user.id}`, '>', 0));
+    }, [user?.id, isEmployeeView, isManagementRole]);
+    const { data: chatUnreadStudents } = useCollection<Student>(chatUnreadQuery);
 
-    // 2. Listen to tasks targeted at the user or their department
+    const newDocsQuery = useMemoFirebase(() => {
+      if (!user || isEmployeeView || !isManagementRole) return null;
+      return query(collection(firestore, 'students'), where('newDocumentsForAdmin', '>', 0));
+    }, [user?.id, isEmployeeView, isManagementRole]);
+    const { data: newDocsStudents } = useCollection<Student>(newDocsQuery);
+
+    const newUploadsQuery = useMemoFirebase(() => {
+      if (!user || isEmployeeView || !isManagementRole) return null;
+      return query(collection(firestore, 'students'), where('newPublicUploadsForAdmin', '>', 0));
+    }, [user?.id, isEmployeeView, isManagementRole]);
+    const { data: newUploadsStudents } = useCollection<Student>(newUploadsQuery);
+
+    // Dedicated, cheap query for the Change Agent badge — filters server-side instead of
+    // downloading every student, and stays exact regardless of how old the flag is.
+    const changeAgentQuery = useMemoFirebase(() => {
+      if (!user || isEmployeeView) return null;
+      return query(collection(firestore, 'students'), where('changeAgentRequired', '==', true));
+    }, [user?.id, isEmployeeView]);
+    const { data: changeAgentStudents } = useCollection<Student>(changeAgentQuery);
+
+    // Dedicated, cheap query for the Finalized badge.
+    const finalizedQuery = useMemoFirebase(() => {
+      if (!user || !isManagementRole || isEmployeeView) return null;
+      return query(collection(firestore, 'students'), where('finalChoiceUniversity', '>', ''));
+    }, [user?.id, isManagementRole, isEmployeeView]);
+    const { data: finalizedStudents } = useCollection<Student>(finalizedQuery);
+
+    // Admin/department's OWN portfolio (for the "Switch View" pill), same narrow shape as
+    // the employee-view query above.
+    const myPortfolioQuery = useMemoFirebase(() => {
+      if (!user || isEmployeeView || !user.civilId) return null;
+      return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
+    }, [user?.civilId, isEmployeeView]);
+    const { data: myPortfolioStudents } = useCollection<Student>(myPortfolioQuery);
+
+    // Tasks targeted at the user or their department — already narrow (was previously
+    // widened to "every task in the system" for admins, even though the badge only ever
+    // counted tasks addressed to that one user).
     const taskQuery = useMemoFirebase(() => {
         if (!user) return null;
-        
-        // Admins and adminplus see all tasks for oversight
-        if ((user.role === 'admin' || user.role === 'adminplus') && viewMode === 'management') {
-            return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
-        }
 
-        // Employee View or Department View: Match targeting logic
         const groups = [user.id, 'all'];
         if (user.department) {
             groups.push(`dept:${user.department}`);
         }
 
         return query(
-            collection(firestore, 'tasks'), 
+            collection(firestore, 'tasks'),
             where('recipientIds', 'array-contains-any', groups)
         );
-    }, [user?.id, user?.role, user?.department, viewMode]);
+    }, [user?.id, user?.department]);
 
     const { data: tasks } = useCollection<Task>(taskQuery);
 
     // 3. Aggregate notification counts based on active view
     const studentNotificationCount = useMemo(() => {
-      if (!students || !user) return 0;
-      
-      return students.reduce((acc, student) => {
-        if (!isEmployeeView) {
-          const ud = student.chatUnreadCountByUser?.[user.id] || 0;
-          const nd = (student.newDocumentsForAdmin || 0) > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) ? student.newDocumentsForAdmin || 0 : 0;
-          const pu = (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(user.id)) ? student.newPublicUploadsForAdmin || 0 : 0;
-          return acc + ud + nd + pu;
-        } else {
+      if (!user) return 0;
+
+      if (isEmployeeView) {
+        if (!employeeStudents) return 0;
+        return employeeStudents.reduce((acc, student) => {
           const um = (student.employeeUnreadMessages || 0) > 0 && (!student.updatesViewedBy || !student.updatesViewedBy.includes(user.id)) ? student.employeeUnreadMessages || 0 : 0;
           const ed = (student.newDocumentsForEmployee || 0) > 0 && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) ? student.newDocumentsForEmployee || 0 : 0;
           const mi = (student.newMissingItemsForEmployee || 0) > 0 && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(user.id)) ? student.newMissingItemsForEmployee || 0 : 0;
           const pu = (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(user.id)) ? student.newPublicUploadsForEmployee || 0 : 0;
           return acc + um + ed + mi + pu;
-        }
-      }, 0);
-    }, [students, user, isEmployeeView]);
+        }, 0);
+      }
+
+      let sum = 0;
+      for (const student of chatUnreadStudents || []) sum += student.chatUnreadCountByUser?.[user.id] || 0;
+      for (const student of newDocsStudents || []) {
+        if (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(user.id)) sum += student.newDocumentsForAdmin || 0;
+      }
+      for (const student of newUploadsStudents || []) {
+        if (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(user.id)) sum += student.newPublicUploadsForAdmin || 0;
+      }
+      return sum;
+    }, [user, isEmployeeView, employeeStudents, chatUnreadStudents, newDocsStudents, newUploadsStudents]);
 
     // 4. Aggregated unread chats for "Chats" link
     const unreadChatCount = useMemo(() => {
-      if (!students || !user || !isManagementRole || isEmployeeView) return 0;
-      return students.reduce((acc, student) => {
-          const ud = student.chatUnreadCountByUser?.[user.id] || 0;
-          return acc + ud;
-      }, 0);
-    }, [students, user, isManagementRole, isEmployeeView]);
+      if (!user || !isManagementRole || isEmployeeView) return 0;
+      return (chatUnreadStudents || []).reduce((acc, student) => acc + (student.chatUnreadCountByUser?.[user.id] || 0), 0);
+    }, [chatUnreadStudents, user, isManagementRole, isEmployeeView]);
 
     // 5. Tasks notification count — active personal tasks (new or in-progress), matching "My Tasks" tab logic
     const unreadTaskCount = useMemo(() => {
@@ -160,10 +195,10 @@ export function AppSidebar() {
 
     // 6. Change Agent Count for Management (With Precision Regional Routing)
     const changeAgentCount = useMemo(() => {
-      if (!students || isEmployeeView) return 0;
-      
-      let flaggedStudents = students.filter(s => s.changeAgentRequired);
-      
+      if (!changeAgentStudents || isEmployeeView) return 0;
+
+      let flaggedStudents = changeAgentStudents;
+
       if (effectiveRole === 'department' && user?.department) {
         const dept = user.department;
         flaggedStudents = flaggedStudents.filter(student => {
@@ -173,36 +208,33 @@ export function AppSidebar() {
             .filter(app => flaggedUnis.includes(app.university))
             .map(a => a.country);
 
-          return (dept === 'UK' && flaggedCountries.includes('UK')) || 
-                 (dept === 'USA' && flaggedCountries.includes('USA')) || 
+          return (dept === 'UK' && flaggedCountries.includes('UK')) ||
+                 (dept === 'USA' && flaggedCountries.includes('USA')) ||
                  (dept === 'AU/NZ' && (flaggedCountries.includes('Australia') || flaggedCountries.includes('New Zealand')));
         });
       }
-      
+
       return flaggedStudents.length;
-    }, [students, isEmployeeView, effectiveRole, user?.department]);
-    
+    }, [changeAgentStudents, isEmployeeView, effectiveRole, user?.department]);
+
     // 7. Unread Finalized Students for Admin/Department
     const unreadFinalizedCount = useMemo(() => {
-        if (!students || !user || !isManagementRole) return 0;
-        
-        return students.filter(s => 
-            s.finalChoiceUniversity && 
-            s.finalChoiceUniversity.length > 0 && 
+        if (!finalizedStudents || !user || !isManagementRole) return 0;
+
+        return finalizedStudents.filter(s =>
             (!s.finalizedViewedBy || !s.finalizedViewedBy.includes(user.id))
         ).length;
-    }, [students, user, isManagementRole]);
+    }, [finalizedStudents, user, isManagementRole]);
 
     const userHasRole = (roles: string[]) => roles.includes(effectiveRole);
-    
+
     // 7. Track background updates for Employee View when staying on Management View
     const employeeUnreadCount = useMemo(() => {
-      if (!students || !user || !user.civilId || isEmployeeView) return 0;
-      const myStudents = students.filter(s => s.employeeId === user.civilId);
-      return myStudents.reduce((acc, student) => {
+      if (!myPortfolioStudents || !user || !user.civilId || isEmployeeView) return 0;
+      return myPortfolioStudents.reduce((acc, student) => {
           return acc + (student.employeeUnreadMessages || 0) + (student.newDocumentsForEmployee || 0) + (student.newMissingItemsForEmployee || 0) + (student.isNewForEmployee ? 1 : 0);
       }, 0);
-    }, [students, user, isEmployeeView]);
+    }, [myPortfolioStudents, user, isEmployeeView]);
     
     const mainNav = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'adminplus', 'employee', 'department'] },
