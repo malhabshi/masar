@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Search, User as UserIcon, Building2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCollection, useMemoFirebase } from '@/firebase';
-import { where, query, collection, orderBy, limit } from 'firebase/firestore';
+import { where, query, collection, orderBy } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { sortByDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
@@ -22,38 +22,31 @@ interface TaskManagerProps {
     currentUser: AppUser;
 }
 
-const TASKS_PAGE_SIZE = 100;
-
 export function TaskManager({ currentUser }: TaskManagerProps) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const [selectedTask, setSelectedRequestTask] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [visibleCount, setVisibleCount] = useState(TASKS_PAGE_SIZE);
-
+  
   const [taskView, setTaskView] = useState<'personal' | 'department'>(
     currentUser?.role === 'department' ? 'department' : 'personal'
   );
-
+  
   const { toast } = useToast();
   const [newItems, setNewItems] = useState(new Set<string>());
 
-  // While actively searching, fetch everything so the search covers the full history
-  // (matches what search used to do); otherwise only pull the most recent page.
-  const hasSearch = !!searchQuery.trim();
-
   const tasksQuery = useMemoFirebase(() => {
     if (!currentUser) return null;
-
+    
     if (currentUser.role === 'admin' || currentUser.role === 'adminplus') {
-      return hasSearch
-        ? query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'))
-        : query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'), limit(visibleCount));
+      return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
     }
 
     if (currentUser.role === 'employee') {
-        return hasSearch
-          ? query(collection(firestore, 'tasks'), where('authorId', '==', currentUser.id), orderBy('createdAt', 'desc'))
-          : query(collection(firestore, 'tasks'), where('authorId', '==', currentUser.id), orderBy('createdAt', 'desc'), limit(visibleCount));
+        return query(
+            collection(firestore, 'tasks'),
+            where('authorId', '==', currentUser.id),
+            orderBy('createdAt', 'desc')
+        );
     }
 
     // Task Manager for Department users: Unified query for their ID, their department, and 'all'
@@ -62,14 +55,15 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
         groups.push(`dept:${currentUser.department}`);
     }
 
-    return hasSearch
-      ? query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', groups), orderBy('createdAt', 'desc'))
-      : query(collection(firestore, 'tasks'), where('recipientIds', 'array-contains-any', groups), orderBy('createdAt', 'desc'), limit(visibleCount));
-  }, [currentUser, visibleCount, hasSearch]);
+    return query(
+      collection(firestore, 'tasks'), 
+      where('recipientIds', 'array-contains-any', groups),
+      orderBy('createdAt', 'desc')
+    );
+  }, [currentUser]);
 
   const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
   const tasks = useMemo(() => tasksData || [], [tasksData]);
-  const hasMoreTasks = !hasSearch && tasks.length >= visibleCount;
 
   useEffect(() => {
     if (!tasks || tasks.length === 0 || !currentUser) return;
@@ -298,11 +292,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
           </div>
         </CardHeader>
         <CardContent>
-          {!hasSearch && (
-            <p className="text-xs text-muted-foreground italic mb-3">
-              Showing the {visibleCount} most recent requests. Use search to find an older one by name, phone, or content.
-            </p>
-          )}
           {isLoading ? (
               <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
           ) : (
@@ -344,13 +333,6 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
                     </TabsContent>
                   ))}
               </Tabs>
-          )}
-          {hasMoreTasks && (
-            <div className="flex justify-center pt-6">
-              <Button variant="outline" size="sm" onClick={() => setVisibleCount(c => c + TASKS_PAGE_SIZE)} className="gap-2">
-                Load More Requests
-              </Button>
-            </div>
           )}
         </CardContent>
       </Card>

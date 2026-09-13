@@ -8,7 +8,7 @@ import type { Task, UpcomingEvent, Student, Country } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { ToastAction } from '@/components/ui/toast';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { where, orderBy, collection, query, limit } from 'firebase/firestore';
+import { where, orderBy, collection, query } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 
 function playNotificationSound(frequency = 800) {
@@ -49,13 +49,10 @@ export function NotificationListener() {
   // Use a session marker to ignore everything older than the page load on the very first snapshot
   const sessionStartTime = useRef(new Date().toISOString());
 
-  // Only watching for BRAND NEW tasks to toast about, so a recent window is all that's
-  // needed — new tasks always appear at the top of a createdAt-desc query.
-  const NOTIFICATION_TASK_WINDOW = 50;
   const tasksQuery = useMemoFirebase(() => {
     if (!user || user.role === 'adminplus') return null;
-    if (user.role === 'admin') return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'), limit(NOTIFICATION_TASK_WINDOW));
-
+    if (user.role === 'admin') return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+    
     // Correctly match targeted tasks for employees and departments
     const groups = [user.id, 'all'];
     if (user.department) groups.push(`dept:${user.department}`);
@@ -71,18 +68,13 @@ export function NotificationListener() {
 
   const { data: events } = useCollection<UpcomingEvent>(eventsQuery);
 
-  // Watching for new students, new chat messages, and new documents. Every one of those
-  // events bumps lastActivityAt on the student doc (confirmed: sendChatMessage and document
-  // upload actions both set it), so ordering by lastActivityAt-desc with a generous window
-  // will always catch anything that just happened, without downloading the whole collection.
-  const NOTIFICATION_STUDENT_WINDOW = 300;
   const studentQuery = useMemoFirebase(() => {
     if (!user || user.role === 'adminplus') return null;
     const isAdminDept = user.role === 'admin' || user.role === 'department';
     const isEmployee = user.role === 'employee';
-    if (isAdminDept) return query(collection(firestore, 'students'), orderBy('lastActivityAt', 'desc'), limit(NOTIFICATION_STUDENT_WINDOW));
+    if (isAdminDept) return query(collection(firestore, 'students'), orderBy('createdAt', 'desc'));
     if (isEmployee && user.civilId) return query(collection(firestore, 'students'), where('employeeId', '==', user.civilId));
-    return null;
+    return null; 
   }, [user?.civilId, user?.role]);
 
   const { data: students } = useCollection<Student>(studentQuery);

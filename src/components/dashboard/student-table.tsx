@@ -56,13 +56,6 @@ interface StudentTableProps {
   // When true, shows how many days ago each profile was originally created (e.g. on the
   // Unassigned Students page, so admins can see how long a lead has been waiting).
   showDaysSinceCreated?: boolean;
-  // Optional pagination affordance: the parent only fetched a first page of `students`
-  // from Firestore (faster initial load) and can fetch more on request. When provided,
-  // a "Load More" control renders below the table, and search/filters are captioned to
-  // clarify they only cover the rows already loaded.
-  hasMore?: boolean;
-  onLoadMore?: () => void;
-  isLoadingMore?: boolean;
 }
 
 const pipelineStatusStyles: { [key: string]: string } = {
@@ -82,7 +75,7 @@ const pipelineStatusLabels: { [key: string]: string } = {
     none: 'No Status',
 };
 
-export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found.", revealClosedOnSearch = false, onFilteredStudentsChange, showDaysSinceCreated = false, hasMore = false, onLoadMore, isLoadingMore = false }: StudentTableProps) {
+export function StudentTable({ students, currentUser: propUser, allUsers, emptyStateMessage = "No students found.", revealClosedOnSearch = false, onFilteredStudentsChange, showDaysSinceCreated = false }: StudentTableProps) {
   const { toast } = useToast();
   const { user: authUser, effectiveRole } = useUser();
   
@@ -964,23 +957,6 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           </TableBody>
         </Table>
       </div>
-      {onLoadMore && (
-        <div className="flex flex-col items-center gap-2 py-4 border-t">
-          {isFiltered && (
-            <p className="text-xs text-muted-foreground italic">
-              Search and filters only look through the students already loaded below.
-            </p>
-          )}
-          {hasMore ? (
-            <Button variant="outline" size="sm" onClick={onLoadMore} disabled={isLoadingMore} className="gap-2">
-              {isLoadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {isLoadingMore ? 'Loading...' : 'Load More Students'}
-            </Button>
-          ) : (
-            <p className="text-xs text-muted-foreground">All students loaded.</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }
