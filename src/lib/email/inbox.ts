@@ -84,8 +84,17 @@ export async function verifyInboxConnection(): Promise<{ ok: boolean; error?: st
   }
 }
 
-/** Fetch unread messages that have at least one usable attachment. */
-export async function fetchUnreadWithAttachments(limit = 20): Promise<InboxMessage[]> {
+/**
+ * Fetch unread messages.
+ *
+ * `requireAttachments: false` also returns plain text updates — a student writing
+ * "my visa was approved" matters as much as one sending a scan.
+ */
+export async function fetchUnreadMessages(
+  limit = 20,
+  opts: { requireAttachments?: boolean } = {},
+): Promise<InboxMessage[]> {
+  const requireAttachments = opts.requireAttachments ?? false;
   const config = imapConfig();
   if (!config) throw new Error('Inbox is not configured (SMTP_USER / SMTP_PASSWORD).');
 
@@ -123,7 +132,7 @@ export async function fetchUnreadWithAttachments(limit = 20): Promise<InboxMessa
           });
         }
 
-        if (attachments.length === 0) continue;
+        if (requireAttachments && attachments.length === 0) continue;
 
         const fromAddr = parsed.from?.value?.[0];
         results.push({

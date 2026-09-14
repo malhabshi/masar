@@ -101,8 +101,9 @@ export default function EmailIntakePage() {
           title: 'Inbox checked',
           description:
             data.processed === 0
-              ? 'No new emails with attachments.'
-              : `${data.processed} email(s): ${data.filed} filed automatically, ${data.queued} need review, ${data.failed} failed.`,
+              ? 'No new emails.'
+              : `${data.processed} email(s): ${data.filed} filed, ${data.notified} posted to chat, ` +
+                `${data.queued} need review, ${data.skipped} skipped, ${data.failed} failed.`,
         });
       }
       await load();

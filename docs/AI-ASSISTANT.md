@@ -226,6 +226,21 @@ Names are normalised (case, punctuation, whitespace) and matched on whole-word
 boundaries. Arabic-script names work. Students whose stored name is a single word
 (27 of them) are excluded from auto-matching — one token is too weak a signal.
 
+### Announcing it in the internal chat
+
+Every identified email is posted into that student's internal staff chat as **Masar AI**,
+with a one-line AI summary of what the student is saying or asking for, plus the list of
+files attached to the profile. Three groups are notified:
+
+- **the assigned employee** — `student.employeeId` is a civil ID, so it is resolved to a
+  user id first (verified: 0 of 699 assigned students fail this lookup)
+- **all admins**
+- **the relevant department** — derived from the student's application countries, so a UK
+  applicant reaches the UK department and an Australian one reaches AU/NZ
+
+This is how staff find out at all; the document counters alone are easy to miss.
+Manually-filed items from the review queue are announced the same way.
+
 ### What gets picked up
 
 Unread messages with at least one attachment of a plausible document type (PDF, PNG,

@@ -11,13 +11,14 @@
 import { adminDb, storage } from '@/lib/firebase/admin';
 import { uploadStudentDocument } from '@/lib/documents/upload';
 import {
-  fetchUnreadWithAttachments,
+  fetchUnreadMessages,
   isInboxConfigured,
   markMessageSeen,
   type InboxAttachment,
   type InboxMessage,
 } from './inbox';
 import { loadStudentNames, matchStudentByName } from './matcher';
+import { announceEmailInChat } from './notify-chat';
 
 export const INTAKE_QUEUE_COLLECTION = 'email_intake_queue';
 export const INTAKE_LOG_COLLECTION = 'email_intake_log';
@@ -33,6 +34,8 @@ export type IntakeResult = {
   queued: number;
   failed: number;
   skipped: number;
+  /** How many were announced in the student's internal chat. */
+  notified: number;
   items: Array<{
     subject: string;
     from: string;
@@ -41,8 +44,21 @@ export type IntakeResult = {
     studentId?: string;
     studentName?: string;
     attachments: string[];
+    chatPosted?: boolean;
+    chatError?: string;
   }>;
 };
+
+/** The assigned employee's civil ID, used to notify them specifically. */
+async function getStudentEmployeeCivilId(studentId: string): Promise<string | null> {
+  if (!adminDb) return null;
+  try {
+    const snap = await adminDb.collection('students').doc(studentId).get();
+    return (snap.data()?.employeeId as string | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Park an attachment in Storage so a reviewer can open it later without us having
@@ -108,7 +124,15 @@ async function log(entry: Record<string, unknown>): Promise<void> {
  * Run one intake pass. Never throws — returns a summary of what happened.
  */
 export async function runEmailIntake(options: { limit?: number } = {}): Promise<IntakeResult> {
-  const result: IntakeResult = { processed: 0, filed: 0, queued: 0, failed: 0, skipped: 0, items: [] };
+  const result: IntakeResult = {
+    processed: 0,
+    filed: 0,
+    queued: 0,
+    failed: 0,
+    skipped: 0,
+    notified: 0,
+    items: [],
+  };
 
   if (!isInboxConfigured()) {
     await log({ status: 'skipped', reason: 'inbox not configured' });
@@ -117,7 +141,9 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
   let messages: InboxMessage[];
   try {
-    messages = await fetchUnreadWithAttachments(options.limit ?? 20);
+    // Attachments are not required: a plain text update ("my visa was approved") still
+    // needs to reach the employee and the department.
+    messages = await fetchUnreadMessages(options.limit ?? 20, { requireAttachments: false });
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     await log({ status: 'error', reason });
@@ -143,6 +169,24 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         match.kind === 'ambiguous'
           ? `Name matched ${match.candidates.length} students — needs a human to choose.`
           : 'No student name found in the email.';
+
+      // An unidentified email carrying a document must never be dropped. An unidentified
+      // email with no attachment is usually a newsletter or spam, so it is logged and
+      // marked read rather than filling the review queue.
+      if (message.attachments.length === 0) {
+        await markMessageSeen(message.uid).catch(() => {});
+        result.skipped++;
+        await log({ status: 'skipped', reason, from: message.from, subject: message.subject });
+        result.items.push({
+          subject: message.subject,
+          from: message.from,
+          status: 'pending_review',
+          reason: `${reason} No attachment, so it was skipped rather than queued.`,
+          attachments: [],
+        });
+        continue;
+      }
+
       const candidates = match.kind === 'ambiguous'
         ? match.candidates.map((c) => ({ id: c.id, name: c.name }))
         : [];
@@ -180,8 +224,22 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     }
 
     if (allOk) {
+      // Announce it in the student's internal chat so the employee, the admins and the
+      // relevant department are all notified — this is how staff find out at all.
+      const employeeCivilId = await getStudentEmployeeCivilId(match.student.id);
+      const announcement = await announceEmailInChat({
+        studentId: match.student.id,
+        employeeCivilId,
+        from: message.from,
+        fromName: message.fromName,
+        subject: message.subject,
+        body: message.text,
+        filedAttachments: attachmentNames,
+      });
+
       await markMessageSeen(message.uid).catch(() => {});
       result.filed++;
+      result.notified += announcement.posted ? 1 : 0;
       result.items.push({
         subject: message.subject,
         from: message.from,
@@ -189,6 +247,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         studentId: match.student.id,
         studentName: match.student.name,
         attachments: attachmentNames,
+        chatPosted: announcement.posted,
+        chatError: announcement.error,
       });
       await log({
         status: 'filed',
@@ -197,6 +257,10 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         from: message.from,
         subject: message.subject,
         attachments: attachmentNames,
+        chatPosted: announcement.posted,
+        chatRecipients: announcement.recipients ?? null,
+        chatContent: announcement.content ?? null,
+        chatError: announcement.error ?? null,
       });
     } else {
       // Upload failed: leave the message unread so the next run retries it.
@@ -271,11 +335,25 @@ export async function resolveQueuedItem(
     filed++;
   }
 
+  // Same announcement as the automatic path, so a manually-filed document notifies the
+  // employee and department too.
+  const employeeCivilId = await getStudentEmployeeCivilId(studentId);
+  const announcement = await announceEmailInChat({
+    studentId,
+    employeeCivilId,
+    from: item.from ?? 'unknown',
+    fromName: (item as { fromName?: string }).fromName,
+    subject: item.subject ?? '',
+    body: (item as { bodyPreview?: string }).bodyPreview ?? '',
+    filedAttachments: attachments.map((a) => a.filename),
+  });
+
   await ref.update({
     status: 'resolved',
     resolvedStudentId: studentId,
     resolvedBy: reviewerId,
     resolvedAt: new Date().toISOString(),
+    chatPosted: announcement.posted,
   });
 
   return { success: true, filed };
