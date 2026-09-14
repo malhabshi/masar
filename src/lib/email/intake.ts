@@ -16,6 +16,7 @@ import {
   fetchUnreadHeaders,
   INTAKE_LABELS,
   isInboxConfigured,
+  markMessageSeen,
   type InboxAttachment,
   type InboxMessage,
 } from './inbox';
@@ -248,14 +249,19 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
   const mailbox = (process.env.SMTP_USER ?? '').toLowerCase();
 
-  // Phase 2 — download in full only what has not been handled before.
-  const messages: InboxMessage[] = [];
-  for (const head of headers) {
-    if (messages.length >= (options.limit ?? 20)) break;
+  // Phase 2a — tidy our own mail across the WHOLE unread list, before any limit applies.
+  //
+  // Receipts are ours and must never sit in the unread count, which is the signal staff
+  // rely on. This runs over every header rather than stopping at the processing limit;
+  // doing it inside the limited loop below left older receipts unread indefinitely.
+  const ours = mailbox ? headers.filter((h) => h.from.toLowerCase() === mailbox) : [];
+  for (const head of ours) await markMessageSeen(head.uid);
 
-    // Our own filing receipts quote the student's name; reading them back would match
-    // that student and generate another receipt.
-    if (mailbox && head.from.toLowerCase() === mailbox) continue;
+  // Phase 2b — download in full only what has not been handled before, up to the limit.
+  const messages: InboxMessage[] = [];
+  const candidates = headers.filter((h) => !mailbox || h.from.toLowerCase() !== mailbox);
+  for (const head of candidates) {
+    if (messages.length >= (options.limit ?? 20)) break;
 
     // Already dealt with in an earlier run — skip without downloading attachments.
     if (await isAlreadyHandled(head.messageId, head.uid)) continue;

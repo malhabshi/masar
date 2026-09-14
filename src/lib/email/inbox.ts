@@ -232,6 +232,30 @@ export async function applyLabel(uid: number, label: string): Promise<boolean> {
 }
 
 /**
+ * Place a message into the mailbox directly, already marked read.
+ *
+ * Used for our own filing receipts. Sending them over SMTP works, but they then arrive
+ * back as UNREAD mail and inflate the unread count until a later run notices and marks
+ * them — and unread is the signal staff rely on. Appending with \Seen puts the receipt in
+ * the conversation immediately without ever touching that count.
+ */
+export async function appendSeenMessage(raw: Buffer | string): Promise<boolean> {
+  const config = imapConfig();
+  if (!config) return false;
+  const client = new ImapFlow(config);
+  try {
+    await client.connect();
+    const res = await client.append('INBOX', raw, ['\\Seen']);
+    return Boolean(res);
+  } catch (e) {
+    console.error('[inbox] Could not append receipt:', e);
+    return false;
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
+/**
  * Fetch unread messages in full.
  *
  * `requireAttachments: false` also returns plain text updates — a student writing

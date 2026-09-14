@@ -5,7 +5,8 @@
 // the same Gmail conversation (via In-Reply-To / References), opening the thread shows
 // what the system did with that email, right underneath it.
 
-import { sendEmail } from './index';
+import nodemailer from 'nodemailer';
+import { appendSeenMessage } from './inbox';
 import type { InboxMessage } from './inbox';
 
 export type ReceiptOutcome =
@@ -107,7 +108,13 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
 }
 
 /**
- * Send the filing report back into the original email thread. Never throws.
+ * Put the filing report into the original email thread. Never throws.
+ *
+ * The message is BUILT locally and appended straight into the mailbox already marked
+ * read — it is never sent over SMTP. Two reasons: it can only ever be for us, so there is
+ * nothing to deliver; and a real send would arrive back as unread mail, inflating the
+ * unread count that staff use as their to-do list. Threading headers still place it under
+ * the original email.
  */
 export async function replyWithReceipt(
   message: InboxMessage,
@@ -118,20 +125,23 @@ export async function replyWithReceipt(
 
   const { subject, text } = buildBody(message, outcome);
 
-  const result = await sendEmail(
-    {
+  try {
+    // streamTransport + buffer builds the MIME message without opening a connection.
+    const builder = nodemailer.createTransport({ streamTransport: true, buffer: true });
+    const built = await builder.sendMail({
+      from: mailbox,
       to: mailbox,
       subject: `Re: ${message.subject || '(no subject)'} — ${subject}`,
       text,
-      ...(message.messageId ? { inReplyTo: message.messageId, references: message.messageId } : {}),
-    },
-    {
-      triggeredBy: 'email-intake',
-      source: 'intake-receipt',
-      // Addressed to our own mailbox only, so dry-run does not suppress it.
-      allowDuringDryRun: true,
-    },
-  );
+      ...(message.messageId
+        ? { inReplyTo: message.messageId, references: [message.messageId] }
+        : {}),
+    });
 
-  return result.success ? { sent: !result.dryRun } : { sent: false, error: result.error };
+    const raw = built.message as Buffer;
+    const ok = await appendSeenMessage(raw);
+    return ok ? { sent: true } : { sent: false, error: 'Could not append the receipt to the mailbox.' };
+  } catch (e) {
+    return { sent: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
