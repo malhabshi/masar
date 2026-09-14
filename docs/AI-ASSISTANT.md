@@ -197,6 +197,54 @@ tasks" off until you have seen its judgement on a few real requests.
 
 ---
 
+## Email document intake
+
+Students email documents in; this reads the mailbox, works out who each one belongs to,
+and attaches it to their profile. Page: **Email Documents** (admin only).
+
+### The matching rule
+
+A document is filed automatically **only when exactly one student's complete registered
+name appears in the email** (sender display name, subject or body). Everything else goes
+to a review queue where a human picks the student.
+
+This was chosen against measured production data (2026-09-14, 1,400 open students):
+
+| Key | Uniquely identifies |
+|---|---|
+| Full name | **100%** — zero collisions |
+| First + last name | 97.2% — 39 students ambiguous |
+| Email address | 38.8% — most students have no address on file |
+
+Full names never collide because of the stored middle initials:
+`FAISAL A S S ALMUTAIRI` vs `FAISAL F M S ALMUTAIRI` are two different people, and an
+email saying only "Faisal Almutairi" matches **neither** — it goes to review. That is
+deliberate. Misfiling a passport onto the wrong profile is a silent, expensive error;
+a few clicks a week is not.
+
+Names are normalised (case, punctuation, whitespace) and matched on whole-word
+boundaries. Arabic-script names work. Students whose stored name is a single word
+(27 of them) are excluded from auto-matching — one token is too weak a signal.
+
+### What gets picked up
+
+Unread messages with at least one attachment of a plausible document type (PDF, PNG,
+JPEG, HEIC, WEBP, DOC, DOCX) under 20 MB. Inline images — signatures and logos — are
+ignored. Messages are marked read only after being dealt with, so a crash means a retry
+rather than a lost document.
+
+### Running it
+
+Press **Check inbox now** on the page, or POST to `/api/email/intake` with a
+`CRON_SECRET` bearer token for a scheduled sweep. Queued items are stored in
+`email_intake_queue`; everything filed is logged to `email_intake_log`.
+
+Reading uses IMAP (`imap.gmail.com:993`) with the same App Password as sending. IMAP must
+be enabled in Gmail (Settings → Forwarding and POP/IMAP), and a Workspace admin can
+disable it org-wide.
+
+---
+
 ## "Late applications" — a new business rule
 
 masar had no concept of application lateness. There is no deadline field anywhere, so
