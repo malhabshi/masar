@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  FlaskConical,
   Inbox,
   Loader2,
   Mail,
@@ -38,9 +39,17 @@ type QueueItem = {
   candidates: Array<{ id: string; name: string }>;
 };
 
+type IntakeSettings = {
+  restrictToStudentId: string | null;
+  restrictToStudentName: string | null;
+  aiRenameDocuments: boolean;
+  postToChat: boolean;
+};
+
 type IntakeStatus = {
   configured: boolean;
   connection: { ok: boolean; error?: string };
+  settings: IntakeSettings;
   pendingCount: number;
   queue: QueueItem[];
 };
@@ -193,12 +202,38 @@ export default function EmailIntakePage() {
         </Alert>
       )}
 
-      {status?.configured && status.connection.ok && (
+      {status?.configured && status.connection.ok && !status.settings.restrictToStudentId && (
         <Alert>
           <CheckCircle2 className="h-4 w-4" />
           <AlertDescription className="text-sm">
             Mailbox connected. Emails whose text contains exactly one student&apos;s full name are
             filed automatically; anything else waits here for you.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {status?.settings.restrictToStudentId && (
+        <Alert>
+          <FlaskConical className="h-4 w-4" />
+          <AlertTitle>Test mode</AlertTitle>
+          <AlertDescription className="space-y-2 text-sm">
+            <p>
+              Only emails for <strong>{status.settings.restrictToStudentName}</strong> will be
+              touched. Everything else in the mailbox is left completely alone — not filed, not
+              queued, and still unread.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                act(
+                  { action: 'settings', restrictToStudentId: null, restrictToStudentName: null },
+                  'Test mode turned off — all students will be processed',
+                )
+              }
+            >
+              Turn off test mode
+            </Button>
           </AlertDescription>
         </Alert>
       )}

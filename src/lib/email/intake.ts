@@ -19,6 +19,8 @@ import {
 } from './inbox';
 import { loadStudentNames, matchStudentByName } from './matcher';
 import { announceEmailInChat } from './notify-chat';
+import { nameDocument } from './name-document';
+import { getIntakeSettings } from './intake-settings';
 
 export const INTAKE_QUEUE_COLLECTION = 'email_intake_queue';
 export const INTAKE_LOG_COLLECTION = 'email_intake_log';
@@ -154,6 +156,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
   if (messages.length === 0) return result;
 
+  const settings = await getIntakeSettings();
   const students = await loadStudentNames();
 
   for (const message of messages) {
@@ -163,6 +166,23 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     // Search the sender's display name, the subject and the body together.
     const searchText = [message.fromName, message.subject, message.text].filter(Boolean).join(' \n ');
     const match = matchStudentByName(searchText, students);
+
+    // Test restriction: anything that is not the chosen student is left completely
+    // untouched — including its unread flag — so a trial run consumes nothing else.
+    if (settings.restrictToStudentId) {
+      const isTarget = match.kind === 'matched' && match.student.id === settings.restrictToStudentId;
+      if (!isTarget) {
+        result.skipped++;
+        result.items.push({
+          subject: message.subject,
+          from: message.from,
+          status: 'pending_review',
+          reason: `Skipped — test mode is limited to ${settings.restrictToStudentName ?? 'one student'}. Left unread.`,
+          attachments: attachmentNames,
+        });
+        continue;
+      }
+    }
 
     if (match.kind !== 'matched') {
       const reason =
@@ -206,10 +226,24 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     // Exactly one student — file every attachment onto their profile.
     let allOk = true;
     let lastError: string | undefined;
+    const filedNames: string[] = [];
     for (const att of message.attachments) {
+      // Attachments arrive named "WhatsApp Image 2026-09-01 at 12.12.26 AM.jpeg"; work
+      // out what the document actually is. The original filename is kept on the record.
+      const named = settings.aiRenameDocuments
+        ? await nameDocument({
+            filename: att.filename,
+            contentType: att.contentType,
+            subject: message.subject,
+            body: message.text,
+          })
+        : { name: att.filename.replace(/\.[^.]+$/, ''), source: 'fallback' as const };
+      filedNames.push(named.name);
+
       const upload = await uploadStudentDocument({
         studentId: match.student.id,
         filename: att.filename,
+        customName: named.name,
         content: att.content,
         contentType: att.contentType,
         note: `Received by email from ${message.from} — "${message.subject}"`,
@@ -234,7 +268,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         fromName: message.fromName,
         subject: message.subject,
         body: message.text,
-        filedAttachments: attachmentNames,
+        filedAttachments: filedNames,
       });
 
       await markMessageSeen(message.uid).catch(() => {});
@@ -246,7 +280,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         status: 'filed',
         studentId: match.student.id,
         studentName: match.student.name,
-        attachments: attachmentNames,
+        // Show the names staff will actually see, with the original in brackets.
+        attachments: filedNames.map((n, i) => `${n}  (was: ${attachmentNames[i]})`),
         chatPosted: announcement.posted,
         chatError: announcement.error,
       });

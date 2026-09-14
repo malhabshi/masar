@@ -7,6 +7,7 @@ import {
   runEmailIntake,
 } from '@/lib/email/intake';
 import { isInboxConfigured, verifyInboxConnection } from '@/lib/email/inbox';
+import { getIntakeSettings, saveIntakeSettings } from '@/lib/email/intake-settings';
 import type { User } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -62,6 +63,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     configured: isInboxConfigured(),
     connection,
+    settings: await getIntakeSettings(),
     pendingCount: queue.length,
     queue,
   });
@@ -72,7 +74,17 @@ export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  let body: { action?: string; queueItemId?: string; studentId?: string; reason?: string; limit?: number };
+  let body: {
+    action?: string;
+    queueItemId?: string;
+    studentId?: string;
+    reason?: string;
+    limit?: number;
+    restrictToStudentId?: string | null;
+    restrictToStudentName?: string | null;
+    aiRenameDocuments?: boolean;
+    postToChat?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -97,6 +109,15 @@ export async function POST(req: NextRequest) {
       }
       const result = await dismissQueuedItem(body.queueItemId, auth.user.id, body.reason);
       return NextResponse.json(result);
+    }
+    case 'settings': {
+      const saved = await saveIntakeSettings({
+        restrictToStudentId: body.restrictToStudentId,
+        restrictToStudentName: body.restrictToStudentName,
+        aiRenameDocuments: body.aiRenameDocuments,
+        postToChat: body.postToChat,
+      });
+      return NextResponse.json({ success: true, settings: saved });
     }
     default:
       return NextResponse.json({ error: `Unknown action "${body.action}".` }, { status: 400 });
