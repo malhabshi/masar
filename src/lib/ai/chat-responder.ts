@@ -1,0 +1,400 @@
+// Internal-chat AI responder.
+//
+// Reads a student's internal chat thread after a new message arrives, decides whether it
+// can usefully help, and if so replies in the thread and/or creates a task from what an
+// employee asked for.
+//
+// Guard rails, in order of application:
+//   1. Master switch (app_settings/ai_chat_responder.enabled) — OFF by default.
+//   2. observeOnly — drafts the reply into ai_chat_log but posts nothing. ON by default.
+//   3. Loop guard — never reacts to its own messages.
+//   4. Duplicate guard — never replies twice to the same incoming message.
+//   5. Muted students are skipped.
+// Every run is recorded in ai_chat_log, including the runs where it chose to stay quiet.
+
+import type Anthropic from '@anthropic-ai/sdk';
+import { adminDb } from '@/lib/firebase/admin';
+import { runAgent } from './agent';
+import type { AiTool, ToolContext } from './tools';
+import {
+  CHAT_BOT_NAME,
+  CHAT_BOT_USER_ID,
+  ensureChatBotUser,
+  getResponderSettings,
+} from './chat-bot';
+import { isAiConfigured } from './config';
+import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
+import { createStudentTask, sendChatMessage } from '@/lib/actions';
+import type { User } from '@/lib/types';
+
+export const AI_CHAT_LOG_COLLECTION = 'ai_chat_log';
+
+/** How much of the thread the model sees. */
+const THREAD_WINDOW = 30;
+
+export type ResponderOutcome = {
+  studentId: string;
+  /** What actually happened, for logging and for the caller. */
+  status: 'disabled' | 'muted' | 'no_new_message' | 'already_replied' | 'silent' | 'replied' | 'error';
+  reason?: string;
+  reply?: string;
+  /** True when a reply was drafted but withheld because observeOnly is on. */
+  drafted?: boolean;
+  tasksCreated?: Array<{ requestTypeId: string; description: string; ok: boolean; message?: string }>;
+  usage?: { inputTokens: number; outputTokens: number };
+};
+
+type ChatMessage = {
+  id: string;
+  authorId: string;
+  content?: string;
+  timestamp?: string;
+  recipientLabel?: string;
+  document?: { name: string; url: string };
+};
+
+type CreatedTask = { requestTypeId: string; description: string; ok: boolean; message?: string };
+
+/** Mutable state the tool handlers write into during a run. */
+type ResponderState = {
+  reply?: string;
+  silentReason?: string;
+  tasks: CreatedTask[];
+};
+
+async function log(entry: Record<string, unknown>): Promise<void> {
+  if (!adminDb) return;
+  try {
+    await adminDb.collection(AI_CHAT_LOG_COLLECTION).add({ ...entry, createdAt: new Date().toISOString() });
+  } catch (e) {
+    console.error('[chat-responder] Failed to write ai_chat_log:', e);
+  }
+}
+
+/**
+ * Atomically claim a chat message for processing. Returns false if another run already
+ * claimed it, which makes duplicate triggers harmless.
+ */
+async function claimMessage(studentId: string, messageId: string): Promise<boolean> {
+  if (!adminDb) return false;
+  const ref = adminDb.collection('ai_chat_state').doc(studentId);
+  try {
+    return await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists && snap.data()?.lastProcessedMessageId === messageId) return false;
+      tx.set(ref, { lastProcessedMessageId: messageId, claimedAt: new Date().toISOString() }, { merge: true });
+      return true;
+    });
+  } catch (e) {
+    console.error('[chat-responder] claim failed:', e);
+    return false;
+  }
+}
+
+/** Resolve the display names/roles of everyone who appears in the thread. */
+async function resolveAuthors(ids: string[]): Promise<Map<string, { name: string; role: string }>> {
+  const out = new Map<string, { name: string; role: string }>();
+  if (!adminDb || ids.length === 0) return out;
+  const unique = Array.from(new Set(ids));
+  const snaps = await Promise.all(
+    unique.map((id) => adminDb!.collection('users').doc(id).get().catch(() => null)),
+  );
+  snaps.forEach((snap, i) => {
+    if (snap?.exists) {
+      const u = snap.data() as User;
+      out.set(unique[i], { name: u.name ?? 'Unknown', role: u.role ?? 'staff' });
+    } else {
+      out.set(unique[i], { name: 'Unknown user', role: 'unknown' });
+    }
+  });
+  return out;
+}
+
+const SYSTEM = `You are ${CHAT_BOT_NAME}, an assistant that sits inside the internal staff chat of masar, a Kuwaiti study-abroad agency. The chat is between STAFF about a student — the student themselves cannot see it.
+
+Your job is to help when you genuinely can, and otherwise to stay quiet.
+
+## Staying quiet is the normal outcome
+Most messages do not need you. Call \`stay_silent\` when:
+- Staff are talking to each other and no question is directed at the system.
+- The message is social, an acknowledgement ("ok", "done", "thanks"), or an update with no request.
+- Answering would need information you cannot look up.
+- A human has already answered it.
+- You are not confident. Silence is always safer than a wrong answer in a shared staff channel.
+
+## Speak when you can actually help
+Call \`post_reply\` when:
+- Someone asks a factual question you can answer from the student's record (their applications, statuses, documents, assigned employee, IELTS score, deadlines).
+- Someone asks for something that should become a task — create the task first, then say plainly what you created.
+- There is a clear, checkable error worth flagging.
+
+## Creating tasks
+When an employee asks for something that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
+
+## How to write
+- Short. One or two sentences. This is a busy work chat, not a report.
+- Plain and direct. No greetings, no sign-offs, no "I hope this helps".
+- Staff write in a mix of English and Arabic. Reply in the language the message used.
+- Never guess a fact. If you did not read it from the student record, do not state it.
+- Never claim you did something unless the tool told you it succeeded.`;
+
+function buildToolset(opts: {
+  studentId: string;
+  allowTaskCreation: boolean;
+  observeOnly: boolean;
+  notifyUserIds: string[];
+  collected: ResponderState;
+}): AiTool[] {
+  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected } = opts;
+
+  const tools: AiTool[] = [
+    {
+      write: false,
+      definition: {
+        name: 'get_student_record',
+        description:
+          'Fetch the full record for the student this chat is about — applications and their ' +
+          'statuses, documents, notes, checklist state. Use it before answering any factual question.',
+        input_schema: { type: 'object', properties: {} },
+      },
+      handler: async () => (await getStudent(studentId)) ?? { error: 'Student not found.' },
+    },
+    {
+      write: false,
+      definition: {
+        name: 'stay_silent',
+        description:
+          'End without posting anything. This is the correct choice for most messages. Give the ' +
+          'reason you decided not to speak — it is recorded for review, not shown in the chat.',
+        input_schema: {
+          type: 'object',
+          properties: { reason: { type: 'string' } },
+          required: ['reason'],
+        },
+      },
+      handler: async (input) => {
+        collected.silentReason = String(input.reason ?? 'no reason given');
+        return { ok: true, note: 'Staying silent. Stop now and produce no further tool calls.' };
+      },
+    },
+    {
+      write: false,
+      definition: {
+        name: 'post_reply',
+        description:
+          'Post a message into this student\'s internal staff chat, as ' +
+          `${CHAT_BOT_NAME}. Keep it to one or two sentences. Call this at most once.`,
+        input_schema: {
+          type: 'object',
+          properties: { content: { type: 'string', description: 'The message text.' } },
+          required: ['content'],
+        },
+      },
+      handler: async () => ({ ok: false, error: 'replaced below' }),
+    },
+  ];
+
+  // post_reply needs the real implementation, wired here so it can capture state.
+  tools[2].handler = async (input) => {
+    const content = String(input.content ?? '').trim();
+    if (!content) return { ok: false, error: 'Reply content was empty; nothing posted.' };
+    if (collected.reply) {
+      return { ok: false, error: 'You have already replied in this run. Do not post again.' };
+    }
+    collected.reply = content;
+
+    if (observeOnly) {
+      return {
+        ok: true,
+        posted: false,
+        note: 'Observe-only mode is on: the reply was recorded for review but NOT posted to the chat.',
+      };
+    }
+
+    const result = await sendChatMessage(studentId, CHAT_BOT_USER_ID, content, notifyUserIds);
+    return result.success
+      ? { ok: true, posted: true }
+      : { ok: false, error: result.message ?? 'Failed to post the message.' };
+  };
+
+  if (allowTaskCreation) {
+    tools.push({
+      write: false,
+      definition: {
+        name: 'create_task',
+        description:
+          'Create a task/request for this student from what an employee asked for in the chat. ' +
+          'Use one of the requestTypeId values listed in the conversation. After creating it, ' +
+          'post_reply to say what you created.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            requestTypeId: { type: 'string', description: 'Must be one of the listed request type ids.' },
+            description: {
+              type: 'string',
+              description: 'What is being requested, quoting the employee where useful.',
+            },
+          },
+          required: ['requestTypeId', 'description'],
+        },
+      },
+      handler: async (input) => {
+        const requestTypeId = String(input.requestTypeId ?? '');
+        const description = String(input.description ?? '');
+        if (observeOnly) {
+          collected.tasks.push({ requestTypeId, description, ok: true, message: 'observe-only: not created' });
+          return {
+            ok: true,
+            created: false,
+            note: 'Observe-only mode is on: the task was recorded for review but NOT created.',
+          };
+        }
+        const result = await createStudentTask(CHAT_BOT_USER_ID, studentId, requestTypeId, description);
+        collected.tasks.push({
+          requestTypeId,
+          description,
+          ok: result.success === true,
+          message: result.message,
+        });
+        return result.success
+          ? { ok: true, created: true }
+          : { ok: false, error: result.message ?? 'Task creation failed.' };
+      },
+    });
+  }
+
+  return tools;
+}
+
+/**
+ * Examine a student's chat thread and act if useful. Never throws.
+ */
+export async function respondToStudentChat(studentId: string): Promise<ResponderOutcome> {
+  try {
+    const settings = await getResponderSettings();
+    if (!settings.enabled || !isAiConfigured()) {
+      return { studentId, status: 'disabled', reason: !settings.enabled ? 'responder disabled' : 'no API key' };
+    }
+    if (settings.mutedStudentIds.includes(studentId)) {
+      return { studentId, status: 'muted' };
+    }
+
+    const { messages } = (await getStudentChat(studentId, THREAD_WINDOW)) as unknown as {
+      messages: ChatMessage[];
+    };
+    if (!messages.length) return { studentId, status: 'no_new_message' };
+
+    const last = messages[messages.length - 1];
+    // Loop guard: our own message is never a trigger.
+    if (last.authorId === CHAT_BOT_USER_ID) {
+      return { studentId, status: 'already_replied', reason: "last message is the bot's own" };
+    }
+
+    // Duplicate guard. Two triggers can fire for the same message (the sender's browser
+    // plus a queue drain), so claim the message id transactionally — only the first
+    // caller through proceeds.
+    const claimed = await claimMessage(studentId, last.id);
+    if (!claimed) return { studentId, status: 'already_replied', reason: 'message already processed' };
+
+    const [student, requestTypes, authors] = await Promise.all([
+      getStudent(studentId),
+      listRequestTypes(),
+      resolveAuthors(messages.map((m) => m.authorId)),
+    ]);
+    if (!student) return { studentId, status: 'error', reason: 'student not found' };
+
+    await ensureChatBotUser();
+
+    const transcript = messages
+      .map((m) => {
+        const who = m.authorId === CHAT_BOT_USER_ID ? `${CHAT_BOT_NAME} (you)` : authors.get(m.authorId)?.name ?? 'Unknown';
+        const role = authors.get(m.authorId)?.role ?? '';
+        const doc = m.document ? ` [attached file: ${m.document.name}]` : '';
+        return `[${m.timestamp ?? ''}] ${who}${role ? ` (${role})` : ''}: ${m.content ?? ''}${doc}`;
+      })
+      .join('\n');
+
+    const requestTypeList = (requestTypes.requestTypes as Array<Record<string, unknown>>)
+      .map((rt) => `- ${rt.id}: ${rt.name}${rt.description ? ` — ${rt.description}` : ''}`)
+      .join('\n');
+
+    const studentLine = [
+      `Name: ${(student as any).name ?? 'unknown'}`,
+      `Assigned employee (civil ID): ${(student as any).employeeId ?? 'unassigned'}`,
+      `Applications: ${((student as any).applications ?? [])
+        .map((a: any) => `${a.university} (${a.country}) — ${a.status}`)
+        .join('; ') || 'none'}`,
+    ].join('\n');
+
+    const userPrompt = `A new message just arrived in the internal staff chat for this student.
+
+## Student
+${studentLine}
+
+## Request types you can create tasks from
+${requestTypeList || '(none configured)'}
+
+## Chat thread (oldest first, newest last)
+${transcript}
+
+The newest message is the one to react to. Decide whether to help or stay quiet, then call exactly one of stay_silent or post_reply (creating a task first if one was asked for).`;
+
+    const state: ResponderState = { reply: undefined, silentReason: undefined, tasks: [] };
+
+    // Notify only the person whose message triggered this, not the whole channel.
+    const notifyUserIds = last.authorId && last.authorId !== CHAT_BOT_USER_ID ? [last.authorId] : [];
+
+    const toolset = buildToolset({
+      studentId,
+      allowTaskCreation: settings.allowTaskCreation,
+      observeOnly: settings.observeOnly,
+      notifyUserIds,
+      collected: state,
+    });
+
+    const actor = { id: CHAT_BOT_USER_ID, name: CHAT_BOT_NAME, role: 'employee' };
+    const system: Anthropic.TextBlockParam[] = [
+      { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
+    ];
+
+    const run = await runAgent({
+      messages: [{ role: 'user', content: userPrompt }],
+      actor,
+      allowWrites: true,
+      toolset,
+      system,
+      maxIterations: 6,
+    });
+
+    const outcome: ResponderOutcome = {
+      studentId,
+      status: state.reply ? 'replied' : 'silent',
+      reason: state.silentReason ?? run.error,
+      reply: state.reply,
+      drafted: state.reply ? settings.observeOnly : undefined,
+      tasksCreated: state.tasks.length ? state.tasks : undefined,
+      usage: { inputTokens: run.usage.inputTokens, outputTokens: run.usage.outputTokens },
+    };
+
+    await log({
+      studentId,
+      studentName: (student as any).name ?? null,
+      triggeredByMessage: last.content ?? null,
+      triggeredByAuthor: authors.get(last.authorId)?.name ?? last.authorId,
+      status: outcome.status,
+      reason: outcome.reason ?? null,
+      reply: outcome.reply ?? null,
+      observeOnly: settings.observeOnly,
+      posted: outcome.status === 'replied' && !settings.observeOnly,
+      tasks: state.tasks,
+      usage: outcome.usage,
+      agentError: run.error ?? null,
+    });
+
+    return outcome;
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    await log({ studentId, status: 'error', reason });
+    return { studentId, status: 'error', reason };
+  }
+}

@@ -22,6 +22,9 @@ before it will answer anything (step 1 below).
 | Server-side upload | `src/lib/documents/upload.ts` | Buffer-based, no browser `File` needed |
 | API | `src/app/api/ai/chat/route.ts` | `POST` to chat, `GET` for a config status probe |
 | UI | `src/app/(app)/ai-assistant/page.tsx` | Chat page, admin-only, linked in the sidebar |
+| Chat responder | `src/lib/ai/chat-responder.ts` | Reads internal staff chat and replies / creates tasks |
+| Bot identity | `src/lib/ai/chat-bot.ts` | "Masar AI" user + responder settings |
+| Responder API | `src/app/api/ai/chat-responder/route.ts` | `POST` to wake it, `GET`/`PATCH` for settings |
 
 Everything is additive. No existing behaviour was modified except one new sidebar link.
 
@@ -113,6 +116,58 @@ enforcement.
 
 Every answer shows a "Checked N sources" panel listing the tools it ran and their
 arguments, so you can audit how it reached a number.
+
+---
+
+## Internal chat responder
+
+The AI reads **every** new message in a student's internal staff chat, and decides for
+itself whether to help. When it does, it can answer from the student's record and create
+a task from what an employee asked for.
+
+**It is off by default, and even once enabled it starts in watch-only mode.** Controls are
+on the AI Assistant page (admin only):
+
+| Switch | Default | What it does |
+|---|---|---|
+| Enabled | **off** | Master switch. While off, nothing runs and nothing is charged. |
+| Watch only | **on** | It decides and drafts, but posts nothing. Drafts go to `ai_chat_log`. |
+| Can create tasks | on | Allows `create_task` when an employee asks for something. |
+
+**Run it in watch-only for a while first.** Read `ai_chat_log` and check its judgement —
+whether it stayed quiet when it should have, and whether the replies it drafted were
+right. Only turn "Watch only" off once you trust it, because at that point it is talking
+to your staff under the name **Masar AI**.
+
+### How it gets triggered
+
+There is no background job. When someone sends a chat message, their browser fires a
+request at `/api/ai/chat-responder` and does not wait for it — so the sender never sits
+waiting on the AI. The endpoint also accepts a `CRON_SECRET` bearer token if you later
+want a scheduled sweep.
+
+### Guards
+
+- **Loop guard** — it never reacts to its own messages.
+- **Duplicate guard** — each message id is claimed in a Firestore transaction
+  (`ai_chat_state/{studentId}`), so two triggers for the same message produce one reply.
+- **Muting** — `mutedStudentIds` skips individual students.
+- **Bias toward silence** — the prompt tells it that staying quiet is the normal outcome,
+  and it must call `stay_silent` with a reason, which is logged for review.
+
+### Bot identity
+
+A `users/masar-ai-assistant` document is created on first use so its messages render with
+a name. It has no phone (so it is never sent WhatsApp notifications) and no civil ID (so
+it never appears in employee-portfolio queries).
+
+### What to watch out for
+
+It reads every message, so it will sometimes speak when nobody wanted it to — that is the
+tradeoff of this mode over "only when tagged". Staff chat is a mix of English and Arabic;
+the prompt tells it to reply in the language used, but this is the part most worth
+checking during watch-only. And a task it creates is a real task, so keep "Can create
+tasks" off until you have seen its judgement on a few real requests.
 
 ---
 

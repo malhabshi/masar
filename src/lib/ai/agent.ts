@@ -5,7 +5,14 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient, AiNotConfiguredError } from './client';
 import { AI_MODEL, AI_MAX_TOKENS, AI_MAX_TOOL_ITERATIONS } from './config';
 import { buildSystemPrompt } from './system-prompt';
-import { executeTool, getToolDefinitions, type ToolContext, type ToolExecution } from './tools';
+import {
+  buildToolRegistry,
+  executeTool,
+  getToolDefinitions,
+  type AiTool,
+  type ToolContext,
+  type ToolExecution,
+} from './tools';
 import type { Actor } from '@/lib/mcp/dispatch';
 
 export type AgentRunInput = {
@@ -13,6 +20,12 @@ export type AgentRunInput = {
   messages: Anthropic.MessageParam[];
   actor: Actor;
   allowWrites: boolean;
+  /** Replace the default tool surface. Used by the internal-chat responder. */
+  toolset?: AiTool[];
+  /** Replace the default system prompt. */
+  system?: Anthropic.TextBlockParam[];
+  /** Lower the tool-round ceiling for short-lived agents. */
+  maxIterations?: number;
 };
 
 export type AgentRunResult = {
@@ -82,11 +95,15 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     throw e;
   }
 
-  const system = buildSystemPrompt(actor, allowWrites);
-  const tools = getToolDefinitions(allowWrites);
+  const system = input.system ?? buildSystemPrompt(actor, allowWrites);
+  const registry = input.toolset ? buildToolRegistry(input.toolset) : undefined;
+  const tools = input.toolset
+    ? input.toolset.filter((t) => allowWrites || !t.write).map((t) => t.definition)
+    : getToolDefinitions(allowWrites);
+  const maxIterations = input.maxIterations ?? AI_MAX_TOOL_ITERATIONS;
   const working: Anthropic.MessageParam[] = [...input.messages];
 
-  for (let iteration = 1; iteration <= AI_MAX_TOOL_ITERATIONS; iteration++) {
+  for (let iteration = 1; iteration <= maxIterations; iteration++) {
     let response: Anthropic.Message;
     try {
       response = await client.messages.create({
@@ -148,7 +165,9 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     // Run the batch concurrently, then return every result in ONE user message —
     // splitting them across messages would train the model out of parallel calls.
     const executions: ToolExecution[] = await Promise.all(
-      toolUses.map((use) => executeTool(use.name, (use.input ?? {}) as Record<string, any>, ctx)),
+      toolUses.map((use) =>
+        executeTool(use.name, (use.input ?? {}) as Record<string, any>, ctx, registry),
+      ),
     );
 
     const resultBlocks: Anthropic.ToolResultBlockParam[] = toolUses.map((use, i) => ({
@@ -182,8 +201,8 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     reply: lastText?.text ?? '',
     newMessages,
     toolCalls,
-    iterations: AI_MAX_TOOL_ITERATIONS,
+    iterations: maxIterations,
     usage,
-    error: `Stopped after ${AI_MAX_TOOL_ITERATIONS} tool rounds without reaching an answer. Try asking something narrower.`,
+    error: `Stopped after ${maxIterations} tool rounds without reaching an answer. Try asking something narrower.`,
   };
 }

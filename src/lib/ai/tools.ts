@@ -400,6 +400,11 @@ export const AI_TOOLS: AiTool[] = [
 
 const TOOL_MAP = new Map(AI_TOOLS.map((t) => [t.definition.name, t]));
 
+/** Build a lookup for a custom tool surface (the chat responder uses its own). */
+export function buildToolRegistry(tools: AiTool[]): Map<string, AiTool> {
+  return new Map(tools.map((t) => [t.definition.name, t]));
+}
+
 /**
  * Tool definitions to send to the model. Write tools are withheld entirely when writes
  * are off — the model cannot call what it cannot see, and the handlers still guard.
@@ -423,9 +428,10 @@ export async function executeTool(
   name: string,
   input: Record<string, any>,
   ctx: ToolContext,
+  registry: Map<string, AiTool> = TOOL_MAP,
 ): Promise<ToolExecution> {
   const started = Date.now();
-  const tool = TOOL_MAP.get(name);
+  const tool = registry.get(name);
 
   if (!tool) {
     return {

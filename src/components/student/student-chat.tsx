@@ -142,7 +142,23 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
         if (fileInputRef.current) fileInputRef.current.value = '';
         setRecipientIds([]);
         toast({ title: 'Message Sent' });
-    
+
+        // Wake the AI responder. Deliberately not awaited: it decides for itself whether
+        // to say anything, and the sender must never wait on it. A failure here is
+        // invisible by design — the message is already sent either way.
+        void (async () => {
+          try {
+            const token = await authUser.getIdToken();
+            await fetch('/api/ai/chat-responder', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ studentId: student.id }),
+            });
+          } catch {
+            /* responder is best-effort */
+          }
+        })();
+
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {

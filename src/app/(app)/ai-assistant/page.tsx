@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   Loader2,
+  MessageSquare,
   Send,
   Sparkles,
   Trash2,
@@ -48,6 +49,14 @@ type StatusPayload = {
   setupHint?: string;
 };
 
+type ResponderSettings = {
+  enabled: boolean;
+  observeOnly: boolean;
+  allowTaskCreation: boolean;
+  mutedStudentIds: string[];
+  aiConfigured: boolean;
+};
+
 const SUGGESTIONS = [
   'Which applications are late right now, and who owns them?',
   'Summarise the last 30 days: new students, applications, and where they stand.',
@@ -65,6 +74,8 @@ export default function AiAssistantPage() {
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState<StatusPayload | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [responder, setResponder] = useState<ResponderSettings | null>(null);
+  const [savingResponder, setSavingResponder] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -84,11 +95,15 @@ export default function AiAssistantPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await authedFetch('/api/ai/chat');
-        const data = await res.json();
+        const [statusRes, responderRes] = await Promise.all([
+          authedFetch('/api/ai/chat'),
+          authedFetch('/api/ai/chat-responder'),
+        ]);
+        const data = await statusRes.json();
         if (cancelled) return;
-        if (!res.ok) setStatusError(data.error ?? 'Could not load assistant status.');
+        if (!statusRes.ok) setStatusError(data.error ?? 'Could not load assistant status.');
         else setStatus(data as StatusPayload);
+        if (responderRes.ok) setResponder((await responderRes.json()) as ResponderSettings);
       } catch (e) {
         if (!cancelled) setStatusError(e instanceof Error ? e.message : String(e));
       }
@@ -167,6 +182,27 @@ export default function AiAssistantPage() {
     setInput('');
   }, []);
 
+  const updateResponder = useCallback(
+    async (patch: Partial<ResponderSettings>) => {
+      setSavingResponder(true);
+      try {
+        const res = await authedFetch('/api/ai/chat-responder', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+        const data = await res.json();
+        if (res.ok) setResponder(data as ResponderSettings);
+        else setStatusError(data.error ?? 'Could not save responder settings.');
+      } catch (e) {
+        setStatusError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSavingResponder(false);
+      }
+    },
+    [authedFetch],
+  );
+
   if (isUserLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -240,6 +276,10 @@ export default function AiAssistantPage() {
         </Alert>
       )}
 
+      {responder && (
+        <ResponderControls settings={responder} saving={savingResponder} onChange={updateResponder} />
+      )}
+
       <Card className="flex min-h-0 flex-1 flex-col">
         <CardContent ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
           {turns.length === 0 ? (
@@ -282,6 +322,107 @@ export default function AiAssistantPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Controls for the internal-chat responder. Separate from the chat above: this governs
+ * whether the AI reads and speaks in staff chat on its own.
+ */
+function ResponderControls({
+  settings,
+  saving,
+  onChange,
+}: {
+  settings: ResponderSettings;
+  saving: boolean;
+  onChange: (patch: Partial<ResponderSettings>) => void;
+}) {
+  const live = settings.enabled && !settings.observeOnly;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MessageSquare className="h-4 w-4" />
+              Internal chat responder
+              {live ? (
+                <Badge variant="destructive">Live — posting to staff chat</Badge>
+              ) : settings.enabled ? (
+                <Badge variant="secondary">Watching only</Badge>
+              ) : (
+                <Badge variant="outline">Off</Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Reads every new internal chat message and replies when it can help.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <div className="flex flex-wrap gap-x-8 gap-y-3">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="responder-enabled"
+              checked={settings.enabled}
+              disabled={saving || !settings.aiConfigured}
+              onCheckedChange={(v) => onChange({ enabled: v })}
+            />
+            <Label htmlFor="responder-enabled" className="cursor-pointer text-sm">
+              Enabled
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="responder-observe"
+              checked={settings.observeOnly}
+              disabled={saving || !settings.enabled}
+              onCheckedChange={(v) => onChange({ observeOnly: v })}
+            />
+            <Label htmlFor="responder-observe" className="cursor-pointer text-sm">
+              Watch only (draft, don&apos;t post)
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="responder-tasks"
+              checked={settings.allowTaskCreation}
+              disabled={saving || !settings.enabled}
+              onCheckedChange={(v) => onChange({ allowTaskCreation: v })}
+            />
+            <Label htmlFor="responder-tasks" className="cursor-pointer text-sm">
+              Can create tasks
+            </Label>
+          </div>
+        </div>
+
+        {settings.enabled && settings.observeOnly && (
+          <p className="text-xs text-muted-foreground">
+            Nothing is posted to chat. Every reply it would have sent is written to the{' '}
+            <span className="font-mono">ai_chat_log</span> collection so you can review its judgement
+            before going live.
+          </p>
+        )}
+        {live && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-sm">
+              The AI is posting into real staff chats as &quot;Masar AI&quot;
+              {settings.allowTaskCreation && ' and can create tasks'}. Turn &quot;Watch only&quot; back
+              on to stop it speaking.
+            </AlertDescription>
+          </Alert>
+        )}
+        {!settings.aiConfigured && (
+          <p className="text-xs text-muted-foreground">
+            Needs an ANTHROPIC_API_KEY before it can be enabled.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
