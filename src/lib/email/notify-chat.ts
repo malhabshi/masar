@@ -25,43 +25,60 @@ export async function findEmployeeUserIdByCivilId(civilId?: string | null): Prom
   }
 }
 
-const SUMMARY_SYSTEM = `You summarise incoming student emails for a study-abroad agency's internal staff chat.
+const SUMMARY_SYSTEM = `You summarise incoming student emails for a Kuwaiti study-abroad agency's internal staff chat. Staff are busy and read on their phones, so every word must earn its place.
 
-Write ONE short line — at most 25 words — saying what the student is telling us or asking for. This goes into a busy work chat, so:
-- No greeting, no sign-off, no "the student says that".
-- Lead with the substance: what changed, or what they need.
-- If they are asking for something, make the ask explicit.
-- If the email is purely a document with no message, say what the document appears to be.
+Say ONLY the thing that matters: what is needed, what changed, or what was decided.
+
+Cut all of this:
+- greetings, sign-offs, pleasantries, "please find attached"
+- reference numbers, application IDs, case numbers
+- the sender's name and company (staff can already see who it is from)
+- restating the subject line
+- anything that does not change what someone has to do
+
+Rules:
+- At most 25 words in English.
+- If something is REQUIRED from us or the student, lead with it and name the deadline if there is one.
+- If the email is only a document with no message, say what the document is.
 - Never invent detail that is not in the email.
-- Reply in the language the email was written in (English or Arabic).`;
 
-/** One short line describing the email. Falls back to a plain excerpt without AI. */
-async function summarise(subject: string, body: string): Promise<string> {
+Reply with EXACTLY two lines and nothing else:
+EN: <the English line>
+AR: <the same thing in Arabic>
+
+The Arabic must be natural Kuwaiti-office Arabic, not a literal word-for-word translation.`;
+
+export type EmailSummary = { en: string; ar: string | null };
+
+/** The one important line, in English and Arabic. Falls back to an excerpt without AI. */
+async function summarise(subject: string, body: string): Promise<EmailSummary> {
   const excerpt = body.replace(/\s+/g, ' ').trim();
-  if (!isAiConfigured()) return excerpt.slice(0, 200) || subject || '(no message body)';
+  const fallback = { en: excerpt.slice(0, 200) || subject || '(no message body)', ar: null };
+  if (!isAiConfigured()) return fallback;
 
   try {
     const client = getAnthropicClient();
     const response = await client.messages.create({
       model: AI_MODEL,
-      max_tokens: 200,
+      max_tokens: 400,
       system: SUMMARY_SYSTEM,
       messages: [
-        {
-          role: 'user',
-          content: `Subject: ${subject}\n\nBody:\n${excerpt.slice(0, 4000)}`,
-        },
+        { role: 'user', content: `Subject: ${subject}\n\nBody:\n${excerpt.slice(0, 4000)}` },
       ],
     });
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map((b) => b.text)
-      .join(' ')
+      .join('\n')
       .trim();
-    return text || excerpt.slice(0, 200);
+
+    const en = text.match(/^EN:\s*(.+)$/m)?.[1]?.trim();
+    const ar = text.match(/^AR:\s*(.+)$/m)?.[1]?.trim();
+    if (!en) return fallback;
+    return { en, ar: ar || null };
   } catch (e) {
     console.error('[email-intake] Summary failed, falling back to excerpt:', e);
-    return excerpt.slice(0, 200) || subject || '(no message body)';
+    return fallback;
   }
 }
 
@@ -77,6 +94,27 @@ export type ChatAnnouncement = {
   /** Warnings about a document superseding one already on file. */
   versionNotes?: string[];
 };
+
+/**
+ * Build the chat message without posting it — used to preview wording changes against
+ * real emails before they reach anyone's chat.
+ */
+export async function buildChatMessagePreview(input: {
+  from: string;
+  fromName?: string;
+  subject: string;
+  body: string;
+  filedAttachments: string[];
+  versionNotes?: string[];
+}): Promise<string> {
+  const summary = await summarise(input.subject, input.body);
+  const sender = input.fromName || input.from.split('@')[1] || input.from;
+  const lines: string[] = [`📧 ${sender}`, '', summary.en];
+  if (summary.ar) lines.push('', summary.ar);
+  if (input.filedAttachments.length) lines.push('', `📎 ${input.filedAttachments.join(' · ')}`);
+  if (input.versionNotes?.length) lines.push('', ...input.versionNotes);
+  return lines.join('\n').trim();
+}
 
 export type ChatAnnouncementResult = {
   posted: boolean;
@@ -96,26 +134,23 @@ export async function announceEmailInChat(
     await ensureChatBotUser();
 
     const summary = await summarise(input.subject, input.body);
-    const sender = input.fromName ? `${input.fromName} <${input.from}>` : input.from;
 
-    const lines = [
-      `📧 Email received from ${sender}`,
-      input.subject ? `Subject: ${input.subject}` : '',
-      '',
-      summary,
-    ];
+    // Just the organisation, not "Email received from Name <address>" plus a subject
+    // line — staff can open the email for that. The point of the message is the ask.
+    const sender = input.fromName || input.from.split('@')[1] || input.from;
+
+    const lines: string[] = [`📧 ${sender}`, '', summary.en];
+    if (summary.ar) lines.push('', summary.ar);
+
     if (input.filedAttachments.length) {
-      lines.push(
-        '',
-        `📎 Attached to this profile: ${input.filedAttachments.join(', ')}`,
-      );
+      lines.push('', `📎 ${input.filedAttachments.join(' · ')}`);
     }
     // Version warnings go last so they are the final thing read — a reissued offer with
     // changed conditions is the most consequential thing in the message.
     if (input.versionNotes?.length) {
       lines.push('', ...input.versionNotes);
     }
-    const content = lines.filter((l) => l !== undefined).join('\n').trim();
+    const content = lines.join('\n').trim();
 
     // Assigned employee + all admins + the student's own department(s).
     const employeeUserId = await findEmployeeUserIdByCivilId(input.employeeCivilId);
