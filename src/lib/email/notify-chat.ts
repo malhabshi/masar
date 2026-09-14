@@ -33,8 +33,11 @@ Cut all of this:
 - greetings, sign-offs, pleasantries, "please find attached"
 - reference numbers, application IDs, case numbers
 - the sender's name and company (staff can already see who it is from)
-- restating the subject line
 - anything that does not change what someone has to do
+
+ALWAYS identify the university or college the email concerns. A student usually has
+several applications running at once, and different universities send near-identical
+requests — staff cannot act without knowing which one this is about.
 
 Rules:
 - At most 25 words in English.
@@ -42,18 +45,19 @@ Rules:
 - If the email is only a document with no message, say what the document is.
 - Never invent detail that is not in the email.
 
-Reply with EXACTLY two lines and nothing else:
+Reply with EXACTLY three lines and nothing else:
+UNI: <the university or college name ALONE - no agency name, no parenthetical, no campus code. Use NONE only if it genuinely concerns no institution.>
 EN: <the English line>
 AR: <the same thing in Arabic>
 
 The Arabic must be natural Kuwaiti-office Arabic, not a literal word-for-word translation.`;
 
-export type EmailSummary = { en: string; ar: string | null };
+export type EmailSummary = { en: string; ar: string | null; university: string | null };
 
 /** The one important line, in English and Arabic. Falls back to an excerpt without AI. */
 async function summarise(subject: string, body: string): Promise<EmailSummary> {
   const excerpt = body.replace(/\s+/g, ' ').trim();
-  const fallback = { en: excerpt.slice(0, 200) || subject || '(no message body)', ar: null };
+  const fallback = { en: excerpt.slice(0, 200) || subject || '(no message body)', ar: null, university: null };
   if (!isAiConfigured()) return fallback;
 
   try {
@@ -74,12 +78,34 @@ async function summarise(subject: string, body: string): Promise<EmailSummary> {
 
     const en = text.match(/^EN:\s*(.+)$/m)?.[1]?.trim();
     const ar = text.match(/^AR:\s*(.+)$/m)?.[1]?.trim();
+    const uni = text.match(/^UNI:\s*(.+)$/m)?.[1]?.trim();
     if (!en) return fallback;
-    return { en, ar: ar || null };
+    return {
+      en,
+      ar: ar || null,
+      university: uni && !/^NONE$/i.test(uni) ? uni : null,
+    };
   } catch (e) {
     console.error('[email-intake] Summary failed, falling back to excerpt:', e);
     return fallback;
   }
+}
+
+/**
+ * Header line: university first, sender second. The sender is dropped when the
+ * university string already names them ("University of Bath (Study Group)" alongside
+ * "Study Group Admissions" reads as a stutter).
+ */
+function buildHeader(university: string | null, sender: string): string {
+  if (!university) return `📧 ${sender}`;
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const uni = norm(university);
+  // Significant words from the sender, ignoring generic ones.
+  const senderWords = norm(sender)
+    .split(' ')
+    .filter((w) => w.length > 3 && !['admissions', 'admission', 'team', 'office', 'group'].includes(w));
+  const alreadyNamed = senderWords.length > 0 && senderWords.every((w) => uni.includes(w));
+  return alreadyNamed ? `📧 ${university}` : `📧 ${university} · ${sender}`;
 }
 
 export type ChatAnnouncement = {
@@ -109,7 +135,8 @@ export async function buildChatMessagePreview(input: {
 }): Promise<string> {
   const summary = await summarise(input.subject, input.body);
   const sender = input.fromName || input.from.split('@')[1] || input.from;
-  const lines: string[] = [`📧 ${sender}`, '', summary.en];
+  const header = buildHeader(summary.university, sender);
+  const lines: string[] = [header, '', summary.en];
   if (summary.ar) lines.push('', summary.ar);
   if (input.filedAttachments.length) lines.push('', `📎 ${input.filedAttachments.join(' · ')}`);
   if (input.versionNotes?.length) lines.push('', ...input.versionNotes);
@@ -138,8 +165,11 @@ export async function announceEmailInChat(
     // Just the organisation, not "Email received from Name <address>" plus a subject
     // line — staff can open the email for that. The point of the message is the ask.
     const sender = input.fromName || input.from.split('@')[1] || input.from;
+    // The university matters more than the sender: a student has several applications
+    // running and different universities send near-identical requests.
+    const header = buildHeader(summary.university, sender);
 
-    const lines: string[] = [`📧 ${sender}`, '', summary.en];
+    const lines: string[] = [header, '', summary.en];
     if (summary.ar) lines.push('', summary.ar);
 
     if (input.filedAttachments.length) {
