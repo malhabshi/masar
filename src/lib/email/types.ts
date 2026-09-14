@@ -17,6 +17,10 @@ export type SendEmailInput = {
   /** Overrides EMAIL_FROM. Must be a verified sender on the provider. */
   from?: string;
   attachments?: EmailAttachment[];
+  /** RFC822 Message-ID this is a reply to — makes mail clients thread it. */
+  inReplyTo?: string;
+  /** Message-ID chain for threading. Usually the same as inReplyTo. */
+  references?: string | string[];
 };
 
 export type SendEmailResult = {

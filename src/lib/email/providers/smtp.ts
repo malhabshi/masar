@@ -46,6 +46,8 @@ export function createSmtpProvider(config: {
           ...(input.cc ? { cc: Array.isArray(input.cc) ? input.cc.join(', ') : input.cc } : {}),
           ...(input.bcc ? { bcc: Array.isArray(input.bcc) ? input.bcc.join(', ') : input.bcc } : {}),
           ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+          ...(input.inReplyTo ? { inReplyTo: input.inReplyTo } : {}),
+          ...(input.references ? { references: input.references } : {}),
           ...(input.attachments?.length
             ? {
                 attachments: input.attachments.map((a) => ({

@@ -138,6 +138,17 @@ export async function fetchUnreadMessages(
         if (requireAttachments && attachments.length === 0) continue;
 
         const fromAddr = parsed.from?.value?.[0];
+
+        // Never process our own mail. The filing receipts we send are addressed to this
+        // same mailbox and quote the student's full name, so without this guard every
+        // receipt would be read back, matched to that student, and announced in chat —
+        // which would then generate another receipt.
+        const self = (config.auth.user ?? '').toLowerCase();
+        if (self && (fromAddr?.address ?? '').toLowerCase() === self) {
+          await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true }).catch(() => {});
+          continue;
+        }
+
         results.push({
           uid,
           messageId: parsed.messageId ?? null,

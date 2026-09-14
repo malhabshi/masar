@@ -19,6 +19,13 @@ export function createResendProvider(apiKey: string): EmailProvider {
       if (input.cc) body.cc = input.cc;
       if (input.bcc) body.bcc = input.bcc;
       if (input.replyTo) body.reply_to = input.replyTo;
+      if (input.inReplyTo || input.references) {
+        const refs = Array.isArray(input.references) ? input.references.join(' ') : input.references;
+        body.headers = {
+          ...(input.inReplyTo ? { 'In-Reply-To': input.inReplyTo } : {}),
+          ...(refs ? { References: refs } : {}),
+        };
+      }
       if (input.attachments?.length) {
         body.attachments = input.attachments.map((a) => ({
           filename: a.filename,

@@ -27,6 +27,7 @@ import {
   findSupersededDocument,
 } from './document-compare';
 import type { Document as StudentDocument } from '@/lib/types';
+import { replyWithReceipt } from './reply-receipt';
 
 export const INTAKE_QUEUE_COLLECTION = 'email_intake_queue';
 export const INTAKE_LOG_COLLECTION = 'email_intake_log';
@@ -267,6 +268,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       // email with no attachment is usually a newsletter or spam, so it is logged and
       // marked read rather than filling the review queue.
       if (message.attachments.length === 0) {
+        await replyWithReceipt(message, { kind: 'skipped', reason });
         await markMessageSeen(message.uid).catch(() => {});
         result.skipped++;
         await log({ status: 'skipped', reason, from: message.from, subject: message.subject });
@@ -284,6 +286,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         ? match.candidates.map((c) => ({ id: c.id, name: c.name }))
         : [];
       await queueForReview(message, reason, candidates);
+      await replyWithReceipt(message, { kind: 'queued', reason, attachments: attachmentNames });
       await markMessageSeen(message.uid).catch(() => {});
       result.queued++;
       result.items.push({
@@ -388,6 +391,16 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         versionNotes,
       });
 
+      await replyWithReceipt(message, {
+        kind: 'filed',
+        studentId: match.student.id,
+        studentName: match.student.name,
+        documents: filedNames,
+        versionNotes,
+        chatPosted: announcement.posted,
+        chatRecipients: announcement.recipients ?? [],
+      });
+
       await markMessageSeen(message.uid).catch(() => {});
       result.filed++;
       result.notified += announcement.posted ? 1 : 0;
@@ -416,6 +429,11 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       });
     } else {
       // Upload failed: leave the message unread so the next run retries it.
+      await replyWithReceipt(message, {
+        kind: 'failed',
+        reason: lastError ?? 'unknown error',
+        studentName: match.student.name,
+      });
       result.failed++;
       result.items.push({
         subject: message.subject,

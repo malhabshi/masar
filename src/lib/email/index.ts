@@ -171,7 +171,24 @@ export type SendEmailContext = {
   triggeredByName?: string;
   /** Free-form origin tag, e.g. 'ai-assistant' or 'late-application-report'. */
   source?: string;
+  /**
+   * Deliver even while EMAIL_DRY_RUN is on.
+   *
+   * Only honoured when EVERY recipient is the configured mailbox itself. Dry-run exists
+   * to stop mail reaching students and third parties; a note we send to the account we
+   * are already reading cannot reach anyone new. The check below enforces that — this
+   * flag cannot be used to slip an external send past dry-run.
+   */
+  allowDuringDryRun?: boolean;
 };
+
+/** True when every recipient is the mailbox this app reads and sends from. */
+function isSelfAddressed(recipients: string[], cc: string[], bcc: string[]): boolean {
+  const self = bareAddress(env('SMTP_USER') ?? env('EMAIL_FROM') ?? '');
+  if (!self) return false;
+  const all = [...recipients, ...cc, ...bcc];
+  return all.length > 0 && all.every((r) => bareAddress(r) === self);
+}
 
 /**
  * Send an email. Never throws — always resolves to a SendEmailResult describing what
@@ -182,8 +199,10 @@ export async function sendEmail(
   context: SendEmailContext = {},
 ): Promise<SendEmailResult> {
   const activeProvider = providerName();
-  const dryRun = isEmailDryRun();
   const recipients = toList(input.to);
+  const selfOnly = isSelfAddressed(recipients, toList(input.cc), toList(input.bcc));
+  // The exemption applies only to mail addressed solely to our own mailbox.
+  const dryRun = isEmailDryRun() && !(context.allowDuringDryRun === true && selfOnly);
 
   const fail = async (error: string, extra: Record<string, unknown> = {}): Promise<SendEmailResult> => {
     await logAttempt({

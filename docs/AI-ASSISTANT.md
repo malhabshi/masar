@@ -277,6 +277,46 @@ PDF text extraction uses `pdf-parse`. It and `pdfjs-dist` are listed in
 `serverComponentsExternalPackages` in `next.config.mjs` — webpack otherwise rewrites
 pdfjs into something broken that silently returns no text.
 
+### The in-thread reply
+
+After handling an email, a report is sent **into the same Gmail conversation** (via
+`In-Reply-To` / `References`), so opening the thread shows what the system did with it:
+
+```
+Re: Asia Kh A H NADOUM - University of Bath - ... — ✅ Filed to ASIA KH A H NADOUM
+
+RESULT: Filed to ASIA KH A H NADOUM
+
+Documents added to the profile:
+  • University of Bath - ISC Offer Letter
+
+VERSION CHECK:
+  ⚠️ ... is a NEW VERSION of the one on file from 2026-09-09. What changed:
+  - Tuition fee changed: GBP 27,250.00 → GBP 19,500.00
+
+Posted in the internal chat, notifying: ZAINAB DASHTI, admins, departments
+
+Profile: https://…/student/U-300021001306-1787885425665
+```
+
+There is a report for every outcome — filed, needs review, no action taken, and failed
+(which says the message was left unread for retry).
+
+**The reply is addressed only to our own mailbox, never to the original sender.** An
+admissions office must not receive our internal filing notes; the only reason it appears
+in the thread is the threading headers.
+
+Because it is self-addressed it is **exempt from `EMAIL_DRY_RUN`** — dry-run exists to
+stop mail reaching students and third parties, and this can only reach the account we
+already read. The exemption is enforced by checking every recipient is that mailbox, so
+the flag cannot be used to slip an external send past dry-run (verified by test).
+
+Two loops are closed as a result:
+- `fetchUnreadMessages` **skips mail sent from our own address** and marks it read.
+  Without this, a receipt quoting the student's full name would be read back, matched to
+  that student, announced in chat, and generate another receipt.
+- Each message is claimed by Message-ID before being acted on.
+
 ### What gets picked up
 
 Unread messages with at least one attachment of a plausible document type (PDF, PNG,
