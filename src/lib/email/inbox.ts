@@ -4,9 +4,19 @@
 // IMAP must also be enabled in Gmail settings (Settings → Forwarding and POP/IMAP), and
 // a Workspace admin can disable it org-wide.
 //
-// Only unread messages that carry at least one usable attachment are returned. Messages
-// are NOT marked as read here — that happens after a message has been dealt with, so a
-// crash mid-run means the message is retried rather than silently lost.
+// ────────────────────────────────────────────────────────────────────────────
+// THIS MODULE NEVER DELETES EMAIL.
+// There is no delete, expunge, or move anywhere in this file. Handled mail is
+// LABELLED, using an IMAP copy — in Gmail, copying to a folder adds that label and
+// leaves the message in the inbox. A *move* would remove the INBOX label (archiving
+// it), so copy is used deliberately and must not be swapped for move.
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Read/unread is left alone for staff to use as their own to-do signal. Duplicate
+// processing is prevented by a Message-ID claim in Firestore, not by the read flag.
+//
+// Reading is two-phase so that leaving mail unread stays cheap: envelopes first
+// (a few hundred bytes each), then the full message only for those not yet handled.
 
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
@@ -84,8 +94,145 @@ export async function verifyInboxConnection(): Promise<{ ok: boolean; error?: st
   }
 }
 
+/** Gmail labels applied to handled mail. Folders are created on first use. */
+export const INTAKE_LABELS = {
+  filed: 'masar/filed',
+  review: 'masar/review',
+  noAction: 'masar/no-action',
+} as const;
+
+export type MessageHeader = {
+  uid: number;
+  messageId: string | null;
+  from: string;
+  fromName: string;
+  subject: string;
+  date: string;
+};
+
 /**
- * Fetch unread messages.
+ * Cheap first pass: envelopes only, for every unread message.
+ *
+ * Used to decide what is worth downloading in full. Mail stays unread, so this list
+ * repeats each run — which is exactly why the expensive fetch is deferred.
+ */
+export async function fetchUnreadHeaders(limit = 50): Promise<MessageHeader[]> {
+  const config = imapConfig();
+  if (!config) throw new Error('Inbox is not configured (SMTP_USER / SMTP_PASSWORD).');
+
+  const client = new ImapFlow(config);
+  const out: MessageHeader[] = [];
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const uids = await client.search({ seen: false }, { uid: true });
+      if (!uids || uids.length === 0) return [];
+      const selected = uids.slice(-limit).reverse();
+
+      for await (const msg of client.fetch(
+        selected.join(','),
+        { envelope: true },
+        { uid: true },
+      )) {
+        const addr = msg.envelope?.from?.[0];
+        out.push({
+          uid: msg.uid,
+          messageId: msg.envelope?.messageId ?? null,
+          from: addr?.address ?? '',
+          fromName: addr?.name ?? '',
+          subject: msg.envelope?.subject ?? '',
+          date: new Date(msg.envelope?.date ?? Date.now()).toISOString(),
+        });
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+  return out;
+}
+
+/** Download and parse one message in full, including attachments. */
+export async function fetchMessageByUid(uid: number): Promise<InboxMessage | null> {
+  const config = imapConfig();
+  if (!config) throw new Error('Inbox is not configured.');
+
+  const client = new ImapFlow(config);
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const item = await client.fetchOne(String(uid), { source: true }, { uid: true });
+      if (!item || !item.source) return null;
+
+      const parsed = await simpleParser(item.source);
+      const attachments: InboxAttachment[] = [];
+      for (const att of parsed.attachments ?? []) {
+        const contentType = String(att.contentType ?? '').toLowerCase();
+        if (!ALLOWED_CONTENT_TYPES.has(contentType)) continue;
+        if (!att.content || att.size > MAX_ATTACHMENT_BYTES) continue;
+        if (att.contentDisposition === 'inline' && contentType.startsWith('image/')) continue;
+        attachments.push({
+          filename: att.filename || `attachment-${attachments.length + 1}`,
+          contentType,
+          size: att.size,
+          content: att.content as Buffer,
+        });
+      }
+
+      const fromAddr = parsed.from?.value?.[0];
+      return {
+        uid,
+        messageId: parsed.messageId ?? null,
+        from: fromAddr?.address ?? '',
+        fromName: fromAddr?.name ?? '',
+        subject: parsed.subject ?? '',
+        date: (parsed.date ?? new Date()).toISOString(),
+        text: parsed.text ?? (parsed.html ? String(parsed.html).replace(/<[^>]+>/g, ' ') : ''),
+        attachments,
+      };
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
+/**
+ * Apply a Gmail label to a message, leaving it in the inbox and leaving its read state
+ * untouched.
+ *
+ * Uses COPY, not MOVE. In Gmail's IMAP model a copy adds the destination label while
+ * keeping INBOX; a move would strip INBOX and archive the mail. Nothing here deletes.
+ */
+export async function applyLabel(uid: number, label: string): Promise<boolean> {
+  const config = imapConfig();
+  if (!config) return false;
+  const client = new ImapFlow(config);
+  try {
+    await client.connect();
+    // Creating an existing mailbox throws; that is fine and means it already exists.
+    await client.mailboxCreate(label).catch(() => {});
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      await client.messageCopy(String(uid), label, { uid: true });
+      return true;
+    } finally {
+      lock.release();
+    }
+  } catch (e) {
+    console.error(`[inbox] Could not label uid ${uid} as "${label}":`, e);
+    return false;
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
+/**
+ * Fetch unread messages in full.
  *
  * `requireAttachments: false` also returns plain text updates — a student writing
  * "my visa was approved" matters as much as one sending a scan.

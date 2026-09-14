@@ -277,6 +277,36 @@ PDF text extraction uses `pdf-parse`. It and `pdfjs-dist` are listed in
 `serverComponentsExternalPackages` in `next.config.mjs` — webpack otherwise rewrites
 pdfjs into something broken that silently returns no text.
 
+### Read/unread, labels, and deletion
+
+**Nothing is ever deleted, moved, or archived.** There is no delete, expunge or move
+anywhere in `src/lib/email/` — handled mail is labelled using an IMAP *copy*, which in
+Gmail adds the label while keeping the message in the inbox. A *move* would strip INBOX
+and archive it, so copy is used deliberately and must not be swapped.
+
+**Read/unread is left alone**, so staff keep it as their own "still needs me" signal.
+Handled mail gets a Gmail label instead:
+
+| Label | Meaning |
+|---|---|
+| `masar/filed` | Filed to a student profile |
+| `masar/review` | Could not identify the student — waiting in the review queue |
+| `masar/no-action` | Nothing to file (no name, no attachment) |
+
+A failure applies **no label**, so the message is picked up again next run.
+
+Because the read flag no longer records what has been handled, the Message-ID claim in
+`email_intake_seen` is the only thing preventing duplicates — and a failed run
+**releases** its claim, otherwise a transient error would mark a message handled forever
+without filing it.
+
+Mail stays unread, so every run sees the same list. To keep that cheap, reading is two
+phase: envelopes first (a few hundred bytes each), then the full download only for
+messages not already handled.
+
+Verified on the live mailbox: after labelling, the message was still unread
+(`seen: false`) and still in the inbox.
+
 ### The in-thread reply
 
 After handling an email, a report is sent **into the same Gmail conversation** (via

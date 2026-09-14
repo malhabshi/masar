@@ -11,9 +11,11 @@
 import { adminDb, storage } from '@/lib/firebase/admin';
 import { uploadStudentDocument } from '@/lib/documents/upload';
 import {
-  fetchUnreadMessages,
+  applyLabel,
+  fetchMessageByUid,
+  fetchUnreadHeaders,
+  INTAKE_LABELS,
   isInboxConfigured,
-  markMessageSeen,
   type InboxAttachment,
   type InboxMessage,
 } from './inbox';
@@ -61,14 +63,17 @@ export type IntakeResult = {
 /**
  * Claim a message so it can only ever be filed once.
  *
- * Belt and braces alongside the IMAP \Seen flag: if marking read fails for any reason,
- * the next run would otherwise file the same attachments again. Keyed on the RFC822
- * Message-ID, which is stable and unique per email.
+ * This is the ONLY thing preventing duplicates now — read/unread is deliberately left
+ * alone for staff to use, so the mailbox itself no longer records what has been handled.
+ * Keyed on the RFC822 Message-ID, which is stable and unique per email.
  */
+function claimKey(messageId: string | null, uid: number): string {
+  return (messageId ?? `uid-${uid}`).replace(/[^\w.@-]/g, '_').slice(0, 400);
+}
+
 async function claimMessage(messageId: string | null, uid: number): Promise<boolean> {
   if (!adminDb) return true; // No DB means no dedupe; better to process than to stall.
-  const key = (messageId ?? `uid-${uid}`).replace(/[^\w.@-]/g, '_').slice(0, 400);
-  const ref = adminDb.collection('email_intake_seen').doc(key);
+  const ref = adminDb.collection('email_intake_seen').doc(claimKey(messageId, uid));
   try {
     return await adminDb.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -79,6 +84,32 @@ async function claimMessage(messageId: string | null, uid: number): Promise<bool
   } catch (e) {
     console.error('[email-intake] Claim failed:', e);
     return false;
+  }
+}
+
+/** Cheap pre-check used before downloading a message in full. */
+async function isAlreadyHandled(messageId: string | null, uid: number): Promise<boolean> {
+  if (!adminDb) return false;
+  try {
+    const snap = await adminDb.collection('email_intake_seen').doc(claimKey(messageId, uid)).get();
+    return snap.exists;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Give up a claim so the message is retried next run.
+ *
+ * Without this a transient failure (Storage hiccup, network blip) would claim the
+ * message, fail to file it, and then be skipped forever as "already handled".
+ */
+async function releaseClaim(messageId: string | null, uid: number): Promise<void> {
+  if (!adminDb) return;
+  try {
+    await adminDb.collection('email_intake_seen').doc(claimKey(messageId, uid)).delete();
+  } catch (e) {
+    console.error('[email-intake] Could not release claim:', e);
   }
 }
 
@@ -200,17 +231,41 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     return result;
   }
 
-  let messages: InboxMessage[];
+  // Phase 1 — envelopes only. Mail is left unread, so this list repeats every run;
+  // downloading every attachment each time would be wasteful.
+  let headers: Awaited<ReturnType<typeof fetchUnreadHeaders>>;
   try {
-    // Attachments are not required: a plain text update ("my visa was approved") still
-    // needs to reach the employee and the department.
-    messages = await fetchUnreadMessages(options.limit ?? 20, { requireAttachments: false });
+    headers = await fetchUnreadHeaders(Math.max((options.limit ?? 20) * 3, 50));
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     await log({ status: 'error', reason });
     result.failed++;
     result.items.push({ subject: '(inbox)', from: '', status: 'failed', reason, attachments: [] });
     return result;
+  }
+
+  if (headers.length === 0) return result;
+
+  const mailbox = (process.env.SMTP_USER ?? '').toLowerCase();
+
+  // Phase 2 — download in full only what has not been handled before.
+  const messages: InboxMessage[] = [];
+  for (const head of headers) {
+    if (messages.length >= (options.limit ?? 20)) break;
+
+    // Our own filing receipts quote the student's name; reading them back would match
+    // that student and generate another receipt.
+    if (mailbox && head.from.toLowerCase() === mailbox) continue;
+
+    // Already dealt with in an earlier run — skip without downloading attachments.
+    if (await isAlreadyHandled(head.messageId, head.uid)) continue;
+
+    try {
+      const full = await fetchMessageByUid(head.uid);
+      if (full) messages.push(full);
+    } catch (e) {
+      console.error('[email-intake] Could not download message', head.uid, e);
+    }
   }
 
   if (messages.length === 0) return result;
@@ -254,7 +309,6 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         reason: 'Already processed in an earlier run — skipped to avoid a duplicate.',
         attachments: attachmentNames,
       });
-      await markMessageSeen(message.uid);
       continue;
     }
 
@@ -269,7 +323,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       // marked read rather than filling the review queue.
       if (message.attachments.length === 0) {
         await replyWithReceipt(message, { kind: 'skipped', reason });
-        await markMessageSeen(message.uid).catch(() => {});
+        await applyLabel(message.uid, INTAKE_LABELS.noAction);
         result.skipped++;
         await log({ status: 'skipped', reason, from: message.from, subject: message.subject });
         result.items.push({
@@ -287,7 +341,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         : [];
       await queueForReview(message, reason, candidates);
       await replyWithReceipt(message, { kind: 'queued', reason, attachments: attachmentNames });
-      await markMessageSeen(message.uid).catch(() => {});
+      await applyLabel(message.uid, INTAKE_LABELS.review);
       result.queued++;
       result.items.push({
         subject: message.subject,
@@ -401,7 +455,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         chatRecipients: announcement.recipients ?? [],
       });
 
-      await markMessageSeen(message.uid).catch(() => {});
+      await applyLabel(message.uid, INTAKE_LABELS.filed);
       result.filed++;
       result.notified += announcement.posted ? 1 : 0;
       result.items.push({
@@ -428,7 +482,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         chatError: announcement.error ?? null,
       });
     } else {
-      // Upload failed: leave the message unread so the next run retries it.
+      // Upload failed: release the claim and apply no label, so the next run retries it.
+      await releaseClaim(message.messageId, message.uid);
       await replyWithReceipt(message, {
         kind: 'failed',
         reason: lastError ?? 'unknown error',
