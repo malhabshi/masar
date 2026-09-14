@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
   staticPageGenerationTimeout: 180,
+  experimental: {
+    // pdf-parse pulls in pdfjs-dist, which webpack rewrites into something broken
+    // ("Object.defineProperty called on non-object") and silently returns no text.
+    // Loading them at runtime instead of bundling keeps extraction working.
+    serverComponentsExternalPackages: ['pdf-parse', 'pdfjs-dist'],
+  },
   // Serve OAuth well-known metadata from normal route handlers (app-router ignores dot-folders).
   async rewrites() {
     return [

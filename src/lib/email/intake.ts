@@ -21,6 +21,12 @@ import { loadStudentNames, matchStudentByName } from './matcher';
 import { announceEmailInChat } from './notify-chat';
 import { nameDocument } from './name-document';
 import { getIntakeSettings } from './intake-settings';
+import {
+  compareDocumentVersions,
+  extractPdfText,
+  findSupersededDocument,
+} from './document-compare';
+import type { Document as StudentDocument } from '@/lib/types';
 
 export const INTAKE_QUEUE_COLLECTION = 'email_intake_queue';
 export const INTAKE_LOG_COLLECTION = 'email_intake_log';
@@ -72,6 +78,34 @@ async function claimMessage(messageId: string | null, uid: number): Promise<bool
   } catch (e) {
     console.error('[email-intake] Claim failed:', e);
     return false;
+  }
+}
+
+/** Documents currently on a student's profile, for version comparison. */
+async function getStudentDocuments(studentId: string): Promise<StudentDocument[]> {
+  if (!adminDb) return [];
+  try {
+    const snap = await adminDb.collection('students').doc(studentId).get();
+    const docs = snap.data()?.documents;
+    return Array.isArray(docs) ? (docs as StudentDocument[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Download a stored document and pull its text out, for comparing against a new version. */
+async function fetchDocumentText(doc: StudentDocument): Promise<string | null> {
+  if (!doc.url) return null;
+  try {
+    const res = await fetch(doc.url);
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const type = res.headers.get('content-type') ?? '';
+    // Stored offer letters are PDFs; the content type on the signed URL is authoritative.
+    return extractPdfText(buffer, type.includes('pdf') ? 'application/pdf' : type);
+  } catch (e) {
+    console.error('[email-intake] Could not fetch stored document for comparison:', e);
+    return null;
   }
 }
 
@@ -266,6 +300,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     let allOk = true;
     let lastError: string | undefined;
     const filedNames: string[] = [];
+    const versionNotes: string[] = [];
+    const existingDocs = await getStudentDocuments(match.student.id);
     for (const att of message.attachments) {
       // Attachments arrive named "WhatsApp Image 2026-09-01 at 12.12.26 AM.jpeg"; work
       // out what the document actually is. The original filename is kept on the record.
@@ -278,6 +314,42 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           })
         : { name: att.filename.replace(/\.[^.]+$/, ''), source: 'fallback' as const };
       filedNames.push(named.name);
+
+      // Does this supersede something already on file? An offer letter can be reissued
+      // with different conditions, and staff must not keep working from the old one.
+      const identical = existingDocs.find(
+        (d) => d.originalName === att.filename && d.size === att.content.length,
+      );
+      const superseded = identical ? null : findSupersededDocument(existingDocs, named.name);
+
+      if (identical) {
+        versionNotes.push(
+          `ℹ️ *${named.name}* is byte-identical to the copy already on file from ` +
+            `${String(identical.uploadedAt).slice(0, 10)} — nothing new to review.`,
+        );
+      } else if (superseded) {
+        const newText = await extractPdfText(att.content, att.contentType);
+        const oldText = await fetchDocumentText(superseded);
+        const comparison = await compareDocumentVersions({
+          documentName: named.name,
+          oldText,
+          newText,
+        });
+        const when = String(superseded.uploadedAt).slice(0, 10);
+        if (comparison.changed) {
+          versionNotes.push(
+            `⚠️ *${named.name}* is a NEW VERSION of the one on file from ${when}. What changed:\n${comparison.summary}`,
+          );
+        } else if (comparison.comparable) {
+          versionNotes.push(
+            `ℹ️ *${named.name}* matches the version already on file from ${when} — ${comparison.summary}`,
+          );
+        } else {
+          versionNotes.push(
+            `⚠️ *${named.name}* looks like another version of the one from ${when}, but ${comparison.summary}`,
+          );
+        }
+      }
 
       const upload = await uploadStudentDocument({
         studentId: match.student.id,
@@ -313,6 +385,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         subject: message.subject,
         body: message.text,
         filedAttachments: filedNames,
+        versionNotes,
       });
 
       await markMessageSeen(message.uid).catch(() => {});

@@ -241,6 +241,42 @@ files attached to the profile. Three groups are notified:
 This is how staff find out at all; the document counters alone are easy to miss.
 Manually-filed items from the review queue are announced the same way.
 
+### Revised documents — checking the offer is still current
+
+Offer letters get reissued with changed conditions, and a revised offer filed quietly
+alongside the old one means staff act on stale terms. So when an incoming document looks
+like a newer version of one already on the profile (matched on the generated document
+name — "University of Bath - ISC Offer Letter"), the PDF text of both versions is
+extracted and compared, and the differences are stated in the chat note:
+
+```
+⚠️ University of Bath - ISC Offer Letter is a NEW VERSION of the one on file
+   from 2026-09-09. What changed:
+   - Tuition fee changed: GBP 27,250.00 → GBP 19,500.00
+   - Course dates 28 Sep 2026–28 May 2027 → 21 Sep 2026–11 Jun 2027
+   - Interview requirement during foundation year removed
+```
+
+The comparison reports only material changes — conditions, deadlines, fees, course,
+intake, English requirements, offer type. Formatting, reference numbers and print dates
+are ignored. Verified against two real 7-page Study Group offer letters: identical input
+returns "no material change", and genuinely different offers produce the list above.
+
+**The old document is never deleted or overwritten** — both versions stay on the profile
+so the history is intact.
+
+Three outcomes, so a resend is never confused with a revision:
+
+| Incoming file | Result |
+|---|---|
+| Byte-identical to one on file | Skipped, noted as "nothing new to review" |
+| Same document, different content | Filed **and** flagged with what changed |
+| Not seen before | Filed normally |
+
+PDF text extraction uses `pdf-parse`. It and `pdfjs-dist` are listed in
+`serverComponentsExternalPackages` in `next.config.mjs` — webpack otherwise rewrites
+pdfjs into something broken that silently returns no text.
+
 ### What gets picked up
 
 Unread messages with at least one attachment of a plausible document type (PDF, PNG,

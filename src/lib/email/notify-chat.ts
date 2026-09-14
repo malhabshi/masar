@@ -74,6 +74,8 @@ export type ChatAnnouncement = {
   body: string;
   /** Filenames successfully attached to the profile, if any. */
   filedAttachments: string[];
+  /** Warnings about a document superseding one already on file. */
+  versionNotes?: string[];
 };
 
 export type ChatAnnouncementResult = {
@@ -107,6 +109,11 @@ export async function announceEmailInChat(
         '',
         `📎 Attached to this profile: ${input.filedAttachments.join(', ')}`,
       );
+    }
+    // Version warnings go last so they are the final thing read — a reissued offer with
+    // changed conditions is the most consequential thing in the message.
+    if (input.versionNotes?.length) {
+      lines.push('', ...input.versionNotes);
     }
     const content = lines.filter((l) => l !== undefined).join('\n').trim();
 
