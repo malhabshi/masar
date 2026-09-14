@@ -5,17 +5,22 @@
 // provider-agnostic so the provider can be swapped without touching call sites.
 //
 // Environment:
-//   EMAIL_PROVIDER          'resend' (default; the only adapter implemented so far)
-//   EMAIL_API_KEY           provider API key — without it, sends fail with a clear message
-//   EMAIL_FROM              default sender, e.g. "Masar <noreply@yourdomain.com>"
+//   EMAIL_PROVIDER          'gmail' | 'smtp' | 'resend' (default 'resend')
+//   EMAIL_FROM              sender, e.g. "Masar <noreply@yourdomain.com>".
+//                           Optional for gmail — defaults to SMTP_USER.
 //   EMAIL_DRY_RUN           'true' to log sends without delivering (safe for testing)
 //   EMAIL_ALLOWED_DOMAINS   optional comma-separated allowlist, e.g. "q8sf.com,example.com"
+//
+//   gmail:   SMTP_USER (address) + SMTP_PASSWORD (16-char App Password, NOT the account password)
+//   smtp:    SMTP_HOST, SMTP_USER, SMTP_PASSWORD, optional SMTP_PORT (587) / SMTP_SECURE
+//   resend:  EMAIL_API_KEY
 //
 // Every attempt — delivered, blocked, or failed — is written to the `email_log`
 // Firestore collection, because an AI assistant can trigger these and that trail matters.
 
 import { adminDb } from '@/lib/firebase/admin';
 import { createResendProvider } from './providers/resend';
+import { createGmailProvider, createSmtpProvider } from './providers/smtp';
 import type { EmailProvider, SendEmailInput, SendEmailResult } from './types';
 
 export type { EmailAttachment, SendEmailInput, SendEmailResult } from './types';
@@ -27,8 +32,29 @@ function env(name: string): string | null {
   return value && value.trim() ? value.trim() : null;
 }
 
+/** Provider in use, defaulting to resend for backwards compatibility. */
+function providerName(): string {
+  return (env('EMAIL_PROVIDER') ?? 'resend').toLowerCase();
+}
+
+/**
+ * Sender address. Gmail falls back to the authenticated account, since Gmail rewrites
+ * From to that address anyway unless a verified alias is configured.
+ */
+export function getFromAddress(): string | null {
+  return env('EMAIL_FROM') ?? (providerName() === 'gmail' ? env('SMTP_USER') : null);
+}
+
 export function isEmailConfigured(): boolean {
-  return env('EMAIL_API_KEY') !== null && env('EMAIL_FROM') !== null;
+  if (getFromAddress() === null) return false;
+  switch (providerName()) {
+    case 'gmail':
+      return env('SMTP_USER') !== null && env('SMTP_PASSWORD') !== null;
+    case 'smtp':
+      return env('SMTP_HOST') !== null && env('SMTP_USER') !== null && env('SMTP_PASSWORD') !== null;
+    default:
+      return env('EMAIL_API_KEY') !== null;
+  }
 }
 
 export function isEmailDryRun(): boolean {
@@ -46,11 +72,15 @@ export function getAllowedDomains(): string[] {
 }
 
 export function getEmailConfigStatus() {
+  const provider = providerName();
   return {
-    provider: env('EMAIL_PROVIDER') ?? 'resend',
+    provider,
     configured: isEmailConfigured(),
-    hasApiKey: env('EMAIL_API_KEY') !== null,
-    from: env('EMAIL_FROM'),
+    hasApiKey:
+      provider === 'gmail' || provider === 'smtp'
+        ? env('SMTP_PASSWORD') !== null
+        : env('EMAIL_API_KEY') !== null,
+    from: getFromAddress(),
     dryRun: isEmailDryRun(),
     allowedDomains: getAllowedDomains(),
   };
@@ -58,19 +88,57 @@ export function getEmailConfigStatus() {
 
 function resolveProvider(): { provider: EmailProvider } | { error: string } {
   const name = (env('EMAIL_PROVIDER') ?? 'resend').toLowerCase();
-  const apiKey = env('EMAIL_API_KEY');
-  if (!apiKey) {
-    return {
-      error:
-        'Email is not configured: EMAIL_API_KEY is not set. Add it (plus EMAIL_FROM) to ' +
-        'apphosting.yaml for production or .env.local for local development.',
-    };
-  }
+
   switch (name) {
-    case 'resend':
+    case 'gmail': {
+      const user = env('SMTP_USER');
+      const password = env('SMTP_PASSWORD');
+      if (!user || !password) {
+        return {
+          error:
+            'Gmail is not configured: SMTP_USER (your Gmail address) and SMTP_PASSWORD ' +
+            '(a 16-character App Password, not your normal password) are both required.',
+        };
+      }
+      return { provider: createGmailProvider(user, password) };
+    }
+
+    case 'smtp': {
+      const host = env('SMTP_HOST');
+      const user = env('SMTP_USER');
+      const password = env('SMTP_PASSWORD');
+      if (!host || !user || !password) {
+        return { error: 'SMTP is not configured: SMTP_HOST, SMTP_USER and SMTP_PASSWORD are required.' };
+      }
+      const port = Number(env('SMTP_PORT') ?? '587');
+      return {
+        provider: createSmtpProvider({
+          host,
+          port: Number.isFinite(port) ? port : 587,
+          secure: (env('SMTP_SECURE') ?? '').toLowerCase() === 'true' || port === 465,
+          user,
+          password,
+          label: 'smtp',
+        }),
+      };
+    }
+
+    case 'resend': {
+      const apiKey = env('EMAIL_API_KEY');
+      if (!apiKey) {
+        return {
+          error:
+            'Email is not configured: EMAIL_API_KEY is not set. Add it (plus EMAIL_FROM) to ' +
+            'apphosting.yaml for production or .env.local for local development.',
+        };
+      }
       return { provider: createResendProvider(apiKey) };
+    }
+
     default:
-      return { error: `Unsupported EMAIL_PROVIDER "${name}". Only "resend" is implemented.` };
+      return {
+        error: `Unsupported EMAIL_PROVIDER "${name}". Supported: "gmail", "smtp", "resend".`,
+      };
   }
 }
 
@@ -113,14 +181,14 @@ export async function sendEmail(
   input: SendEmailInput,
   context: SendEmailContext = {},
 ): Promise<SendEmailResult> {
-  const providerName = (env('EMAIL_PROVIDER') ?? 'resend').toLowerCase();
+  const activeProvider = providerName();
   const dryRun = isEmailDryRun();
   const recipients = toList(input.to);
 
   const fail = async (error: string, extra: Record<string, unknown> = {}): Promise<SendEmailResult> => {
     await logAttempt({
       status: 'failed',
-      provider: providerName,
+      provider: activeProvider,
       to: recipients,
       subject: input.subject ?? null,
       error,
@@ -128,7 +196,7 @@ export async function sendEmail(
       ...context,
       ...extra,
     });
-    return { success: false, error, provider: providerName, dryRun, to: recipients };
+    return { success: false, error, provider: activeProvider, dryRun, to: recipients };
   };
 
   // --- Validation -----------------------------------------------------------
@@ -140,7 +208,7 @@ export async function sendEmail(
   if (!input.subject || !input.subject.trim()) return fail('Subject is required.');
   if (!input.html && !input.text) return fail('Either html or text body is required.');
 
-  const from = input.from ?? env('EMAIL_FROM');
+  const from = input.from ?? getFromAddress();
   if (!from) {
     return fail('Email is not configured: EMAIL_FROM is not set (e.g. "Masar <noreply@yourdomain.com>").');
   }
@@ -164,7 +232,7 @@ export async function sendEmail(
   if (dryRun) {
     await logAttempt({
       status: 'dry_run',
-      provider: providerName,
+      provider: activeProvider,
       from,
       to: recipients,
       cc: toList(input.cc),
@@ -177,7 +245,7 @@ export async function sendEmail(
     });
     return {
       success: true,
-      provider: providerName,
+      provider: activeProvider,
       dryRun: true,
       to: recipients,
       error: undefined,
@@ -193,7 +261,7 @@ export async function sendEmail(
 
   await logAttempt({
     status: 'sent',
-    provider: providerName,
+    provider: activeProvider,
     providerMessageId: id ?? null,
     from,
     to: recipients,
@@ -206,5 +274,5 @@ export async function sendEmail(
     ...context,
   });
 
-  return { success: true, id, provider: providerName, dryRun: false, to: recipients };
+  return { success: true, id, provider: activeProvider, dryRun: false, to: recipients };
 }

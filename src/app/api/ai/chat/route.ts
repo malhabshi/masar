@@ -104,6 +104,15 @@ export async function POST(req: NextRequest) {
       actor: auth.actor,
       allowWrites,
     });
+    // Spend profile, one line per run. On a warmed-up conversation cacheRead should
+    // dominate in; if it stays at 0, something above the breakpoint is changing per
+    // request and the prefix is being re-billed at full price every turn.
+    console.log(
+      `[ai/chat] user=${auth.actor.id} iterations=${result.iterations} ` +
+        `tools=${result.toolCalls.length} in=${result.usage.inputTokens} ` +
+        `cacheRead=${result.usage.cacheReadTokens} cacheWrite=${result.usage.cacheWriteTokens} ` +
+        `out=${result.usage.outputTokens}`,
+    );
     return NextResponse.json(result);
   } catch (e) {
     console.error('[ai/chat] Agent run failed:', e);

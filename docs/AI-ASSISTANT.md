@@ -58,7 +58,33 @@ follow-up questions in the same conversation are cheaper than the first.
 ### 2. Email (optional — only needed for the "send an email" capability)
 
 No email service existed in masar before this; WhatsApp was the only outbound channel.
-The adapter written is [Resend](https://resend.com) (free tier: 100 emails/day, 3k/month).
+Three providers are supported: **gmail**, **smtp** (any server), and **resend**.
+
+#### Option A — Gmail / Google Workspace (simplest if you already have an account)
+
+Gmail needs an **App Password**, not your normal password:
+
+1. Google Account → Security → turn on **2-Step Verification** (required).
+2. Security → **App passwords** → create one for "Mail". Google shows a 16-character code.
+3. Add to `.env.local` (or `apphosting.yaml` for production):
+
+```
+EMAIL_PROVIDER=gmail
+SMTP_USER=you@yourdomain.com
+SMTP_PASSWORD=the16charapppassword
+EMAIL_DRY_RUN=true
+```
+
+`EMAIL_FROM` is optional here — it defaults to `SMTP_USER`, and Gmail rewrites the From
+header to the authenticated account anyway unless the address is a verified
+"Send mail as" alias.
+
+Limits: ~500 recipients/day on a free Gmail account, ~2,000/day on Google Workspace.
+Replies come back to that mailbox, which is usually what you want for chasing students.
+
+#### Option B — Resend (better for volume and deliverability)
+
+Free tier: 100 emails/day, 3k/month. Requires domain verification.
 
 1. Create a Resend account, verify your sending domain, create an API key.
 2. Add to `apphosting.yaml`:

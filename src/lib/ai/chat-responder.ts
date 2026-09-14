@@ -10,6 +10,7 @@
 //   3. Loop guard — never reacts to its own messages.
 //   4. Duplicate guard — never replies twice to the same incoming message.
 //   5. Muted students are skipped.
+//   6. Triage gate — messages that plainly need no answer never reach the model.
 // Every run is recorded in ai_chat_log, including the runs where it chose to stay quiet.
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -267,6 +268,29 @@ function buildToolset(opts: {
 }
 
 /**
+ * Pure acknowledgements, in the two languages the staff chat actually uses. Matched
+ * against the whole message, so "ok" is caught but "ok what about the UCL offer" is not.
+ */
+const ACKNOWLEDGEMENT =
+  /^(ok(ay)?|k+|done|thx|thanks?|thank you|ty|noted|sure|yes|yeah|yep|no|nope|got it|fine|great|perfect|تم|تمام|شكرا|شكرا جزيلا|اوك|أوك|ماشي|تسلم|زين)[\s.!،]*$/i;
+
+/**
+ * Cheap triage before any tokens are spent. The responder fires on every message posted
+ * to a student thread, and the overwhelming majority of those are staff talking to each
+ * other — a full agent run only to conclude stay_silent. Deliberately conservative: an
+ * attachment, a question mark, or any message of real length always reaches the model.
+ */
+function needsModel(m: ChatMessage): boolean {
+  if (m.document) return true;
+  const text = (m.content ?? '').trim();
+  if (!text) return false;
+  if (/[?؟]/.test(text)) return true;
+  if (ACKNOWLEDGEMENT.test(text)) return false;
+  // Too short to carry a request. "book IELTS" (10) survives; "تم" and a bare emoji do not.
+  return text.length >= 8;
+}
+
+/**
  * Examine a student's chat thread and act if useful. Never throws.
  */
 export async function respondToStudentChat(studentId: string): Promise<ResponderOutcome> {
@@ -288,6 +312,12 @@ export async function respondToStudentChat(studentId: string): Promise<Responder
     // Loop guard: our own message is never a trigger.
     if (last.authorId === CHAT_BOT_USER_ID) {
       return { studentId, status: 'already_replied', reason: "last message is the bot's own" };
+    }
+
+    // Triage gate. Skipped messages cost nothing — no model call, no log write — and are
+    // left unclaimed, so a later edit to the thread is still free to wake the responder.
+    if (!needsModel(last)) {
+      return { studentId, status: 'silent', reason: 'no answer needed (pre-model triage)' };
     }
 
     // Duplicate guard. Two triggers can fire for the same message (the sender's browser

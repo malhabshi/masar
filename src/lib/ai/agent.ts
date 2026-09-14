@@ -37,7 +37,12 @@ export type AgentRunResult = {
   /** Every tool the model ran this turn, in order — surfaced in the UI for transparency. */
   toolCalls: Array<{ name: string; input: unknown; isError: boolean; durationMs: number }>;
   iterations: number;
-  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+  };
   /** Set when the run ended abnormally (not configured, refused, capped, API error). */
   error?: string;
   stopReason?: string;
@@ -52,7 +57,7 @@ function extractText(content: Anthropic.ContentBlock[]): string {
 }
 
 /** Tool results are JSON-stringified for the model; oversized payloads are truncated. */
-const MAX_TOOL_RESULT_CHARS = 60_000;
+const MAX_TOOL_RESULT_CHARS = 15_000;
 
 function serializeToolResult(result: unknown): string {
   let text: string;
@@ -76,7 +81,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
 
   const newMessages: Anthropic.MessageParam[] = [];
   const toolCalls: AgentRunResult['toolCalls'] = [];
-  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
 
   const base = (): AgentRunResult => ({
     ok: false,
@@ -109,6 +114,11 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
       response = await client.messages.create({
         model: AI_MODEL,
         max_tokens: AI_MAX_TOKENS,
+        // Without this only the system prefix is cached, so every iteration resends the
+        // whole growing conversation — including every prior tool result — at full price,
+        // and cost climbs with the square of the round count. Top-level cache_control
+        // caches the last cacheable block, which moves forward each turn.
+        cache_control: { type: 'ephemeral' },
         system,
         tools,
         thinking: { type: 'adaptive' },
@@ -131,6 +141,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     usage.inputTokens += response.usage.input_tokens ?? 0;
     usage.outputTokens += response.usage.output_tokens ?? 0;
     usage.cacheReadTokens += response.usage.cache_read_input_tokens ?? 0;
+    usage.cacheWriteTokens += response.usage.cache_creation_input_tokens ?? 0;
 
     // A safety decline ends the run; there is nothing useful to loop on.
     if (response.stop_reason === 'refusal') {
