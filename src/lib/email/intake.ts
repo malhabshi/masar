@@ -51,6 +51,30 @@ export type IntakeResult = {
   }>;
 };
 
+/**
+ * Claim a message so it can only ever be filed once.
+ *
+ * Belt and braces alongside the IMAP \Seen flag: if marking read fails for any reason,
+ * the next run would otherwise file the same attachments again. Keyed on the RFC822
+ * Message-ID, which is stable and unique per email.
+ */
+async function claimMessage(messageId: string | null, uid: number): Promise<boolean> {
+  if (!adminDb) return true; // No DB means no dedupe; better to process than to stall.
+  const key = (messageId ?? `uid-${uid}`).replace(/[^\w.@-]/g, '_').slice(0, 400);
+  const ref = adminDb.collection('email_intake_seen').doc(key);
+  try {
+    return await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists) return false;
+      tx.set(ref, { messageId, uid, claimedAt: new Date().toISOString() });
+      return true;
+    });
+  } catch (e) {
+    console.error('[email-intake] Claim failed:', e);
+    return false;
+  }
+}
+
 /** The assigned employee's civil ID, used to notify them specifically. */
 async function getStudentEmployeeCivilId(studentId: string): Promise<string | null> {
   if (!adminDb) return null;
@@ -184,6 +208,21 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       }
     }
 
+    // Only claim once we know we are going to act on it — a message skipped by test mode
+    // must stay claimable for the real run later.
+    if (!(await claimMessage(message.messageId, message.uid))) {
+      result.skipped++;
+      result.items.push({
+        subject: message.subject,
+        from: message.from,
+        status: 'pending_review',
+        reason: 'Already processed in an earlier run — skipped to avoid a duplicate.',
+        attachments: attachmentNames,
+      });
+      await markMessageSeen(message.uid);
+      continue;
+    }
+
     if (match.kind !== 'matched') {
       const reason =
         match.kind === 'ambiguous'
@@ -249,11 +288,16 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         note: `Received by email from ${message.from} — "${message.subject}"`,
         section: 'admin',
         uploaderId: EMAIL_INTAKE_USER_ID,
+        // The same offer letter is often re-sent, or already saved by hand.
+        skipIfDuplicate: true,
         notify: true,
       });
       if (!upload.success) {
         allOk = false;
         lastError = upload.error;
+      } else if ('skipped' in upload) {
+        // Already on the profile — say so in the chat note instead of silently dropping it.
+        filedNames[filedNames.length - 1] = `${named.name} (already on file)`;
       }
     }
 
@@ -364,10 +408,11 @@ export async function resolveQueuedItem(
       note: `Received by email from ${item.from ?? 'unknown'} — "${item.subject ?? ''}" (filed manually)`,
       section: 'admin',
       uploaderId: reviewerId,
+      skipIfDuplicate: true,
       notify: true,
     });
     if (!upload.success) return { success: false, error: upload.error };
-    filed++;
+    if (!('skipped' in upload)) filed++;
   }
 
   // Same announcement as the automatic path, so a manually-filed document notifies the

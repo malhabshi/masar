@@ -29,10 +29,17 @@ export type UploadStudentDocumentInput = {
   uploaderId: string;
   /** Set false to skip the WhatsApp notification (e.g. bulk backfills). */
   notify?: boolean;
+  /**
+   * Skip the upload when the profile already holds a document with the same original
+   * filename and byte size. Used by email intake, where the same offer letter is often
+   * mailed more than once — or was already saved by hand.
+   */
+  skipIfDuplicate?: boolean;
 };
 
 export type UploadStudentDocumentResult =
   | { success: true; document: StudentDocument }
+  | { success: true; skipped: true; reason: string; existing: StudentDocument }
   | { success: false; error: string };
 
 const EXTENSION_CONTENT_TYPES: Record<string, string> = {
@@ -100,6 +107,20 @@ export async function uploadStudentDocument(
     const studentSnap = await studentRef.get();
     if (!studentSnap.exists) return { success: false, error: `Student ${input.studentId} not found.` };
     const student = studentSnap.data() as Student;
+
+    if (input.skipIfDuplicate) {
+      const existing = (student.documents || []).find(
+        (d) => d.originalName === filename && d.size === buffer.length,
+      );
+      if (existing) {
+        return {
+          success: true,
+          skipped: true,
+          reason: `Already on this profile as "${existing.name}" (uploaded ${existing.uploadedAt}).`,
+          existing,
+        };
+      }
+    }
 
     const contentType = input.contentType || guessContentType(filename);
     const filePath = `students/${input.studentId}/${Date.now()}_${filename}`;

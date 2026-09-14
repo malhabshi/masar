@@ -105,7 +105,10 @@ export async function fetchUnreadMessages(
   try {
     const lock = await client.getMailboxLock('INBOX');
     try {
-      const uids = await client.search({ seen: false });
+      // `{ uid: true }` is essential: without it ImapFlow returns SEQUENCE numbers, which
+      // are positional and shift as the mailbox changes. Marking a message read by a
+      // sequence number flags the wrong message, so mail is re-processed forever.
+      const uids = await client.search({ seen: false }, { uid: true });
       if (!uids || uids.length === 0) return [];
 
       // Newest first, bounded so one run can't pull down a huge backlog.
@@ -156,19 +159,30 @@ export async function fetchUnreadMessages(
   return results;
 }
 
-/** Mark a message read so the next run skips it. */
-export async function markMessageSeen(uid: number): Promise<void> {
+/**
+ * Mark a message read so the next run skips it.
+ *
+ * Returns whether the flag was actually applied. A silent failure here means the message
+ * is processed again on the next run — which is how duplicate documents get filed — so
+ * the caller must not ignore a false.
+ */
+export async function markMessageSeen(uid: number): Promise<boolean> {
   const config = imapConfig();
-  if (!config) return;
+  if (!config) return false;
   const client = new ImapFlow(config);
-  await client.connect();
   try {
+    await client.connect();
     const lock = await client.getMailboxLock('INBOX');
     try {
-      await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+      const ok = await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+      if (!ok) console.error(`[inbox] Could not mark uid ${uid} as seen.`);
+      return Boolean(ok);
     } finally {
       lock.release();
     }
+  } catch (e) {
+    console.error(`[inbox] Failed to mark uid ${uid} as seen:`, e);
+    return false;
   } finally {
     await client.logout().catch(() => {});
   }
