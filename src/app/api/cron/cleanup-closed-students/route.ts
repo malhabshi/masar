@@ -3,8 +3,15 @@ import { adminDb, storage } from '@/lib/firebase/admin';
 import type { Student } from '@/lib/types';
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+
+  // An unset secret must FAIL. Comparing against `Bearer ${undefined}` let anyone who
+  // sent the literal string "Bearer undefined" trigger permanent file deletion.
+  if (!secret) {
+    console.error('[cron/cleanup] CRON_SECRET is not set — refusing to run.');
+    return NextResponse.json({ error: 'Scheduler is not configured.' }, { status: 503 });
+  }
+  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
