@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { initialiseReminderStages } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 import { Bell, Plus, AlarmClock, Trash2, Pencil, Clock, MapPin, MessageSquare, Loader2 } from 'lucide-react';
 import { addHours, addDays, isPast } from 'date-fns';
@@ -60,7 +61,11 @@ function SnoozeDialog({ reminder, open, onClose }: { reminder: Reminder; open: b
       await updateDoc(doc(firestore, 'student_reminders', reminder.id), {
         dueAt: isoDate,
         whatsAppSentAt: deleteField(),
+        stages: deleteField(),
       });
+      // Re-arm the day / hour / 5-minute stages around the new time. `announce: false`
+      // because the reminder was already announced when it was created.
+      await initialiseReminderStages(reminder.id, { announce: false });
       toast({ title: 'Reminder snoozed' });
       onClose();
     } catch (e: any) {
@@ -187,9 +192,13 @@ function ReminderFormDialog({
         await updateDoc(doc(firestore, 'student_reminders', editing.id), {
           ...payload,
           whatsAppSentAt: deleteField(),
+          stages: deleteField(),
         });
+        // Re-arm the stages around the new date without announcing it again.
+        await initialiseReminderStages(editing.id, { announce: false });
+        toast({ title: 'Reminder updated' });
       } else {
-        await addDoc(collection(firestore, 'student_reminders'), {
+        const created = await addDoc(collection(firestore, 'student_reminders'), {
           ...payload,
           studentId: student.id,
           studentName: student.name,
@@ -198,8 +207,15 @@ function ReminderFormDialog({
           status: 'active',
           createdAt: new Date().toISOString(),
         });
+        // Sends the "created" WhatsApp straight away and arms the day / hour / 5-minute
+        // stages. Any stage already in the past is skipped rather than fired at once.
+        const res = await initialiseReminderStages(created.id, { announce: true });
+        toast(
+          res.success
+            ? { title: 'Reminder created', description: payload.notifyWhatsApp ? 'WhatsApp sent.' : undefined }
+            : { variant: 'destructive', title: 'Reminder created', description: res.message },
+        );
       }
-      toast({ title: editing ? 'Reminder updated' : 'Reminder created' });
       onClose();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed', description: e.message });

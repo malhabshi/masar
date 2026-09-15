@@ -1,3 +1,5 @@
+import type { StageLog } from './reminder-stages';
+
 export type UserRole = 'admin' | 'adminplus' | 'employee' | 'department' | 'student';
 
 export interface User {
@@ -612,5 +614,8 @@ export interface Reminder {
   createdAt: string;
   status: 'active' | 'dismissed';
   notifyWhatsApp: boolean;
+  /** Superseded by `stages`; kept so reminders created before staged sending still read correctly. */
   whatsAppSentAt?: string;
+  /** Per-stage send record: ISO timestamp once sent, or 'skipped'. See lib/reminder-stages.ts. */
+  stages?: StageLog;
 }

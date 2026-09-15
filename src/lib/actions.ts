@@ -4,6 +4,14 @@ import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { jsPDF } from 'jspdf';
 import { formatKuwaitTime } from '@/lib/timestamp-utils';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
+import {
+  initialStageLog,
+  migrateLegacyStages,
+  stagePhrase,
+  stagesDueNow,
+  SKIPPED,
+  type ReminderStage,
+} from '@/lib/reminder-stages';
 import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ChecklistConfigItem, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry } from './types';
 import {
   isWithinInterval,
@@ -200,8 +208,10 @@ export async function triggerWhatsAppNotification(
   type: NotificationType,
   variables: Record<string, string>,
   recipientPhone?: string
-) {
-  if (!checkAdminServices() || !recipientPhone) return;
+): Promise<{ success: boolean; message?: string }> {
+  if (!checkAdminServices() || !recipientPhone) {
+    return { success: false, message: 'No recipient phone number.' };
+  }
 
   try {
     const templateQuery = await adminDb!
@@ -211,14 +221,14 @@ export async function triggerWhatsAppNotification(
       .limit(1)
       .get();
 
-    if (templateQuery.empty) return;
+    if (templateQuery.empty) return { success: false, message: `No active template for "${type}".` };
 
     const template = templateQuery.docs[0].data() as NotificationTemplate;
-    if (template.webhookUrl) {
-      await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables, template.variableMapping);
-    }
-  } catch (e) {
+    if (!template.webhookUrl) return { success: false, message: 'Template has no webhook URL.' };
+    return await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables, template.variableMapping);
+  } catch (e: any) {
     console.error('WhatsApp trigger failed:', e);
+    return { success: false, message: e?.message || String(e) };
   }
 }
 
@@ -264,7 +274,12 @@ export async function sendSampleWebhookRequest(webhookUrl: string, mapping: Reco
     pendingTasksCount: '5',
     oldestTaskDate: '2025-01-01',
     submissionDate: '2025-01-01',
-    studentUrl: 'https://uniapplyhub.com/student/sample'
+    studentUrl: 'https://uniapplyhub.com/student/sample',
+    // Without these two the reminder template's {{3}} and {{4}} arrive empty, and
+    // WANotifier shows no sample value to map against.
+    reminderTitle: 'University Interview',
+    reminderDescription: 'Online interview with admissions',
+    dueAt: 'in 1 hour — Sep 15, 2026, 7:14 PM'
   };
   return await sendWhatsAppViaWebhook(webhookUrl, '00000000', dummyVars, mapping);
 }
@@ -2658,6 +2673,221 @@ export async function rejectStudentDeletion(studentId: string, adminId: string, 
 }
 
 
+/**
+ * Everyone who should get a WhatsApp for this reminder, de-duplicated by phone.
+ *
+ * Note: 'all' deliberately does NOT include department users — that matches how this
+ * has always behaved, and widening it would silently add people to existing reminders.
+ */
+async function resolveReminderRecipients(reminder: Reminder): Promise<{ phone: string; name: string }[]> {
+  const found: { phone: string; name: string }[] = [];
+  const { recipientType, recipientUserIds } = reminder;
+
+  const add = (data: FirebaseFirestore.DocumentData | undefined, fallback: string) => {
+    if (data?.phone) found.push({ phone: data.phone, name: data.name || fallback });
+  };
+
+  if (recipientType === 'admin' || recipientType === 'all') {
+    const admins = await adminDb!.collection('users').where('role', '==', 'admin').get();
+    admins.docs.forEach(d => add(d.data(), 'Admin'));
+  }
+  if (recipientType === 'employee' || recipientType === 'all') {
+    const studentDoc = await adminDb!.collection('students').doc(reminder.studentId).get();
+    const employeeId = (studentDoc.data() as Student | undefined)?.employeeId;
+    if (employeeId) {
+      const emp = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
+      emp.docs.forEach(d => add(d.data(), 'Employee'));
+    }
+  }
+  if (recipientType === 'department') {
+    const depts = await adminDb!.collection('users').where('role', '==', 'department').get();
+    depts.docs.forEach(d => add(d.data(), 'Team'));
+  }
+  if (recipientType === 'custom' && recipientUserIds?.length) {
+    const docs = await Promise.all(recipientUserIds.map(uid => adminDb!.collection('users').doc(uid).get()));
+    docs.forEach(d => { if (d.exists) add(d.data(), 'Team'); });
+  }
+
+  const seen = new Set<string>();
+  return found.filter(r => {
+    if (seen.has(r.phone)) return false;
+    seen.add(r.phone);
+    return true;
+  });
+}
+
+/**
+ * Claim the stages that are due for one reminder, then send them.
+ *
+ * The claim is a transaction, so two overlapping runs — the cron and someone opening
+ * the site at the same moment — can never both send the same stage. A stage whose
+ * messages all fail is released so the next run retries it.
+ */
+async function sendDueStagesFor(
+  ref: FirebaseFirestore.DocumentReference,
+  now: Date,
+): Promise<{ stage: ReminderStage; recipients: number }[]> {
+  const nowIso = now.toISOString();
+
+  const claim = await adminDb!.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const reminder = { id: snap.id, ...snap.data() } as Reminder;
+    if (reminder.status !== 'active' || !reminder.notifyWhatsApp) return null;
+
+    // Reminders created before staged sending have no log at all.
+    const migrated = migrateLegacyStages(reminder);
+    if (migrated) reminder.stages = migrated;
+
+    const { send, skip } = stagesDueNow(reminder, now);
+    if (!send.length && !skip.length) return null;
+
+    const update: Record<string, string> = {};
+    for (const s of send) update[`stages.${s}`] = nowIso;
+    for (const s of skip) update[`stages.${s}`] = SKIPPED;
+    // Writing the migrated log first keeps a legacy reminder from being re-evaluated.
+    if (migrated) tx.set(ref, { stages: { ...migrated } }, { merge: true });
+    tx.update(ref, update);
+
+    return { reminder, send };
+  });
+
+  if (!claim || !claim.send.length) return [];
+
+  const { reminder, send } = claim;
+  const recipients = await resolveReminderRecipients(reminder);
+  const results: { stage: ReminderStage; recipients: number }[] = [];
+
+  for (const stage of send) {
+    let delivered = 0;
+    for (const { phone, name } of recipients) {
+      const res = await triggerWhatsAppNotification('student_reminder', {
+        recipientName: name,
+        studentName: reminder.studentName,
+        reminderTitle: reminder.title,
+        reminderDescription: reminder.description || '',
+        dueAt: stagePhrase(stage, reminder.dueAt),
+      }, phone);
+      if (res?.success) delivered++;
+    }
+
+    if (delivered === 0 && recipients.length > 0) {
+      // Nothing got through — let the next run try this stage again.
+      await ref.update({ [`stages.${stage}`]: FieldValue.delete() }).catch(() => {});
+      console.error(`[reminders] stage "${stage}" failed for ${ref.id}, released for retry`);
+      continue;
+    }
+    results.push({ stage, recipients: delivered });
+  }
+
+  // Kept in step with the stage log so older screens still show a last-sent time.
+  if (results.length) await ref.update({ whatsAppSentAt: nowIso }).catch(() => {});
+  return results;
+}
+
+/**
+ * Send every reminder stage that is due right now, for every student.
+ *
+ * Called by the scheduler (every few minutes) and as a fallback whenever someone loads
+ * the app. Idempotent — running it twice in the same minute sends nothing twice.
+ */
+export async function processReminderStages(): Promise<{ sent: number; details: string[] }> {
+  if (!checkAdminServices()) return { sent: 0, details: [] };
+  try {
+    const now = new Date();
+    // The earliest stage fires 24h ahead, so nothing due beyond that can have work.
+    const horizon = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+
+    const snapshot = await adminDb!
+      .collection('student_reminders')
+      .where('status', '==', 'active')
+      .where('dueAt', '<=', horizon)
+      .get();
+
+    const details: string[] = [];
+    let sent = 0;
+
+    for (const doc of snapshot.docs) {
+      const results = await sendDueStagesFor(doc.ref, now);
+      for (const r of results) {
+        sent += r.recipients;
+        details.push(`${doc.id}:${r.stage}->${r.recipients}`);
+      }
+    }
+
+    return { sent, details };
+  } catch (e: any) {
+    // Loud on purpose. A silent failure here once hid a broken index for three months.
+    console.error('[reminders] processReminderStages FAILED:', e?.message || e);
+    return { sent: 0, details: [`ERROR: ${e?.message || e}`] };
+  }
+}
+
+/**
+ * Set up a reminder's stages, and announce it immediately when it is newly created.
+ *
+ * Called right after the reminder is written, and again whenever its date changes
+ * (edit or snooze) so the day/hour/final stages are re-armed for the new time.
+ */
+export async function initialiseReminderStages(
+  reminderId: string,
+  options: { announce: boolean } = { announce: true },
+): Promise<{ success: boolean; message?: string }> {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const ref = adminDb!.collection('student_reminders').doc(reminderId);
+    const snap = await ref.get();
+    if (!snap.exists) return { success: false, message: 'Reminder not found.' };
+    const reminder = { id: snap.id, ...snap.data() } as Reminder;
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const stages = initialStageLog(reminder.dueAt, now);
+
+    // On an edit the reminder has already been announced; don't announce it twice.
+    if (!options.announce) {
+      const previous = reminder.stages?.created;
+      if (previous) stages.created = previous;
+    }
+
+    const shouldAnnounce = options.announce && reminder.notifyWhatsApp;
+    if (shouldAnnounce) stages.created = nowIso;
+
+    await ref.set({ stages }, { merge: true });
+
+    if (shouldAnnounce) {
+      const recipients = await resolveReminderRecipients(reminder);
+      let delivered = 0;
+      for (const { phone, name } of recipients) {
+        const res = await triggerWhatsAppNotification('student_reminder', {
+          recipientName: name,
+          studentName: reminder.studentName,
+          reminderTitle: reminder.title,
+          reminderDescription: reminder.description || '',
+          dueAt: stagePhrase('created', reminder.dueAt),
+        }, phone);
+        if (res?.success) delivered++;
+      }
+      if (delivered > 0) await ref.update({ whatsAppSentAt: nowIso });
+      else if (recipients.length > 0) {
+        await ref.update({ 'stages.created': FieldValue.delete() }).catch(() => {});
+        return { success: false, message: 'Reminder saved, but the WhatsApp could not be sent.' };
+      }
+    }
+
+    return { success: true };
+  } catch (e: any) {
+    console.error('[reminders] initialiseReminderStages failed:', e);
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Reminders this user should see as a toast, and a fallback run of the scheduler.
+ *
+ * The WhatsApp sending itself lives in processReminderStages — this only decides what
+ * to pop up on screen for whoever is looking.
+ */
 export async function processStudentReminders(params: {
   userId: string;
   userRole: string;
@@ -2665,6 +2895,11 @@ export async function processStudentReminders(params: {
   userCivilId?: string;
 }): Promise<{ triggered: Reminder[] }> {
   if (!checkAdminServices()) return { triggered: [] };
+
+  // Fallback for as long as no scheduler is configured. Independent of the toasts
+  // below, and idempotent, so it is safe on every page load.
+  const stageRun = processReminderStages();
+
   try {
     const now = new Date().toISOString();
     const snapshot = await adminDb!
@@ -2673,15 +2908,12 @@ export async function processStudentReminders(params: {
       .where('dueAt', '<=', now)
       .get();
 
-    if (snapshot.empty) return { triggered: [] };
-
     const triggered: Reminder[] = [];
 
     for (const doc of snapshot.docs) {
       const reminder = { id: doc.id, ...doc.data() } as Reminder;
-
-      // Check if this user is a recipient
       const { recipientType, recipientUserIds } = reminder;
+
       let isRecipient = false;
       if (recipientType === 'all') isRecipient = true;
       else if (recipientType === 'admin' && params.userRole === 'admin') isRecipient = true;
@@ -2689,58 +2921,15 @@ export async function processStudentReminders(params: {
       else if (recipientType === 'department' && params.userRole === 'department') isRecipient = true;
       else if (recipientType === 'custom' && recipientUserIds?.includes(params.userId)) isRecipient = true;
 
-      if (!isRecipient) continue;
-
-      triggered.push(scrub(reminder));
-
-      // Send WhatsApp if not yet sent
-      if (reminder.notifyWhatsApp && !reminder.whatsAppSentAt) {
-        const recipients: { phone: string; name: string }[] = [];
-
-        if (recipientType === 'admin' || recipientType === 'all') {
-          const admins = await adminDb!.collection('users').where('role', '==', 'admin').get();
-          admins.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Admin' }); });
-        }
-        if (recipientType === 'employee' || recipientType === 'all') {
-          // Get student's assigned employee
-          const studentDoc = await adminDb!.collection('students').doc(reminder.studentId).get();
-          if (studentDoc.exists) {
-            const student = studentDoc.data() as Student;
-            if (student.employeeId) {
-              const emp = await adminDb!.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
-              emp.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Employee' }); });
-            }
-          }
-        }
-        if (recipientType === 'department') {
-          const depts = await adminDb!.collection('users').where('role', '==', 'department').get();
-          depts.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Team' }); });
-        }
-        if (recipientType === 'custom' && recipientUserIds?.length) {
-          const docs = await Promise.all(recipientUserIds.map(uid => adminDb!.collection('users').doc(uid).get()));
-          docs.forEach(d => { if (d.exists && d.data()?.phone) recipients.push({ phone: d.data()!.phone, name: d.data()!.name || 'Team' }); });
-        }
-
-        const seen = new Set<string>();
-        for (const { phone, name } of recipients) {
-          if (seen.has(phone)) continue;
-          seen.add(phone);
-          await triggerWhatsAppNotification('student_reminder', {
-            recipientName: name,
-            studentName: reminder.studentName,
-            reminderTitle: reminder.title,
-            reminderDescription: reminder.description || '',
-            dueAt: formatKuwaitTime(reminder.dueAt),
-          }, phone);
-        }
-
-        await doc.ref.update({ whatsAppSentAt: now });
-      }
+      if (isRecipient) triggered.push(scrub(reminder));
     }
 
+    await stageRun;
     return { triggered };
   } catch (e: any) {
-    console.error('processStudentReminders failed:', e);
+    // Loud on purpose — this failed silently against a missing index for three months.
+    console.error('[reminders] processStudentReminders FAILED:', e?.message || e);
+    await stageRun.catch(() => {});
     return { triggered: [] };
   }
 }
