@@ -129,13 +129,24 @@ export function stagesDueNow(
 }
 
 /**
- * A reminder with no stage log at all predates this feature. Treat its old
- * `whatsAppSentAt` field as the `created` stage so it is not re-announced.
+ * A reminder with no stage log at all predates staged sending.
+ *
+ * It is armed exactly as if it had just been created: only the stages still in the
+ * future can fire. Without this, a reminder due in 40 minutes would send "created",
+ * "a day before" and "an hour before" in one burst the first time this runs, because
+ * all three moments are technically in the past.
+ *
+ * Returns null when the reminder already has a log and needs no migration.
  */
-export function migrateLegacyStages(reminder: {
-  stages?: StageLog;
-  whatsAppSentAt?: string;
-}): StageLog | null {
+export function migrateLegacyStages(
+  reminder: { dueAt: string; stages?: StageLog; whatsAppSentAt?: string },
+  now: Date = new Date(),
+): StageLog | null {
   if (reminder.stages) return null;
-  return reminder.whatsAppSentAt ? { created: reminder.whatsAppSentAt } : {};
+
+  const log = initialStageLog(reminder.dueAt, now);
+  // It was created before this existed, so there is no creation message to send —
+  // unless the old single-send already went out, which is worth keeping as a record.
+  log.created = reminder.whatsAppSentAt ?? SKIPPED;
+  return log;
 }

@@ -2735,18 +2735,18 @@ async function sendDueStagesFor(
     const reminder = { id: snap.id, ...snap.data() } as Reminder;
     if (reminder.status !== 'active' || !reminder.notifyWhatsApp) return null;
 
-    // Reminders created before staged sending have no log at all.
-    const migrated = migrateLegacyStages(reminder);
+    // A reminder from before staged sending has no log; arm it as if created now, so
+    // its already-passed stages are recorded rather than fired all at once.
+    const migrated = migrateLegacyStages(reminder, now);
     if (migrated) reminder.stages = migrated;
 
     const { send, skip } = stagesDueNow(reminder, now);
-    if (!send.length && !skip.length) return null;
 
     const update: Record<string, string> = {};
+    if (migrated) for (const [key, value] of Object.entries(migrated)) update[`stages.${key}`] = value;
     for (const s of send) update[`stages.${s}`] = nowIso;
     for (const s of skip) update[`stages.${s}`] = SKIPPED;
-    // Writing the migrated log first keeps a legacy reminder from being re-evaluated.
-    if (migrated) tx.set(ref, { stages: { ...migrated } }, { merge: true });
+    if (!Object.keys(update).length) return null;
     tx.update(ref, update);
 
     return { reminder, send };
