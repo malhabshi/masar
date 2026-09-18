@@ -216,11 +216,17 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   const effectiveAge = calculateAge(effectiveDob);
   const effectiveIsMinor = effectiveAge != null && effectiveAge < 18;
   const isExamTask = !!(requestType.isSpecialTask && config?.examTypes);
-  const needsDobEntry = isExamTask && !profileDob;
+  // Parent/guardian details exist for one reason: the exam board requires them to register
+  // an under-18 candidate for a NEW IELTS/TOEFL sitting. Courses, retakes and the unified
+  // exam carry no such requirement, so they must never ask for a guardian — or for the DOB
+  // that only exists to decide whether a guardian is needed.
+  const isNewExamBooking = watchExamType === 'ielts' || watchExamType === 'toefl';
+  const requiresGuardian = isNewExamBooking && effectiveIsMinor;
+  const needsDobEntry = isNewExamBooking && !profileDob;
 
-  // Block submission of an exam task until DOB is known, and require guardian info for minors.
+  // Block submission of a new exam booking until DOB is known, and require guardian info for minors.
   const handleGuardedSubmit = (values: any) => {
-    if (isExamTask) {
+    if (isNewExamBooking) {
       if (!effectiveDob) {
         form.setError('studentDob', { type: 'manual', message: "Please add the student's date of birth." });
         return;
@@ -640,15 +646,16 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           </div>
         )}
 
-        {/* Student age — important for IELTS/TOEFL (under-18 needs a guardian). */}
+        {/* Student age — shown as context on exam tasks. The guardian warning is reserved for
+            a new IELTS/TOEFL booking, the only case that actually needs a parent. */}
         {isExamTask && (
           <div className={cn(
             "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold",
-            effectiveIsMinor ? "border-amber-300 bg-amber-50 text-amber-800" : "border-muted bg-muted/30 text-foreground"
+            requiresGuardian ? "border-amber-300 bg-amber-50 text-amber-800" : "border-muted bg-muted/30 text-foreground"
           )}>
             <CalendarIcon className="h-4 w-4" />
             Student Age: {effectiveAge != null ? `${effectiveAge} years` : 'N/A (no date of birth on file)'}
-            {effectiveIsMinor && <span className="uppercase tracking-wide text-[11px]">· Under 18 — guardian required</span>}
+            {requiresGuardian && <span className="uppercase tracking-wide text-[11px]">· Under 18 — guardian required</span>}
           </div>
         )}
 
@@ -809,7 +816,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
               )}
             />
 
-            {effectiveIsMinor && (
+            {requiresGuardian && (
               <div className="space-y-4 rounded-md border border-amber-300 bg-amber-50 p-4">
                 <div className="space-y-0.5">
                   <p className="text-sm font-bold text-amber-800">
