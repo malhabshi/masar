@@ -16,6 +16,12 @@ import type { AppUser } from '@/hooks/use-user';
 import { cn } from '@/lib/utils';
 
 const ALL_COUNTRIES = ['UK', 'Australia / New Zealand', 'USA', 'Ireland'];
+// The UK form requires a scholarship type. The USA form never collects one, so a
+// student added through USA has to supply it here before UK can be submitted.
+const SCHOLARSHIP_OPTIONS = [
+  'MOHE - التعليم العالي', 'خطة الايفاد', 'بعثه متميزه',
+  'طلبة الثانويه العامه', 'PAEET - التطبيقي', 'Self Funded - حساب الخاص',
+];
 const BEST_UNI = 'Best Option';
 const USA_SEMESTER_OPTIONS = ['Spring 2026 / 1', 'Summer 2026 / 6', 'Fall 2026/9'];
 
@@ -55,11 +61,31 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
   const countryKey = country === 'Australia / New Zealand' ? 'AUNZ' : country === 'UK' ? 'UK' : country === 'USA' ? 'USA' : country === 'Ireland' ? 'Ireland' : '';
   const showBestUni = countryKey !== 'USA';
 
+  // The approved UK list is a Foundation list, so it stays hidden until the application
+  // is marked as Foundation. Previously this was read from the original Jotform
+  // submission, which left the list permanently empty for anyone who came in through
+  // another country's form — a USA student could never be given UK schools.
+  const arrivedAsFoundation = acceptanceType === 'Foundation';
+  const [ukFoundation, setUkFoundation] = useState(arrivedAsFoundation);
+
+  // Required by the UK form but absent from a USA/AUNZ submission. Only asked for when
+  // the student genuinely doesn't have them.
+  const [ukScholarship, setUkScholarship] = useState('');
+  const [ukCivilId, setUkCivilId] = useState('');
+  const [ukSchoolName, setUkSchoolName] = useState('');
+  const needsScholarship = !jd?.scholarshipType;
+  const needsCivilId = !jd?.civilId;
+  const needsSchoolName = !jd?.schoolName;
+  const ukDetailsComplete =
+    (!needsScholarship || !!ukScholarship) &&
+    (!needsCivilId || !!ukCivilId.trim()) &&
+    (!needsSchoolName || !!ukSchoolName.trim());
+
   // Filter approved universities for the selected country
   const unis = useMemo((): ApprovedUniversity[] => {
     if (!allApprovedUnis || !countryKey) return [];
     if (countryKey === 'UK') {
-      if (acceptanceType !== 'Foundation') return [];
+      if (!ukFoundation) return [];
       return allApprovedUnis.filter(u => {
         if (!u.isAvailable || u.country !== 'UK') return false;
         if (u.entryLevels && u.entryLevels.length > 0 && !u.entryLevels.includes('Foundation')) return false;
@@ -76,7 +102,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
       return allApprovedUnis.filter(u => u.isAvailable && u.country === 'Ireland');
     }
     return [];
-  }, [allApprovedUnis, countryKey, acceptanceType]);
+  }, [allApprovedUnis, countryKey, ukFoundation]);
 
   const allMajorsInDB = useMemo(() => [...new Set(unis.map(u => u.major.trim()))].sort(), [unis]);
   const majorSugs = pick.majorSearch.trim()
@@ -164,6 +190,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     setCountry(val);
     setSemester('');
     setGuardianDob('');
+    setUkFoundation(arrivedAsFoundation);
     setPick(emptyPick());
   };
 
@@ -172,6 +199,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     if (!country || !major) return;
     if (country === 'USA' && !semester) return;
     if (country === 'USA' && !guardianDob && !jd?.guardianDob) return;
+    if (countryKey === 'UK' && !ukDetailsComplete) return;
 
     // Enrich each entry with the actual Firestore country
     const applicationEntries = entries.map(e => {
@@ -186,7 +214,16 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     });
 
     setIsSubmitting(true);
-    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined, guardianDob || undefined, applicationEntries);
+    // Details the UK form needs that this student's original submission may not carry.
+    const ukDetails = countryKey === 'UK'
+      ? {
+          ...(ukFoundation && !arrivedAsFoundation ? { acceptanceType: 'Foundation' } : {}),
+          ...(needsScholarship && ukScholarship ? { scholarshipType: ukScholarship } : {}),
+          ...(needsCivilId && ukCivilId.trim() ? { civilId: ukCivilId.trim() } : {}),
+          ...(needsSchoolName && ukSchoolName.trim() ? { schoolName: ukSchoolName.trim() } : {}),
+        }
+      : undefined;
+    const result = await addCountryApplication(student.id, country, major, universities, currentUser.id, semester || undefined, guardianDob || undefined, applicationEntries, ukDetails);
     if (result.success) {
       toast({ title: 'Application Submitted', description: result.message });
       onSuccess();
@@ -273,6 +310,71 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
           <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {countryKey === 'AUNZ' ? 'AU / NZ' : countryKey}
           </div>
+
+          {/* Foundation toggle — UK only. The approved UK list is a Foundation list, so
+              without this the schools never appear for a student who arrived through
+              another country's form. */}
+          {countryKey === 'UK' && (
+            <div className="space-y-1.5">
+              <label className="flex items-start gap-2.5 text-sm cursor-pointer select-none rounded-md border bg-background p-3">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={ukFoundation}
+                  onCheckedChange={v => { setUkFoundation(v === true); setPick(emptyPick()); }}
+                />
+                <span className="space-y-0.5">
+                  <span className="block font-bold">Foundation application</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {ukFoundation
+                      ? 'Approved UK Foundation schools are listed below.'
+                      : 'Tick this to choose from the approved UK schools. Leave it off to enter universities manually.'}
+                  </span>
+                  {ukFoundation && !arrivedAsFoundation && (
+                    <span className="block text-xs text-amber-700">
+                      This is recorded on the UK application only — the student&apos;s profile
+                      study level is not changed.
+                    </span>
+                  )}
+                </span>
+              </label>
+
+              {(needsScholarship || needsCivilId || needsSchoolName) && (
+                <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+                  <p className="text-xs font-bold text-amber-800">
+                    The UK form requires these, and they are not on this student&apos;s record yet.
+                  </p>
+                  {needsScholarship && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Scholarship Type <span className="text-destructive">*</span></Label>
+                      <Select value={ukScholarship} onValueChange={setUkScholarship}>
+                        <SelectTrigger className="bg-background"><SelectValue placeholder="Select..." /></SelectTrigger>
+                        <SelectContent>
+                          {SCHOLARSHIP_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {needsCivilId && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Civil ID <span className="text-destructive">*</span></Label>
+                      <Input className="bg-background" value={ukCivilId} inputMode="numeric"
+                        onChange={e => setUkCivilId(e.target.value)} placeholder="12 digits" />
+                    </div>
+                  )}
+                  {needsSchoolName && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">School Name (secondary) <span className="text-destructive">*</span></Label>
+                      <Input className="bg-background" value={ukSchoolName}
+                        onChange={e => setUkSchoolName(e.target.value)} placeholder="e.g. Al-Bayan Bilingual School" />
+                    </div>
+                  )}
+                  <p className="text-[10px] text-amber-700 italic">
+                    These are saved to the student so you are not asked again.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Semester + Guardian DOB — USA only */}
           {countryKey === 'USA' && (
@@ -408,7 +510,7 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
         </Button>
         <Button
           className="flex-1"
-          disabled={!country || !finalMajor || availableCountries.length === 0 || isSubmitting || (country === 'USA' && !semester) || (country === 'USA' && !jd?.guardianDob && !guardianDob)}
+          disabled={!country || !finalMajor || availableCountries.length === 0 || isSubmitting || (country === 'USA' && !semester) || (country === 'USA' && !jd?.guardianDob && !guardianDob) || (countryKey === 'UK' && !ukDetailsComplete)}
           onClick={handleSubmit}
         >
           {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}

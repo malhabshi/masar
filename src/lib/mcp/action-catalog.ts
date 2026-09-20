@@ -2535,6 +2535,11 @@ export const ACTION_CATALOG: CatalogAction[] = [
         "name": "applicationEntries",
         "type": "{ university: string; major: string; country: string }[]",
         "optional": true
+      },
+      {
+        "name": "ukDetails",
+        "type": "{ acceptanceType?: string; scholarshipType?: string; civilId?: string; schoolName?: string }",
+        "optional": true
       }
     ]
   },

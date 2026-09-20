@@ -3696,7 +3696,22 @@ export async function addCountryApplication(
   userId: string,
   semesterOverride?: string,
   guardianDobOverride?: string,
-  applicationEntries?: { university: string; major: string; country: string }[]
+  applicationEntries?: { university: string; major: string; country: string }[],
+  /**
+   * Details the UK form requires that the student's original submission may not hold.
+   * A student who came in through the USA form has no scholarship type, civil ID or
+   * school name — the USA form never asks for them — yet the UK form rejects a
+   * submission without all three.
+   *
+   * `acceptanceType` marks THIS application as Foundation without changing the
+   * student's profile study level.
+   */
+  ukDetails?: {
+    acceptanceType?: string;
+    scholarshipType?: string;
+    civilId?: string;
+    schoolName?: string;
+  }
 ): Promise<{ success: boolean; message: string }> {
   'use server';
   if (!adminDb) return { success: false, message: 'Server not configured.' };
@@ -3777,16 +3792,16 @@ export async function addCountryApplication(
   const email = student.email || '';
   const kuwaitPhone = student.phone || '';
   const dob = jd.dob || '';
-  const civilId = jd.civilId || '';
+  const civilId = jd.civilId || ukDetails?.civilId || '';
   const kuwaitAddress = jd.kuwaitAddress || '';
-  const schoolName = jd.schoolName || '';
+  const schoolName = jd.schoolName || ukDetails?.schoolName || '';
   const ieltsScore = jd.ieltsScore || '';
   const followUpPerson = jd.followUpPerson || '';
   const guardianName = jd.guardianName || '';
   const guardianEmail = jd.guardianEmail || '';
   const guardianPhone = jd.guardianPhone || '';
-  const scholarshipType = jd.scholarshipType || '';
-  const acceptanceType = jd.acceptanceType || '';
+  const scholarshipType = jd.scholarshipType || ukDetails?.scholarshipType || '';
+  const acceptanceType = ukDetails?.acceptanceType || jd.acceptanceType || '';
   const semester = semesterOverride || jd.semester || '';
   const guardianDob = guardianDobOverride || jd.guardianDob || '';
 
@@ -3822,17 +3837,57 @@ export async function addCountryApplication(
       method: 'POST',
       body: fd,
     });
-    let detail = '';
-    try { detail = await res.text(); } catch { /* ignore */ }
-    const textPreview = detail.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
-    console.log(`[Jotform] ${formId} → HTTP ${res.status} | ${textPreview}`);
-    return { ok: res.ok, status: res.status, detail };
+    let body = '';
+    try { body = await res.text(); } catch { /* ignore */ }
+
+    // JotForm rejects with an error "message" and/or an error <title> ("Incomplete
+    // Values", file-too-large, ...) — often still with HTTP 200. Reading res.ok alone
+    // reported those rejections as success, so the application was written to the
+    // student and the employee was told it had been submitted when nothing was saved.
+    const jfError = (
+      body.match(/"message"\s*:\s*"([^"]+)"/)?.[1] ||
+      /<title>\s*(Incomplete Values|Unable[^<]*|Submission Error[^<]*|[^<]*cannot be bigger[^<]*)\s*<\/title>/i.exec(body)?.[1] ||
+      ''
+    ).replace(/\\u0026lt;/g, '<').replace(/\\u0026gt;/g, '>').replace(/\\\//g, '/').replace(/<[^>]+>/g, '').trim();
+
+    const accepted = res.ok && !jfError;
+    const textPreview = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
+    console.log(`[Jotform] ${formId} → HTTP ${res.status} accepted=${accepted}${jfError ? ` error="${jfError}"` : ''} | ${textPreview}`);
+
+    return {
+      ok: accepted,
+      status: accepted ? res.status : (res.status === 200 ? 422 : res.status || 502),
+      detail: jfError || body,
+    };
   };
 
   let jotformResult: { ok: boolean; status: number; detail: string } = { ok: false, status: 0, detail: '' };
 
   try {
     if (country === 'UK') {
+      // Checked before posting so the employee is told exactly what is missing. The UK
+      // form requires all of these and refuses the submission otherwise; a student who
+      // arrived through the USA form has none of the last three.
+      const missingUK: string[] = [];
+      if (!firstName) missingUK.push('student name');
+      if (!dob) missingUK.push('date of birth');
+      if (!email) missingUK.push('email');
+      if (!kuwaitAddress) missingUK.push('Kuwait address');
+      if (!kuwaitPhone) missingUK.push('Kuwait phone');
+      if (!guardianName) missingUK.push("guardian's name");
+      if (!guardianEmail) missingUK.push("guardian's email");
+      if (!guardianPhone) missingUK.push("guardian's phone");
+      if (!followUpPerson) missingUK.push('follow-up person');
+      if (!scholarshipType) missingUK.push('scholarship type');
+      if (!civilId) missingUK.push('civil ID');
+      if (!schoolName) missingUK.push('school name');
+      if (passportData.length === 0) missingUK.push('passport file');
+      if (secondaryCertsData.length === 0) missingUK.push('secondary certificates');
+      if (missingUK.length > 0) {
+        console.log('[addCountryApplication] UK missing:', missingUK);
+        return { success: false, message: `The UK form needs: ${missingUK.join(', ')}.` };
+      }
+
       const fd = buildBase(JOTFORM_UK_FORM_ID);
       if (major) fd.append('q7_input7', major);
       if (universities) fd.append('q8_input8', universities);
@@ -3843,6 +3898,38 @@ export async function addCountryApplication(
       if (scholarshipType) fd.append('q37_input37', scholarshipType);
       if (acceptanceType) fd.append('q38_input38', acceptanceType);
       if (followUpPerson) fd.append('q39_input39', followUpPerson);
+
+      // q21 (program) and q36 (scholarship) are REQUIRED checkboxes on the UK form —
+      // JotForm rejects the whole submission without them. The original submission path
+      // sends both; this one never did, so every UK application added from an existing
+      // student was refused by JotForm.
+      const ukProgramMap: Record<string, string> = {
+        'Foundation': 'I want to apply for foundation',
+        'First Year': 'I want to apply for first year',
+        'General English': 'General English معهد اللغة',
+        'ESL': 'General English معهد اللغة',
+        'ESL + Foundation': 'I want to apply for foundation',
+        'Masters': 'Masters',
+      };
+      const ukProgram = acceptanceType ? ukProgramMap[acceptanceType] : '';
+      if (ukProgram) fd.append('q21_input21[]', ukProgram);
+
+      const ukScholarshipMap: Record<string, string> = {
+        'MOHE - التعليم العالي': 'بعثة التعليم العالي',
+        'خطة الايفاد':          'بعثة الإيفاد',
+        'بعثه متميزه':          'بعثة متميزة',
+        'Self Funded - حساب الخاص': 'حساب خاص',
+      };
+      if (scholarshipType) {
+        const mappedScholarship = ukScholarshipMap[scholarshipType];
+        if (mappedScholarship) {
+          fd.append('q36_input36[]', mappedScholarship);
+        } else {
+          // No matching option (e.g. طلبة الثانويه العامه, PAEET) — send as "Other" + text.
+          fd.append('q36_input36[other]', scholarshipType);
+        }
+      }
+
       jotformResult = await postToJotform(JOTFORM_UK_FORM_ID, fd);
     } else if (country === 'Australia / New Zealand') {
       const fd = buildBase(JOTFORM_AUNZ_FORM_ID);
@@ -3948,10 +4035,20 @@ export async function addCountryApplication(
         updatedAt: now,
       }];
 
+  // Keep details supplied for this submission, so the next country doesn't ask again.
+  // Only ever FILLS A GAP — an existing value is never overwritten, and the student's
+  // studyLevel is deliberately left alone: marking one application as Foundation does
+  // not make the whole student a Foundation student.
+  const backfill: Record<string, string> = {};
+  if (!jd.civilId && ukDetails?.civilId) backfill['jotformData.civilId'] = ukDetails.civilId;
+  if (!jd.schoolName && ukDetails?.schoolName) backfill['jotformData.schoolName'] = ukDetails.schoolName;
+  if (!jd.scholarshipType && ukDetails?.scholarshipType) backfill['jotformData.scholarshipType'] = ukDetails.scholarshipType;
+
   await adminDb.collection('students').doc(studentId).update({
     applications: [...existingApps, ...newApplications],
     targetCountries: updatedCountries,
     lastActivityAt: now,
+    ...backfill,
   });
 
   return { success: true, message: `Application for ${country} submitted successfully.` };
