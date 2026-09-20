@@ -21,6 +21,7 @@ import {
   wouldExceedLimit,
 } from '@/lib/school-quota';
 import { submitJotformApplications, findExistingStudentsByNumber, type ExistingStudentMatch } from '@/lib/actions';
+import { classifyNameRelation, RELATION_ORDER } from '@/lib/student-name-match';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase';
 import type { ApprovedUniversity, Application, Country } from '@/lib/types';
@@ -80,10 +81,12 @@ function ExistingStudentNote({
   matches,
   label,
   checking,
+  typedName,
 }: {
   matches: ExistingStudentMatch[];
   label: string;
   checking: boolean;
+  typedName: string;
 }) {
   if (checking) {
     return (
@@ -95,32 +98,61 @@ function ExistingStudentNote({
   }
   if (matches.length === 0) return null;
 
+  // Siblings share a parent's number, so a shared number is not by itself a duplicate.
+  // The name decides which of the two this is.
+  const judged = matches
+    .map(m => ({ ...m, relation: classifyNameRelation(typedName, m.name) }))
+    .sort((a, b) => RELATION_ORDER[a.relation] - RELATION_ORDER[b.relation]);
+
+  const looksDuplicate = judged.some(m => m.relation === 'same-student');
+  const allFamily = judged.every(m => m.relation === 'same-family');
+
+  const tone = looksDuplicate
+    ? { border: 'border-red-400', bg: 'bg-red-50', head: 'text-red-900', body: 'text-red-800' }
+    : allFamily
+      ? { border: 'border-sky-300', bg: 'bg-sky-50', head: 'text-sky-900', body: 'text-sky-800' }
+      : { border: 'border-amber-400', bg: 'bg-amber-50', head: 'text-amber-900', body: 'text-amber-800' };
+
+  const heading = looksDuplicate
+    ? `This student looks like they are already in the system`
+    : allFamily
+      ? `This ${label} is already used by a family member`
+      : `This ${label} is already in the system`;
+
   return (
-    <div className="rounded-md border border-amber-400 bg-amber-50 p-2.5 space-y-1.5">
-      <p className="text-xs font-bold text-amber-900">
-        ⚠️ Already in the system — this {label} belongs to{' '}
-        {matches.length === 1 ? 'an existing student' : `${matches.length} existing students`}:
+    <div className={cn('rounded-md border p-2.5 space-y-1.5', tone.border, tone.bg)}>
+      <p className={cn('text-xs font-bold', tone.head)}>
+        {looksDuplicate ? '⚠️ ' : 'ℹ️ '}{heading}:
       </p>
-      {matches.map(m => (
-        <a
-          key={m.id}
-          href={`/student/${m.id}`}
-          target="_blank"
-          rel="noreferrer"
-          className="block text-xs font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950"
-        >
-          {m.name}
-          {m.isClosed && <span className="font-normal"> · closed</span>}
-          <span className="font-normal">
-            {' · '}
-            {m.employeeName ?? 'unassigned'}
-            {m.targetCountries.length > 0 && ` · ${m.targetCountries.join(', ')}`}
-          </span>
-        </a>
+      {judged.map(m => (
+        <div key={m.id} className="space-y-0.5">
+          <a
+            href={`/student/${m.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className={cn('block text-xs font-semibold underline underline-offset-2', tone.head)}
+          >
+            {m.name}
+            {m.isClosed && <span className="font-normal"> · closed</span>}
+            <span className="font-normal">
+              {' · '}
+              {m.employeeName ?? 'unassigned'}
+              {m.targetCountries.length > 0 && ` · ${m.targetCountries.join(', ')}`}
+            </span>
+          </a>
+          <p className={cn('text-[10px]', tone.body)}>
+            {m.relation === 'same-student'
+              ? 'Same name — submitting would create a second profile for this student.'
+              : m.relation === 'same-family'
+                ? 'Same family name — most likely a brother or sister sharing a parent’s number.'
+                : 'A different name. Check whether the number was entered correctly.'}
+          </p>
+        </div>
       ))}
-      <p className="text-[10px] text-amber-800">
-        Open the profile before submitting. Sending this form again would create a second
-        profile for the same student.
+      <p className={cn('text-[10px] italic', tone.body)}>
+        {allFamily
+          ? 'Nothing to fix if they are siblings — carry on.'
+          : 'Open the profile to check before submitting.'}
       </p>
     </div>
   );
@@ -896,6 +928,7 @@ export default function JotformPage() {
                     matches={phoneMatches}
                     label="phone number"
                     checking={checkingNumber === 'phone'}
+                    typedName={`${firstName} ${lastName}`.trim()}
                   />
                 </div>
                 {isUKorAUNZ && (
@@ -906,6 +939,7 @@ export default function JotformPage() {
                       matches={civilMatches}
                       label="Civil ID"
                       checking={checkingNumber === 'civilId'}
+                      typedName={`${firstName} ${lastName}`.trim()}
                     />
                   </div>
                 )}
