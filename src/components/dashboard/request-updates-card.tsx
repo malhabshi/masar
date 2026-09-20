@@ -9,6 +9,8 @@
 // ever shown. This card renders exactly those, from data the dashboard already holds.
 
 import { useMemo, useState } from 'react';
+import { useCollection, useMemoFirebase } from '@/firebase/client';
+import { where, orderBy, limit } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,8 @@ import Link from 'next/link';
 /** Only the last 60 days: older outcomes are history, not news. */
 const RECENT_DAYS = 60;
 const MAX_SHOWN = 15;
+/** Outcomes to pull. Asked for directly, so a small number is plenty. */
+const FETCH_LIMIT = 40;
 
 const LOOK = {
   completed:     { icon: CheckCircle2, label: 'Completed', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
@@ -31,18 +35,40 @@ const LOOK = {
   'in-progress': { icon: Clock,        label: 'In Progress', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
 } as const;
 
-export function RequestUpdatesCard({ tasks, currentUser }: { tasks: Task[]; currentUser: AppUser }) {
+export function RequestUpdatesCard({ currentUser }: { currentUser: AppUser }) {
   const { toast } = useToast();
   const [clearing, setClearing] = useState(false);
 
-  // Everything in the window, so the count is the real one — the team is carrying a
-  // backlog of these (139 for one employee), and a badge that only counted the visible
-  // rows would understate it.
+  // Its own small query rather than the dashboard's. The dashboards used to download
+  // the entire tasks collection — 26,806 documents, 13.5 MB — to render two short
+  // lists. This asks for outcome notifications addressed to this user and nothing else.
+  //
+  // Filtering on category in the query matters: outcomes are heavily outnumbered by
+  // ordinary request notifications, so pulling the newest N of everything and sifting
+  // client-side missed them entirely — for one admin the first outcome sat at position
+  // 72. Needs the recipientIds + category + createdAt index.
+  const constraints = useMemoFirebase(
+    () => (currentUser?.id
+      ? [
+          where('recipientIds', 'array-contains', currentUser.id),
+          where('category', '==', 'system'),
+          orderBy('createdAt', 'desc'),
+          limit(FETCH_LIMIT),
+        ]
+      : []),
+    [currentUser?.id],
+  );
+  const { data: tasksData } = useCollection<Task>(currentUser?.id ? 'tasks' : '', ...constraints);
+  const tasks = tasksData || [];
+
+  // Unread only. Marking one read takes it off the list for good — this is a list of
+  // things still to look at, not a history, and the team is carrying a large backlog.
   const recent = useMemo(() => {
     const cutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
     return (tasks || [])
       .filter(t => {
         if (t.category !== 'system') return false;
+        if (t.status !== 'new') return false; // already read
         const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
         if (!targets.includes(currentUser.id)) return false;
         // Older notifications predate the structured fields, so fall back to the text.
@@ -53,7 +79,7 @@ export function RequestUpdatesCard({ tasks, currentUser }: { tasks: Task[]; curr
   }, [tasks, currentUser.id]);
 
   const updates = recent.slice(0, MAX_SHOWN);
-  const unread = recent.filter(u => u.status === 'new');
+  const unread = recent; // everything here is unread by definition
 
   const clear = async () => {
     setClearing(true);
@@ -92,7 +118,7 @@ export function RequestUpdatesCard({ tasks, currentUser }: { tasks: Task[]; curr
               key={u.id}
               className={cn(
                 'rounded-lg border p-3 transition-colors',
-                isNew ? 'border-primary/40 bg-primary/5' : 'bg-background',
+                'border-primary/40 bg-primary/5',
               )}
             >
               <div className="flex items-start gap-2.5">

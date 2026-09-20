@@ -9,7 +9,10 @@ import Link from 'next/link';
 
 // Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { where } from 'firebase/firestore';
 import { TaskList } from '@/components/dashboard/task-list';
+import { getAdminDashboardStats, type AdminDashboardStats } from '@/lib/actions';
+import { RequestUpdatesCard } from '@/components/dashboard/request-updates-card';
 import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import type { AppUser } from '@/hooks/use-user';
@@ -26,19 +29,43 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     setIsClient(true);
   }, []);
 
+  // Only the students that are actually shown as badges. The counters come from
+  // getAdminDashboardStats instead of downloading all 1,960 records.
   const studentsPath = (isClient && isAdmin) ? 'students' : '';
   const tasksPath = (isClient && currentUser) ? 'tasks' : '';
   const usersPath = (isClient && isAdmin) ? 'users' : '';
 
-  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath);
-  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksPath);
+  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(
+    studentsPath, where('changeAgentRequired', '==', true),
+  );
+
+  // Counters computed server-side — see getAdminDashboardStats.
+  const [serverStats, setServerStats] = useState<AdminDashboardStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  useEffect(() => {
+    if (!isClient || !currentUser?.id) return;
+    let cancelled = false;
+    setStatsLoading(true);
+    getAdminDashboardStats(currentUser.id).then(res => {
+      if (cancelled) return;
+      setServerStats(res);
+      setStatsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [isClient, currentUser?.id]);
+  // TaskList renders ONLY category 'update' notes written by management — 15 documents
+  // in the whole system. This used to fetch the entire tasks collection instead: 26,806
+  // documents, 13.5 MB, on every dashboard load.
+  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(
+    tasksPath, where('category', '==', 'update'),
+  );
   const { data: usersData, isLoading: usersLoading } = useCollection<User>(usersPath);
 
   const students = useMemo(() => studentsData || [], [studentsData]);
   const tasks = useMemo(() => tasksData || [], [tasksData]);
   const users = useMemo(() => usersData || [], [usersData]);
   
-  const isLoading = studentsLoading || tasksLoading || usersLoading;
+  const isLoading = statsLoading || tasksLoading;
 
   const changeAgentStudents = useMemo(() => {
     return students.filter(s => s.changeAgentRequired);
@@ -49,93 +76,21 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     return [...tasks].sort((a,b) => sortByDate(a,b));
   }, [tasks]);
 
-  const stats = useMemo(() => {
-    if (!students || !users) return { 
-      total: 0, 
-      assigned: 0, 
-      unassigned: 0, 
-      apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
-      pipeline: { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 }
-    };
-    
-    const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
-    const validUserIds = new Set(users.map(u => u.id));
-
-    let assigned = 0;
-    let unassigned = 0;
-    const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
-    const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
-
-    students.forEach(s => {
-      if (s.isClosed) return;
-
-      const hasAgent = !!s.employeeId;
-      const isGhost = hasAgent && !validCivilIds.has(s.employeeId!) && !validUserIds.has(s.employeeId!);
-
-      if (!hasAgent) {
-        unassigned++;
-      } else if (!isGhost) {
-        assigned++;
-        // Count pipeline status for assigned students
-        const status = s.pipelineStatus || 'none';
-        if (status === 'green') pipeline.green++;
-        else if (status === 'yellow') pipeline.yellow++;
-        else if (status === 'orange') pipeline.orange++;
-        else if (status === 'red') pipeline.red++;
-        else if (status === 'black') pipeline.black++;
-        else pipeline.none++;
-      }
-
-      // Stats Breakdown (Exclude ghosts from official metrics)
-      if (!isGhost) {
-        (s.applications || []).forEach(app => {
-          apps.total++;
-          const status = app.status;
-          if (status === 'Pending') apps.pending++;
-          else if (status === 'Submitted') apps.submitted++;
-          else if (status === 'Missing Items') apps.missingItems++;
-          else if (status === 'Accepted') apps.accepted++;
-          else if (status === 'Rejected') apps.rejected++;
-        });
-      }
-    });
-    
-    const total = assigned + unassigned;
-    return { total, assigned, unassigned, apps, pipeline };
-  }, [students, users]);
+  // Counters come from the server now — see getAdminDashboardStats. The browser used
+  // to download all 1,960 students (9.7 MB) purely to add them up.
+  const EMPTY_STATS: AdminDashboardStats = {
+    total: 0, assigned: 0, unassigned: 0,
+    apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
+    pipeline: { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 },
+    agentBreakdown: [],
+  };
+  const stats = serverStats ?? EMPTY_STATS;
 
   // Per-User Portfolio Breakdown - Includes all staff who have students assigned
-  const agentBreakdown = useMemo(() => {
-    if (!isClient || !users || !students) return [];
-
-    const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, yellow: number, orange: number, red: number, black: number, none: number }>();
-
-    // Initialize map with all users who have a Civil ID (potential agents)
-    users.forEach(u => {
-      if (u.civilId) {
-        statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 });
-      }
-    });
-
-    students.forEach(s => {
-      if (s.isClosed) return;
-      if (s.employeeId && statsMap.has(s.employeeId)) {
-        const entry = statsMap.get(s.employeeId)!;
-        entry.total++;
-        const status = s.pipelineStatus || 'none';
-        if (status === 'green') entry.green++;
-        else if (status === 'yellow') entry.yellow++;
-        else if (status === 'orange') entry.orange++;
-        else if (status === 'red') entry.red++;
-        else if (status === 'black') entry.black++;
-        else entry.none++;
-      }
-    });
-
-    return Array.from(statsMap.values())
-      .filter(s => s.total > 0)
-      .sort((a, b) => b.total - a.total);
-  }, [isClient, users, students]);
+  const agentBreakdown = useMemo(
+    () => [...stats.agentBreakdown].sort((a, b) => b.total - a.total),
+    [stats.agentBreakdown],
+  );
 
   if (!isAdmin) return null;
 
@@ -304,6 +259,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           </Card>
 
           <SendTaskForm currentUser={currentUser} />
+          <RequestUpdatesCard currentUser={currentUser} />
           <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
         </div>
         <div className="space-y-6">

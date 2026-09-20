@@ -183,10 +183,15 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
       let reason = undefined;
       
       if (status === 'denied') {
-          // A premium-feeling prompt (native but effective for quick workflow)
-          const resp = window.prompt("Why is this task being denied? (Optional)");
+          // Required, not optional: the reason is what the employee is shown on their
+          // dashboard. Without it they only learn that the answer was no.
+          const resp = window.prompt("Why is this task being denied? The employee will see this.");
           if (resp === null) return; // User cancelled
-          reason = resp.trim() || undefined;
+          if (!resp.trim()) {
+              toast({ variant: 'destructive', title: "A reason is required", description: "The employee needs to know why it was denied." });
+              return;
+          }
+          reason = resp.trim();
       }
 
       setIsUpdatingStatus(taskId);

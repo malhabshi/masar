@@ -13,6 +13,7 @@ import Link from 'next/link';
 // Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
+import { RequestUpdatesCard } from '@/components/dashboard/request-updates-card';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { SendTaskForm } from './send-task-form';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
@@ -39,7 +40,9 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         if (!currentUser || !isDept || !isClient) return null;
         
         if (isAdmin) {
-            return query(collection(firestore, 'tasks'));
+            // Only the management notes TaskList actually renders — 15 documents,
+            // rather than the whole 26,806-document collection.
+            return query(collection(firestore, 'tasks'), where('category', '==', 'update'));
         }
 
         const groups = [currentUser.id, 'all'];
@@ -48,8 +51,8 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
         }
 
         return query(
-            collection(firestore, 'tasks'), 
-            where('recipientIds', 'array-contains-any', groups)
+            collection(firestore, 'tasks'),
+            where('category', '==', 'update')
         );
      }, [currentUser, isDept, isAdmin, isClient]);
 
@@ -317,6 +320,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                     </Card>
 
                     <SendTaskForm currentUser={currentUser} />
+                    <RequestUpdatesCard currentUser={currentUser} />
                     <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
                 </div>
                 <div className="space-y-6">

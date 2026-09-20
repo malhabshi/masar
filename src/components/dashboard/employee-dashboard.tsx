@@ -33,15 +33,14 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
         return myStudents.filter(s => s.changeAgentRequired);
     }, [myStudents]);
 
-    const relevantTasksConstraints = useMemoFirebase(() => {
-        if (!currentUser) return [];
-        // Query tasks directed to this user specifically, their department, or everyone
-        const groups = [currentUser.id, 'all'];
-        if (currentUser.role === 'admin') groups.push('admins');
-        if (currentUser.department) groups.push(`dept:${currentUser.department}`);
-        
-        return [where('recipientIds', 'array-contains-any', groups)];
-    }, [currentUser]);
+    // TaskList renders ONLY category 'update' notes written by management — 15 documents
+    // in the whole system. This used to pull every task addressed to the user: between
+    // 900 and 2,600 documents, up to 1 MB, on every dashboard load, then discard almost
+    // all of it. Request outcomes now come from RequestUpdatesCard's own small query.
+    const relevantTasksConstraints = useMemoFirebase(
+        () => (currentUser ? [where('category', '==', 'update')] : []),
+        [currentUser],
+    );
 
     const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(
         currentUser ? 'tasks' : '', 
@@ -146,7 +145,7 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
                 </Card>
             </div>
             <DashboardRemindersCard currentUser={currentUser} />
-            <RequestUpdatesCard tasks={relevantTasks} currentUser={currentUser} />
+            <RequestUpdatesCard currentUser={currentUser} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TaskList tasks={relevantTasks} currentUser={currentUser} isLoading={isLoading} />
                 <UpcomingEventsCard />

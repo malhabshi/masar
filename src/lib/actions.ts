@@ -1069,6 +1069,95 @@ export async function markRequestUpdatesRead(taskIds: string[], userId: string) 
   }
 }
 
+export type AdminDashboardStats = {
+  total: number;
+  assigned: number;
+  unassigned: number;
+  apps: { total: number; pending: number; submitted: number; missingItems: number; accepted: number; rejected: number };
+  pipeline: { green: number; yellow: number; orange: number; red: number; black: number; none: number };
+  agentBreakdown: { id: string; name: string; role: string; total: number; green: number; yellow: number; orange: number; red: number; black: number; none: number }[];
+};
+
+/**
+ * The admin dashboard's counters, computed here instead of in the browser.
+ *
+ * The dashboard used to download every student to add them up — 1,960 documents and
+ * 9.7 MB, including documents, notes and jotform data it never looked at — which is
+ * what made the page take minutes to appear. The client SDK cannot ask for a subset of
+ * fields; the Admin SDK can, so the five fields that matter are read here and only the
+ * totals cross the wire.
+ */
+export async function getAdminDashboardStats(userId: string): Promise<AdminDashboardStats | null> {
+  if (!checkAdminServices()) return null;
+  try {
+    const user = await getUser(userId);
+    if (!user || !['admin', 'adminplus', 'department'].includes(user.role)) return null;
+
+    const [studentsSnap, usersSnap] = await Promise.all([
+      adminDb!.collection('students').select('isClosed', 'employeeId', 'pipelineStatus', 'applications').get(),
+      adminDb!.collection('users').select('name', 'role', 'civilId').get(),
+    ]);
+
+    const validCivilIds = new Set<string>();
+    const validUserIds = new Set<string>();
+    const statsMap = new Map<string, AdminDashboardStats['agentBreakdown'][number]>();
+    for (const doc of usersSnap.docs) {
+      const u = doc.data();
+      validUserIds.add(doc.id);
+      if (u.civilId) {
+        validCivilIds.add(u.civilId);
+        statsMap.set(u.civilId, { id: doc.id, name: u.name, role: u.role, total: 0, green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 });
+      }
+    }
+
+    let assigned = 0;
+    let unassigned = 0;
+    const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
+    const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
+    const bump = (bucket: Record<string, number>, key: string) => {
+      if (key in bucket) bucket[key] += 1; else bucket.none += 1;
+    };
+
+    for (const doc of studentsSnap.docs) {
+      const s = doc.data();
+      if (s.isClosed) continue;
+
+      const hasAgent = !!s.employeeId;
+      const isGhost = hasAgent && !validCivilIds.has(s.employeeId) && !validUserIds.has(s.employeeId);
+      const status = s.pipelineStatus || 'none';
+
+      if (!hasAgent) unassigned++;
+      else if (!isGhost) { assigned++; bump(pipeline, status); }
+
+      if (!isGhost) {
+        for (const app of (s.applications || []) as Application[]) {
+          apps.total++;
+          if (app.status === 'Pending') apps.pending++;
+          else if (app.status === 'Submitted') apps.submitted++;
+          else if (app.status === 'Missing Items') apps.missingItems++;
+          else if (app.status === 'Accepted') apps.accepted++;
+          else if (app.status === 'Rejected') apps.rejected++;
+        }
+      }
+
+      const entry = s.employeeId ? statsMap.get(s.employeeId) : undefined;
+      if (entry) { entry.total++; bump(entry as unknown as Record<string, number>, status); }
+    }
+
+    return {
+      total: assigned + unassigned,
+      assigned,
+      unassigned,
+      apps,
+      pipeline,
+      agentBreakdown: [...statsMap.values()].filter(a => a.total > 0),
+    };
+  } catch (e) {
+    console.error('[getAdminDashboardStats] failed:', e);
+    return null;
+  }
+}
+
 export async function toggleTaskPriority(taskId: string, isPrioritized: boolean) {
   if (!checkAdminServices()) return { success: false };
   try {
