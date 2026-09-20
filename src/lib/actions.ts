@@ -5,6 +5,12 @@ import { jsPDF } from 'jspdf';
 import { formatKuwaitTime } from '@/lib/timestamp-utils';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import {
+  COMPANY_LIMIT,
+  buildCompanyLookup,
+  countByCompany,
+  schoolsAlreadyHeld,
+} from '@/lib/school-quota';
+import {
   initialStageLog,
   migrateLegacyStages,
   stagePhrase,
@@ -657,6 +663,31 @@ export async function createStudentTask(authorId: string, studentId: string, req
     const studentDoc = await adminDb!.collection('students').doc(studentId).get();
     if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
     const studentData = studentDoc.data() as Student;
+
+    // A Foundation student may hold at most COMPANY_LIMIT schools from any one pathway
+    // company. Checked here as well as in the form, so the rule holds no matter how the
+    // request is created — the form's version can be bypassed, this one cannot.
+    const picked = (dynamicData?.selectedGlobalUniversities || []) as { name?: string; company?: string }[];
+    if (studentData.studyLevel === 'Foundation' && picked.length > 0) {
+      const approvedSnap = await adminDb!.collection('approved_universities').select('name', 'company').get();
+      const lookup = buildCompanyLookup(approvedSnap.docs.map(d => d.data() as { name: string; company?: string }));
+      const held = schoolsAlreadyHeld(studentData.applications, lookup);
+      const counted = countByCompany([
+        ...held,
+        ...picked
+          .filter((u): u is { name: string; company: string } => !!u?.name && !!u?.company)
+          .map(u => ({ name: u.name, company: u.company })),
+      ]);
+      const over = Object.entries(counted).filter(([, set]) => set.size > COMPANY_LIMIT);
+      if (over.length > 0) {
+        const detail = over.map(([c, set]) => `${c} ${set.size}/${COMPANY_LIMIT}`).join(', ');
+        return {
+          success: false,
+          message: `Over the school limit for this student: ${detail}. Each company allows ${COMPANY_LIMIT} schools, counting the ones already on the profile.`,
+        };
+      }
+    }
+
     const recipientGroups: string[] = [];
     const specificUserIds: string[] = [];
     if (requestTypeData.recipients) {

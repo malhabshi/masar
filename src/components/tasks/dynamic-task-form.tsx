@@ -17,6 +17,13 @@ import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn, calculateAge } from '@/lib/utils';
+import {
+  COMPANY_LIMIT,
+  buildCompanyLookup,
+  countByCompany,
+  schoolsAlreadyHeld,
+  wouldExceedLimit,
+} from '@/lib/school-quota';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { Badge } from '../ui/badge';
 import { useCollection } from '@/firebase/client';
@@ -31,7 +38,6 @@ interface DynamicTaskFormProps {
 }
 
 const COMPANY_ORDER: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
-const COMPANY_LIMIT = 5;
 const COMPANY_COLORS: Record<string, string> = {
   Into:       'bg-blue-100 text-blue-800 border-blue-300',
   Studygroup: 'bg-violet-100 text-violet-800 border-violet-300',
@@ -256,19 +262,44 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   const watchDocs = form.watch('selectedDocuments') || [];
   const watchMultiUnis = form.watch('selectedGlobalUniversityIds') || [];
 
-  // Count distinct schools (by schoolOrder fallback to name) per company for Foundation students
-  const companySchoolCounts = useMemo(() => {
-    if (student.studyLevel !== 'Foundation' || !config?.allowMultipleUniversitySelection) return {} as Record<string, number>;
-    if (!globalUniversities || watchMultiUnis.length === 0) return {} as Record<string, number>;
-    const sets: Record<string, Set<string>> = {};
-    watchMultiUnis.forEach((id: string) => {
-      const u = globalUniversities.find(g => g.id === id);
-      if (!u || !u.company || u.company === 'Inhouse') return;
-      if (!sets[u.company]) sets[u.company] = new Set();
-      sets[u.company].add(u.schoolOrder != null ? String(u.schoolOrder) : u.name);
-    });
-    return Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, v.size]));
-  }, [watchMultiUnis, globalUniversities, student.studyLevel, config?.allowMultipleUniversitySelection]);
+  // The company limit applies to Foundation students on any form that picks from the
+  // approved list. It used to also require config.allowMultipleUniversitySelection,
+  // which is not set on ANY request type — so the limit never actually ran.
+  const companyLimitApplies = student.studyLevel === 'Foundation' && !!config?.useApprovedUniversitiesList;
+
+  /** Which company each approved school belongs to, keyed so spelling variants agree. */
+  const companyLookup = useMemo(() => buildCompanyLookup(globalUniversities || []), [globalUniversities]);
+
+  /**
+   * Schools the student ALREADY holds. Counted against the limit, so five Kaplan
+   * schools spread over three separate requests is still five — and removing one from
+   * the profile frees its place straight away.
+   */
+  const heldSchools = useMemo(
+    () => (companyLimitApplies ? schoolsAlreadyHeld(student.applications, companyLookup) : []),
+    [companyLimitApplies, student.applications, companyLookup],
+  );
+
+  /** Everything counted: already held, plus what is being picked right now. */
+  const companySchoolSets = useMemo(() => {
+    if (!companyLimitApplies) return {} as Record<string, Set<string>>;
+    const picked = (watchMultiUnis as string[])
+      .map(id => globalUniversities?.find(g => g.id === id))
+      .filter((u): u is ApprovedUniversity => !!u && !!u.company)
+      .map((u: ApprovedUniversity) => ({ name: u.name, company: u.company as string }));
+    return countByCompany([...heldSchools, ...picked]);
+  }, [companyLimitApplies, watchMultiUnis, globalUniversities, heldSchools]);
+
+  const companySchoolCounts = useMemo(
+    () => Object.fromEntries(Object.entries(companySchoolSets).map(([k, v]) => [k, v.size])),
+    [companySchoolSets],
+  );
+
+  /** How many of a company's places were already taken before this request. */
+  const heldCounts = useMemo(
+    () => Object.fromEntries(Object.entries(countByCompany(heldSchools)).map(([k, v]) => [k, v.size])),
+    [heldSchools],
+  );
 
   const handleDocToggle = (docId: string) => {
     const current = form.getValues('selectedDocuments') || [];
@@ -287,22 +318,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       form.setValue('selectedGlobalUniversityIds', currentIds.filter((id: string) => id !== uni.id));
       form.setValue('selectedGlobalUniversities', currentDetails.filter((d: any) => d.id !== uni.id));
     } else {
-      // Enforce company limit for Foundation students
-      if (student.studyLevel === 'Foundation' && uni.company && uni.company !== 'Inhouse') {
-        const thisSchoolKey = uni.schoolOrder != null ? String(uni.schoolOrder) : uni.name;
-        const isSchoolAlreadyIn = currentIds.some((id: string) => {
-          const u = globalUniversities?.find(g => g.id === id);
-          return !!u && u.company === uni.company && (u.schoolOrder != null ? String(u.schoolOrder) : u.name) === thisSchoolKey;
-        });
-        if (!isSchoolAlreadyIn) {
-          const schoolsForCompany = new Set<string>();
-          currentIds.forEach((id: string) => {
-            const u = globalUniversities?.find(g => g.id === id);
-            if (u && u.company === uni.company) schoolsForCompany.add(u.schoolOrder != null ? String(u.schoolOrder) : u.name);
-          });
-          if (schoolsForCompany.size >= COMPANY_LIMIT) return;
-        }
-      }
+      // Enforce the company limit, counting the schools already on the student.
+      if (companyLimitApplies && wouldExceedLimit(uni, companySchoolSets)) return;
       form.setValue('selectedGlobalUniversityIds', [...currentIds, uni.id]);
       form.setValue('selectedGlobalUniversities', [...currentDetails, {
         id: uni.id,
@@ -548,17 +565,23 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             </div>
             
             <div className="space-y-3">
-              {/* Company quota summary — Foundation students only */}
-              {student.studyLevel === 'Foundation' && config.allowMultipleUniversitySelection && Object.keys(companySchoolCounts).length > 0 && (
+              {/* Company quota summary — Foundation students only. Counts the schools
+                  already on the student as well as the ones being picked here. */}
+              {companyLimitApplies && Object.keys(companySchoolCounts).length > 0 && (
                 <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-lg border text-xs">
-                  <span className="font-bold text-muted-foreground w-full text-[10px] uppercase tracking-wide">Company Limits</span>
+                  <span className="font-bold text-muted-foreground w-full text-[10px] uppercase tracking-wide">
+                    Company Limits — {COMPANY_LIMIT} schools each, including schools already on this student
+                  </span>
                   {COMPANY_ORDER.filter(c => c !== 'Inhouse').map(company => {
                     const count = companySchoolCounts[company] || 0;
                     if (count === 0) return null;
+                    const held = heldCounts[company] || 0;
                     const atLimit = count >= COMPANY_LIMIT;
                     return (
                       <Badge key={company} variant="outline" className={cn('text-[10px] font-bold', atLimit ? 'bg-red-100 text-red-800 border-red-400' : COMPANY_COLORS[company])}>
-                        {company}: {count}/{COMPANY_LIMIT}{atLimit ? ' FULL' : ''}
+                        {company}: {count}/{COMPANY_LIMIT}
+                        {held > 0 ? ` (${held} already)` : ''}
+                        {atLimit ? ' FULL' : ''}
                       </Badge>
                     );
                   })}
@@ -575,25 +598,17 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                       const showGroupHeader = !prevUni || prevUni.company !== uni.company;
                       const isSelected = watchMultiUnis.includes(uni.id);
 
-                      // Determine if adding this uni would exceed company limit (Foundation only)
-                      let isDisabled = false;
-                      if (config.allowMultipleUniversitySelection && !isSelected && student.studyLevel === 'Foundation' && uni.company && uni.company !== 'Inhouse') {
-                        const thisSchoolKey = uni.schoolOrder != null ? String(uni.schoolOrder) : uni.name;
-                        const schoolAlreadyIn = watchMultiUnis.some((id: string) => {
-                          const u = globalUniversities?.find(g => g.id === id);
-                          return !!u && u.company === uni.company && (u.schoolOrder != null ? String(u.schoolOrder) : u.name) === thisSchoolKey;
-                        });
-                        if (!schoolAlreadyIn && (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT) {
-                          isDisabled = true;
-                        }
-                      }
+                      // Would picking this one break the company limit? Another major at
+                      // a school already counted is always allowed — it takes no new place.
+                      const isDisabled =
+                        !isSelected && companyLimitApplies && wouldExceedLimit(uni, companySchoolSets);
 
                       return (
                         <div key={uni.id}>
                           {showGroupHeader && uni.company && (
                             <div className={cn('px-3 py-1.5 flex items-center justify-between border-b', COMPANY_COLORS[uni.company] || 'bg-muted/40')}>
                               <span className="text-[10px] font-black uppercase tracking-wider">{uni.company}</span>
-                              {uni.company !== 'Inhouse' && student.studyLevel === 'Foundation' && config.allowMultipleUniversitySelection && (
+                              {uni.company !== 'Inhouse' && companyLimitApplies && (
                                 <span className={cn('text-[10px] font-bold', (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT ? 'text-red-700' : 'opacity-70')}>
                                   {companySchoolCounts[uni.company] || 0}/{COMPANY_LIMIT} schools
                                 </span>
