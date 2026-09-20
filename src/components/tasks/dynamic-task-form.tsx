@@ -22,11 +22,13 @@ import {
   buildCompanyLookup,
   countByCompany,
   schoolsAlreadyHeld,
+  schoolsInOpenRequests,
   wouldExceedLimit,
 } from '@/lib/school-quota';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { Badge } from '../ui/badge';
 import { useCollection } from '@/firebase/client';
+import { where } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
 interface DynamicTaskFormProps {
@@ -70,6 +72,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   // Fetch master universities list
   const { data: globalUniversities, isLoading: unisLoading } = useCollection<ApprovedUniversity>(
     config?.useApprovedUniversitiesList ? 'approved_universities' : ''
+  );
+
+  // This student's own requests. Schools are chosen one request at a time, so five
+  // separate open requests would otherwise slip past the company limit together.
+  const { data: studentRequests } = useCollection<{ status?: string; category?: string; data?: unknown }>(
+    config?.useApprovedUniversitiesList ? 'tasks' : '',
+    where('studentId', '==', student.id),
   );
 
   // Fetch unified exam dates
@@ -276,8 +285,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
    * the profile frees its place straight away.
    */
   const heldSchools = useMemo(
-    () => (companyLimitApplies ? schoolsAlreadyHeld(student.applications, companyLookup) : []),
-    [companyLimitApplies, student.applications, companyLookup],
+    () => (companyLimitApplies
+      ? [
+          ...schoolsAlreadyHeld(student.applications, companyLookup),
+          ...schoolsInOpenRequests(studentRequests, companyLookup),
+        ]
+      : []),
+    [companyLimitApplies, student.applications, studentRequests, companyLookup],
   );
 
   /** Everything counted: already held, plus what is being picked right now. */
@@ -292,6 +306,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
   const companySchoolCounts = useMemo(
     () => Object.fromEntries(Object.entries(companySchoolSets).map(([k, v]) => [k, v.size])),
+    [companySchoolSets],
+  );
+
+  /** Companies with no places left. */
+  const fullCompanies = useMemo(
+    () => Object.entries(companySchoolSets).filter(([, v]) => v.size >= COMPANY_LIMIT).map(([c]) => c),
     [companySchoolSets],
   );
 
@@ -565,6 +585,20 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             </div>
             
             <div className="space-y-3">
+              {/* Named up front, so the reason a school is greyed out is never a mystery. */}
+              {companyLimitApplies && fullCompanies.length > 0 && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
+                  <p className="font-bold text-red-800">
+                    Limit reached for {fullCompanies.join(' and ')}.
+                  </p>
+                  <p className="text-xs text-red-700">
+                    This student already has {COMPANY_LIMIT} schools with{' '}
+                    {fullCompanies.length > 1 ? 'each of those companies' : fullCompanies[0]}, so those schools
+                    cannot be chosen. Remove one from the student to free a place. Other companies are unaffected.
+                  </p>
+                </div>
+              )}
+
               {/* Company quota summary — Foundation students only. Counts the schools
                   already on the student as well as the ones being picked here. */}
               {companyLimitApplies && Object.keys(companySchoolCounts).length > 0 && (
@@ -600,8 +634,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
                       // Would picking this one break the company limit? Another major at
                       // a school already counted is always allowed — it takes no new place.
+                      // This covers BOTH pickers: the multi-select one and the single
+                      // checkbox below, which is what these forms actually render.
+                      const singleSelected = form.watch('selectedGlobalUniversityId') === uni.id;
+                      const alreadyChosen = isSelected || singleSelected;
                       const isDisabled =
-                        !isSelected && companyLimitApplies && wouldExceedLimit(uni, companySchoolSets);
+                        !alreadyChosen && companyLimitApplies && wouldExceedLimit(uni, companySchoolSets);
 
                       return (
                         <div key={uni.id}>
@@ -624,14 +662,21 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                               />
                             ) : (
                               <Checkbox
-                                checked={form.watch('selectedGlobalUniversityId') === uni.id}
-                                onCheckedChange={() => handleGlobalUniSelect(uni)}
+                                checked={singleSelected}
+                                onCheckedChange={() => !isDisabled && handleGlobalUniSelect(uni)}
+                                disabled={isDisabled}
                               />
                             )}
                             <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
                               <div className="space-y-0.5">
                                 <span className="block text-sm font-bold">{uni.name}</span>
                                 <span className="block text-xs text-muted-foreground">{uni.major}</span>
+                                {isDisabled && (
+                                  <span className="block text-[11px] font-bold text-red-700">
+                                    Limit reached — this student already has {COMPANY_LIMIT} {uni.company} schools.
+                                    Remove one to add another.
+                                  </span>
+                                )}
                                 {uni.importantNote && <span className="block text-[10px] text-red-600 font-black uppercase">⚠️ {uni.importantNote}</span>}
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">

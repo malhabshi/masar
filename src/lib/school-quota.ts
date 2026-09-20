@@ -90,6 +90,41 @@ export function schoolsAlreadyHeld(
 }
 
 /**
+ * Schools tied up by requests that are still open.
+ *
+ * A school is picked one request at a time, and it only reaches the student's
+ * applications once that request is completed — so five separate open requests would
+ * otherwise slip past the limit together. Completed requests are NOT counted here:
+ * their school is already an application, and counting both would keep a place
+ * occupied after the school had been removed from the student.
+ */
+export function schoolsInOpenRequests(
+  tasks: { status?: string | null; category?: string | null; data?: unknown }[] | null | undefined,
+  lookup: Map<string, string>,
+): CountedSchool[] {
+  const open: CountedSchool[] = [];
+  for (const task of tasks ?? []) {
+    if (task?.category !== 'request') continue;
+    if (task.status !== 'new' && task.status !== 'in-progress') continue;
+
+    const data = (task.data ?? {}) as {
+      selectedGlobalUniversityDetails?: { name?: string };
+      selectedGlobalUniversities?: { name?: string }[];
+    };
+    const names = [
+      data.selectedGlobalUniversityDetails?.name,
+      ...(data.selectedGlobalUniversities ?? []).map(u => u?.name),
+    ];
+    for (const name of names) {
+      if (!name) continue;
+      const company = lookup.get(schoolKey(name));
+      if (company) open.push({ name, company });
+    }
+  }
+  return open;
+}
+
+/**
  * Whether one more school from this company would break the limit.
  *
  * Picking a school the student already holds is always allowed — it takes no new place.

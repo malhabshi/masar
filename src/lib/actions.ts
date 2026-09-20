@@ -8,7 +8,9 @@ import {
   COMPANY_LIMIT,
   buildCompanyLookup,
   countByCompany,
+  schoolKey,
   schoolsAlreadyHeld,
+  schoolsInOpenRequests,
 } from '@/lib/school-quota';
 import {
   initialStageLog,
@@ -667,16 +669,30 @@ export async function createStudentTask(authorId: string, studentId: string, req
     // A Foundation student may hold at most COMPANY_LIMIT schools from any one pathway
     // company. Checked here as well as in the form, so the rule holds no matter how the
     // request is created — the form's version can be bypassed, this one cannot.
-    const picked = (dynamicData?.selectedGlobalUniversities || []) as { name?: string; company?: string }[];
-    if (studentData.studyLevel === 'Foundation' && picked.length > 0) {
+    // These forms pick ONE school per request (selectedGlobalUniversityDetails); the
+    // multi-select array is only used when a request type enables it, which none do.
+    // Checking just the array meant this never ran.
+    const pickedNames: string[] = [
+      dynamicData?.selectedGlobalUniversityDetails?.name,
+      ...((dynamicData?.selectedGlobalUniversities || []) as { name?: string }[]).map(u => u?.name),
+    ].filter((n): n is string => !!n);
+
+    if (studentData.studyLevel === 'Foundation' && pickedNames.length > 0) {
       const approvedSnap = await adminDb!.collection('approved_universities').select('name', 'company').get();
       const lookup = buildCompanyLookup(approvedSnap.docs.map(d => d.data() as { name: string; company?: string }));
-      const held = schoolsAlreadyHeld(studentData.applications, lookup);
+
+      // Everything holding a place: schools on the profile, plus requests still open.
+      const openSnap = await adminDb!.collection('tasks').where('studentId', '==', studentId).get();
+      const held = [
+        ...schoolsAlreadyHeld(studentData.applications, lookup),
+        ...schoolsInOpenRequests(openSnap.docs.map(d => d.data()), lookup),
+      ];
+
       const counted = countByCompany([
         ...held,
-        ...picked
-          .filter((u): u is { name: string; company: string } => !!u?.name && !!u?.company)
-          .map(u => ({ name: u.name, company: u.company })),
+        ...pickedNames
+          .map(name => ({ name, company: lookup.get(schoolKey(name)) }))
+          .filter((u): u is { name: string; company: string } => !!u.company),
       ]);
       const over = Object.entries(counted).filter(([, set]) => set.size > COMPANY_LIMIT);
       if (over.length > 0) {
