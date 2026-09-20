@@ -178,6 +178,8 @@ export function TaskDetailsDialog({
     'selectedGlobalUniversityDetails', 'selectedGlobalUniversityId',
     'selectedGlobalUniversities', 'selectedGlobalUniversityIds',
     'selectedPortalDetails', 'selectedPortalId', 'selectedDocuments',
+    // Rendered as links below.
+    'attachments',
   ]);
 
   const prettifyKey = (key: string) =>
@@ -328,9 +330,33 @@ export function TaskDetailsDialog({
                 </section>
             )}
 
+            {Array.isArray(data.attachments) && data.attachments.length > 0 && (
+              <section className="space-y-3">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                  <FileText className="h-5 w-5" />
+                  Attached Documents ({data.attachments.length})
+                </h3>
+                <div className="space-y-2">
+                  {data.attachments.map((a: any, i: number) => (
+                    <a
+                      key={i}
+                      href={a?.url || '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3 hover:bg-muted/40 transition-colors"
+                    >
+                      <span className="text-sm font-bold">{a?.label}</span>
+                      <span className="flex-1 truncate text-xs text-muted-foreground">{a?.name}</span>
+                      <span className="text-xs font-semibold text-primary underline underline-offset-2">Open</span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="space-y-4">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" /> 
+                <FileText className="h-5 w-5 text-primary" />
                 Request Details
               </h3>
               <div className="grid grid-cols-2 gap-y-6 bg-muted/20 p-4 rounded-lg border border-dashed">

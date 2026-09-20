@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search, Key } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search, Key, Paperclip, Users } from 'lucide-react';
 import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -28,6 +28,8 @@ import {
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { Badge } from '../ui/badge';
 import { useCollection } from '@/firebase/client';
+import { useUser } from '@/hooks/use-user';
+import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 import { where } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
@@ -40,6 +42,88 @@ interface DynamicTaskFormProps {
 }
 
 const COMPANY_ORDER: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
+
+/** Optional attachments on a UK First Year application. None of them is required. */
+const FIRST_YEAR_ATTACHMENTS = [
+  { key: 'shareCodeEvisa', label: 'Share Code + eVisa' },
+  { key: 'casDocument', label: 'CAS (picture or PDF)' },
+  { key: 'foundationTranscript', label: 'Foundation Transcript' },
+] as const;
+
+type TaskAttachment = { label: string; name: string; url: string };
+
+/**
+ * One optional attachment slot.
+ *
+ * The file goes to the student's own documents through the existing upload route, so
+ * it lives on the profile as well as on this request — nothing is stranded inside a
+ * task. The request keeps a link to it.
+ */
+function AttachmentSlot({
+  student,
+  label,
+  value,
+  onChange,
+}: {
+  student: Student;
+  label: string;
+  value: TaskAttachment | null;
+  onChange: (next: TaskAttachment | null) => void;
+}) {
+  const { auth: authUser } = useUser();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = async (file: File) => {
+    const check = validateFile(file);
+    if (!check.isValid) { setError(check.message ?? 'Invalid file.'); return; }
+    if (!authUser) { setError('Not signed in.'); return; }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('destination', 'student');
+      fd.append('studentId', student.id);
+      fd.append('customName', label);
+      const token = await authUser.getIdToken();
+      const res = await fetch('/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const result = await res.json();
+      if (!res.ok || !result.success) throw new Error(result.error || 'Upload failed.');
+      onChange({ label, name: result.document?.name || file.name, url: result.document?.url || '' });
+    } catch (e: any) {
+      setError(e?.message || 'Upload failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <FormLabel className="text-xs font-semibold">{label} <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+      {value ? (
+        <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5">
+          <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="flex-1 truncate text-xs font-medium">{value.name}</span>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => onChange(null)}>
+            Remove
+          </Button>
+        </div>
+      ) : (
+        <Input
+          type="file"
+          className="text-xs"
+          disabled={busy}
+          accept={ALLOWED_FILE_EXTENSIONS}
+          onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
+        />
+      )}
+      {busy && <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Uploading…</p>}
+      {error && <p className="text-[11px] font-semibold text-destructive">{error}</p>}
+    </div>
+  );
+}
 const COMPANY_COLORS: Record<string, string> = {
   Into:       'bg-blue-100 text-blue-800 border-blue-300',
   Studygroup: 'bg-violet-100 text-violet-800 border-violet-300',
@@ -151,6 +235,18 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     schemaFields.selectedApplicationDetails = z.any().optional();
   }
 
+  // Every First Year extra is optional by design — the employee fills in whatever the
+  // student has so far, and the request is never blocked on a missing document.
+  if (config?.firstYearUkFields) {
+    schemaFields.ukPhone = z.string().optional();
+    schemaFields.ukAddress = z.string().optional();
+    schemaFields.reference1Name = z.string().optional();
+    schemaFields.reference1Email = z.string().optional();
+    schemaFields.reference2Name = z.string().optional();
+    schemaFields.reference2Email = z.string().optional();
+    schemaFields.attachments = z.array(z.any()).optional();
+  }
+
   if (config?.useApprovedUniversitiesList) {
     if (config.allowMultipleUniversitySelection) {
       schemaFields.selectedGlobalUniversityIds = z.array(z.string()).min(1, 'Please select at least one university');
@@ -204,6 +300,14 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       originalExamDate: undefined,
       preferredDate: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
+      // Pre-filled from the profile so a second application doesn't ask again.
+      ukPhone: student.jotformData?.ukPhone || '',
+      ukAddress: student.jotformData?.ukAddress || '',
+      reference1Name: student.jotformData?.reference1Name || '',
+      reference1Email: student.jotformData?.reference1Email || '',
+      reference2Name: student.jotformData?.reference2Name || '',
+      reference2Email: student.jotformData?.reference2Email || '',
+      attachments: [],
       selectedApplicationId: '',
       selectedGlobalUniversityId: '',
       selectedPortalId: '',
@@ -274,7 +378,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   // The company limit applies to Foundation students on any form that picks from the
   // approved list. It used to also require config.allowMultipleUniversitySelection,
   // which is not set on ANY request type — so the limit never actually ran.
-  const companyLimitApplies = student.studyLevel === 'Foundation' && !!config?.useApprovedUniversitiesList;
+  // skipCompanyLimit exempts a request type entirely — the First Year application is
+  // not part of a pathway company's allocation.
+  const companyLimitApplies =
+    student.studyLevel === 'Foundation' &&
+    !!config?.useApprovedUniversitiesList &&
+    !config?.skipCompanyLimit;
 
   /** Which company each approved school belongs to, keyed so spelling variants agree. */
   const companyLookup = useMemo(() => buildCompanyLookup(globalUniversities || []), [globalUniversities]);
@@ -1167,6 +1276,78 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 </FormItem>
               )}
             />
+          </div>
+        )}
+
+        {/* UK First Year extras — every field optional. */}
+        {config?.firstYearUkFields && (
+          <div className="space-y-4 border-t pt-4">
+            <FormLabel className="text-base font-bold flex items-center gap-2">
+              <Paperclip className="h-5 w-5 text-primary" />
+              Supporting Documents & UK Details
+              <span className="text-xs font-normal text-muted-foreground">all optional</span>
+            </FormLabel>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {FIRST_YEAR_ATTACHMENTS.map(slot => {
+                const current: TaskAttachment[] = form.watch('attachments') || [];
+                const existing = current.find(a => a.label === slot.label) ?? null;
+                return (
+                  <AttachmentSlot
+                    key={slot.key}
+                    student={student}
+                    label={slot.label}
+                    value={existing}
+                    onChange={next => {
+                      const rest = current.filter(a => a.label !== slot.label);
+                      form.setValue('attachments', next ? [...rest, next] : rest);
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField control={form.control} name="ukPhone" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>UK Phone Number</FormLabel>
+                  <FormControl><Input placeholder="e.g. +44 7700 900000" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="ukAddress" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>UK Address</FormLabel>
+                  <FormControl><Input placeholder="Street, city, postcode" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            <div className="space-y-3">
+              <FormLabel className="flex items-center gap-2 text-sm font-bold">
+                <Users className="h-4 w-4 text-primary" />
+                References
+              </FormLabel>
+              {[1, 2].map(n => (
+                <div key={n} className="grid gap-4 md:grid-cols-2 rounded-md border bg-muted/20 p-3">
+                  <FormField control={form.control} name={`reference${n}Name`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Reference {n} — Name</FormLabel>
+                      <FormControl><Input placeholder="Full name" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name={`reference${n}Email`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Reference {n} — Email</FormLabel>
+                      <FormControl><Input type="email" placeholder="name@school.edu" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

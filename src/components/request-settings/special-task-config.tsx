@@ -74,6 +74,31 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
                     </FormItem>
                   )} />
 
+                  <FormField control={form.control} name="specialConfig.skipCompanyLimit" render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-2 space-y-0">
+                      <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <div className="space-y-0.5 leading-none">
+                        <FormLabel className="text-[10px] font-bold text-blue-600">No company limit</FormLabel>
+                        <FormDescription className="text-[10px]">
+                          Skips the 5-schools-per-company rule for this request.
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="specialConfig.firstYearUkFields" render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-2 space-y-0">
+                      <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <div className="space-y-0.5 leading-none">
+                        <FormLabel className="text-[10px] font-bold text-blue-600">UK First Year extras</FormLabel>
+                        <FormDescription className="text-[10px]">
+                          Optional share code / eVisa, CAS and transcript attachments, UK phone and
+                          address, and two references.
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )} />
+
                   <FormField control={form.control} name="specialConfig.countryFilter" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-[10px] font-bold uppercase">Filter list by Country</FormLabel>

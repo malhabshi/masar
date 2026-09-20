@@ -201,6 +201,14 @@ export interface Student {
     // registration and reused for future tasks while the student is still a minor.
     guardianFirstNameEn?: string;
     guardianLastNameEn?: string;
+    // UK contact details and academic references, captured on a First Year application
+    // and kept so a later request pre-fills them instead of asking again.
+    ukPhone?: string;
+    ukAddress?: string;
+    reference1Name?: string;
+    reference1Email?: string;
+    reference2Name?: string;
+    reference2Email?: string;
     followUpPerson?: string;
     documents?: {
       passport?: string[];
@@ -383,6 +391,12 @@ export interface SpecialTaskConfig {
   requireUniversitySelection?: boolean;
   useApprovedUniversitiesList?: boolean; // Toggles selection from Global Approved Universities
   allowMultipleUniversitySelection?: boolean; // Allow picking more than one school
+  // Exempts this request from the 5-schools-per-company rule. Used by the First Year
+  // application, where the company allocation does not apply.
+  skipCompanyLimit?: boolean;
+  // Extra optional fields for a UK First Year application: share code / eVisa, CAS and
+  // foundation transcript attachments, a UK phone and address, and two references.
+  firstYearUkFields?: boolean;
   countryFilter?: Country | 'all'; // Filters the selection list by country
   allowPortalReferenceSelection?: boolean; // Optional selection of stored student logins
   studentInfo: {
