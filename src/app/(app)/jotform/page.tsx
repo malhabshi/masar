@@ -154,6 +154,24 @@ export default function JotformPage() {
 
   const getPick = (key: string): CountryPick => picks[key] || emptyPick();
 
+  // The 5-school company limit is counted ACROSS COUNTRIES, not per country. INTO runs
+  // schools in the UK, the USA and Australia, and the allocation is with INTO — so five
+  // INTO schools is the maximum in total, however they are spread. Counting per country
+  // would have allowed fifteen.
+  const companyOfAll = useMemo(() => buildCompanyLookup(allApprovedUnis || []), [allApprovedUnis]);
+  const companySets = useMemo(() => {
+    const chosen = Object.values(picks)
+      .flatMap(p => Object.values(p.selectedUniNamesByMajor).flat())
+      .filter(n => n.toLowerCase().trim() !== 'best option')
+      .map(name => ({ name, company: companyOfAll.get(schoolKey(name)) }))
+      .filter((u): u is { name: string; company: string } => !!u.company);
+    return countByCompany(chosen);
+  }, [picks, companyOfAll]);
+  const fullCompanies = useMemo(
+    () => Object.entries(companySets).filter(([, v]) => v.size >= COMPANY_LIMIT).map(([c]) => c),
+    [companySets],
+  );
+
   const updPick = (key: string, update: Partial<CountryPick> | ((prev: CountryPick) => Partial<CountryPick>)) => {
     setPicks(prev => {
       const current = prev[key] || emptyPick();
@@ -570,20 +588,9 @@ export default function JotformPage() {
                 const BEST_UNI = 'Best Option';
                 const showBestUni = key !== 'USA';
 
-                // At most 5 schools per pathway company (Kaplan, INTO, Study Group, ...).
-                // Five Kaplan AND five INTO is fine; a sixth from either is not. Counted
-                // across every major in this country, since a school picked under two
-                // majors is still one school.
-                const companyOf = buildCompanyLookup(unis);
-                const chosenHere = Object.values(pick.selectedUniNamesByMajor)
-                  .flat()
-                  .filter(n => n.toLowerCase().trim() !== BEST_UNI.toLowerCase())
-                  .map(name => ({ name, company: companyOf.get(schoolKey(name)) }))
-                  .filter((u): u is { name: string; company: string } => !!u.company);
-                const companySets = countByCompany(chosenHere);
-                const fullCompanies = Object.entries(companySets)
-                  .filter(([, v]) => v.size >= COMPANY_LIMIT)
-                  .map(([c]) => c);
+                // companySets / fullCompanies are computed once for ALL countries above —
+                // the limit belongs to the company, not to a country.
+                const companyOf = companyOfAll;
 
                 // All unique majors in DB for this country (for autocomplete)
                 const allMajorsInDB = [...new Set(unis.map(u => u.major.trim()))].sort();
@@ -642,9 +649,13 @@ export default function JotformPage() {
                   <div key={key} className="border rounded-lg p-4 space-y-3 bg-muted/10">
                     <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{COUNTRY_KEY_LABEL[key]}</div>
 
-                    {/* Running count per company, so the limit is visible before it bites. */}
+                    {/* Running count per company across EVERY country chosen, so the
+                        totals read the same wherever you are looking. */}
                     {Object.keys(companySets).length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          All countries:
+                        </span>
                         {Object.entries(companySets).sort().map(([company, set]) => (
                           <Badge key={company} variant="outline"
                             className={cn('text-[10px] font-bold', set.size >= COMPANY_LIMIT && 'bg-red-100 text-red-800 border-red-400')}>
@@ -659,8 +670,9 @@ export default function JotformPage() {
                           You have reached the limit for {fullCompanies.join(' and ')}.
                         </p>
                         <p className="text-xs text-red-700">
-                          {COMPANY_LIMIT} schools per company is the maximum. Deselect one to choose a
-                          different {fullCompanies.length > 1 ? 'school from those companies' : `${fullCompanies[0]} school`}.
+                          {COMPANY_LIMIT} schools per company is the maximum, counted across every
+                          country — {fullCompanies[0]} schools in the UK, the USA and Australia all come
+                          out of the same {COMPANY_LIMIT}. Deselect one to choose another.
                           Other companies are unaffected.
                         </p>
                       </div>
