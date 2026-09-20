@@ -20,7 +20,7 @@ import {
   schoolKey,
   wouldExceedLimit,
 } from '@/lib/school-quota';
-import { submitJotformApplications } from '@/lib/actions';
+import { submitJotformApplications, findExistingStudentsByNumber, type ExistingStudentMatch } from '@/lib/actions';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase';
 import type { ApprovedUniversity, Application, Country } from '@/lib/types';
@@ -71,6 +71,61 @@ const emptyPick = (): CountryPick => ({ majorSearch: '', showSugs: false, addedM
 
 const COUNTRY_KEY_LABEL: Record<string, string> = { UK: 'UK', AUNZ: 'AU / NZ', USA: 'USA' };
 
+/**
+ * "This number already belongs to someone." Shown under a number field as soon as the
+ * employee finishes typing, with enough detail to tell whether it is the same person:
+ * who they are, who handles them, and where they applied.
+ */
+function ExistingStudentNote({
+  matches,
+  label,
+  checking,
+}: {
+  matches: ExistingStudentMatch[];
+  label: string;
+  checking: boolean;
+}) {
+  if (checking) {
+    return (
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Checking for an existing student…
+      </p>
+    );
+  }
+  if (matches.length === 0) return null;
+
+  return (
+    <div className="rounded-md border border-amber-400 bg-amber-50 p-2.5 space-y-1.5">
+      <p className="text-xs font-bold text-amber-900">
+        ⚠️ Already in the system — this {label} belongs to{' '}
+        {matches.length === 1 ? 'an existing student' : `${matches.length} existing students`}:
+      </p>
+      {matches.map(m => (
+        <a
+          key={m.id}
+          href={`/student/${m.id}`}
+          target="_blank"
+          rel="noreferrer"
+          className="block text-xs font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950"
+        >
+          {m.name}
+          {m.isClosed && <span className="font-normal"> · closed</span>}
+          <span className="font-normal">
+            {' · '}
+            {m.employeeName ?? 'unassigned'}
+            {m.targetCountries.length > 0 && ` · ${m.targetCountries.join(', ')}`}
+          </span>
+        </a>
+      ))}
+      <p className="text-[10px] text-amber-800">
+        Open the profile before submitting. Sending this form again would create a second
+        profile for the same student.
+      </p>
+    </div>
+  );
+}
+
 export default function JotformPage() {
   const { toast } = useToast();
   const { user } = useUser();
@@ -86,6 +141,12 @@ export default function JotformPage() {
   const [kuwaitAddress, setKuwaitAddress] = useState('');
   const [kuwaitPhone, setKuwaitPhone] = useState('');
   const [civilId, setCivilId] = useState('');
+
+  // Live duplicate check. The employee is told the student already exists WHILE typing
+  // the number, rather than finding out after a second profile has been created.
+  const [phoneMatches, setPhoneMatches] = useState<ExistingStudentMatch[]>([]);
+  const [civilMatches, setCivilMatches] = useState<ExistingStudentMatch[]>([]);
+  const [checkingNumber, setCheckingNumber] = useState<'phone' | 'civilId' | null>(null);
   const [schoolName, setSchoolName] = useState('');
   const [scholarshipType, setScholarshipType] = useState('');
   const [acceptanceType, setAcceptanceType] = useState('');
@@ -109,6 +170,36 @@ export default function JotformPage() {
   }, [user?.name]);
 
   // Academic term follows the destination country: UK → Fall 2027, USA & AU/NZ → Spring 2027
+  // Look the number up once the employee stops typing, and only once it is complete —
+  // a partial number would match half the list and the lookup would run on every key.
+  useEffect(() => {
+    const digits = kuwaitPhone.replace(/\D/g, '');
+    if (digits.length !== 8) { setPhoneMatches([]); return; }
+    let cancelled = false;
+    setCheckingNumber('phone');
+    const timer = setTimeout(async () => {
+      const found = await findExistingStudentsByNumber(digits, 'phone');
+      if (cancelled) return;
+      setPhoneMatches(found);
+      setCheckingNumber(null);
+    }, 450);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [kuwaitPhone]);
+
+  useEffect(() => {
+    const digits = civilId.replace(/\D/g, '');
+    if (digits.length !== 12) { setCivilMatches([]); return; }
+    let cancelled = false;
+    setCheckingNumber('civilId');
+    const timer = setTimeout(async () => {
+      const found = await findExistingStudentsByNumber(digits, 'civilId');
+      if (cancelled) return;
+      setCivilMatches(found);
+      setCheckingNumber(null);
+    }, 450);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [civilId]);
+
   // (UK takes priority if combined). This mirrors the server-side rule in submitJotformApplications.
   useEffect(() => {
     const hasUK = selectedCountries.includes('UK');
@@ -801,11 +892,21 @@ export default function JotformPage() {
                 <div className="space-y-2">
                   <Label>Kuwaiti Phone Number *</Label>
                   <Input value={kuwaitPhone} onChange={e => setKuwaitPhone(e.target.value)} required placeholder="8-digit number" maxLength={8} inputMode="numeric" />
+                  <ExistingStudentNote
+                    matches={phoneMatches}
+                    label="phone number"
+                    checking={checkingNumber === 'phone'}
+                  />
                 </div>
                 {isUKorAUNZ && (
                   <div className="space-y-2">
                     <Label>Civil ID Number *</Label>
                     <Input value={civilId} onChange={e => setCivilId(e.target.value)} required placeholder="12-digit Civil ID" maxLength={12} inputMode="numeric" />
+                    <ExistingStudentNote
+                      matches={civilMatches}
+                      label="Civil ID"
+                      checking={checkingNumber === 'civilId'}
+                    />
                   </div>
                 )}
               </div>

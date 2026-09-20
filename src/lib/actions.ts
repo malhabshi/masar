@@ -4132,6 +4132,97 @@ export async function addCountryApplication(
   return { success: true, message: `Application for ${country} submitted successfully.` };
 }
 
+export type ExistingStudentMatch = {
+  id: string;
+  name: string;
+  matchedOn: 'phone' | 'civilId';
+  employeeName: string | null;
+  isClosed: boolean;
+  targetCountries: string[];
+  createdAt: string | null;
+};
+
+/**
+ * Who in the system already has this number.
+ *
+ * Used while an employee is still typing a Jotform submission, so an existing student
+ * is spotted BEFORE a duplicate profile is created rather than after. Phones are held
+ * in three separate fields and the civil ID in two, so each is queried in turn —
+ * every one is a single equality filter, which needs no composite index.
+ */
+export async function findExistingStudentsByNumber(
+  raw: string,
+  kind: 'phone' | 'civilId',
+): Promise<ExistingStudentMatch[]> {
+  if (!checkAdminServices()) return [];
+
+  const digits = (raw || '').replace(/\D/g, '');
+  // Too short to be meaningful — searching on a partial number would match half the list.
+  if (kind === 'phone' && digits.length !== 8) return [];
+  if (kind === 'civilId' && digits.length !== 12) return [];
+
+  const fields = kind === 'phone'
+    ? ['phone', 'phone2', 'phone3']
+    : ['civilId', 'jotformData.civilId'];
+
+  // Most numbers are stored bare, but a handful carry a leading zero or a country code
+  // ("096666379", "96560014066"). Equality is exact, so those variants are searched too.
+  const candidates = kind === 'phone'
+    ? [...new Set([digits, `0${digits}`, `965${digits}`])]
+    : [digits];
+
+  try {
+    const snaps = await Promise.all(
+      fields.flatMap(f =>
+        candidates.map(value =>
+          adminDb!
+            .collection('students')
+            .where(f, '==', value)
+            .select('name', 'employeeId', 'isClosed', 'targetCountries', 'createdAt')
+            .limit(5)
+            .get()
+            .catch(() => null),
+        ),
+      ),
+    );
+
+    const found = new Map<string, ExistingStudentMatch & { employeeId?: string }>();
+    for (const snap of snaps) {
+      for (const doc of snap?.docs ?? []) {
+        if (found.has(doc.id)) continue;
+        const d = doc.data();
+        found.set(doc.id, {
+          id: doc.id,
+          name: d.name || '(no name)',
+          matchedOn: kind,
+          employeeName: null,
+          isClosed: !!d.isClosed,
+          targetCountries: d.targetCountries || [],
+          createdAt: d.createdAt || null,
+          employeeId: d.employeeId,
+        });
+      }
+    }
+    if (found.size === 0) return [];
+
+    // Name the assigned employee, so the note says who to speak to.
+    const civilIds = [...new Set([...found.values()].map(m => m.employeeId).filter(Boolean) as string[])];
+    const employeeByCivilId = new Map<string, string>();
+    await Promise.all(civilIds.map(async cid => {
+      const u = await adminDb!.collection('users').where('civilId', '==', cid).select('name').limit(1).get();
+      if (!u.empty) employeeByCivilId.set(cid, u.docs[0].data().name || 'Employee');
+    }));
+
+    return [...found.values()].map(({ employeeId, ...m }) => ({
+      ...m,
+      employeeName: employeeId ? employeeByCivilId.get(employeeId) ?? null : null,
+    }));
+  } catch (e) {
+    console.error('[duplicate-check] lookup failed:', e);
+    return [];
+  }
+}
+
 export async function refreshStudentDuplicateWarning(studentId: string): Promise<void> {
   if (!adminDb) return;
 
