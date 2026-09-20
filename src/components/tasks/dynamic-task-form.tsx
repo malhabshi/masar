@@ -195,8 +195,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
     if (config.examTypes?.includes('ielts_retake')) {
       schemaFields.examType = z.literal('ielts_retake').optional();
-      schemaFields.idpUsername = z.string().min(1, 'IDP Username is required');
-      schemaFields.idpPassword = z.string().min(1, 'IDP Password is required');
+      // Required only when no saved portal reference is chosen — see the refine below.
+      // A portal reference already holds the same IDP login, so asking again would mean
+      // typing the same credentials twice and risking them disagreeing.
+      schemaFields.idpUsername = z.string().optional();
+      schemaFields.idpPassword = z.string().optional();
       schemaFields.retakeSection = z.string({ required_error: 'Select a section to retake' });
       schemaFields.preferredDate = z.date({ required_error: 'Preferred date is required' });
       schemaFields.preferredTime = z.enum(['10:00 AM', '1:30 PM', '5:00 PM'], { required_error: 'Preferred time is required' });
@@ -275,6 +278,22 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   }, {
     message: "Please select the LRW time.",
     path: ["lrwTime"]
+  }).refine(data => {
+    // An IELTS retake needs the IDP login — either typed in, or taken from a saved
+    // portal reference.
+    if (data.examType !== 'ielts_retake') return true;
+    if (data.selectedPortalId) return true;
+    return !!data.idpUsername?.trim();
+  }, {
+    message: 'Enter the IDP username, or choose a saved portal reference above.',
+    path: ['idpUsername'],
+  }).refine(data => {
+    if (data.examType !== 'ielts_retake') return true;
+    if (data.selectedPortalId) return true;
+    return !!data.idpPassword?.trim();
+  }, {
+    message: 'Enter the IDP password, or choose a saved portal reference above.',
+    path: ['idpPassword'],
   }).refine(data => {
     // For under-18 students, parent/guardian info is mandatory on IELTS/TOEFL exams.
     if (!isMinor) return true;
@@ -371,6 +390,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchExamType]);
+
+  // A chosen portal reference already carries the IDP login for a retake.
+  const watchPortalId = form.watch('selectedPortalId');
+  const selectedPortal = student.studentLogins?.find(p => p.id === watchPortalId) ?? null;
+  const usingSavedPortal = !!watchPortalId && !!selectedPortal;
 
   const watchDocs = form.watch('selectedDocuments') || [];
   const watchMultiUnis = form.watch('selectedGlobalUniversityIds') || [];
@@ -1051,30 +1075,53 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         {/* IELTS RETAKE LOGIC */}
         {watchExamType === 'ielts_retake' && config && (
           <div className="space-y-6 border-t pt-4 animate-in fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="idpUsername"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>IDP Username *</FormLabel>
-                    <FormControl><Input placeholder="Enter username" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="idpPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>IDP Password *</FormLabel>
-                    <FormControl><Input type="text" placeholder="Enter password" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* The IDP login IS the portal reference. When one is chosen the credentials
+                come from it, so asking again would mean typing the same thing twice and
+                risking the two disagreeing. */}
+            {usingSavedPortal ? (
+              <div className="flex items-start gap-2.5 rounded-lg border border-emerald-300 bg-emerald-50 p-3">
+                <Key className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-bold text-emerald-900">
+                    Using the saved portal reference{selectedPortal?.description ? ` — ${selectedPortal.description}` : ''}
+                  </p>
+                  <p className="text-xs text-emerald-800">
+                    IDP username <span className="font-semibold">{selectedPortal?.username || '—'}</span> and its
+                    password are taken from the saved login, so they are not asked for again.
+                    Clear the selection above to type them in instead.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="idpUsername"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>IDP Username *</FormLabel>
+                      <FormControl><Input placeholder="Enter username" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="idpPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>IDP Password *</FormLabel>
+                      <FormControl><Input type="text" placeholder="Enter password" {...field} /></FormControl>
+                      <FormMessage />
+                      <FormDescription className="text-[10px]">
+                        Saved to this student&apos;s portal references as “IDP PASSWORD”, so the next
+                        retake can reuse it.
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
             <div className="space-y-3">
               <FormLabel>Select Section to Retake *</FormLabel>
               <FormField

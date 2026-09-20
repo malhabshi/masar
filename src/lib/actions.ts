@@ -724,6 +724,39 @@ export async function createStudentTask(authorId: string, studentId: string, req
       taskType: requestTypeData.name, requestTypeId: requestTypeId,
       data: { ...(dynamicData || {}), studentName: studentData.name, studentEmail: studentData.email, studentPhone: studentData.phone, requestedBy: creator?.email, requestedByName: creator?.name }
     });
+    // An IELTS retake taken WITHOUT choosing a saved portal reference means the IDP
+    // login was typed by hand. Keep it as a portal reference so the next retake can be
+    // taken straight from the saved login instead of asking for it again.
+    if (
+      dynamicData?.examType === 'ielts_retake' &&
+      !dynamicData?.selectedPortalId &&
+      dynamicData?.idpUsername?.trim()
+    ) {
+      const username = String(dynamicData.idpUsername).trim();
+      const password = String(dynamicData.idpPassword ?? '').trim();
+      const logins = [...((studentData.studentLogins || []) as StudentLogin[])];
+      const existing = logins.findIndex(
+        l => (l.username || '').trim().toLowerCase() === username.toLowerCase(),
+      );
+
+      if (existing >= 0) {
+        // Same account — refresh the password rather than storing it twice.
+        logins[existing] = { ...logins[existing], username, password: password || logins[existing].password };
+      } else {
+        logins.push({
+          id: `portal-idp-${taskRef.id}`,
+          description: 'IDP PASSWORD',
+          username,
+          password,
+          notes: `Saved from an IELTS retake request on ${formatKuwaitTime(new Date().toISOString())}.`,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      await adminDb!.collection('students').doc(studentId).update({ studentLogins: logins })
+        .catch(e => console.error('[createStudentTask] could not save the IDP portal reference:', e));
+    }
+
     // Record what was submitted on the student's Admin Notes. The task itself can be
     // closed, reassigned or lost in a long list; the note keeps the details — schools,
     // UK contact, references and which documents came in — on the profile for later.
