@@ -310,13 +310,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesAcceptedCountry && matchesAcceptedMajor && matchesFoundationCategory && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
     });
 
-    return [...filtered].sort((a, b) => {
-        // Closed profiles always go last
-        if (!!a.isClosed !== !!b.isClosed) return a.isClosed ? 1 : -1;
-        if (a.isClosed && b.isClosed) return 0;
-
-        if (!!a.changeAgentRequired !== !!b.changeAgentRequired) return a.changeAgentRequired ? -1 : 1;
-        const getNotificationScore = (s: Student) => {
+    const getNotificationScore = (s: Student) => {
             let score = 0;
             if (s.markedUnreadBy?.includes(currentUser.id)) score += 200;
             if (currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department') {
@@ -332,7 +326,36 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 if (s.isNewForEmployee) score += 50;
             }
             return score;
-        };
+    };
+
+    // A student with a final university choice is essentially done, so they belong at
+    // the bottom of the list rather than taking up room at the top. They come back to
+    // their normal position the moment something happens: a notification for this user,
+    // or any activity in the last week — submitting a task updates lastActivityAt, so a
+    // newly submitted request brings the student straight back up.
+    const FINALIZED_QUIET_MS = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const isSettledFinalized = (s: Student) => {
+      if (!s.finalChoiceUniversity) return false;
+      if (s.changeAgentRequired) return false;
+      if (getNotificationScore(s) > 0) return false;
+      const last = Date.parse(s.lastActivityAt || s.createdAt || '');
+      if (Number.isFinite(last) && now - last < FINALIZED_QUIET_MS) return false;
+      return true;
+    };
+
+    return [...filtered].sort((a, b) => {
+        // Closed profiles always go last
+        if (!!a.isClosed !== !!b.isClosed) return a.isClosed ? 1 : -1;
+        if (a.isClosed && b.isClosed) return 0;
+
+        if (!!a.changeAgentRequired !== !!b.changeAgentRequired) return a.changeAgentRequired ? -1 : 1;
+
+        // Finished and quiet students sink — just above the closed ones.
+        const settledA = isSettledFinalized(a);
+        const settledB = isSettledFinalized(b);
+        if (settledA !== settledB) return settledA ? 1 : -1;
+
         const scoreA = getNotificationScore(a);
         const scoreB = getNotificationScore(b);
         
