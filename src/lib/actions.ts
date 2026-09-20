@@ -724,6 +724,47 @@ export async function createStudentTask(authorId: string, studentId: string, req
       taskType: requestTypeData.name, requestTypeId: requestTypeId,
       data: { ...(dynamicData || {}), studentName: studentData.name, studentEmail: studentData.email, studentPhone: studentData.phone, requestedBy: creator?.email, requestedByName: creator?.name }
     });
+    // Record what was submitted on the student's Admin Notes. The task itself can be
+    // closed, reassigned or lost in a long list; the note keeps the details — schools,
+    // UK contact, references and which documents came in — on the profile for later.
+    if (requestTypeData.specialConfig?.firstYearUkFields) {
+      const d = dynamicData || {};
+      const lines: string[] = [`${requestTypeData.name.trim()} — submitted by ${creator?.name || 'Staff'}`];
+
+      const schools = (d.selectedGlobalUniversities || []) as { name?: string; major?: string }[];
+      const single = d.selectedGlobalUniversityDetails as { name?: string; major?: string } | undefined;
+      const chosen = schools.length > 0 ? schools : single ? [single] : [];
+      if (chosen.length > 0) {
+        lines.push('Schools:');
+        for (const s of chosen) lines.push(`  • ${s?.name || '(unnamed)'}${s?.major ? ` — ${s.major}` : ''}`);
+      }
+
+      if (d.ukPhone) lines.push(`UK phone: ${d.ukPhone}`);
+      if (d.ukAddress) lines.push(`UK address: ${d.ukAddress}`);
+      for (const n of [1, 2]) {
+        const name = d[`reference${n}Name`];
+        const email = d[`reference${n}Email`];
+        if (name || email) lines.push(`Reference ${n}: ${name || '(no name)'}${email ? ` <${email}>` : ''}`);
+      }
+
+      const attachments = (d.attachments || []) as { label?: string; name?: string }[];
+      if (attachments.length > 0) {
+        lines.push(`Documents added to the profile: ${attachments.map(a => `${a?.label} (${a?.name})`).join(', ')}`);
+      }
+
+      // Only worth a note if something beyond the heading was actually filled in.
+      if (lines.length > 1) {
+        await adminDb!.collection('students').doc(studentId).update({
+          adminNotes: FieldValue.arrayUnion({
+            id: `note-request-${taskRef.id}`,
+            authorId,
+            content: lines.join('\n'),
+            createdAt: new Date().toISOString(),
+          }),
+        }).catch(e => console.error('[createStudentTask] could not write the admin note:', e));
+      }
+    }
+
     await refreshStudentActivity(studentId);
     const usersToNotify = new Map<string, User>();
     for (const uid of specificUserIds) {
