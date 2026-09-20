@@ -21,7 +21,6 @@ import {
   wouldExceedLimit,
 } from '@/lib/school-quota';
 import { submitJotformApplications, findExistingStudentsByNumber, type ExistingStudentMatch } from '@/lib/actions';
-import { classifyNameRelation, RELATION_ORDER } from '@/lib/student-name-match';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase';
 import type { ApprovedUniversity, Application, Country } from '@/lib/types';
@@ -72,6 +71,10 @@ const emptyPick = (): CountryPick => ({ majorSearch: '', showSugs: false, addedM
 
 const COUNTRY_KEY_LABEL: Record<string, string> = { UK: 'UK', AUNZ: 'AU / NZ', USA: 'USA' };
 
+// Worst case first: a confirmed duplicate, then one we cannot judge, then a confirmed
+// different person.
+const RELATION_RANK = { 'same-student': 0, 'unknown': 1, 'different-person': 2 } as const;
+
 /**
  * "This number already belongs to someone." Shown under a number field as soon as the
  * employee finishes typing, with enough detail to tell whether it is the same person:
@@ -81,12 +84,12 @@ function ExistingStudentNote({
   matches,
   label,
   checking,
-  typedName,
+  typedCivilId,
 }: {
   matches: ExistingStudentMatch[];
   label: string;
   checking: boolean;
-  typedName: string;
+  typedCivilId: string;
 }) {
   if (checking) {
     return (
@@ -99,13 +102,22 @@ function ExistingStudentNote({
   if (matches.length === 0) return null;
 
   // Siblings share a parent's number, so a shared number is not by itself a duplicate.
-  // The name decides which of the two this is.
+  // The CIVIL ID decides it: one per person, unlike a name. Names are deliberately not
+  // compared — brothers share almost every part of a Kuwaiti name.
+  const typed = typedCivilId.replace(/\D/g, '');
   const judged = matches
-    .map(m => ({ ...m, relation: classifyNameRelation(typedName, m.name) }))
-    .sort((a, b) => RELATION_ORDER[a.relation] - RELATION_ORDER[b.relation]);
+    .map(m => ({
+      ...m,
+      relation: !typed || !m.civilId
+        ? ('unknown' as const)
+        : m.civilId === typed
+          ? ('same-student' as const)
+          : ('different-person' as const),
+    }))
+    .sort((a, b) => RELATION_RANK[a.relation] - RELATION_RANK[b.relation]);
 
   const looksDuplicate = judged.some(m => m.relation === 'same-student');
-  const allFamily = judged.every(m => m.relation === 'same-family');
+  const allFamily = judged.length > 0 && judged.every(m => m.relation === 'different-person');
 
   const tone = looksDuplicate
     ? { border: 'border-red-400', bg: 'bg-red-50', head: 'text-red-900', body: 'text-red-800' }
@@ -114,9 +126,9 @@ function ExistingStudentNote({
       : { border: 'border-amber-400', bg: 'bg-amber-50', head: 'text-amber-900', body: 'text-amber-800' };
 
   const heading = looksDuplicate
-    ? `This student looks like they are already in the system`
+    ? 'Same Civil ID — this student is already in the system'
     : allFamily
-      ? `This ${label} is already used by a family member`
+      ? `This ${label} belongs to a different person (different Civil ID)`
       : `This ${label} is already in the system`;
 
   return (
@@ -142,16 +154,18 @@ function ExistingStudentNote({
           </a>
           <p className={cn('text-[10px]', tone.body)}>
             {m.relation === 'same-student'
-              ? 'Same name — submitting would create a second profile for this student.'
-              : m.relation === 'same-family'
-                ? 'Same family name — most likely a brother or sister sharing a parent’s number.'
-                : 'A different name. Check whether the number was entered correctly.'}
+              ? `Civil ID ${m.civilId} matches — submitting would create a second profile for this student.`
+              : m.relation === 'different-person'
+                ? `Different Civil ID (${m.civilId}) — a different person, most likely a brother or sister on the same number.`
+                : m.civilId
+                  ? 'Enter the Civil ID to confirm whether this is the same student.'
+                  : 'No Civil ID on that profile, so it cannot be confirmed from here — open it to check.'}
           </p>
         </div>
       ))}
       <p className={cn('text-[10px] italic', tone.body)}>
         {allFamily
-          ? 'Nothing to fix if they are siblings — carry on.'
+          ? 'Different Civil ID, so this is a different student — carry on.'
           : 'Open the profile to check before submitting.'}
       </p>
     </div>
@@ -928,7 +942,7 @@ export default function JotformPage() {
                     matches={phoneMatches}
                     label="phone number"
                     checking={checkingNumber === 'phone'}
-                    typedName={`${firstName} ${lastName}`.trim()}
+                    typedCivilId={civilId}
                   />
                 </div>
                 {isUKorAUNZ && (
@@ -939,7 +953,7 @@ export default function JotformPage() {
                       matches={civilMatches}
                       label="Civil ID"
                       checking={checkingNumber === 'civilId'}
-                      typedName={`${firstName} ${lastName}`.trim()}
+                      typedCivilId={civilId}
                     />
                   </div>
                 )}

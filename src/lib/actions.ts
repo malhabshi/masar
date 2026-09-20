@@ -4136,6 +4136,8 @@ export type ExistingStudentMatch = {
   id: string;
   name: string;
   matchedOn: 'phone' | 'civilId';
+  /** The civil ID on file, which is what decides whether this is the same person. */
+  civilId: string | null;
   employeeName: string | null;
   isClosed: boolean;
   targetCountries: string[];
@@ -4178,7 +4180,7 @@ export async function findExistingStudentsByNumber(
           adminDb!
             .collection('students')
             .where(f, '==', value)
-            .select('name', 'employeeId', 'isClosed', 'targetCountries', 'createdAt')
+            .select('name', 'employeeId', 'isClosed', 'targetCountries', 'createdAt', 'civilId', 'jotformData.civilId')
             .limit(5)
             .get()
             .catch(() => null),
@@ -4191,10 +4193,12 @@ export async function findExistingStudentsByNumber(
       for (const doc of snap?.docs ?? []) {
         if (found.has(doc.id)) continue;
         const d = doc.data();
+        const onFile = (d.jotformData?.civilId || d.civilId || '').replace(/\D/g, '');
         found.set(doc.id, {
           id: doc.id,
           name: d.name || '(no name)',
           matchedOn: kind,
+          civilId: onFile || null,
           employeeName: null,
           isClosed: !!d.isClosed,
           targetCountries: d.targetCountries || [],
