@@ -1009,7 +1009,22 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
         message = `Status updated to 'Denied' by ${updater.name}. Reason: ${reason}`;
       }
 
-      await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: taskData.authorId, recipientIds: [taskData.authorId], content: message, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
+      // Structured alongside the text, so the employee's dashboard can show a proper
+      // status badge and link back to the request instead of a line of prose.
+      await adminDb!.collection('tasks').add({
+        authorId: 'system', createdBy: 'system',
+        recipientId: taskData.authorId, recipientIds: [taskData.authorId],
+        content: message,
+        createdAt: new Date().toISOString(),
+        status: 'new', category: 'system', replies: [],
+        relatedTaskId: taskId,
+        newStatus: status,
+        taskType: taskData.taskType || null,
+        studentId: taskData.studentId || null,
+        studentName: taskData.studentName || null,
+        denialReason: status === 'denied' ? (reason || null) : null,
+        updatedByName: updater.name || null,
+      });
       const recipient = await getUser(taskData.authorId);
       if (recipient?.phone) {
         let type: NotificationType = 'task_status_in_progress';
@@ -1020,6 +1035,38 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
     }
     return { success: true, message: 'Status updated.' };
   } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+/**
+ * Mark request-outcome notifications as read for the person they belong to.
+ *
+ * Only touches notifications addressed to that user, so one employee can never clear
+ * another's. Capped because the collection holds thousands of historic ones.
+ */
+export async function markRequestUpdatesRead(taskIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  if (!taskIds?.length) return { success: true, message: 'Nothing to mark.' };
+
+  try {
+    const ids = taskIds.slice(0, 50);
+    const batch = adminDb!.batch();
+    let marked = 0;
+
+    const docs = await Promise.all(ids.map(id => adminDb!.collection('tasks').doc(id).get()));
+    for (const doc of docs) {
+      if (!doc.exists) continue;
+      const t = doc.data() as Task;
+      const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
+      if (!targets.includes(userId)) continue; // not this user's to clear
+      batch.update(doc.ref, { status: 'completed' });
+      marked++;
+    }
+
+    if (marked > 0) await batch.commit();
+    return { success: true, message: `${marked} update(s) marked as read.` };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
 }
 
 export async function toggleTaskPriority(taskId: string, isPrioritized: boolean) {

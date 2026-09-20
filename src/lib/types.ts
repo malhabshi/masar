@@ -299,6 +299,11 @@ export interface Task {
   notifications?: TaskNotification[];
   isPrioritized?: boolean;
   denialReason?: string;
+  // Set on the 'system' notification raised when a request is completed or denied, so
+  // the author's dashboard can show the outcome rather than a line of prose.
+  relatedTaskId?: string;
+  newStatus?: TaskStatus;
+  updatedByName?: string;
 }
 
 export interface ResourceLink {

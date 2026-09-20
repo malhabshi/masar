@@ -12,6 +12,7 @@ import Link from 'next/link';
 // Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { TaskList } from '@/components/dashboard/task-list';
+import { RequestUpdatesCard } from '@/components/dashboard/request-updates-card';
 import { PersonalTodoList } from '@/components/dashboard/personal-todo-list';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import { DashboardRemindersCard } from '@/components/dashboard/dashboard-reminders-card';
@@ -145,6 +146,7 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
                 </Card>
             </div>
             <DashboardRemindersCard currentUser={currentUser} />
+            <RequestUpdatesCard tasks={relevantTasks} currentUser={currentUser} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TaskList tasks={relevantTasks} currentUser={currentUser} isLoading={isLoading} />
                 <UpcomingEventsCard />
