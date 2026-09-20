@@ -12,6 +12,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const ACCEPTANCE_OPTIONS = ['Foundation', 'First Year', 'General English', 'ESL', 'ESL + Foundation', 'Masters'];
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import {
+  COMPANY_LIMIT,
+  buildCompanyLookup,
+  countByCompany,
+  schoolKey,
+  wouldExceedLimit,
+} from '@/lib/school-quota';
 import { submitJotformApplications } from '@/lib/actions';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase';
@@ -562,6 +570,21 @@ export default function JotformPage() {
                 const BEST_UNI = 'Best Option';
                 const showBestUni = key !== 'USA';
 
+                // At most 5 schools per pathway company (Kaplan, INTO, Study Group, ...).
+                // Five Kaplan AND five INTO is fine; a sixth from either is not. Counted
+                // across every major in this country, since a school picked under two
+                // majors is still one school.
+                const companyOf = buildCompanyLookup(unis);
+                const chosenHere = Object.values(pick.selectedUniNamesByMajor)
+                  .flat()
+                  .filter(n => n.toLowerCase().trim() !== BEST_UNI.toLowerCase())
+                  .map(name => ({ name, company: companyOf.get(schoolKey(name)) }))
+                  .filter((u): u is { name: string; company: string } => !!u.company);
+                const companySets = countByCompany(chosenHere);
+                const fullCompanies = Object.entries(companySets)
+                  .filter(([, v]) => v.size >= COMPANY_LIMIT)
+                  .map(([c]) => c);
+
                 // All unique majors in DB for this country (for autocomplete)
                 const allMajorsInDB = [...new Set(unis.map(u => u.major.trim()))].sort();
                 const majorSugs = pick.majorSearch.trim()
@@ -618,6 +641,30 @@ export default function JotformPage() {
                 return (
                   <div key={key} className="border rounded-lg p-4 space-y-3 bg-muted/10">
                     <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{COUNTRY_KEY_LABEL[key]}</div>
+
+                    {/* Running count per company, so the limit is visible before it bites. */}
+                    {Object.keys(companySets).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(companySets).sort().map(([company, set]) => (
+                          <Badge key={company} variant="outline"
+                            className={cn('text-[10px] font-bold', set.size >= COMPANY_LIMIT && 'bg-red-100 text-red-800 border-red-400')}>
+                            {company}: {set.size}/{COMPANY_LIMIT}{set.size >= COMPANY_LIMIT ? ' FULL' : ''}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {fullCompanies.length > 0 && (
+                      <div className="rounded-md border border-red-300 bg-red-50 p-2.5">
+                        <p className="text-sm font-bold text-red-800">
+                          You have reached the limit for {fullCompanies.join(' and ')}.
+                        </p>
+                        <p className="text-xs text-red-700">
+                          {COMPANY_LIMIT} schools per company is the maximum. Deselect one to choose a
+                          different {fullCompanies.length > 1 ? 'school from those companies' : `${fullCompanies[0]} school`}.
+                          Other companies are unaffected.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Major search */}
                     <div className="flex gap-2 items-start">
@@ -692,12 +739,20 @@ export default function JotformPage() {
                                 const isSelected = selectedForMajor.some(n => n.toLowerCase().trim() === norm);
                                 const conflict = !isSelected && elsewhere.has(norm);
                                 const disabledByBest = bestActive && !isSelected;
-                                const disabled = conflict || disabledByBest;
+                                const uniCompany = companyOf.get(schoolKey(uniName));
+                                const atCompanyLimit =
+                                  !isSelected && wouldExceedLimit({ name: uniName, company: uniCompany }, companySets);
+                                const disabled = conflict || disabledByBest || atCompanyLimit;
                                 return (
                                   <label key={uniName} className={cn('flex items-center gap-2.5 text-sm select-none', disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer')}>
                                     <Checkbox checked={isSelected} disabled={disabled} onCheckedChange={() => !disabled && toggleUni(major, uniName)} />
                                     <span className="flex-1">{uniName}</span>
                                     {conflict && <span className="text-xs text-muted-foreground italic">taken</span>}
+                                    {atCompanyLimit && (
+                                      <span className="text-[11px] font-bold text-red-700">
+                                        {uniCompany} limit reached ({COMPANY_LIMIT})
+                                      </span>
+                                    )}
                                   </label>
                                 );
                               }) : (

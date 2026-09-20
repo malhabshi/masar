@@ -3294,6 +3294,37 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   const civilId = (formData.get('civilId') as string) || '';
   const schoolName = (formData.get('schoolName') as string) || '';
   const ieltsScore = (formData.get('ieltsScore') as string) || '';
+
+  // At most 5 schools per pathway company. Checked BEFORE anything is posted to
+  // Jotform, so an over-limit submission is refused outright rather than reaching the
+  // form and then failing to produce a student.
+  try {
+    const chosen = JSON.parse((formData.get('builtApplications') as string) || '[]') as
+      { university?: string }[];
+    if (Array.isArray(chosen) && chosen.length > 0 && adminDb) {
+      const approvedSnap = await adminDb.collection('approved_universities').select('name', 'company').get();
+      const lookup = buildCompanyLookup(approvedSnap.docs.map(d => d.data() as { name: string; company?: string }));
+      const counted = countByCompany(
+        chosen
+          .map(a => ({ name: a.university || '', company: lookup.get(schoolKey(a.university || '')) }))
+          .filter((u): u is { name: string; company: string } => !!u.name && !!u.company),
+      );
+      const over = Object.entries(counted).filter(([, set]) => set.size > COMPANY_LIMIT);
+      if (over.length > 0) {
+        const detail = over.map(([c, set]) => `${c} ${set.size}/${COMPANY_LIMIT}`).join(', ');
+        return {
+          jotformResults: [{
+            country: 'UK',
+            success: false,
+            detail: `Over the school limit: ${detail}. Each company allows ${COMPANY_LIMIT} schools — deselect the extras and submit again.`,
+          }],
+          studentCreated: false,
+        };
+      }
+    }
+  } catch {
+    // A malformed payload is not a reason to block the submission.
+  }
   const followUpPerson = (formData.get('followUpPerson') as string) || '';
   const guardianName = (formData.get('guardianName') as string) || '';
   const guardianEmail = (formData.get('guardianEmail') as string) || '';

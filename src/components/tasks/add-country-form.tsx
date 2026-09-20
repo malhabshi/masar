@@ -14,8 +14,16 @@ import { addCountryApplication } from '@/lib/actions';
 import type { Student, ApprovedUniversity } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { cn } from '@/lib/utils';
+import {
+  COMPANY_LIMIT,
+  buildCompanyLookup,
+  countByCompany,
+  schoolKey as normalizeKey,
+  schoolsAlreadyHeld,
+  wouldExceedLimit,
+} from '@/lib/school-quota';
 
-const ALL_COUNTRIES = ['UK', 'Australia / New Zealand', 'USA', 'Ireland'];
+const ALL_COUNTRIES =['UK', 'Australia / New Zealand', 'USA', 'Ireland'];
 // The UK form requires a scholarship type. The USA form never collects one, so a
 // student added through USA has to supply it here before UK can be submitted.
 const SCHOLARSHIP_OPTIONS = [
@@ -103,6 +111,22 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
     }
     return [];
   }, [allApprovedUnis, countryKey, ukFoundation]);
+
+  // At most 5 schools per pathway company, counting the ones already on the student —
+  // the same rule the task forms apply.
+  const companyOf = useMemo(() => buildCompanyLookup(allApprovedUnis || []), [allApprovedUnis]);
+  const companySets = useMemo(() => {
+    const chosen = Object.values(pick.selectedUniNamesByMajor)
+      .flat()
+      .filter(n => n.toLowerCase().trim() !== BEST_UNI.toLowerCase())
+      .map(name => ({ name, company: companyOf.get(normalizeKey(name)) }))
+      .filter((u): u is { name: string; company: string } => !!u.company);
+    return countByCompany([...schoolsAlreadyHeld(student.applications, companyOf), ...chosen]);
+  }, [pick.selectedUniNamesByMajor, companyOf, student.applications]);
+  const fullCompanies = useMemo(
+    () => Object.entries(companySets).filter(([, v]) => v.size >= COMPANY_LIMIT).map(([c]) => c),
+    [companySets],
+  );
 
   const allMajorsInDB = useMemo(() => [...new Set(unis.map(u => u.major.trim()))].sort(), [unis]);
   const majorSugs = pick.majorSearch.trim()
@@ -401,6 +425,18 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
             </div>
           )}
 
+          {fullCompanies.length > 0 && (
+            <div className="rounded-md border border-red-300 bg-red-50 p-2.5">
+              <p className="text-sm font-bold text-red-800">
+                You have reached the limit for {fullCompanies.join(' and ')}.
+              </p>
+              <p className="text-xs text-red-700">
+                {COMPANY_LIMIT} schools per company is the maximum, counting the schools already on this
+                student. Remove one to choose another. Other companies are unaffected.
+              </p>
+            </div>
+          )}
+
           {/* Major search */}
           <div className="flex gap-2 items-start">
             <div className="flex-1 relative">
@@ -471,12 +507,18 @@ export function AddCountryForm({ student, currentUser, onSuccess, onCancel }: Ad
                     const isSelected = selectedForMajor.some(n => n.toLowerCase().trim() === norm);
                     const conflict = !isSelected && elsewhere.has(norm);
                     const disabledByBest = bestActive && !isSelected;
-                    const disabled = conflict || disabledByBest;
+                    const uniCompany = companyOf.get(normalizeKey(uniName));
+                    const atCompanyLimit =
+                      !isSelected && wouldExceedLimit({ name: uniName, company: uniCompany }, companySets);
+                    const disabled = conflict || disabledByBest || atCompanyLimit;
                     return (
                       <label key={uniName} className={cn('flex items-center gap-2.5 text-sm select-none', disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer')}>
                         <Checkbox checked={isSelected} disabled={disabled} onCheckedChange={() => !disabled && toggleUni(major, uniName)} />
                         <span className="flex-1">{uniName}</span>
                         {conflict && <span className="text-xs text-muted-foreground italic">taken</span>}
+                        {atCompanyLimit && (
+                          <span className="text-[11px] font-bold text-red-700">{uniCompany} limit reached ({COMPANY_LIMIT})</span>
+                        )}
                       </label>
                     );
                   }) : (
