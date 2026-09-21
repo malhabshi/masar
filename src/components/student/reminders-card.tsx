@@ -202,6 +202,8 @@ function ReminderFormDialog({
           ...payload,
           studentId: student.id,
           studentName: student.name,
+          // So "Employee (assigned)" can mean this student's employee specifically.
+          studentEmployeeId: student.employeeId ?? null,
           createdBy: currentUser.id,
           createdByName: currentUser.name,
           status: 'active',

@@ -3174,7 +3174,14 @@ export async function processStudentReminders(params: {
       let isRecipient = false;
       if (recipientType === 'all') isRecipient = true;
       else if (recipientType === 'admin' && params.userRole === 'admin') isRecipient = true;
-      else if (recipientType === 'employee' && params.userRole === 'employee') isRecipient = true;
+      // The student's OWN employee, not any employee — this used to pop the reminder
+      // toast on every employee's screen. Reminders saved before studentEmployeeId
+      // existed keep the old behaviour rather than silently stopping.
+      else if (recipientType === 'employee' && params.userRole === 'employee') {
+        isRecipient = reminder.studentEmployeeId
+          ? reminder.studentEmployeeId === params.userCivilId
+          : true;
+      }
       else if (recipientType === 'department' && params.userRole === 'department') isRecipient = true;
       else if (recipientType === 'custom' && recipientUserIds?.includes(params.userId)) isRecipient = true;
 

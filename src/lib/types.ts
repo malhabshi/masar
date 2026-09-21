@@ -628,6 +628,12 @@ export interface Reminder {
   dueAt: string;
   recipientType: ReminderRecipientType;
   recipientUserIds?: string[];
+  /**
+   * Civil ID of the employee assigned to the student when the reminder was made.
+   * 'Employee (assigned)' means THAT employee — without this, the check could only ask
+   * "is this person an employee?", which is true of all of them.
+   */
+  studentEmployeeId?: string | null;
   createdBy: string;
   createdByName: string;
   createdAt: string;
