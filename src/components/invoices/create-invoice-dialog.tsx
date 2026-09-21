@@ -395,7 +395,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                               {catalogItems && catalogItems.length > 0 && (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] font-black bg-primary/10 text-primary hover:bg-primary/20">
+                                    <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] font-semibold bg-primary/10 text-primary hover:bg-primary/20">
                                       <Library className="h-2 w-2 mr-1" /> Quick Load
                                     </Button>
                                   </DropdownMenuTrigger>
@@ -494,7 +494,7 @@ export function CreateInvoiceDialog({ currentUser, students, templates, children
                     <span className="text-sm font-bold uppercase tracking-widest">Total</span>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-black text-primary">{total.toFixed(2)} KWD</div>
+                    <div className="text-2xl font-semibold text-primary">{total.toFixed(2)} KWD</div>
                     {secondaryTotal !== null && (
                       <div className="text-sm font-bold text-accent">
                         ≈ {secondaryTotal.toFixed(2)} {watchSecondary}

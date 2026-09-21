@@ -66,6 +66,16 @@ const pipelineStatusStyles: { [key: string]: string } = {
   black: 'bg-black text-white',
   none: 'bg-gray-400 text-primary-foreground',
 };
+/**
+ * One value from the two fields the intake is stored in. Students with neither get
+ * 'none' so they can be filtered for — 878 of 1,384 open students have no intake set,
+ * and finding them is half the point of the filter.
+ */
+const intakeTermOf = (s: { academicIntakeSemester?: string; academicIntakeYear?: number }) =>
+  s.academicIntakeSemester || s.academicIntakeYear
+    ? `${s.academicIntakeSemester ?? '?'} ${s.academicIntakeYear ?? '?'}`.trim()
+    : 'none';
+
 const pipelineStatusLabels: { [key: string]: string } = {
     green: 'Green',
     yellow: 'Yellow',
@@ -96,6 +106,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [acceptedCountryFilter, setAcceptedCountryFilter] = useState<string[]>([]);
   const [acceptedMajorFilter, setAcceptedMajorFilter] = useState<string[]>([]);
   const [foundationCategoryFilter, setFoundationCategoryFilter] = useState<string[]>([]);
+  // Intake term: semester and year are two fields, filtered as one value ("FALL (8/9) 2026").
+  const [intakeTermFilter, setIntakeTermFilter] = useState<string[]>([]);
   const [isClient, setIsClient] = useState(false);
 
   // Checklist filters
@@ -138,6 +150,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setAcceptedCountryFilter([]);
     setAcceptedMajorFilter([]);
     setFoundationCategoryFilter([]);
+    setIntakeTermFilter([]);
     setShowAllStudents(false);
     try {
       const raw = sessionStorage.getItem(`applicants_filters_${currentUser.id}`);
@@ -148,6 +161,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (Array.isArray(f.employeeFilter))   setEmployeeFilter(f.employeeFilter);
         if (Array.isArray(f.genderFilter))     setGenderFilter(f.genderFilter);
         if (Array.isArray(f.studyLevelFilter))   setStudyLevelFilter(f.studyLevelFilter);
+        if (Array.isArray(f.intakeTermFilter))   setIntakeTermFilter(f.intakeTermFilter);
         if (Array.isArray(f.schoolTypeFilter))   setSchoolTypeFilter(f.schoolTypeFilter);
         if (Array.isArray(f.countryFilter))      setCountryFilter(f.countryFilter);
         if (f.ieltsFilter !== undefined)           setIeltsFilter(f.ieltsFilter);
@@ -186,11 +200,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     try {
       sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
-        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, showAllStudents,
+        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, intakeTermFilter, showAllStudents,
         checklistItemFilter, checklistStatusFilter,
       }));
     } catch {}
-  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
+  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, intakeTermFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
 
   // Identify duplicate phones across all currently loaded students (all phone fields)
   const duplicatePhoneSet = useMemo(() => {
@@ -240,6 +254,21 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     const seen = new Set(students.map(s => s.id));
     return [...students, ...closedStudents.filter(s => !seen.has(s.id))];
   }, [students, closedStudents]);
+
+    // Offered options come from the data, so a new intake year appears without a code
+  // change and dead ones drop off.
+  const intakeTermOptions = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const s of sourceStudents) {
+      const key = intakeTermOf(s);
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
+    const real = [...seen.keys()].filter(k => k !== 'none').sort().reverse();
+    return [
+      ...real.map(k => ({ label: k, value: k })),
+      ...(seen.has('none') ? [{ label: 'No intake set', value: 'none' }] : []),
+    ];
+  }, [sourceStudents]);
 
   const displayedStudents = useMemo(() => {
     const filtered = sourceStudents.filter(student => {
@@ -295,6 +324,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
         const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
         const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
+        const matchesIntakeTerm = intakeTermFilter.length === 0 || intakeTermFilter.includes(intakeTermOf(student));
         const matchesSchoolType = schoolTypeFilter.length === 0 || (student.studyLevel === 'Foundation' && schoolTypeFilter.some(f => f === 'none' ? !student.schoolType : student.schoolType === f));
 
         let matchesChecklist = true;
@@ -307,7 +337,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           matchesChecklist = checklistStatusFilter === 'checked' ? isChecked : !isChecked;
         }
 
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesAcceptedCountry && matchesAcceptedMajor && matchesFoundationCategory && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesAcceptedCountry && matchesAcceptedMajor && matchesFoundationCategory && matchesGender && matchesStudyLevel && matchesIntakeTerm && matchesSchoolType && matchesChecklist;
     });
 
     const getNotificationScore = (s: Student) => {
@@ -376,7 +406,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [sourceStudents, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
+  }, [sourceStudents, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, genderFilter, studyLevelFilter, intakeTermFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
 
   useEffect(() => {
     if (!isClient || !currentUser?.id) return;
@@ -402,6 +432,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setFoundationCategoryFilter([]);
     setGenderFilter([]);
     setStudyLevelFilter([]);
+    setIntakeTermFilter([]);
     setSchoolTypeFilter([]);
     setCountryFilter([]);
     setShowAllStudents(false);
@@ -412,7 +443,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || acceptedFilter !== 'all' || acceptedCountryFilter.length > 0 || acceptedMajorFilter.length > 0 || foundationCategoryFilter.length > 0 || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
+  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || acceptedFilter !== 'all' || acceptedCountryFilter.length > 0 || acceptedMajorFilter.length > 0 || foundationCategoryFilter.length > 0 || genderFilter.length > 0 || studyLevelFilter.length > 0 || intakeTermFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -539,6 +570,15 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                     selected={studyLevelFilter}
                     onChange={setStudyLevelFilter}
                     className="flex-1 min-w-[110px]"
+                  />
+                )}
+                {isClient && intakeTermOptions.length > 0 && (
+                  <MultiSelectFilter
+                    label="Intake Term"
+                    options={intakeTermOptions}
+                    selected={intakeTermFilter}
+                    onChange={setIntakeTermFilter}
+                    className="flex-1 min-w-[140px]"
                   />
                 )}
                 {isClient && (
@@ -840,7 +880,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             </Badge>
                           )}
                           {student.isClosed && <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5">CLOSED</Badge>}
-                          {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border animate-pulse uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
+                          {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
                           {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
                           {isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0 ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.chatUnreadCountByUser![currentUser.id]}</span></Badge> : null}
                           {isAdminDept && student.newDocumentsForAdmin && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
@@ -880,7 +920,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       )}
                       {isDuplicate && (
                         <div className="flex">
-                          <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-black uppercase tracking-tighter gap-1">
+                          <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-semibold uppercase tracking-tighter gap-1">
                             <AlertTriangle className="h-2 w-2" />
                             Duplicate Profile
                           </Badge>

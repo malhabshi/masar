@@ -95,9 +95,9 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                   <div className="flex flex-col gap-1">
                     <span>{uni.name}</span>
                     {uni.importantNote && (
-                      <div className="flex items-center gap-1.5 text-red-600 animate-pulse">
+                      <div className="flex items-center gap-1.5 text-red-600">
                         <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span className="text-[10px] font-black uppercase tracking-tight leading-none">
+                        <span className="text-[10px] font-semibold uppercase tracking-tight leading-none">
                           IMPORTANT: {uni.importantNote}
                         </span>
                       </div>

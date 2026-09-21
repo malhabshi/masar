@@ -114,7 +114,7 @@ export function MissingItemsSection({ student, currentUser }: MissingItemsSectio
       <div className="flex flex-col gap-1">
         <span className="text-sm font-bold">{item.text}</span>
         <div className="flex items-center gap-1.5">
-          <Badge variant="secondary" className="text-[9px] h-4 py-0 font-black uppercase tracking-tighter bg-primary/10 text-primary border-primary/20">
+          <Badge variant="secondary" className="text-[9px] h-4 py-0 font-semibold uppercase tracking-tighter bg-primary/10 text-primary border-primary/20">
             <Building2 className="h-2 w-2 mr-1" />
             {item.department}
           </Badge>

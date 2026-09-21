@@ -188,7 +188,7 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                       <Link key={student.id} href={`/student/${student.id}`}>
                         <Badge className="bg-black text-red-500 border-red-500 border-2 hover:bg-black/90 px-4 py-2 flex items-center gap-3 transition-transform hover:scale-105 group">
                           <div className="flex flex-col items-start leading-none">
-                            <span className="font-black text-xs uppercase animate-pulse">{student.name}</span>
+                            <span className="font-semibold text-xs uppercase">{student.name}</span>
                             <span className="text-[8px] text-red-400 font-bold opacity-70">PRIORITY REVIEW</span>
                           </div>
                           <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
@@ -211,19 +211,19 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
                             <span className="text-green-700 uppercase font-bold">Green</span>
-                            <span className="font-black text-green-700">{stats.pipeline.green}</span>
+                            <span className="font-semibold text-green-700">{stats.pipeline.green}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-orange-50 px-2 py-1 rounded">
                             <span className="text-orange-700 uppercase font-bold">Orange</span>
-                            <span className="font-black text-orange-700">{stats.pipeline.orange}</span>
+                            <span className="font-semibold text-orange-700">{stats.pipeline.orange}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
                             <span className="text-red-700 uppercase font-bold">Red</span>
-                            <span className="font-black text-red-700">{stats.pipeline.red}</span>
+                            <span className="font-semibold text-red-700">{stats.pipeline.red}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                             <span className="text-muted-foreground uppercase font-bold">No Status</span>
-                            <span className="font-black text-muted-foreground">{stats.pipeline.none}</span>
+                            <span className="font-semibold text-muted-foreground">{stats.pipeline.none}</span>
                           </div>
                         </div>
                     </CardContent>
@@ -247,23 +247,23 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                             <span className="text-muted-foreground uppercase font-bold">Pending</span>
-                            <span className="font-black text-yellow-600">{stats.apps.pending}</span>
+                            <span className="font-semibold text-yellow-600">{stats.apps.pending}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                             <span className="text-muted-foreground uppercase font-bold">Submitted</span>
-                            <span className="font-black text-blue-600">{stats.apps.submitted}</span>
+                            <span className="font-semibold text-blue-600">{stats.apps.submitted}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                             <span className="text-muted-foreground uppercase font-bold">Missing Items</span>
-                            <span className="font-black text-purple-600">{stats.apps.missingItems}</span>
+                            <span className="font-semibold text-purple-600">{stats.apps.missingItems}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
                             <span className="text-green-700 uppercase font-bold">Accepted</span>
-                            <span className="font-black text-green-700">{stats.apps.accepted}</span>
+                            <span className="font-semibold text-green-700">{stats.apps.accepted}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
                             <span className="text-red-700 uppercase font-bold">Rejected</span>
-                            <span className="font-black text-red-700">{stats.apps.rejected}</span>
+                            <span className="font-semibold text-red-700">{stats.apps.rejected}</span>
                           </div>
                         </div>
                     </CardContent>
@@ -284,12 +284,12 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-muted/30">
-                                            <TableHead className="text-[10px] font-black uppercase">Staff Member</TableHead>
-                                            <TableHead className="text-[10px] font-black uppercase text-center">Total</TableHead>
-                                            <TableHead className="text-[10px] font-black uppercase text-center text-green-700">Green</TableHead>
-                                            <TableHead className="text-[10px] font-black uppercase text-center text-orange-700">Orange</TableHead>
-                                            <TableHead className="text-[10px] font-black uppercase text-center text-red-700">Red</TableHead>
-                                            <TableHead className="text-[10px] font-black uppercase text-center text-muted-foreground">None</TableHead>
+                                            <TableHead className="text-[10px] font-semibold uppercase">Staff Member</TableHead>
+                                            <TableHead className="text-[10px] font-semibold uppercase text-center">Total</TableHead>
+                                            <TableHead className="text-[10px] font-semibold uppercase text-center text-green-700">Green</TableHead>
+                                            <TableHead className="text-[10px] font-semibold uppercase text-center text-orange-700">Orange</TableHead>
+                                            <TableHead className="text-[10px] font-semibold uppercase text-center text-red-700">Red</TableHead>
+                                            <TableHead className="text-[10px] font-semibold uppercase text-center text-muted-foreground">None</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -302,9 +302,9 @@ export default function DepartmentDashboard({ currentUser }: { currentUser: AppU
                                                   )}
                                                 </TableCell>
                                                 <TableCell className="text-center"><Badge variant="outline" className="font-mono text-[10px]">{agent.total}</Badge></TableCell>
-                                                <TableCell className="text-center font-black text-green-700 text-xs">{agent.green}</TableCell>
-                                                <TableCell className="text-center font-black text-orange-700 text-xs">{agent.orange}</TableCell>
-                                                <TableCell className="text-center font-black text-red-700 text-xs">{agent.red}</TableCell>
+                                                <TableCell className="text-center font-semibold text-green-700 text-xs">{agent.green}</TableCell>
+                                                <TableCell className="text-center font-semibold text-orange-700 text-xs">{agent.orange}</TableCell>
+                                                <TableCell className="text-center font-semibold text-red-700 text-xs">{agent.red}</TableCell>
                                                 <TableCell className="text-center font-bold text-muted-foreground text-xs">{agent.none}</TableCell>
                                             </TableRow>
                                         ))}

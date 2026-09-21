@@ -81,7 +81,7 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-2 text-red-600">
                     <AlertCircle className="h-6 w-6 animate-bounce" />
-                    <CardTitle className="text-xl font-black">🚨 URGENT: Change Agent Required</CardTitle>
+                    <CardTitle className="text-xl font-semibold">🚨 URGENT: Change Agent Required</CardTitle>
                   </div>
                   <CardDescription className="text-red-700 font-medium">Management has flagged these students for immediate action.</CardDescription>
                 </CardHeader>
@@ -91,7 +91,7 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
                       <Link key={student.id} href={`/student/${student.id}`}>
                         <div className="bg-black p-4 rounded-lg flex items-center justify-between border-2 border-red-500 transition-transform hover:scale-[1.02] shadow-lg shadow-red-500/20 group">
                           <div className="min-w-0 flex-1">
-                            <span className="text-red-500 font-black truncate block uppercase tracking-tighter text-sm group-hover:animate-pulse">
+                            <span className="text-red-500 font-semibold truncate block uppercase tracking-tighter text-sm group-hover:">
                               {student.name}
                             </span>
                             <span className="text-[10px] text-red-400/70 font-bold uppercase">Immediate Attention Required</span>
@@ -116,19 +116,19 @@ export default function EmployeeDashboard({ currentUser }: { currentUser: AppUse
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
                             <span className="text-green-700 uppercase font-bold">Green</span>
-                            <span className="font-black text-green-700">{stats.pipeline.green}</span>
+                            <span className="font-semibold text-green-700">{stats.pipeline.green}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-orange-50 px-2 py-1 rounded">
                             <span className="text-orange-700 uppercase font-bold">Orange</span>
-                            <span className="font-black text-orange-700">{stats.pipeline.orange}</span>
+                            <span className="font-semibold text-orange-700">{stats.pipeline.orange}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
                             <span className="text-red-700 uppercase font-bold">Red</span>
-                            <span className="font-black text-red-700">{stats.pipeline.red}</span>
+                            <span className="font-semibold text-red-700">{stats.pipeline.red}</span>
                           </div>
                           <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                             <span className="text-muted-foreground uppercase font-bold">No Status</span>
-                            <span className="font-black text-muted-foreground">{stats.pipeline.none}</span>
+                            <span className="font-semibold text-muted-foreground">{stats.pipeline.none}</span>
                           </div>
                         </div>
                     </CardContent>

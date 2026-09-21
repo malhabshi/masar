@@ -105,7 +105,7 @@ function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
           <Link
             href={`/student/${student.id}`}
             onClick={e => e.stopPropagation()}
-            className="font-black text-sm hover:underline truncate"
+            className="font-semibold text-sm hover:underline truncate"
           >
             {student.name}
           </Link>
@@ -165,7 +165,7 @@ function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
                             </span>
                           )}
                           {isActive && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
                               <AlertCircle className="h-3 w-3" />Active
                             </span>
                           )}
@@ -193,7 +193,7 @@ function HistoryStudentRow({ student, isClosed }: HistoryStudentRowProps) {
                           ? <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white bg-black px-2 py-0.5 rounded-full">
                               <XCircle className="h-3 w-3" />Gone
                             </span>
-                          : <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">
+                          : <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
                               <AlertCircle className="h-3 w-3" />Active
                             </span>
                         }
@@ -232,7 +232,7 @@ function HistorySection({ title, students, isClosed, accentClass, headerBgClass,
           <CardTitle className="text-sm font-bold uppercase tracking-widest flex items-center gap-2">
             {title}
           </CardTitle>
-          <span className={cn('text-xs font-black px-2 py-0.5 rounded-full', countBadgeClass)}>
+          <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', countBadgeClass)}>
             {students.length}
           </span>
         </div>
@@ -439,7 +439,7 @@ export default function ChangeAgentDashboard() {
                       <TableCell>
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
-                            <span className="font-black text-sm">{student.name}</span>
+                            <span className="font-semibold text-sm">{student.name}</span>
                             {student.internalNumber && (
                               <Badge variant="outline" className="text-[10px] h-5 bg-muted font-mono">
                                 #{student.internalNumber}
@@ -530,17 +530,17 @@ export default function ChangeAgentDashboard() {
                     <TableRow key={emp.civilId} className="hover:bg-muted/20">
                       <TableCell className="font-bold text-sm">{emp.name}</TableCell>
                       <TableCell className="text-center">
-                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-black px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
                           {emp.active}
                         </span>
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-black px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
                           {emp.closed}
                         </span>
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-800">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800">
                           {emp.total}
                         </span>
                       </TableCell>

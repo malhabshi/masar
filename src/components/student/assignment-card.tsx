@@ -64,7 +64,7 @@ export function AssignmentCard({ student, currentUser }: AssignmentCardProps) {
       <CardContent className="space-y-6 pt-6">
         {/* Employee Section */}
         <div className="space-y-3">
-          <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Assigned Portfolio Agent</p>
+          <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-tighter">Assigned Portfolio Agent</p>
           {student.employeeId ? (
             <div className="space-y-2">
               <div className="flex items-center gap-3 bg-background p-3 rounded-lg border shadow-sm">
@@ -105,8 +105,8 @@ export function AssignmentCard({ student, currentUser }: AssignmentCardProps) {
               )}
             </div>
           ) : (
-            <div className="p-3 border-2 border-dashed border-orange-200 rounded-lg bg-orange-50 text-orange-700 text-xs font-black flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+            <div className="p-3 border-2 border-dashed border-orange-200 rounded-lg bg-orange-50 text-orange-700 text-xs font-semibold flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-orange-500" />
               UNASSIGNED LEAD
             </div>
           )}
@@ -114,7 +114,7 @@ export function AssignmentCard({ student, currentUser }: AssignmentCardProps) {
 
         {/* Handling Departments Section */}
         <div className="space-y-3 border-t pt-4">
-          <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Handling Departments</p>
+          <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-tighter">Handling Departments</p>
           <div className="flex flex-wrap gap-2">
             {relevantDepts.length > 0 ? (
               relevantDepts.map(dept => (

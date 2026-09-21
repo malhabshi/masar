@@ -778,7 +778,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                         <div key={uni.id}>
                           {showGroupHeader && uni.company && (
                             <div className={cn('px-3 py-1.5 flex items-center justify-between border-b', COMPANY_COLORS[uni.company] || 'bg-muted/40')}>
-                              <span className="text-[10px] font-black uppercase tracking-wider">{uni.company}</span>
+                              <span className="text-[10px] font-semibold uppercase tracking-wider">{uni.company}</span>
                               {uni.company !== 'Inhouse' && companyLimitApplies && (
                                 <span className={cn('text-[10px] font-bold', (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT ? 'text-red-700' : 'opacity-70')}>
                                   {companySchoolCounts[uni.company] || 0}/{COMPANY_LIMIT} schools
@@ -810,7 +810,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                                     Remove one to add another.
                                   </span>
                                 )}
-                                {uni.importantNote && <span className="block text-[10px] text-red-600 font-black uppercase">⚠️ {uni.importantNote}</span>}
+                                {uni.importantNote && <span className="block text-[10px] text-red-600 font-semibold uppercase">⚠️ {uni.importantNote}</span>}
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <Badge variant="outline" className="text-[10px] font-mono">{uni.country}</Badge>

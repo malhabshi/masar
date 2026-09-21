@@ -121,7 +121,7 @@ export function StudyLevelCard({ student, currentUser }: StudyLevelCardProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-3xl font-black text-primary">
+        <p className="text-3xl font-semibold text-primary">
           {student.studyLevel || 'Not Set'}
         </p>
       </CardContent>

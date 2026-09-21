@@ -176,10 +176,10 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                 </div>
               </div>
               <div className="text-right">
-                <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">INVOICE</h2>
+                <h2 className="text-4xl font-semibold text-slate-900 uppercase tracking-tighter leading-none mb-2">INVOICE</h2>
                 <div className="space-y-0.5">
-                  <p className="text-base font-black text-slate-900">{invoice.invoiceNumber}</p>
-                  <p className="text-xs font-black text-black">
+                  <p className="text-base font-semibold text-slate-900">{invoice.invoiceNumber}</p>
+                  <p className="text-xs font-semibold text-black">
                     DATE: {isClient ? formatDate(invoice.createdAt) : '...'}
                   </p>
                 </div>
@@ -190,8 +190,8 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             <div className="mb-6">
               <div className="space-y-3 bg-slate-50/50 p-4 rounded-lg border border-dashed border-slate-200">
                 <div className="flex gap-2 items-baseline">
-                  <span className="text-[10px] font-black uppercase text-slate-500 shrink-0">Name:</span>
-                  <p className="text-base font-black text-black bg-yellow-50 px-1">
+                  <span className="text-[10px] font-semibold uppercase text-slate-500 shrink-0">Name:</span>
+                  <p className="text-base font-semibold text-black bg-yellow-50 px-1">
                     {invoice.studentName}
                   </p>
                 </div>
@@ -207,10 +207,10 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-900 text-white">
-                    <th className="py-2 px-4 text-[9px] font-black uppercase tracking-widest w-12">#</th>
-                    <th className="py-2 px-2 text-[9px] font-black uppercase tracking-widest">Description</th>
-                    <th className="py-2 px-2 text-[9px] font-black uppercase tracking-widest text-center">Qty</th>
-                    <th className="py-2 px-4 text-[9px] font-black uppercase tracking-widest text-right">Amount</th>
+                    <th className="py-2 px-4 text-[9px] font-semibold uppercase tracking-widest w-12">#</th>
+                    <th className="py-2 px-2 text-[9px] font-semibold uppercase tracking-widest">Description</th>
+                    <th className="py-2 px-2 text-[9px] font-semibold uppercase tracking-widest text-center">Qty</th>
+                    <th className="py-2 px-4 text-[9px] font-semibold uppercase tracking-widest text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 border-b border-slate-900">
@@ -221,7 +221,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                       <tr key={item.id} className="group">
                         <td className="py-3 px-4 text-[10px] font-mono text-slate-400 align-top">{index + 1}</td>
                         <td className="py-3 px-2 align-top">
-                          <p className="font-black text-slate-900 text-xs uppercase">{item.description}</p>
+                          <p className="font-semibold text-slate-900 text-xs uppercase">{item.description}</p>
                           {item.details && (
                             <p className="text-[9px] text-slate-500 italic mt-0.5 font-medium whitespace-pre-wrap leading-tight">
                               {item.details}
@@ -230,7 +230,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
                         </td>
                         <td className="py-3 px-2 text-center text-slate-700 font-bold text-xs align-top">{item.quantity}</td>
                         <td className="py-3 px-4 text-right align-top">
-                          <div className="text-xs font-black text-slate-900">{lineKWD.toFixed(2)} KWD</div>
+                          <div className="text-xs font-semibold text-slate-900">{lineKWD.toFixed(2)} KWD</div>
                           {hasSecondary && (
                             <div className="text-[9px] font-bold text-slate-500">{lineSec.toFixed(2)} {invoice.secondaryCurrency}</div>
                           )}
@@ -268,13 +268,13 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
 
                 <div className="flex items-center justify-between bg-slate-50 border-2 border-slate-900 p-3 rounded-lg mt-1">
                   <div className="flex flex-col">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Due</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-widest text-slate-500">Total Due</span>
                     {hasSecondary && <span className="text-[8px] italic font-bold text-slate-400">Rate Applied</span>}
                   </div>
                   <div className="text-right">
-                    <div className="text-xl font-black text-slate-900 leading-none">{invoice.totalAmount.toFixed(2)} <span className="text-xs">KWD</span></div>
+                    <div className="text-xl font-semibold text-slate-900 leading-none">{invoice.totalAmount.toFixed(2)} <span className="text-xs">KWD</span></div>
                     {hasSecondary && (
-                      <div className="text-sm font-black text-slate-500 mt-0.5">
+                      <div className="text-sm font-semibold text-slate-500 mt-0.5">
                         {totalSec.toFixed(2)} <span className="text-[10px]">{invoice.secondaryCurrency}</span>
                       </div>
                     )}
@@ -293,7 +293,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
             <div className="mt-auto pt-6">
               {invoice.notes && (
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4">
-                  <h4 className="text-[9px] font-black uppercase text-slate-900 mb-1.5 tracking-widest flex items-center gap-2">
+                  <h4 className="text-[9px] font-semibold uppercase text-slate-900 mb-1.5 tracking-widest flex items-center gap-2">
                     <MapPin className="h-2.5 w-2.5" />
                     Payment Instructions
                   </h4>
@@ -302,7 +302,7 @@ export function InvoiceViewDialog({ invoice, templates, isOpen, onOpenChange }: 
               )}
               
               <div className="text-center border-t pt-4">
-                <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em] mb-2">Thank you for your business</p>
+                <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-[0.2em] mb-2">Thank you for your business</p>
                 
                 <div className="space-y-0.5 text-[10px] text-slate-600 font-medium mb-3">
                   <p className="whitespace-pre-wrap">

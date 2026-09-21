@@ -221,7 +221,7 @@ export function StudentApplications({ student }: StudentApplicationsProps) {
           <CardTitle>University Applications</CardTitle>
           {selectedApps.size > 0 && isAdminDept && (
             <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
-              <span className="text-[10px] font-black uppercase text-muted-foreground mr-2">
+              <span className="text-[10px] font-semibold uppercase text-muted-foreground mr-2">
                 {selectedApps.size} Selected
               </span>
               <DropdownMenu>

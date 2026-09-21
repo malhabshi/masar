@@ -491,13 +491,13 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             </h1>
             
             {student.isClosed && (
-              <BadgeComponent className="bg-black text-white border-white border font-black text-sm px-3 py-1 uppercase tracking-widest">
+              <BadgeComponent className="bg-black text-white border-white border font-semibold text-sm px-3 py-1 uppercase tracking-widest">
                 CLOSED
               </BadgeComponent>
             )}
 
             {student.changeAgentRequired && (
-              <BadgeComponent className="bg-black text-red-50 border-red-500 border-2 font-black animate-pulse text-sm px-3 py-1">
+              <BadgeComponent className="bg-black text-red-50 border-red-500 border-2 font-semibold text-sm px-3 py-1">
                 CHANGE AGENT
               </BadgeComponent>
             )}
@@ -902,7 +902,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           )}
           {student.changeAgentRequired && student.changeAgentUniversities && student.changeAgentUniversities.length > 0 && (
             <div className="flex flex-col items-end gap-1.5 max-w-[300px] animate-in fade-in slide-in-from-right-4">
-              <p className="text-[9px] font-black text-red-600 uppercase tracking-widest bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-red-100">
+              <p className="text-[9px] font-semibold text-red-600 uppercase tracking-widest bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-red-100">
                 Change Agent Required For:
               </p>
               <div className="flex flex-wrap justify-end gap-1">
@@ -911,7 +911,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                   return (
                     <BadgeComponent
                       key={idx}
-                      className="bg-red-600 text-white font-black text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
+                      className="bg-red-600 text-white font-semibold text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
                     >
                       {uni} {country ? `(${country})` : ''}
                     </BadgeComponent>

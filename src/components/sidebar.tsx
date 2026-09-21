@@ -294,7 +294,7 @@ export function AppSidebar() {
                         </SidebarMenuBadge>
                     )}
                     {item.label === 'Finalized' && item.badge !== undefined && item.badge > 0 && (
-                        <SidebarMenuBadge className="bg-yellow-500 text-white animate-pulse">
+                        <SidebarMenuBadge className="bg-yellow-500 text-white">
                             New
                         </SidebarMenuBadge>
                     )}
@@ -348,7 +348,7 @@ export function AppSidebar() {
                       <span className="flex-1 text-left">{isEmployeeView ? "Management View" : "Employee View"}</span>
                       
                       {!isEmployeeView && employeeUnreadCount > 0 && (
-                        <span className="flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-yellow-500 text-[10px] font-black text-white shadow-[0_0_10px_rgba(234,179,8,0.5)] animate-pulse">
+                        <span className="flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-yellow-500 text-[10px] font-semibold text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]">
                           {employeeUnreadCount}
                         </span>
                       )}
