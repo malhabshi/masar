@@ -119,7 +119,7 @@ const BLANK_FORM = {
   location: '',
   date: '',
   time: '',
-  recipientType: 'admin' as ReminderRecipientType,
+  recipientType: 'employee' as ReminderRecipientType,
   recipientUserIds: [] as string[],
   notifyWhatsApp: false,
 };
@@ -224,7 +224,9 @@ function ReminderFormDialog({
     }
   };
 
-  const staffUsers = allUsers.filter(u => u.role !== 'student');
+  // Admins and department users only. Other employees are deliberately not offered —
+  // a reminder goes to the student's own employee, not to everyone else's.
+  const staffUsers = allUsers.filter(u => ['admin', 'adminplus', 'department'].includes(u.role));
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -265,18 +267,25 @@ function ReminderFormDialog({
             <Select value={form.recipientType} onValueChange={v => set('recipientType', v as ReminderRecipientType)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
+                {/* Only these two. A reminder belongs to the student's own employee;
+                    anything wider was tagging colleagues who had no part in it. */}
                 <SelectItem value="employee">Employee (assigned)</SelectItem>
-                <SelectItem value="department">Department</SelectItem>
-                <SelectItem value="all">Everyone</SelectItem>
                 <SelectItem value="custom">Custom users</SelectItem>
+                {/* An older reminder may still be set to Admin, Department or Everyone.
+                    Keep its own value selectable so editing one shows what it is rather
+                    than an empty box — it just can't be chosen fresh. */}
+                {!['employee', 'custom'].includes(form.recipientType) && (
+                  <SelectItem value={form.recipientType}>
+                    {RECIPIENT_LABELS[form.recipientType]} (old setting)
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
 
           {form.recipientType === 'custom' && (
             <div className="space-y-1.5">
-              <Label>Select users</Label>
+              <Label>Select users <span className="font-normal text-muted-foreground">(admins and departments)</span></Label>
               <div className="max-h-36 overflow-y-auto border rounded-md divide-y">
                 {staffUsers.map(u => (
                   <label key={u.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/50">
