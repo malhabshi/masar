@@ -43,7 +43,11 @@ const DialogContent = React.forwardRef<
         // rest of it or reach the Save button. 35 of 47 dialogs were missing it. A short
         // dialog never reaches 90vh, so this changes nothing for them, and a dialog that
         // sets its own max-h still wins — className is merged last.
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg max-h-[90vh] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        // [&>*]:min-w-0 — grid children default to min-width:auto, so one child wider
+        // than the dialog (a button row that doesn't fit) stretches the whole content
+        // area past the box; everything then gets clipped, title included. Letting
+        // children shrink makes them wrap inside the dialog instead.
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg max-h-[90vh] overflow-y-auto [&>*]:min-w-0 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className
       )}
       {...props}
@@ -78,7 +82,12 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      // flex-wrap + gap, not space-x: a footer with three icon buttons (Cancel /
+      // Reject Request / Approve Permanent Deletion) is wider than a max-w-lg dialog.
+      // Without wrapping the row forced the whole dialog wider than its box and the
+      // title and last button were cut off. space-x breaks under wrapping — it puts a
+      // margin on every non-first child, so a wrapped row starts indented.
+      "flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end",
       className
     )}
     {...props}
@@ -93,7 +102,10 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
+      // break-words: student names are long ("MUHAMMAD M H A ALAWADH-Closed"), and a
+      // title must wrap, not push the dialog wider. pr-6 keeps the last word clear of
+      // the close ×, which sits over the top-right corner.
+      "text-lg font-semibold leading-snug tracking-tight break-words pr-6",
       className
     )}
     {...props}
