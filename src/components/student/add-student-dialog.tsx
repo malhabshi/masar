@@ -38,6 +38,11 @@ const formSchema = z.object({
   phone3: z.string().min(8, { message: 'Please enter a valid phone number.' }).optional().or(z.literal('')),
   internalNumber: z.string().optional(),
   highSchoolGrade: z.string().optional(),
+  // Neither is required — most students are added before this is known. The name is
+  // kept under jotformData.schoolName, the one place the rest of the app (UK Add
+  // Country, the duplicate check) already reads it from.
+  schoolName: z.string().optional(),
+  schoolType: z.enum(['Private', 'Public']).optional(),
   targetCountries: z.array(z.string()).default([]),
   otherCountry: z.string().optional(),
   gender: z.enum(['M', 'F'], { required_error: 'Please select a gender.' }),
@@ -72,6 +77,7 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
             phone3: '',
             internalNumber: '',
             highSchoolGrade: '',
+            schoolName: '',
             notes: '',
             targetCountries: [],
             otherCountry: '',
@@ -209,6 +215,42 @@ export function AddStudentDialog({ source }: AddStudentDialogProps) {
                                         <FormLabel>High School % or GPA</FormLabel>
                                         <FormControl>
                                             <Input placeholder="e.g., 95% or 3.8" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="schoolName"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>School Name <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="Secondary school name" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="schoolType"
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-3">
+                                        <FormLabel>School Type <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+                                        <FormControl>
+                                            {/* Same radio-card pattern as Gender above; click again to clear. */}
+                                            <div className="flex items-center space-x-4">
+                                                <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange(field.value === 'Private' ? undefined : 'Private')}>
+                                                    <input type="radio" checked={field.value === 'Private'} onChange={() => {}} className="accent-primary" />
+                                                    <span className="text-sm font-medium">Private School</span>
+                                                </div>
+                                                <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange(field.value === 'Public' ? undefined : 'Public')}>
+                                                    <input type="radio" checked={field.value === 'Public'} onChange={() => {}} className="accent-primary" />
+                                                    <span className="text-sm font-medium">Public School</span>
+                                                </div>
+                                            </div>
                                         </FormControl>
                                         <FormMessage />
                                         </FormItem>

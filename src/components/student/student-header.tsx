@@ -509,7 +509,18 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               </BadgeComponent>
             )}
 
-            {canEdit && student.studyLevel === 'Foundation' && (
+            {/* School name is asked for on Add New Student, so it belongs on the
+                profile for every student — not only Foundation. */}
+            {student.jotformData?.schoolName && (
+              <BadgeComponent variant="outline" className="text-xs font-semibold flex items-center gap-1.5">
+                <GraduationCap className="h-3.5 w-3.5" />
+                {student.jotformData.schoolName}
+              </BadgeComponent>
+            )}
+
+            {/* School type was gated to Foundation students; it is now collected at
+                creation for everyone, so it is shown and editable for everyone. */}
+            {canEdit && (
               <div className="pdf-hide">
                 <Select value={student.schoolType ?? 'none'} onValueChange={handleSetSchoolType}>
                   <SelectTrigger
@@ -531,7 +542,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
               </div>
             )}
 
-            {!canEdit && student.studyLevel === 'Foundation' && student.schoolType && (
+            {!canEdit && student.schoolType && (
               <BadgeComponent
                 variant="outline"
                 className={cn(
