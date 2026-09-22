@@ -203,7 +203,16 @@ async function sendWhatsAppViaWebhook(webhookUrl: string, phone: string, variabl
     });
 
     if (!response.ok) {
-      return { success: false, message: 'Failed to trigger WANotifier webhook' };
+      // Surface WaNotifier's own reason ("Notification not found", "Invalid API key"…).
+      // A generic "failed" once hid a deleted notification for an afternoon.
+      let reason = '';
+      try {
+        const text = await response.text();
+        try { reason = JSON.parse(text)?.message || text; } catch { reason = text; }
+      } catch { /* body unreadable */ }
+      reason = (reason || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      console.error(`[whatsapp] webhook ${response.status} for ${webhookUrl.replace(/key=.*/, 'key=…')}: ${reason}`);
+      return { success: false, message: `WaNotifier ${response.status}${reason ? `: ${reason}` : ''}` };
     }
 
     return { success: true };
@@ -3115,6 +3124,7 @@ export async function initialiseReminderStages(
     if (shouldAnnounce) {
       const recipients = await resolveReminderRecipients(reminder);
       let delivered = 0;
+      let lastError = '';
       for (const { phone, name } of recipients) {
         const res = await triggerWhatsAppNotification('student_reminder', {
           recipientName: name,
@@ -3124,11 +3134,15 @@ export async function initialiseReminderStages(
           dueAt: stagePhrase('created', reminder.dueAt),
         }, phone);
         if (res?.success) delivered++;
+        else if (res?.message) lastError = res.message;
       }
       if (delivered > 0) await ref.update({ whatsAppSentAt: nowIso });
       else if (recipients.length > 0) {
         await ref.update({ 'stages.created': FieldValue.delete() }).catch(() => {});
-        return { success: false, message: 'Reminder saved, but the WhatsApp could not be sent.' };
+        return {
+          success: false,
+          message: `Reminder saved, but the WhatsApp could not be sent${lastError ? ` (${lastError})` : ''}. Check the Student Reminder template under WA Templates.`,
+        };
       }
     }
 
