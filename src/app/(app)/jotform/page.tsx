@@ -416,7 +416,9 @@ export default function JotformPage() {
       toast({ variant: 'destructive', title: 'Kuwaiti Phone must be 8 digits' });
       return;
     }
-    if (isUKorAUNZ && civilId.replace(/\D/g, '').length !== 12) {
+    // Required for every country. Only the UK and AU/NZ JotForms have a Civil ID question,
+    // but the profile needs it regardless (duplicate check, internal number for USA).
+    if (civilId.replace(/\D/g, '').length !== 12) {
       toast({ variant: 'destructive', title: 'Civil ID must be 12 digits' });
       return;
     }
@@ -945,18 +947,19 @@ export default function JotformPage() {
                     typedCivilId={civilId}
                   />
                 </div>
-                {isUKorAUNZ && (
-                  <div className="space-y-2">
-                    <Label>Civil ID Number *</Label>
-                    <Input value={civilId} onChange={e => setCivilId(e.target.value)} required placeholder="12-digit Civil ID" maxLength={12} inputMode="numeric" />
-                    <ExistingStudentNote
-                      matches={civilMatches}
-                      label="Civil ID"
-                      checking={checkingNumber === 'civilId'}
-                      typedCivilId={civilId}
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label>Civil ID Number *</Label>
+                  <Input value={civilId} onChange={e => setCivilId(e.target.value)} required placeholder="12-digit Civil ID" maxLength={12} inputMode="numeric" />
+                  {isUSA && !isUKorAUNZ && (
+                    <p className="text-xs text-muted-foreground">Saved to the student profile only. The USA form has no Civil ID question.</p>
+                  )}
+                  <ExistingStudentNote
+                    matches={civilMatches}
+                    label="Civil ID"
+                    checking={checkingNumber === 'civilId'}
+                    typedCivilId={civilId}
+                  />
+                </div>
               </div>
               {isUK && (
                 <div className="space-y-2">
