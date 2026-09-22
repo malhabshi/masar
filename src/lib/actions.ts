@@ -3061,13 +3061,13 @@ export async function processReminderStages(): Promise<{ sent: number; details: 
   if (!checkAdminServices()) return { sent: 0, details: [] };
   try {
     const now = new Date();
-    // The earliest stage fires 24h ahead, so nothing due beyond that can have work.
-    const horizon = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-
+    // Every active reminder, not only those due within 24h: a "created" announcement
+    // that failed to send (WaNotifier down, notification deleted) is released for retry,
+    // and it must be retried right away even when the event is a week out. The active
+    // set is a few dozen documents, so the wider query costs nothing.
     const snapshot = await adminDb!
       .collection('student_reminders')
       .where('status', '==', 'active')
-      .where('dueAt', '<=', horizon)
       .get();
 
     const details: string[] = [];
