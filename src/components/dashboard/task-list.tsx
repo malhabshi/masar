@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +13,9 @@ import { formatRelativeTime } from '@/lib/timestamp-utils';
 import type { Task, TaskReply } from '@/lib/types';
 import type { AppUser } from '@/hooks/use-user';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { addReplyToTask, deleteTask } from '@/lib/actions';
+import { addReplyToTask, deleteTask, markUpdatesRead } from '@/lib/actions';
 import { cn } from '@/lib/utils';
+import { ReadReceipt, readerIds } from '@/components/shared/read-receipt';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,6 +83,8 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
     (tasks || []).forEach(task => {
         ids.add(task.authorId);
         (task.replies || []).forEach(reply => ids.add(reply.authorId));
+        // Readers too, so "Seen by …" shows names.
+        readerIds(task.readBy, task.authorId).forEach(id => ids.add(id));
     });
     return Array.from(ids);
   }, [tasks]);
@@ -103,6 +106,44 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
   const getUserName = (userId: string) => {
     return userMap.get(userId)?.name || '...';
   };
+
+  // Read receipts: an update addressed to this user counts as seen once it has been on
+  // screen in a visible tab. Ids already sent are remembered so a slow write is not
+  // repeated. The write is a server action because employees cannot update `tasks`
+  // documents from the client.
+  const markedRef = useRef(new Set<string>());
+  useEffect(() => {
+    const userGroups = [currentUser.id, 'all'];
+    if (currentUser.role === 'admin') userGroups.push('admins');
+    if (currentUser.department) userGroups.push(`dept:${currentUser.department}`);
+
+    const unread = filteredTasks
+      .filter(task => {
+        if (task.authorId === currentUser.id || task.readBy?.[currentUser.id] || markedRef.current.has(task.id)) return false;
+        const targets = task.recipientIds || (task.recipientId ? [task.recipientId] : []);
+        return targets.some(id => userGroups.includes(id));
+      })
+      .map(task => task.id);
+    if (unread.length === 0) return;
+
+    const send = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const ids = unread.filter(id => !markedRef.current.has(id));
+      if (ids.length === 0) return;
+      ids.forEach(id => markedRef.current.add(id));
+      markUpdatesRead(ids, currentUser.id).catch(() => {
+        ids.forEach(id => markedRef.current.delete(id));
+      });
+    };
+
+    send();
+    document.addEventListener('visibilitychange', send);
+    return () => document.removeEventListener('visibilitychange', send);
+  }, [filteredTasks, currentUser]);
+
+  // Who gets to see the receipts: the sender, and management generally.
+  const canSeeReceipts = (task: Task) =>
+    task.authorId === currentUser.id || ['admin', 'adminplus', 'department'].includes(currentUser.role);
 
   const handleReply = async (taskId: string) => {
     if (!replyContent[taskId]?.trim()) return;
@@ -231,6 +272,14 @@ export function TaskList({ tasks, currentUser, isLoading }: TaskListProps) {
                     <p className="text-sm text-muted-foreground">
                       From: {getUserName(task.authorId)} • {isClient ? formatRelativeTime(task.createdAt) : '...'}
                     </p>
+                    {canSeeReceipts(task) && (
+                      <ReadReceipt
+                        readBy={task.readBy}
+                        authorId={task.authorId}
+                        getName={getUserName}
+                        className="mt-1 text-xs text-muted-foreground"
+                      />
+                    )}
                   </div>
                 </div>
                 

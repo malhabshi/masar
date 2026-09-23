@@ -17,7 +17,17 @@ import { doc, collection, query, orderBy, arrayUnion } from 'firebase/firestore'
 import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
 import { useUserCacheById } from '@/hooks/use-user-cache';
-import { sendChatMessage, deleteChatMessage } from '@/lib/actions';
+import { sendChatMessage, deleteChatMessage, markChatMessagesRead } from '@/lib/actions';
+import { ReadReceipt, readerIds } from '@/components/shared/read-receipt';
+
+/** Was this message addressed to `user` — by name, or through a group they belong to? */
+function isTargetOf(message: ChatMessage, user: User): boolean {
+  if (message.targetUserIds?.includes(user.id)) return true;
+  if (message.targetGroups?.includes('all')) return true;
+  if (message.targetGroups?.includes('admins') && user.role === 'admin') return true;
+  if (message.targetGroups?.includes('departments') && user.role === 'department') return true;
+  return false;
+}
 
 interface StudentChatProps {
   student: Student;
@@ -46,9 +56,61 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   }, [studentId]);
 
   const { data: messages, isLoading: messagesLoading } = useCollection<ChatMessage>(messagesQuery);
-  
-  const authorIds = useMemo(() => (messages || []).map(m => m.authorId), [messages]);
+
+  // Authors, plus everyone who has read one of the current user's messages, so the
+  // "Seen by …" line can show names rather than ids.
+  const authorIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of messages || []) {
+      ids.add(m.authorId);
+      if (m.authorId === currentUser.id) readerIds(m.readBy, m.authorId).forEach(id => ids.add(id));
+    }
+    return Array.from(ids);
+  }, [messages, currentUser.id]);
   const { userMap } = useUserCacheById(authorIds);
+
+  // What this user is allowed to see: their own messages, and those addressed to them.
+  // Admins see the whole thread. (Kept in one place so the read receipts below agree
+  // exactly with what is rendered.)
+  const visibleMessages = useMemo(() => {
+    return (messages || []).filter(message => {
+      if (message.authorId === currentUser.id) return true;
+      if (currentUser.role === 'admin') return true;
+      if (message.targetGroups?.includes('all')) return true; // legacy
+      if (currentUser.role === 'department') {
+        return !!(message.targetGroups?.includes('departments') || message.targetUserIds?.includes(currentUser.id));
+      }
+      if (currentUser.role === 'employee') {
+        return !!message.targetUserIds?.includes(currentUser.id);
+      }
+      return true;
+    });
+  }, [messages, currentUser.id, currentUser.role]);
+
+  // Read receipts: once a message addressed to this user has been on screen, record it.
+  // Only while the tab is actually visible — a thread left open in a background tab is
+  // not "seen". Ids already sent are remembered so a slow write is not repeated.
+  const markedRef = useRef(new Set<string>());
+  useEffect(() => {
+    const unread = visibleMessages
+      .filter(m => m.authorId !== currentUser.id && !m.readBy?.[currentUser.id] && isTargetOf(m, currentUser) && !markedRef.current.has(m.id))
+      .map(m => m.id);
+    if (unread.length === 0) return;
+
+    const send = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const ids = unread.filter(id => !markedRef.current.has(id));
+      if (ids.length === 0) return;
+      ids.forEach(id => markedRef.current.add(id));
+      markChatMessagesRead(studentId, ids, currentUser.id).catch(() => {
+        ids.forEach(id => markedRef.current.delete(id));
+      });
+    };
+
+    send();
+    document.addEventListener('visibilitychange', send);
+    return () => document.removeEventListener('visibilitychange', send);
+  }, [visibleMessages, currentUser, studentId]);
 
   const { data: allUsers, isLoading: usersLoading } = useCollection<User>(currentUser ? 'users' : '');
 
@@ -209,38 +271,8 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                 <Loader2 className="h-6 w-6 animate-spin" />
                 <p className="text-xs">Loading conversation...</p>
               </div>
-            ) : messages && messages.length > 0 ? (
-              messages
-                .filter(message => {
-                  const author = userMap.get(message.authorId);
-                  const isCurrentUser = message.authorId === currentUser.id;
-                  if (isCurrentUser) return true;
-
-                  const m = message as any;
-                  // Only show the message to the user if they were specifically mentioned, or in a mentioned group.
-                  // Admins can see everything unless we strictly limit them too. The user asked for "only show if mentioned".
-                  // Let's enforce strict visibility based on targets correctly.
-                  if (currentUser.role === 'admin') {
-                     // Check if admin is mentioned
-                     if (m.targetGroups?.includes('admins') || m.targetUserIds?.includes(currentUser.id)) return true;
-                     // Optional: If they want ONLY mentioned, then even admins don't see it if not mentioned. (Following prompt exactly)
-                     return true; // We will allow Admin to see all to avoid chaotic invisible records, BUT wait, user explicitly said: "for the other side only show the message if the person is mentend".
-                  }
-                  
-                  if (m.targetGroups?.includes('all')) return true; // Legacy support
-                  
-                  if (currentUser.role === 'department') {
-                      if (m.targetGroups?.includes('departments') || m.targetUserIds?.includes(currentUser.id)) return true;
-                      return false;
-                  }
-
-                  if (currentUser.role === 'employee') {
-                      if (m.targetUserIds?.includes(currentUser.id)) return true;
-                      return false;
-                  }
-
-                  return true;
-                })
+            ) : visibleMessages.length > 0 ? (
+              visibleMessages
                 .map(message => {
                 const author = userMap.get(message.authorId);
                 const isCurrentUser = author?.id === currentUser.id;
@@ -311,10 +343,19 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
                         </a>
                       )}
                       <div className={cn(
-                          "text-[9px] mt-1 text-right opacity-60",
+                          "text-[9px] mt-1 flex items-center justify-end gap-2 opacity-60",
                           isCurrentUser ? "text-primary-foreground" : "text-muted-foreground"
                       )}>
-                          {new Date(message.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {isCurrentUser && (
+                            <ReadReceipt
+                              readBy={message.readBy}
+                              authorId={message.authorId}
+                              getName={id => userMap.get(id)?.name || '…'}
+                            />
+                          )}
+                          <span>
+                            {new Date(message.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                       </div>
                     </div>
                   </div>

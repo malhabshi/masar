@@ -20,7 +20,7 @@ import {
   SKIPPED,
   type ReminderStage,
 } from '@/lib/reminder-stages';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ChecklistConfigItem, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry } from './types';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ChecklistConfigItem, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry, ChatMessage } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -851,6 +851,80 @@ export async function markMultipleTasksAsSeen(taskIds: string[], userId: string,
     for (const id of taskIds) batch.update(adminDb!.collection('tasks').doc(id), { viewedBy: FieldValue.arrayUnion({ userId, userName, timestamp }) });
     await batch.commit();
     return { success: true };
+  } catch (e: any) { return { success: false, message: e.message }; }
+}
+
+/**
+ * Record that `userId` has had these chat messages on screen.
+ *
+ * Only messages addressed to the user count, and only once: the first read time
+ * is what the sender sees, so a later visit must not move it. Runs server-side so
+ * the check "is this user actually a recipient" is not left to the client.
+ */
+export async function markChatMessagesRead(studentId: string, messageIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  const ids = Array.from(new Set((messageIds || []).filter(Boolean))).slice(0, 300);
+  if (!ids.length) return { success: true, marked: 0 };
+  try {
+    const user = await getUser(userId);
+    if (!user) return { success: false, message: 'User not found.' };
+
+    const col = adminDb!.collection('chats').doc(studentId).collection('messages');
+    const snaps = await adminDb!.getAll(...ids.map(id => col.doc(id)));
+    const now = new Date().toISOString();
+    const batch = adminDb!.batch();
+    let marked = 0;
+
+    for (const snap of snaps) {
+      if (!snap.exists) continue;
+      const m = snap.data() as ChatMessage;
+      if (m.authorId === userId || m.readBy?.[userId]) continue;
+      const targeted =
+        m.targetUserIds?.includes(userId) ||
+        m.targetGroups?.includes('all') ||
+        (m.targetGroups?.includes('admins') && user.role === 'admin') ||
+        (m.targetGroups?.includes('departments') && user.role === 'department');
+      if (!targeted) continue;
+      batch.update(snap.ref, new FieldPath('readBy', userId), now);
+      marked++;
+    }
+
+    if (marked) await batch.commit();
+    return { success: true, marked };
+  } catch (e: any) { return { success: false, message: e.message }; }
+}
+
+/** Same as markChatMessagesRead, for the management "Updates" broadcasts on the dashboard. */
+export async function markUpdatesRead(taskIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  const ids = Array.from(new Set((taskIds || []).filter(Boolean))).slice(0, 300);
+  if (!ids.length) return { success: true, marked: 0 };
+  try {
+    const user = await getUser(userId);
+    if (!user) return { success: false, message: 'User not found.' };
+
+    const snaps = await adminDb!.getAll(...ids.map(id => adminDb!.collection('tasks').doc(id)));
+    const now = new Date().toISOString();
+    const batch = adminDb!.batch();
+    let marked = 0;
+
+    for (const snap of snaps) {
+      if (!snap.exists) continue;
+      const t = snap.data() as Task;
+      if (t.category !== 'update' || t.authorId === userId || t.readBy?.[userId]) continue;
+      const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
+      const targeted =
+        targets.includes(userId) ||
+        targets.includes('all') ||
+        (user.role === 'admin' && targets.includes('admins')) ||
+        (!!user.department && targets.includes(`dept:${user.department}`));
+      if (!targeted) continue;
+      batch.update(snap.ref, new FieldPath('readBy', userId), now);
+      marked++;
+    }
+
+    if (marked) await batch.commit();
+    return { success: true, marked };
   } catch (e: any) { return { success: false, message: e.message }; }
 }
 

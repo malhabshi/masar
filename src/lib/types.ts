@@ -234,11 +234,22 @@ export interface Student {
   importMatchType?: 'new' | 'existing'; // set by bulk import: 'new' = created by import, 'existing' = matched an existing profile
 }
 
+/**
+ * Who has read a message, keyed by user id, value = ISO time of the first read.
+ * A map rather than an array so one user's read is a single dot-path write that
+ * never races another reader's, and so the time survives for the tooltip.
+ */
+export type ReadReceipts = Record<string, string>;
+
 export interface ChatMessage {
   id: string;
   authorId: string;
   content: string;
   timestamp: string;
+  recipientLabel?: string;
+  targetUserIds?: string[];
+  targetGroups?: string[];
+  readBy?: ReadReceipts;
   document?: {
     name: string;
     url: string;
@@ -304,6 +315,8 @@ export interface Task {
   relatedTaskId?: string;
   newStatus?: TaskStatus;
   updatedByName?: string;
+  // Set on 'update' broadcasts: which recipients have had it on screen, and when.
+  readBy?: ReadReceipts;
 }
 
 export interface ResourceLink {
