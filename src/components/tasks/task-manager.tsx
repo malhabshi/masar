@@ -38,7 +38,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     if (!currentUser) return null;
     
     if (currentUser.role === 'admin' || currentUser.role === 'adminplus') {
-      return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+      // Only requests are ever rendered (see categorizedTasks), so only requests are
+      // fetched: 6.6k documents instead of the whole collection's 27k, most of which
+      // are system notifications. No orderBy here — that would need a composite index
+      // on (category, createdAt); the list is sorted client-side below instead.
+      return query(collection(firestore, 'tasks'), where('category', '==', 'request'));
     }
 
     if (currentUser.role === 'employee') {
@@ -63,7 +67,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   }, [currentUser]);
 
   const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
-  const tasks = useMemo(() => tasksData || [], [tasksData]);
+  // Newest first, whichever query produced the data.
+  const tasks = useMemo(
+    () => [...(tasksData || [])].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [tasksData],
+  );
 
   useEffect(() => {
     if (!tasks || tasks.length === 0 || !currentUser) return;
