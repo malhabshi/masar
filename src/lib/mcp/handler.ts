@@ -8,6 +8,7 @@ import { z } from 'zod-v4';
 import { adminDb } from '@/lib/firebase/admin';
 import * as tasks from '@/lib/mcp/task-tools';
 import * as q from '@/lib/mcp/query-tools';
+import * as docs from '@/lib/mcp/document-tools';
 import { listCapabilities, runAction, type Actor } from '@/lib/mcp/dispatch';
 import type { TaskStatus } from '@/lib/types';
 
@@ -177,6 +178,46 @@ export function getMcpHandler() {
       description: 'Get the internal chat messages for a student (oldest to newest).',
       inputSchema: { studentId: z.string(), limit: z.number().int().min(1).max(200).optional() },
     }, async ({ studentId, limit }: { studentId: string; limit?: number }) => json(await q.getStudentChat(studentId, limit)));
+
+    // ------------------------------------------------------------ Documents
+    s.registerTool('list_student_documents', {
+      description:
+        'List the documents on a student profile (offer letters, CAS, passports, transcripts) with their documentId, name, file type, size and upload date — without the storage URLs. ' +
+        'Lighter than get_student when all you need are the ids to read. `readable: true` means read_student_document can return usable content for it.',
+      inputSchema: { studentId: z.string() },
+    }, async ({ studentId }: { studentId: string }) => {
+      try {
+        return json(await docs.listStudentDocuments(studentId));
+      } catch (e) {
+        return text(e instanceof Error ? e.message : String(e));
+      }
+    });
+
+    s.registerTool('read_student_document', {
+      description:
+        'Read the CONTENT of one document on a student profile. Use this instead of trying to open the URL from get_student — those URLs cannot be fetched from a tool result. ' +
+        'PDFs (offer letters, CAS letters) come back as extracted plain text you can read and compare directly, with pageCount. ' +
+        'Images (passports, screenshots) come back as an attached image you can view; the JSON then carries encoding "base64" with an empty content field, because the bytes travel as an image block rather than as text. ' +
+        'A scanned PDF with no text layer is reported with scanned: true instead of unreadable bytes. Text longer than 30,000 characters is truncated with a note. ' +
+        'Get documentId from list_student_documents (or the documents array in get_student).',
+      inputSchema: { studentId: z.string(), documentId: z.string() },
+    }, async ({ studentId, documentId }: { studentId: string; documentId: string }) => {
+      try {
+        const result = await docs.readStudentDocument(studentId, documentId);
+        const { imageBlock, ...meta } = result;
+        if (!imageBlock) return json(meta);
+        // The image goes back as a real image block so it can be viewed; the base64 is
+        // deliberately not repeated in the JSON alongside it.
+        return {
+          content: [
+            { type: 'image' as const, data: imageBlock.base64, mimeType: imageBlock.mimeType },
+            { type: 'text' as const, text: JSON.stringify(meta, null, 2) },
+          ],
+        };
+      } catch (e) {
+        return text(e instanceof Error ? e.message : String(e));
+      }
+    });
 
     s.registerTool('list_employees', { description: 'List all staff/users (id, name, email, role, department, civilId). Use ids as recipient/assignee/employee targets.', inputSchema: {} },
       async () => json(await q.listEmployees()));

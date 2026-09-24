@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
   staticPageGenerationTimeout: 180,
+  experimental: {
+    // pdfjs (used by the MCP document reader to pull text out of offer letters) ships as
+    // ESM with its own worker plumbing. Bundling it through webpack breaks that at
+    // runtime, so require it from node_modules on the server instead.
+    serverComponentsExternalPackages: ['pdfjs-dist'],
+  },
   // Serve OAuth well-known metadata from normal route handlers (app-router ignores dot-folders).
   async rewrites() {
     return [
