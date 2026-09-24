@@ -42,6 +42,9 @@ export function TaskHistory({ tasks, studentId, currentUser, isLoading }: TaskHi
             });
         }
         (task.replies || []).forEach(reply => ids.add(reply.authorId));
+        // Quick Notification senders share the details dialog's thread; without them
+        // those entries are labelled "System".
+        (task.notifications || []).forEach(n => ids.add(n.fromId));
     });
     return Array.from(ids);
   }, [tasks]);

@@ -56,11 +56,26 @@ export function NotificationListener() {
   const router = useRouter();
   const { fetchUsersById } = useUsers();
 
-  // Everything older than this moment is history, not news. Set two minutes into the
-  // past so a browser clock slightly ahead of the server cannot hide the first events
-  // after load; anything inside that window lands in the first snapshot, which is only
-  // ever used as the baseline and never announced.
-  const sessionStart = useRef(new Date(Date.now() - 2 * 60 * 1000).toISOString());
+  // Everything older than this moment is history, not news. Set well into the past so a
+  // browser clock running ahead of the server cannot hide the first events of the
+  // session: the times being compared are written by the server, and a staff PC ten
+  // minutes fast would otherwise filter out its own new documents. A generous window is
+  // free — whatever lands in the first snapshot becomes the baseline and is never
+  // announced (the one deliberate exception is the catch-up below).
+  const sessionStart = useRef(new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+  // Catch-up: tasks and events addressed to you since you last looked at the update
+  // feed are announced once, on arrival of the first snapshot — that is what the old
+  // listener did (it diffed against an empty baseline), and staff rely on it when they
+  // open the app from a WhatsApp link rather than the dashboard. Capped at seven days
+  // so a long absence cannot drag in thousands of documents or a wall of beeps.
+  const catchUpFloor = useRef(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+  const since = (key: string | null) => {
+    if (typeof window === 'undefined' || !key) return sessionStart.current;
+    const lastViewed = window.localStorage.getItem(key);
+    if (!lastViewed) return sessionStart.current;
+    return lastViewed > catchUpFloor.current ? lastViewed : catchUpFloor.current;
+  };
 
   const role = user?.role;
   const civilId = user?.civilId;
@@ -71,12 +86,18 @@ export function NotificationListener() {
   const nameOf = (userId: string | undefined, fallback: string) =>
     userId ? fetchUsersById([userId]).then(m => m.get(userId)?.name || fallback).catch(() => fallback) : Promise.resolve(fallback);
 
-  // Tasks created since the page opened. Any signed-in user may list tasks, and who a
-  // task is for is decided below exactly as before.
+  // Tasks created since the page opened, or since the user last read the update feed,
+  // whichever is earlier. Any signed-in user may list tasks, and who a task is for is
+  // decided below exactly as before.
+  const taskFloor = useRef<string | null>(null);
+  if (taskFloor.current === null && user) {
+    const catchUp = since(`lastViewedTasks_${user.id}`);
+    taskFloor.current = catchUp < sessionStart.current ? catchUp : sessionStart.current;
+  }
   const tasksQuery = useMemoFirebase(() => {
-    if (!active) return null;
-    return query(collection(firestore, 'tasks'), where('createdAt', '>', sessionStart.current));
-  }, [active]);
+    if (!active || !taskFloor.current) return null;
+    return query(collection(firestore, 'tasks'), where('createdAt', '>', taskFloor.current));
+  }, [active, taskFloor.current]);
   // Each hook hands back an empty list until its first snapshot lands. A baseline taken
   // from that placeholder would make the whole first snapshot look "new", so every
   // effect below waits for the loading flag to clear before it records a baseline.
@@ -106,6 +127,17 @@ export function NotificationListener() {
   }, [active, isEmployee, civilId]);
   const { data: portfolio, isLoading: portfolioLoading } = useCollection<Student>(portfolioQuery);
 
+  // Management's current chat backlog. This is the baseline for the "New Message" toast:
+  // without it a student already carrying unread messages for me would announce itself
+  // the moment anything else touched that student — including a message addressed to
+  // someone else. The sidebar holds this identical query, so the SDK shares one listener
+  // and it costs nothing extra.
+  const chatBacklogQuery = useMemoFirebase(() => {
+    if (!active || !isManagement || !user) return null;
+    return query(collection(firestore, 'students'), where(`chatUnreadCountByUser.${user.id}`, '>', 0));
+  }, [active, isManagement, user?.id]);
+  const { data: chatBacklog, isLoading: backlogLoading } = useCollection<Student>(chatBacklogQuery);
+
   // Whatever students happen to be loaded, for department checks without a round trip.
   const knownStudents = useMemo(() => {
     const map = new Map<string, Student>();
@@ -114,32 +146,35 @@ export function NotificationListener() {
     return map;
   }, [recentStudents, portfolio]);
 
-  // 1. Task notifications
-  const prevTasksRef = useRef<Set<string>>();
+  // 1. Task notifications.
+  //    `announced` holds the tasks already dealt with. A task that is not addressed to
+  //    me is deliberately NOT recorded, so if it is later reassigned to me (the MCP
+  //    assign_task tool rewrites recipientIds without touching createdAt) the next
+  //    snapshot still announces it.
+  const announcedTasksRef = useRef<Set<string>>();
   useEffect(() => {
     if (!tasks || !user || tasksLoading) return;
 
-    const storageKey = `lastViewedTasks_${user.id}`;
-    const lastViewed = localStorage.getItem(storageKey);
-    const cutOffTime = lastViewed || sessionStart.current;
+    const cutOffTime = since(`lastViewedTasks_${user.id}`);
+    const firstPass = !announcedTasksRef.current;
+    if (!announcedTasksRef.current) announcedTasksRef.current = new Set<string>();
+    const announced = announcedTasksRef.current;
 
-    if (!prevTasksRef.current) {
-      prevTasksRef.current = new Set(tasks.map(t => t.id));
-      return;
-    }
-
+    const open = () => router.push('/tasks');
     const announce = (task: Task) => {
+      announced.add(task.id);
       playNotificationSound();
       toast({
         title: 'New Task/Update Received',
         description: task.content.substring(0, 50) + '...',
-        action: <ToastAction altText="View" onClick={() => router.push('/tasks')}>View</ToastAction>,
+        action: <ToastAction altText="View" onClick={open}>View</ToastAction>,
       });
     };
 
-    const prevTaskIds = prevTasksRef.current;
+    const mine: Task[] = [];
+    const pending: Task[] = [];
     tasks.forEach(task => {
-      if (prevTaskIds.has(task.id) || task.authorId === user.id || task.createdAt <= cutOffTime) return;
+      if (announced.has(task.id) || task.authorId === user.id || task.createdAt <= cutOffTime) return;
 
       const myIds = [user.id, 'all'];
       if (user.department) myIds.push(`dept:${user.department}`);
@@ -152,28 +187,47 @@ export function NotificationListener() {
         : inRecipients;
       if (!isForMe) return;
 
-      if (user.role === 'department' && task.studentId) {
-        // A department only hears about students in its own countries. The student is
-        // usually not in the small loaded set yet (the task is written before the
-        // student's activity stamp), so look it up; a missing student never blocked
-        // the toast before and does not now.
-        const known = knownStudents.get(task.studentId);
-        if (known) {
-          if (isStudentInUserDepartment(known, user.department)) announce(task);
-          return;
-        }
-        getDoc(doc(firestore, 'students', task.studentId))
-          .then(snap => {
-            const s = snap.exists() ? (snap.data() as Student) : undefined;
-            if (!s || isStudentInUserDepartment(s, user.department)) announce(task);
-          })
-          .catch(() => announce(task));
+      // A department only hears about students in its own countries. The student is
+      // usually not in the small loaded set yet (the task is written before the
+      // student's activity stamp), so those go through a lookup; a missing student
+      // never blocked the toast before and does not now.
+      if (user.role === 'department' && task.studentId && !knownStudents.has(task.studentId)) {
+        pending.push(task);
         return;
       }
-
-      announce(task);
+      if (user.role === 'department' && task.studentId) {
+        if (isStudentInUserDepartment(knownStudents.get(task.studentId)!, user.department)) mine.push(task);
+        else announced.add(task.id);
+        return;
+      }
+      mine.push(task);
     });
-    prevTasksRef.current = new Set(tasks.map(t => t.id));
+
+    // On the very first snapshot this is the catch-up backlog. One toast each is fine
+    // for a handful; beyond that a single summary replaces the pile of beeps.
+    if (firstPass && mine.length > 5) {
+      mine.forEach(t => announced.add(t.id));
+      playNotificationSound();
+      toast({
+        title: 'New Tasks & Updates',
+        description: `${mine.length} items arrived since you last checked.`,
+        action: <ToastAction altText="View" onClick={open}>View</ToastAction>,
+      });
+    } else {
+      mine.forEach(announce);
+    }
+
+    pending.forEach(task => {
+      getDoc(doc(firestore, 'students', task.studentId!))
+        .then(snap => {
+          if (announced.has(task.id)) return;
+          const s = snap.exists() ? (snap.data() as Student) : undefined;
+          if (!s || isStudentInUserDepartment(s, user.department)) announce(task);
+          else announced.add(task.id);
+        })
+        .catch(() => { if (!announced.has(task.id)) announce(task); });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, tasksLoading, user, toast, router, knownStudents]);
 
   // 2. Event notifications
@@ -181,14 +235,10 @@ export function NotificationListener() {
   useEffect(() => {
     if (!events || !user || eventsLoading) return;
 
-    const storageKey = `lastViewedEvents_${user.id}`;
-    const lastViewed = localStorage.getItem(storageKey);
-    const cutOffTime = lastViewed || sessionStart.current;
-
-    if (!prevEventsRef.current) {
-      prevEventsRef.current = new Set(events.map(e => e.id));
-      return;
-    }
+    // Same catch-up rule as tasks: events added since the user last read the feed are
+    // announced once, on the first snapshot.
+    const cutOffTime = since(`lastViewedEvents_${user.id}`);
+    if (!prevEventsRef.current) prevEventsRef.current = new Set<string>();
 
     const prevEventIds = prevEventsRef.current;
     events.forEach(event => {
@@ -202,6 +252,7 @@ export function NotificationListener() {
       }
     });
     prevEventsRef.current = new Set(events.map(e => e.id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, eventsLoading, user, toast, router]);
 
   // 3. New unassigned student (admin)
@@ -259,8 +310,19 @@ export function NotificationListener() {
   //    latest message is newer than the page — so an old unread thread does not announce
   //    itself when the student shows up for some unrelated reason, and a student just
   //    transferred to an employee announces "Student Assigned" alone, as before.
-  const chatSource = isEmployee ? portfolio : recentStudents;
-  const chatLoading = isEmployee ? portfolioLoading : recentLoading;
+  //    For management the backlog query supplies the starting counts, so a student who
+  //    already owed me messages is known from the outset and only a genuine increase
+  //    announces. Employees keep the old rule that a student seen for the first time
+  //    never announces, so a transfer that carries an unread count over says only
+  //    "Student Assigned".
+  const chatSource = useMemo(() => {
+    if (isEmployee) return portfolio;
+    const map = new Map<string, Student>();
+    for (const s of chatBacklog || []) map.set(s.id, s);
+    for (const s of recentStudents || []) map.set(s.id, s); // fresher copy wins
+    return Array.from(map.values());
+  }, [isEmployee, portfolio, chatBacklog, recentStudents]);
+  const chatLoading = isEmployee ? portfolioLoading : (recentLoading || backlogLoading);
   const prevUnreadRef = useRef<Map<string, number>>();
   useEffect(() => {
     if (!chatSource || !user || isUserLoading || chatLoading) return;
@@ -275,8 +337,7 @@ export function NotificationListener() {
     chatSource.forEach(student => {
       const wasKnown = prev.has(student.id);
       const grew = countOf(student) > (prev.get(student.id) || 0);
-      const fresh = (student.lastChatMessageTimestamp || '') > sessionStart.current;
-      if (grew && (wasKnown || (!isEmployee && fresh))) {
+      if (grew && (wasKnown || !isEmployee)) {
         playNotificationSound(900);
         toast({
           title: 'New Message',

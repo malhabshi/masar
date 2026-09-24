@@ -109,6 +109,9 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
             }
         });
         task.replies?.forEach(reply => userIds.add(reply.authorId));
+        // Quick Notifications are part of the same thread in the details dialog and are
+        // labelled from this map; without their senders the dialog showed "System".
+        task.notifications?.forEach(n => userIds.add(n.fromId));
     });
     return Array.from(userIds);
   }, [tasks]);
