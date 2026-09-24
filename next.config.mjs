@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   staticPageGenerationTimeout: 180,
   experimental: {
@@ -7,6 +8,15 @@ const nextConfig = {
     // ESM with its own worker plumbing. Bundling it through webpack breaks that at
     // runtime, so require it from node_modules on the server instead.
     serverComponentsExternalPackages: ['pdfjs-dist'],
+    // pdfjs pulls its worker in through a computed, webpackIgnore'd import, which file
+    // tracing cannot follow — so the standalone build shipped without it and every PDF
+    // read failed. Name the files so they are copied regardless.
+    outputFileTracingIncludes: {
+      '/api/mcp': [
+        './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
+        './node_modules/pdfjs-dist/legacy/build/pdf.mjs',
+      ],
+    },
   },
   // Serve OAuth well-known metadata from normal route handlers (app-router ignores dot-folders).
   async rewrites() {

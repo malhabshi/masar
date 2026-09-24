@@ -216,6 +216,22 @@ function installPdfGlobals() {
 /** Page text via pdfjs, which is pure JavaScript — no native canvas build to deploy. */
 async function extractPdfText(bytes: Buffer): Promise<{ text: string; pageCount: number }> {
   installPdfGlobals();
+
+  // On Node, pdfjs runs its worker in-process — but it still loads the worker module,
+  // through `await import(/* webpackIgnore: true */ workerSrc)` with a computed path.
+  // Next's standalone build cannot trace that, so the file is left out of the deploy and
+  // the import fails with "Cannot find module .../pdf.worker.mjs".
+  //
+  // pdfjs checks `globalThis.pdfjsWorker` first and skips its own import when it is set.
+  // Loading it here by literal specifier both satisfies that check and gives the build a
+  // dependency edge it can actually follow. next.config also lists the file explicitly,
+  // so the deploy does not rest on tracing alone.
+  const g = globalThis as Record<string, unknown>;
+  if (!g.pdfjsWorker) {
+    // @ts-expect-error — the worker build ships no type declarations.
+    g.pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
+  }
+
   // Loaded on demand: pdfjs is large, and nothing else in the app needs it.
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const doc = await pdfjs.getDocument({
