@@ -146,8 +146,76 @@ export async function listStudentDocuments(studentId: string) {
   return { studentId, count: documents.length, documents };
 }
 
+/**
+ * pdfjs expects a few browser globals. On Node it tries to borrow them from
+ * `@napi-rs/canvas`, and when that native package is absent — which it is here, on
+ * purpose, because a native binary that fails to build would take the whole site down
+ * with it — `DOMMatrix is not defined` is thrown before a single page is read.
+ *
+ * Text extraction never rasterises anything, so a plain 2-D affine matrix is enough;
+ * ImageData and Path2D are only touched on rendering paths that are never reached.
+ */
+function installPdfGlobals() {
+  const g = globalThis as Record<string, unknown>;
+  if (typeof g.DOMMatrix === 'undefined') {
+    class Matrix2D {
+      a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+      readonly is2D = true;
+      constructor(init?: number[] | string) {
+        if (Array.isArray(init)) {
+          if (init.length === 6) [this.a, this.b, this.c, this.d, this.e, this.f] = init;
+          else if (init.length === 16) {
+            this.a = init[0]; this.b = init[1];
+            this.c = init[4]; this.d = init[5];
+            this.e = init[12]; this.f = init[13];
+          }
+        }
+      }
+      get isIdentity() { return this.a === 1 && this.b === 0 && this.c === 0 && this.d === 1 && this.e === 0 && this.f === 0; }
+      get m11() { return this.a; } get m12() { return this.b; }
+      get m21() { return this.c; } get m22() { return this.d; }
+      get m41() { return this.e; } get m42() { return this.f; }
+      multiply(o: Matrix2D) {
+        return new Matrix2D([
+          this.a * o.a + this.c * o.b, this.b * o.a + this.d * o.b,
+          this.a * o.c + this.c * o.d, this.b * o.c + this.d * o.d,
+          this.a * o.e + this.c * o.f + this.e, this.b * o.e + this.d * o.f + this.f,
+        ]);
+      }
+      multiplySelf(o: Matrix2D) { return Object.assign(this, this.multiply(o)); }
+      translateSelf(x = 0, y = 0) { return this.multiplySelf(new Matrix2D([1, 0, 0, 1, x, y])); }
+      scaleSelf(x = 1, y = x) { return this.multiplySelf(new Matrix2D([x, 0, 0, y, 0, 0])); }
+      transformPoint(p: { x?: number; y?: number } = {}) {
+        const x = p.x ?? 0, y = p.y ?? 0;
+        return { x: this.a * x + this.c * y + this.e, y: this.b * x + this.d * y + this.f };
+      }
+      inverse() {
+        const det = this.a * this.d - this.b * this.c;
+        if (!det) return new Matrix2D();
+        return new Matrix2D([
+          this.d / det, -this.b / det, -this.c / det, this.a / det,
+          (this.c * this.f - this.d * this.e) / det, (this.b * this.e - this.a * this.f) / det,
+        ]);
+      }
+      invertSelf() { return Object.assign(this, this.inverse()); }
+      toString() { return `matrix(${this.a}, ${this.b}, ${this.c}, ${this.d}, ${this.e}, ${this.f})`; }
+    }
+    g.DOMMatrix = Matrix2D;
+  }
+  if (typeof g.ImageData === 'undefined') {
+    g.ImageData = class { constructor(public data: unknown, public width: number, public height: number) {} };
+  }
+  if (typeof g.Path2D === 'undefined') {
+    g.Path2D = class {
+      addPath() {} moveTo() {} lineTo() {} bezierCurveTo() {} quadraticCurveTo() {}
+      closePath() {} rect() {} arc() {}
+    };
+  }
+}
+
 /** Page text via pdfjs, which is pure JavaScript — no native canvas build to deploy. */
 async function extractPdfText(bytes: Buffer): Promise<{ text: string; pageCount: number }> {
+  installPdfGlobals();
   // Loaded on demand: pdfjs is large, and nothing else in the app needs it.
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const doc = await pdfjs.getDocument({
