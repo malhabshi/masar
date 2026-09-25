@@ -20,11 +20,17 @@ function resolveInject(sentinel: string, actor: Actor): unknown {
 }
 
 // Human-readable one-line signature for discovery output.
+//
+// Object params spell out their shape. Showing only the param name (`values`) left the
+// caller guessing what belonged inside it, and a wrong guess surfaced as a Firestore
+// error about a field they had never heard of — createStudent's `values.studentName`
+// was repeatedly sent as a top-level `name`.
 function signature(a: CatalogAction): string {
   const parts = a.params.map((p) => {
     if (p.name === a.actorParam) return `${p.name}=<you>`;
     if (a.extraInject && p.name in a.extraInject) return `${p.name}=<auto>`;
-    return p.optional ? `${p.name}?` : p.name;
+    const shape = p.type.trim().startsWith('{') ? `: ${p.type.replace(/\s+/g, ' ').trim()}` : '';
+    return `${p.name}${p.optional ? '?' : ''}${shape}`;
   });
   return `${a.name}(${parts.join(', ')})`;
 }
@@ -42,7 +48,7 @@ export function listCapabilities(domain?: string) {
   }
   const domains = Object.keys(groups).sort();
   return {
-    note: 'Call run_action with { action, args, confirm }. Params shown as <you> are filled with your identity automatically; <auto> is derived. Destructive actions require confirm:true.',
+    note: 'Call run_action with { action, args, confirm }. args keys are the PARAM names in the signature — when a param is an object (shown as name: { ... }) every one of those fields goes INSIDE that object, not at the top level of args. Params shown as <you> are filled with your identity automatically; <auto> is derived. Destructive actions require confirm:true.',
     totalActions: ACTION_CATALOG.length,
     domains,
     capabilities: groups,

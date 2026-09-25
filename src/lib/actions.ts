@@ -1279,16 +1279,38 @@ export async function createNewUser(userData: { name: string; email: string; pas
 
 export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; schoolName?: string; schoolType?: 'Private' | 'Public'; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-  const { studentName, studentEmail, phone, phone2, phone3, gender, internalNumber, highSchoolGrade, schoolName, schoolType, targetCountries, otherCountry, notes } = values;
-  let finalTargetCountries = targetCountries;
+  const { studentName, studentEmail, phone, phone2, phone3, gender, internalNumber, highSchoolGrade, schoolName, schoolType, targetCountries, otherCountry, notes } = values || {};
+
+  // Validate before touching Firestore. Callers that reach this action directly (the MCP
+  // dispatcher passes `values` through untouched) previously got the failure second-hand
+  // and unrecognisable: a missing studentName surfaced as «Cannot use "undefined" as a
+  // Firestore value (found in field name)», and a missing phone as «'IN' requires a
+  // non-empty ArrayValue» from the duplicate-phone query below. Both read as backend
+  // bugs rather than as "you left a required field out".
+  const cleanName = String(studentName ?? '').trim();
+  const cleanPhone = String(phone ?? '').trim();
+  if (!cleanName || !cleanPhone) {
+    const missing = [!cleanName && 'studentName', !cleanPhone && 'phone'].filter(Boolean).join(' and ');
+    return {
+      success: false,
+      message: `createStudent is missing ${missing}. The first argument is a single "values" object: { studentName, phone, targetCountries, studentEmail?, phone2?, phone3?, gender?, internalNumber?, highSchoolGrade?, schoolName?, schoolType?, otherCountry?, notes? }. Note it is "studentName", not "name", and every field goes inside "values" — not at the top level.`,
+    };
+  }
+
+  // Accept a missing or malformed list rather than throwing on the spread below.
+  let finalTargetCountries: string[] = Array.isArray(targetCountries) ? [...targetCountries] : [];
   if (otherCountry && otherCountry.trim()) finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
   try {
-    const newPhones = [phone, phone2, phone3].filter(Boolean) as string[];
+    const newPhones = [cleanPhone, phone2, phone3].map(p => String(p ?? '').trim()).filter(Boolean);
     const existingIds = new Set<string>();
-    await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
-      const snap = await adminDb!.collection('students').where(field, 'in', newPhones).get();
-      snap.docs.forEach(d => existingIds.add(d.id));
-    }));
+    // Firestore rejects an `in` filter with an empty array, so only run the duplicate
+    // check when there is something to look for.
+    if (newPhones.length) {
+      await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
+        const snap = await adminDb!.collection('students').where(field, 'in', newPhones.slice(0, 30)).get();
+        snap.docs.forEach(d => existingIds.add(d.id));
+      }));
+    }
     let duplicateInfo = {};
     if (existingIds.size > 0) duplicateInfo = { duplicatePhoneWarning: true, duplicateOfStudentIds: [...existingIds] };
     const fallbackId = Math.random().toString(36).substring(2, 9);
@@ -1297,8 +1319,8 @@ export async function createStudent(values: { studentName: string; studentEmail?
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
     // If this person is on a previously-imported accepted list, inherit their acceptance.
-    const acceptedMatch = await lookupAcceptedList([phone, phone2, phone3]);
-    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', schoolType: schoolType || null, ...(schoolName?.trim() ? { jotformData: { schoolName: schoolName.trim() } } : {}), employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isClosed: false, isNewForEmployee: !!assignedEmployeeId, ...(acceptedMatch ? { acceptedInfo: { country: acceptedMatch.country, major: acceptedMatch.major }, ...(acceptedMatch.listName ? { importListName: acceptedMatch.listName } : {}) } : {}), profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    const acceptedMatch = await lookupAcceptedList([cleanPhone, phone2, phone3]);
+    await studentRef.set({ id: studentId, name: cleanName, email: studentEmail || '', phone: cleanPhone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', schoolType: schoolType || null, ...(schoolName?.trim() ? { jotformData: { schoolName: schoolName.trim() } } : {}), employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isClosed: false, isNewForEmployee: !!assignedEmployeeId, ...(acceptedMatch ? { acceptedInfo: { country: acceptedMatch.country, major: acceptedMatch.major }, ...(acceptedMatch.listName ? { importListName: acceptedMatch.listName } : {}) } : {}), profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
     
     // Auto-post initial notes to chat if they exist
     if (notes && notes.trim()) {
@@ -1322,7 +1344,7 @@ export async function createStudent(values: { studentName: string; studentEmail?
         for (const adminDoc of adminsSnapshot.docs) {
           batch.set(adminDb!.collection('tasks').doc(), { authorId: creatingUserId, createdBy: creatingUserId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `New student '${studentName}' added.`, status: 'new', category: 'system', studentId: studentRef.id, studentName: studentName, createdAt: new Date().toISOString(), replies: [] });
           const adminData = adminDoc.data() as User;
-          await triggerWhatsAppNotification('new_student_added', { adminName: adminData.name, studentName: studentName, studentEmail: studentEmail || 'N/A', studentPhone: phone, submissionDate: new Date().toLocaleDateString(), studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/unassigned-students` }, adminData.phone);
+          await triggerWhatsAppNotification('new_student_added', { adminName: adminData.name, studentName: cleanName, studentEmail: studentEmail || 'N/A', studentPhone: cleanPhone, submissionDate: new Date().toLocaleDateString(), studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/unassigned-students` }, adminData.phone);
         }
         await batch.commit();
       }
