@@ -141,7 +141,7 @@ function ChangeAgentDialog({
                   </div>
                 );
               }) : (
-                <div className="text-center py-10 border rounded-lg border-dashed bg-red-50 text-red-600">
+                <div className="text-center py-10 border rounded-lg border-dashed bg-danger-soft text-danger">
                   <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-xs font-bold">No Applications Found</p>
                   <p className="text-[10px] mt-1">Please add a university application to the profile before enabling Change Agent status.</p>
@@ -154,7 +154,7 @@ function ChangeAgentDialog({
             <div className="flex flex-wrap gap-2 pt-2 border-t mt-4">
               <p className="text-[10px] font-bold uppercase text-muted-foreground w-full mb-1">Flagged for attention:</p>
               {selectedUnis.map(uni => (
-                <BadgeComponent key={uni} variant="secondary" className="gap-1 px-2 py-1 bg-red-50 text-red-700 border-red-200">
+                <BadgeComponent key={uni} variant="secondary" className="gap-1 px-2 py-1 bg-danger-soft text-danger border-danger-border">
                   {uni}
                   <X className="h-3 w-3 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleToggle(uni); }} />
                 </BadgeComponent>
@@ -167,7 +167,7 @@ function ChangeAgentDialog({
           <Button
             disabled={selectedUnis.length === 0 || isLoading}
             onClick={() => onConfirm(selectedUnis)}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold"
+            className="w-full bg-danger hover:bg-danger/90 text-white font-bold"
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {student.changeAgentRequired ? 'Update List' : 'Enable Status'}
@@ -175,7 +175,7 @@ function ChangeAgentDialog({
           {student.changeAgentRequired && (
             <Button
               variant="outline"
-              className="w-full border-green-600 text-green-700 hover:bg-green-50 font-bold gap-2"
+              className="w-full border-success text-success hover:bg-success-soft font-bold gap-2"
               onClick={() => onConfirm([])}
               disabled={isLoading}
             >
@@ -497,7 +497,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             )}
 
             {student.changeAgentRequired && (
-              <BadgeComponent className="bg-black text-red-50 border-red-500 border-2 font-semibold text-sm px-3 py-1">
+              <BadgeComponent className="bg-black text-danger-foreground border-danger border-2 font-semibold text-sm px-3 py-1">
                 CHANGE AGENT
               </BadgeComponent>
             )}
@@ -595,8 +595,8 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 onClick={handleToggleMarkUnread}
                 disabled={isMarkingUnread}
                 className={isMarkedUnread
-                  ? "bg-amber-50 text-amber-700 border-amber-400 hover:bg-amber-100 font-bold"
-                  : "text-muted-foreground hover:text-amber-700 hover:border-amber-400 hover:bg-amber-50"}
+                  ? "bg-warning-soft text-warning border-warning-border hover:bg-warning-soft/70 font-bold"
+                  : "text-muted-foreground hover:text-warning hover:border-warning-border hover:bg-warning-soft"}
               >
                 {isMarkedUnread
                   ? <><Bell className="h-4 w-4 mr-2" />Marked as Unread</>
@@ -610,7 +610,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                 size="sm" 
                 onClick={handleDownloadPDF} 
                 disabled={isGeneratingPDF}
-                className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                className="bg-info-soft text-info border-info-border hover:bg-info-soft/70"
               >
                 {isGeneratingPDF ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
                 Download PDF
@@ -622,7 +622,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                    size="sm"
                    onClick={handleClearFlags}
                    disabled={isClearingFlags}
-                   className="bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100 font-bold"
+                   className="bg-warning-soft text-warning border-warning-border hover:bg-warning-soft/70 font-bold"
                 >
                   {isClearingFlags ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldAlert className="h-4 w-4 mr-2" />}
                   Clear Flags for All
@@ -633,13 +633,13 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                   <TooltipProvider>
                       <Tooltip>
                           <TooltipTrigger asChild>
-                              <BadgeComponent variant="outline" className="border-yellow-500 text-yellow-600 text-base py-1 px-3 cursor-help">
+                              <BadgeComponent variant="outline" className="border-warning text-warning text-base py-1 px-3 cursor-help">
                                   <ArrowRightLeft className="mr-2 h-4 w-4" />
                                   Transfer Requested
                               </BadgeComponent>
                           </TooltipTrigger>
                           <TooltipContent className="max-w-[300px] p-3 space-y-2">
-                              <p className="font-bold text-xs uppercase text-yellow-600">Transfer Request Details:</p>
+                              <p className="font-bold text-xs uppercase text-warning">Transfer Request Details:</p>
                               <p className="text-xs text-muted-foreground font-medium italic">
                                 "{student.transferRequest?.reason || 'No reason provided.'}"
                               </p>
@@ -681,7 +681,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                   size="sm"
                   onClick={() => setIsChangeAgentDialogOpen(true)}
                   disabled={isTogglingAgent}
-                  className={student.changeAgentRequired ? "bg-black text-red-50 hover:bg-black/90" : ""}
+                  className={student.changeAgentRequired ? "bg-black text-danger-foreground hover:bg-black/90" : ""}
                 >
                   {isTogglingAgent ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundX className="mr-2 h-4 w-4" />}
                   {student.changeAgentRequired ? 'Manage Change Agent' : 'Change Agent'}
@@ -694,7 +694,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                   size="sm" 
                   onClick={handleForceInactivity} 
                   disabled={isForcingInactivity}
-                  className="opacity-20 hover:opacity-100 hover:bg-orange-100 hover:text-orange-700 h-8 gap-1 text-[10px] font-bold"
+                  className="opacity-20 hover:opacity-100 hover:bg-warning-soft hover:text-warning h-8 gap-1 text-[10px] font-bold"
                 >
                   {isForcingInactivity ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
                   DEBUG: Force 10d Inactivity
@@ -729,7 +729,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
             </div>
           )}
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground mt-2">
-            <div className="flex items-center gap-2 font-bold text-red-600">
+            <div className="flex items-center gap-2 font-bold text-danger">
               <Calendar className="h-4 w-4" />
               {isEditingDob ? (
                 <div className="flex items-center gap-1.5 pdf-hide">
@@ -738,13 +738,13 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                     value={dobDraft}
                     max={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setDobDraft(e.target.value)}
-                    className="h-7 w-[150px] text-red-600 font-bold"
+                    className="h-7 w-[150px] text-danger font-bold"
                     autoFocus
                   />
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                    className="h-7 w-7 text-success hover:bg-success-soft"
                     onClick={handleSaveDob}
                     disabled={isSavingDob}
                   >
@@ -768,7 +768,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                       type="button"
                       onClick={handleStartEditDob}
                       title="Edit date of birth"
-                      className="pdf-hide text-red-400 hover:text-red-600 transition-colors"
+                      className="pdf-hide text-danger/70 hover:text-danger transition-colors"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
@@ -798,7 +798,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                      className="h-7 w-7 text-success hover:bg-success-soft"
                       onClick={handleSaveCivilId}
                       disabled={isSavingCivilId}
                     >
@@ -848,7 +848,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                     href={`https://wa.me/965${student.phone.replace(/\D/g, '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-green-500 hover:text-green-600"
+                    className="text-success hover:text-success/80"
                   >
                     <WhatsAppIcon className="h-5 w-5" />
                   </a>
@@ -864,7 +864,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                     href={`https://wa.me/965${student.phone2.replace(/\D/g, '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-green-500 hover:text-green-600"
+                    className="text-success hover:text-success/80"
                   >
                     <WhatsAppIcon className="h-5 w-5" />
                   </a>
@@ -880,7 +880,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                     href={`https://wa.me/965${student.phone3.replace(/\D/g, '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-green-500 hover:text-green-600"
+                    className="text-success hover:text-success/80"
                   >
                     <WhatsAppIcon className="h-5 w-5" />
                   </a>
@@ -913,7 +913,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
           )}
           {student.changeAgentRequired && student.changeAgentUniversities && student.changeAgentUniversities.length > 0 && (
             <div className="flex flex-col items-end gap-1.5 max-w-[300px] animate-in fade-in slide-in-from-right-4">
-              <p className="text-[9px] font-semibold text-red-600 uppercase tracking-widest bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-red-100">
+              <p className="text-[9px] font-semibold text-danger uppercase tracking-widest bg-white/90 px-1.5 py-0.5 rounded shadow-sm border border-danger-border">
                 Change Agent Required For:
               </p>
               <div className="flex flex-wrap justify-end gap-1">
@@ -922,7 +922,7 @@ export function StudentHeader({ student, currentUser, isLoading }: StudentHeader
                   return (
                     <BadgeComponent
                       key={idx}
-                      className="bg-red-600 text-white font-semibold text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
+                      className="bg-danger text-white font-semibold text-[9px] py-0.5 px-2 uppercase shadow-sm border-white/20 whitespace-normal text-right leading-none h-auto"
                     >
                       {uni} {country ? `(${country})` : ''}
                     </BadgeComponent>

@@ -97,9 +97,9 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
   return (
     <div className="space-y-6">
       {changeAgentStudents.length > 0 && (
-        <Card className="border-red-500 bg-red-50/10">
+        <Card className="border-danger bg-danger-soft/40">
           <CardHeader className="pb-3">
-            <div className="flex items-center gap-2 text-red-600">
+            <div className="flex items-center gap-2 text-danger">
               <AlertCircle className="h-5 w-5" />
               <CardTitle className="text-lg">Change Agent Monitoring</CardTitle>
             </div>
@@ -109,10 +109,10 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
             <div className="flex flex-wrap gap-3">
               {changeAgentStudents.map(student => (
                 <Link key={student.id} href={`/student/${student.id}`}>
-                  <Badge className="bg-black text-red-500 border-red-500 border-2 hover:bg-black/90 px-4 py-2 flex items-center gap-3 transition-transform hover:scale-105 group">
+                  <Badge className="bg-black text-danger border-danger border-2 hover:bg-black/90 px-4 py-2 flex items-center gap-3 transition-transform hover:scale-105 group">
                     <div className="flex flex-col items-start leading-none">
                       <span className="font-semibold text-xs uppercase">{student.name}</span>
-                      <span className="text-[8px] text-red-400 font-bold opacity-70">URGENT REVIEW</span>
+                      <span className="text-[8px] text-danger/70 font-bold opacity-70">URGENT REVIEW</span>
                     </div>
                     <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                   </Badge>
@@ -137,13 +137,13 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           </CardContent>
         </Card>
 
-        <Card className="border-green-200">
+        <Card className="border-success-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-green-700 tracking-widest">Officially Assigned</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-xs font-bold uppercase text-success tracking-widest">Officially Assigned</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold text-green-700 mb-3">{isLoading ? '...' : stats.assigned}</div>
+            <div className="text-3xl font-semibold text-success mb-3">{isLoading ? '...' : stats.assigned}</div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
                 <span className="text-green-700 uppercase font-bold">Green</span>
@@ -165,44 +165,44 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           </CardContent>
         </Card>
 
-        <Card className="border-orange-200">
+        <Card className="border-warning-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-orange-700 tracking-widest">Unassigned Leads</CardTitle>
-            <UserPlus className="h-4 w-4 text-orange-600" />
+            <CardTitle className="text-xs font-bold uppercase text-warning tracking-widest">Unassigned Leads</CardTitle>
+            <UserPlus className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold text-orange-700">{isLoading ? '...' : stats.unassigned}</div>
-            <p className="text-[10px] text-orange-600 font-medium mt-1">Pending assignment.</p>
+            <div className="text-3xl font-semibold text-warning">{isLoading ? '...' : stats.unassigned}</div>
+            <p className="text-[10px] text-warning font-medium mt-1">Pending assignment.</p>
           </CardContent>
         </Card>
 
-        <Card className="border-blue-200">
+        <Card className="border-info-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-blue-700 tracking-widest">Total Applications</CardTitle>
-            <FileText className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-xs font-bold uppercase text-info tracking-widest">Total Applications</CardTitle>
+            <FileText className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold text-blue-700 mb-3">{isLoading ? '...' : stats.apps.total}</div>
+            <div className="text-3xl font-semibold text-info mb-3">{isLoading ? '...' : stats.apps.total}</div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                 <span className="text-muted-foreground uppercase font-bold">Pending</span>
-                <span className="font-semibold text-yellow-600">{stats.apps.pending}</span>
+                <span className="font-semibold text-warning">{stats.apps.pending}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                 <span className="text-muted-foreground uppercase font-bold">Submitted</span>
-                <span className="font-semibold text-blue-600">{stats.apps.submitted}</span>
+                <span className="font-semibold text-info">{stats.apps.submitted}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                 <span className="text-muted-foreground uppercase font-bold">Missing Items</span>
                 <span className="font-semibold text-purple-600">{stats.apps.missingItems}</span>
               </div>
-              <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
-                <span className="text-green-700 uppercase font-bold">Accepted</span>
-                <span className="font-semibold text-green-700">{stats.apps.accepted}</span>
+              <div className="flex items-center justify-between text-[10px] bg-success-soft px-2 py-1 rounded">
+                <span className="text-success uppercase font-bold">Accepted</span>
+                <span className="font-semibold text-success">{stats.apps.accepted}</span>
               </div>
-              <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
-                <span className="text-red-700 uppercase font-bold">Rejected</span>
-                <span className="font-semibold text-red-700">{stats.apps.rejected}</span>
+              <div className="flex items-center justify-between text-[10px] bg-danger-soft px-2 py-1 rounded">
+                <span className="text-danger uppercase font-bold">Rejected</span>
+                <span className="font-semibold text-danger">{stats.apps.rejected}</span>
               </div>
             </div>
           </CardContent>

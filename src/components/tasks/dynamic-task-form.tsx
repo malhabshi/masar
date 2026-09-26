@@ -686,7 +686,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                           </FormItem>
                         ))
                       ) : (
-                        <div className="text-center py-8 border rounded-lg border-dashed bg-red-50 text-red-600">
+                        <div className="text-center py-8 border rounded-lg border-dashed bg-danger-soft text-danger">
                             <p className="text-sm font-bold">No active applications found for this student.</p>
                             <p className="text-xs mt-1">Please add a university application to the profile first.</p>
                         </div>
@@ -720,11 +720,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             <div className="space-y-3">
               {/* Named up front, so the reason a school is greyed out is never a mystery. */}
               {companyLimitApplies && fullCompanies.length > 0 && (
-                <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
-                  <p className="font-bold text-red-800">
+                <div className="rounded-lg border border-danger-border bg-danger-soft p-3 text-sm">
+                  <p className="font-bold text-danger">
                     Limit reached for {fullCompanies.join(' and ')}.
                   </p>
-                  <p className="text-xs text-red-700">
+                  <p className="text-xs text-danger">
                     This student already has {COMPANY_LIMIT} schools with{' '}
                     {fullCompanies.length > 1 ? 'each of those companies' : fullCompanies[0]}, so those schools
                     cannot be chosen. Remove one from the student to free a place. Other companies are unaffected.
@@ -745,7 +745,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                     const held = heldCounts[company] || 0;
                     const atLimit = count >= COMPANY_LIMIT;
                     return (
-                      <Badge key={company} variant="outline" className={cn('text-[10px] font-bold', atLimit ? 'bg-red-100 text-red-800 border-red-400' : COMPANY_COLORS[company])}>
+                      <Badge key={company} variant="outline" className={cn('text-[10px] font-bold', atLimit ? 'bg-danger-soft text-danger border-danger' : COMPANY_COLORS[company])}>
                         {company}: {count}/{COMPANY_LIMIT}
                         {held > 0 ? ` (${held} already)` : ''}
                         {atLimit ? ' FULL' : ''}
@@ -780,7 +780,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                             <div className={cn('px-3 py-1.5 flex items-center justify-between border-b', COMPANY_COLORS[uni.company] || 'bg-muted/40')}>
                               <span className="text-[10px] font-semibold uppercase tracking-wider">{uni.company}</span>
                               {uni.company !== 'Inhouse' && companyLimitApplies && (
-                                <span className={cn('text-[10px] font-bold', (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT ? 'text-red-700' : 'opacity-70')}>
+                                <span className={cn('text-[10px] font-bold', (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT ? 'text-danger' : 'opacity-70')}>
                                   {companySchoolCounts[uni.company] || 0}/{COMPANY_LIMIT} schools
                                 </span>
                               )}
@@ -805,12 +805,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                                 <span className="block text-sm font-bold">{uni.name}</span>
                                 <span className="block text-xs text-muted-foreground">{uni.major}</span>
                                 {isDisabled && (
-                                  <span className="block text-[11px] font-bold text-red-700">
+                                  <span className="block text-[11px] font-bold text-danger">
                                     Limit reached — this student already has {COMPANY_LIMIT} {uni.company} schools.
                                     Remove one to add another.
                                   </span>
                                 )}
-                                {uni.importantNote && <span className="block text-[10px] text-red-600 font-semibold uppercase">⚠️ {uni.importantNote}</span>}
+                                {uni.importantNote && <span className="block text-[10px] text-danger font-semibold uppercase">⚠️ {uni.importantNote}</span>}
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <Badge variant="outline" className="text-[10px] font-mono">{uni.country}</Badge>
@@ -844,7 +844,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         {isExamTask && (
           <div className={cn(
             "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold",
-            requiresGuardian ? "border-amber-300 bg-amber-50 text-amber-800" : "border-muted bg-muted/30 text-foreground"
+            requiresGuardian ? "border-warning-border bg-warning-soft text-warning" : "border-muted bg-muted/30 text-foreground"
           )}>
             <CalendarIcon className="h-4 w-4" />
             Student Age: {effectiveAge != null ? `${effectiveAge} years` : 'N/A (no date of birth on file)'}
@@ -858,12 +858,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             control={form.control}
             name="studentDob"
             render={({ field }) => (
-              <FormItem className="rounded-md border border-amber-300 bg-amber-50 p-3">
-                <FormLabel className="font-bold text-amber-800">Student Date of Birth * (missing from profile)</FormLabel>
+              <FormItem className="rounded-md border border-warning-border bg-warning-soft p-3">
+                <FormLabel className="font-bold text-warning">Student Date of Birth * (missing from profile)</FormLabel>
                 <FormControl>
                   <Input type="date" max={new Date().toISOString().slice(0, 10)} className="max-w-[220px]" {...field} />
                 </FormControl>
-                <FormDescription className="text-amber-700">
+                <FormDescription className="text-warning">
                   This student has no date of birth on file. Add it to confirm their age{effectiveAge != null ? ` (currently ${effectiveAge})` : ''}. If under 18, parent/guardian details are required below. It will be saved to the profile.
                 </FormDescription>
                 <FormMessage />
@@ -1010,12 +1010,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             />
 
             {requiresGuardian && (
-              <div className="space-y-4 rounded-md border border-amber-300 bg-amber-50 p-4">
+              <div className="space-y-4 rounded-md border border-warning-border bg-warning-soft p-4">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-bold text-amber-800">
+                  <p className="text-sm font-bold text-warning">
                     Parent / Guardian details required (student is {effectiveAge})
                   </p>
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-warning">
                     The student is under 18. Enter the parent/guardian information in English for the exam registration.
                   </p>
                 </div>
@@ -1079,13 +1079,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 come from it, so asking again would mean typing the same thing twice and
                 risking the two disagreeing. */}
             {usingSavedPortal ? (
-              <div className="flex items-start gap-2.5 rounded-lg border border-emerald-300 bg-emerald-50 p-3">
-                <Key className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+              <div className="flex items-start gap-2.5 rounded-lg border border-success-border bg-success-soft p-3">
+                <Key className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                 <div className="space-y-0.5">
-                  <p className="text-sm font-bold text-emerald-900">
+                  <p className="text-sm font-bold text-success">
                     Using the saved portal reference{selectedPortal?.description ? ` — ${selectedPortal.description}` : ''}
                   </p>
-                  <p className="text-xs text-emerald-800">
+                  <p className="text-xs text-success">
                     IDP username <span className="font-semibold">{selectedPortal?.username || '—'}</span> and its
                     password are taken from the saved login, so they are not asked for again.
                     Clear the selection above to type them in instead.

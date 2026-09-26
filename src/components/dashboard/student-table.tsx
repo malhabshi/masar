@@ -58,6 +58,14 @@ interface StudentTableProps {
   showDaysSinceCreated?: boolean;
 }
 
+/**
+ * Deliberately raw Tailwind shades, not the theme's status tokens.
+ *
+ * These statuses are *named* by their colour — staff say "he's orange" — so the swatch is
+ * the meaning, and they only read as a scale if all six come from one palette. Swapping
+ * green and red for `success` and `danger` would leave yellow and orange from a different
+ * family and break the run.
+ */
 const pipelineStatusStyles: { [key: string]: string } = {
   green: 'bg-green-500 text-primary-foreground',
   yellow: 'bg-yellow-400 text-black',
@@ -835,7 +843,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 const daysSinceCreated = createdDate ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 86400000)) : null;
 
                 return (
-                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20", student.isClosed && "opacity-60 bg-gray-100/60", selectedIds.includes(student.id) && "bg-primary/5")}>
+                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-danger-soft/20", student.isClosed && "opacity-60 bg-muted/60", selectedIds.includes(student.id) && "bg-primary/5")}>
                   {isAdminDept && (
                     <TableCell>
                       <Checkbox 
@@ -858,8 +866,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           {student.importMatchType && (
                             <Badge className={cn("text-[10px] font-semibold px-1.5 h-4 w-fit border",
                               student.importMatchType === 'new'
-                                ? "bg-green-100 text-green-800 border-green-300"
-                                : "bg-slate-100 text-slate-700 border-slate-300")}>
+                                ? "bg-success-soft text-success border-success-border"
+                                : "bg-muted text-muted-foreground border-border")}>
                               {student.importMatchType === 'new' ? 'NEW IMPORT' : 'EXISTING'}
                             </Badge>
                           )}
@@ -871,7 +879,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           <span>{student.name || 'Unknown Student'}</span>
                           {student.acceptedInfo && (
                             <span title={`Accepted: ${student.acceptedInfo.country} · ${student.acceptedInfo.major}`} className="inline-flex shrink-0">
-                              <CheckCircle2 className="h-4 w-4 text-green-600 stroke-[3]" />
+                              <CheckCircle2 className="h-4 w-4 text-success stroke-[3]" />
                             </span>
                           )}
                           {student.foundationCategory && (
@@ -880,21 +888,21 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             </Badge>
                           )}
                           {student.isClosed && <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5">CLOSED</Badge>}
-                          {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
-                          {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
+                          {student.changeAgentRequired && <Badge className="bg-black text-danger border-danger border uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
+                          {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-info hover:bg-info/90">New</Badge>}
                           {isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0 ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.chatUnreadCountByUser![currentUser.id]}</span></Badge> : null}
-                          {isAdminDept && student.newDocumentsForAdmin && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
+                          {isAdminDept && student.newDocumentsForAdmin && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-info"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
                           {isCurrentUserAssigned && student.employeeUnreadMessages && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id)) ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.employeeUnreadMessages}</span></Badge> : null}
-                          {isCurrentUserAssigned && student.newDocumentsForEmployee && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
-                          {isAdminDept && (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForAdmin}</span></Badge> : null}
-                          {isCurrentUserAssigned && (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForEmployee}</span></Badge> : null}
-                          {isCurrentUserAssigned && student.newMissingItemsForEmployee && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 text-black"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
-                          {student.markedUnreadBy?.includes(currentUser.id) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-amber-500 text-white"><Bell className="h-3 w-3" /></Badge> : null}
+                          {isCurrentUserAssigned && student.newDocumentsForEmployee && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-info"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
+                          {isAdminDept && (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-success text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForAdmin}</span></Badge> : null}
+                          {isCurrentUserAssigned && (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-success text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForEmployee}</span></Badge> : null}
+                          {isCurrentUserAssigned && student.newMissingItemsForEmployee && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-warning text-warning-foreground"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
+                          {student.markedUnreadBy?.includes(currentUser.id) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-warning text-warning-foreground"><Bell className="h-3 w-3" /></Badge> : null}
                           {student.transferRequested && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="border-yellow-500 text-yellow-600 cursor-help">
+                                  <Badge variant="outline" className="border-warning text-warning cursor-help">
                                     <ArrowRightLeft className="mr-1 h-3 w-3" />
                                     Transfer Requested
                                   </Badge>
@@ -907,12 +915,12 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             </TooltipProvider>
                           )}
                           {student.deletionRequested?.status === 'pending' && isAdminDept && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="destructive" className="flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Deletion Requested</Badge></TooltipTrigger><TooltipContent><p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : ''}</p></TooltipContent></Tooltip></TooltipProvider>}
-                          {wasTransferred && <Badge variant="outline" className="border-blue-500 text-blue-600"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
+                          {wasTransferred && <Badge variant="outline" className="border-info text-info"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
                         </div>
                       </Link>
                       {showDaysSinceCreated && daysSinceCreated !== null && (
                         <div className="flex">
-                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 text-[10px] h-5 px-1.5 gap-1 font-semibold">
+                          <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning text-[10px] h-5 px-1.5 gap-1 font-semibold">
                             <Calendar className="h-2.5 w-2.5" />
                             {daysSinceCreated === 0 ? 'Added today' : `Added ${daysSinceCreated} day${daysSinceCreated === 1 ? '' : 's'} ago`}
                           </Badge>
@@ -920,7 +928,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       )}
                       {isDuplicate && (
                         <div className="flex">
-                          <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-semibold uppercase tracking-tighter gap-1">
+                          <Badge className="bg-info hover:bg-info/90 text-info-foreground text-[9px] h-4 py-0 font-semibold uppercase tracking-tighter gap-1">
                             <AlertTriangle className="h-2 w-2" />
                             Duplicate Profile
                           </Badge>
@@ -956,7 +964,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                   </TableCell>
                   <TableCell>
                     {student.jotform ? (
-                      <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50 flex items-center gap-1 w-fit whitespace-nowrap">
+                      <Badge variant="outline" className="border-success text-success bg-success-soft flex items-center gap-1 w-fit whitespace-nowrap">
                         <CheckCircle2 className="h-3 w-3" />
                         Completed
                       </Badge>

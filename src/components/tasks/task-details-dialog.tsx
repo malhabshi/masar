@@ -153,11 +153,11 @@ export function TaskDetailsDialog({
     const formatted = Array.isArray(value) ? value.join(', ')
       : (isClient && isDateLike ? (dateOnly ? formatDate(value) : formatDateTime(value)) : String(value));
     return (
-      <div className={cn("space-y-1", important && "rounded-md border border-amber-300 bg-amber-50 p-2.5 -m-0.5")}>
-        <p className={cn("text-[10px] font-bold uppercase tracking-widest", important ? "text-amber-700" : "text-muted-foreground")}>{label}</p>
+      <div className={cn("space-y-1", important && "rounded-md border border-warning-border bg-warning-soft p-2.5 -m-0.5")}>
+        <p className={cn("text-[10px] font-bold uppercase tracking-widest", important ? "text-warning" : "text-muted-foreground")}>{label}</p>
         <div className="flex items-center gap-2 font-medium">
-          {Icon && <Icon className={cn("h-4 w-4", important ? "text-amber-600" : "text-primary")} />}
-          <span className={cn("text-sm", important && "font-bold text-amber-900", valueClassName)}>{formatted}</span>
+          {Icon && <Icon className={cn("h-4 w-4", important ? "text-warning" : "text-primary")} />}
+          <span className={cn("text-sm", important && "font-bold text-warning", valueClassName)}>{formatted}</span>
         </div>
       </div>
     );
@@ -236,10 +236,10 @@ export function TaskDetailsDialog({
                       variant={localStatus === s ? 'secondary' : 'ghost'}
                       className={cn(
                         "h-7 text-[10px] font-bold uppercase px-2",
-                        localStatus === s && s === 'completed' && "bg-green-100 text-green-700 hover:bg-green-200",
-                        localStatus === s && s === 'denied' && "bg-red-100 text-red-700 hover:bg-red-200",
-                        localStatus === s && s === 'new' && "bg-blue-100 text-blue-700 hover:bg-blue-200",
-                        localStatus === s && s === 'in-progress' && "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                        localStatus === s && s === 'completed' && "bg-success-soft text-success hover:bg-success-soft/70",
+                        localStatus === s && s === 'denied' && "bg-danger-soft text-danger hover:bg-danger-soft/70",
+                        localStatus === s && s === 'new' && "bg-info-soft text-info hover:bg-info-soft/70",
+                        localStatus === s && s === 'in-progress' && "bg-warning-soft text-warning hover:bg-warning-soft/70"
                       )}
                       onClick={() => setLocalStatus(s)}
                     >
@@ -257,11 +257,11 @@ export function TaskDetailsDialog({
             </div>
           </div>
           {task.status === 'denied' && task.denialReason && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg animate-in fade-in slide-in-from-top-2">
-              <p className="text-[10px] font-semibold uppercase text-red-600 mb-1 flex items-center gap-1">
+            <div className="mt-4 p-3 bg-danger-soft border border-danger-border rounded-lg animate-in fade-in slide-in-from-top-2">
+              <p className="text-[10px] font-semibold uppercase text-danger mb-1 flex items-center gap-1">
                 <XCircle className="h-3 w-3" /> Rejection Reason
               </p>
-              <p className="text-sm text-red-800 font-medium italic">"{task.denialReason}"</p>
+              <p className="text-sm text-danger font-medium italic">"{task.denialReason}"</p>
             </div>
           )}
         </DialogHeader>
@@ -306,7 +306,7 @@ export function TaskDetailsDialog({
                     </h3>
                     <div className="space-y-3">
                         {selectedMultiUnis.map((uni: any, i: number) => (
-                            <div key={i} className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div key={i} className="bg-info-soft/60 p-4 rounded-lg border border-info-border grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {renderDataField('University', uni.name || uni.university)}
                                 {renderDataField('Major', uni.major)}
                                 {renderDataField('Country', uni.country)}
@@ -321,7 +321,7 @@ export function TaskDetailsDialog({
                         <GraduationCap className="h-5 w-5" /> 
                         Requested New school/major
                     </h3>
-                    <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-info-soft/60 p-4 rounded-lg border border-info-border grid grid-cols-1 md:grid-cols-2 gap-4">
                         {renderDataField('New University', selectedGlobalUni.name || selectedGlobalUni.university || liveUni?.name)}
                         {renderDataField('New Major', selectedGlobalUni.major || liveUni?.major)}
                         {renderDataField('Country', selectedGlobalUni.country)}
@@ -375,7 +375,7 @@ export function TaskDetailsDialog({
                 {renderDataField('Course Start', data.courseStartDate, Calendar)}
                 {renderDataField('Course Option', data.courseOption)}
                 {renderDataField('Retake Section', data.retakeSection)}
-                {renderDataField('Preferred Date', data.preferredDate, Calendar, true, 'text-red-800 font-bold', true)}
+                {renderDataField('Preferred Date', data.preferredDate, Calendar, true, 'text-danger font-bold', true)}
                 {renderDataField('Preferred Time', data.preferredTime, Clock, false, undefined, true)}
                 {renderDataField('Exam Date', data.unifiedExamDateLabel, Calendar)}
                 {renderDataField('Delivery', data.unifiedExamDelivery)}
@@ -388,7 +388,7 @@ export function TaskDetailsDialog({
                         size="sm"
                         type="button"
                         variant={isPaid === true ? 'default' : 'outline'}
-                        className={cn('h-7 text-xs flex-1', isPaid === true && 'bg-green-600 hover:bg-green-700 text-white')}
+                        className={cn('h-7 text-xs flex-1', isPaid === true && 'bg-success hover:bg-success/90 text-white')}
                         onClick={() => handleToggleIsPaid(true)}
                       >
                         Paid
@@ -397,7 +397,7 @@ export function TaskDetailsDialog({
                         size="sm"
                         type="button"
                         variant={isPaid === false ? 'default' : 'outline'}
-                        className={cn('h-7 text-xs flex-1', isPaid === false && 'bg-red-600 hover:bg-red-700 text-white')}
+                        className={cn('h-7 text-xs flex-1', isPaid === false && 'bg-danger hover:bg-danger/90 text-white')}
                         onClick={() => handleToggleIsPaid(false)}
                       >
                         Not Paid
@@ -411,11 +411,11 @@ export function TaskDetailsDialog({
 
             {(data.guardianFirstNameEn || data.guardianLastNameEn || data.guardianDob || data.guardianPhone) && (
               <section className="space-y-4">
-                <h3 className="text-lg font-bold flex items-center gap-2 text-amber-700">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-warning">
                   <User className="h-5 w-5" />
                   Parent / Guardian
                 </h3>
-                <div className="grid grid-cols-2 gap-y-6 bg-amber-50 p-4 rounded-lg border border-amber-200">
+                <div className="grid grid-cols-2 gap-y-6 bg-warning-soft p-4 rounded-lg border border-warning-border">
                   {renderDataField('Parent Name (EN)', [data.guardianFirstNameEn, data.guardianLastNameEn].filter(Boolean).join(' ') || null, User)}
                   {renderDataField('Parent DOB', data.guardianDob, Calendar, true)}
                   {renderDataField('Parent Phone', data.guardianPhone)}
@@ -440,10 +440,10 @@ export function TaskDetailsDialog({
             {data.idpUsername && (
               <section className="space-y-4">
                 <h3 className="text-lg font-bold flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-blue-600" /> 
+                  <ShieldCheck className="h-5 w-5 text-info" /> 
                   IDP Credentials
                 </h3>
-                <div className="grid grid-cols-2 gap-4 bg-blue-50/30 p-4 rounded-lg border border-blue-100">
+                <div className="grid grid-cols-2 gap-4 bg-info-soft/50 p-4 rounded-lg border border-info-border">
                   {renderDataField('Username', data.idpUsername)}
                   {renderDataField('Password', data.idpPassword)}
                 </div>
@@ -501,7 +501,7 @@ export function TaskDetailsDialog({
                   const author = userMap.get(item.authorId);
                   const isNotif = item.type === 'notif';
                   return (
-                    <div key={item.id} className={cn("flex items-start gap-3", isNotif && "bg-blue-50/50 p-3 rounded-lg border border-blue-100")}>
+                    <div key={item.id} className={cn("flex items-start gap-3", isNotif && "bg-info-soft/60 p-3 rounded-lg border border-info-border")}>
                       <Avatar className="h-7 w-7 mt-1"><AvatarImage src={author?.avatarUrl} /><AvatarFallback>{author?.name?.charAt(0) || '?'}</AvatarFallback></Avatar>
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center justify-between">
@@ -509,7 +509,7 @@ export function TaskDetailsDialog({
                           <span className="text-[10px] text-muted-foreground">{isClient ? formatRelativeTime(item.createdAt) : '...'}</span>
                         </div>
                         <div className="text-xs text-muted-foreground whitespace-pre-wrap">
-                          {isNotif && <BadgeComponent variant="secondary" className="mr-1 h-4 text-[8px] bg-blue-500 text-white">NOTIF</BadgeComponent>}
+                          {isNotif && <BadgeComponent variant="secondary" className="mr-1 h-4 text-[8px] bg-info text-info-foreground">NOTIF</BadgeComponent>}
                           {item.content}
                         </div>
                       </div>
