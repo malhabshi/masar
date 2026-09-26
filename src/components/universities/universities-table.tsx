@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { ApprovedUniversity } from '@/lib/types';
-import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Trash2, Star, ShieldCheck, AlertCircle, GraduationCap } from 'lucide-react';
 import { EditUniversityDialog } from './edit-university-dialog';
 import { Skeleton } from '../ui/skeleton';
 import {
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { bandParts, isEmptyRequirement } from './entry-requirements';
 
 const COMPANY_COLORS: Record<string, string> = {
   Into:       'bg-blue-100 text-blue-800 border-blue-300',
@@ -36,6 +37,68 @@ const COMPANY_COLORS: Record<string, string> = {
   Other:      'bg-gray-100 text-gray-700 border-gray-300',
   Inhouse:    'bg-amber-100 text-amber-800 border-amber-300',
 };
+
+/**
+ * What this school asks for, level by level.
+ *
+ * Falls back to the single row-level score, which is all that exists on rows recorded
+ * before per-level requirements were added — that is most of the list, so the fallback is
+ * the normal case rather than the exception.
+ */
+function RequirementsCell({ university }: { university: ApprovedUniversity }) {
+  const perLevel = (university.entryRequirements || []).filter(r => !isEmptyRequirement(r));
+  const general =
+    typeof university.ieltsScore === 'number' ? university.ieltsScore.toFixed(1) : null;
+
+  if (perLevel.length === 0) {
+    return general ? (
+      <Badge variant="secondary" className="font-mono">{general}</Badge>
+    ) : (
+      <span className="text-[10px] text-muted-foreground italic">—</span>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {perLevel.map(req => {
+        // Only what this level actually sets. Repeating the general score against every
+        // level reads as a requirement the school never made.
+        const overall =
+          typeof req.ieltsOverall === 'number' ? req.ieltsOverall.toFixed(1) : null;
+        const bands = bandParts(req);
+        return (
+          <div key={req.level} className="flex flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-tight text-muted-foreground">
+                {req.level}
+              </span>
+              {overall && (
+                <Badge variant="secondary" className="font-mono text-[10px] px-1.5 h-4">
+                  {overall}
+                </Badge>
+              )}
+              {bands.length > 0 && (
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {bands.map(b => (
+                    <span key={b.short} className="mr-1.5 whitespace-nowrap">
+                      <span className="font-bold text-foreground">{b.short}</span>
+                      <span className="font-semibold text-success">{b.value}</span>
+                    </span>
+                  ))}
+                </span>
+              )}
+            </div>
+            {req.otherRequirements && (
+              <span className="text-[10px] leading-snug text-foreground/80">
+                {req.otherRequirements}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface UniversitiesTableProps {
   universities: ApprovedUniversity[];
@@ -82,7 +145,7 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
             <TableHead>Country</TableHead>
             <TableHead>Company</TableHead>
             <TableHead>Entry Levels</TableHead>
-            <TableHead>IELTS Score</TableHead>
+            <TableHead className="min-w-[200px]">IELTS &amp; Requirements</TableHead>
             <TableHead>Available</TableHead>
             {onUpdateUniversity && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
@@ -119,6 +182,17 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                             </Badge>
                         )}
                     </div>
+                    {uni.foundationName && (
+                      <div className="flex items-start gap-1.5 text-[10px] leading-snug">
+                        <GraduationCap className="h-3 w-3 shrink-0 mt-px text-muted-foreground" />
+                        <span>
+                          <span className="font-semibold uppercase tracking-tight text-muted-foreground">
+                            Foundation:{' '}
+                          </span>
+                          {uni.foundationName}
+                        </span>
+                      </div>
+                    )}
                     {uni.notes && (
                       <span className="text-[10px] text-muted-foreground italic line-clamp-1" title={uni.notes}>
                         {uni.notes}
@@ -152,9 +226,7 @@ export function UniversitiesTable({ universities, onUpdateUniversity, onDeleteUn
                   </div>
                 </TableCell>
                 <TableCell className="align-top">
-                    <Badge variant="secondary" className="font-mono">
-                        {uni.ieltsScore.toFixed(1)}
-                    </Badge>
+                  <RequirementsCell university={uni} />
                 </TableCell>
                 <TableCell className="align-top">
                   {uni.isAvailable ? (

@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -30,16 +29,23 @@ import {
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, FilePenLine } from 'lucide-react';
 import type { ApprovedUniversity, Country, UniversityCompany } from '@/lib/types';
+import {
+  EntryRequirementsField,
+  cleanEntryRequirements,
+  entryRequirementDefaults,
+  entryRequirementSchema,
+} from './entry-requirements';
 
-const ENTRY_LEVELS = ['Foundation', 'First Year', 'Bachelor Degree'];
 const COMPANIES: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
 
 const formSchema = z.object({
   name: z.string().min(3, { message: 'University name is required.' }),
   major: z.string().min(3, { message: 'Major is required.' }),
+  foundationName: z.string().optional(),
   country: z.enum(['UK', 'USA', 'Australia', 'New Zealand', 'Ireland']),
   category: z.enum(['MOHE', 'Merit', 'General']),
   entryLevels: z.array(z.string()).default([]),
+  entryRequirements: z.array(entryRequirementSchema).default([]),
   ieltsScore: z.coerce.number().min(0).max(9),
   isAvailable: z.boolean().default(false),
   notes: z.string().optional(),
@@ -69,9 +75,11 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
     defaultValues: {
       name: university.name,
       major: university.major,
+      foundationName: university.foundationName || '',
       country: university.country,
       category: university.category || 'General',
       entryLevels: university.entryLevels || [],
+      entryRequirements: entryRequirementDefaults(university.entryRequirements),
       ieltsScore: university.ieltsScore,
       isAvailable: university.isAvailable,
       notes: university.notes || '',
@@ -91,9 +99,11 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
       form.reset({
           name: u.name,
           major: u.major,
+          foundationName: u.foundationName || '',
           country: u.country,
           category: u.category || 'General',
           entryLevels: u.entryLevels || [],
+          entryRequirements: entryRequirementDefaults(u.entryRequirements),
           ieltsScore: u.ieltsScore,
           isAvailable: u.isAvailable,
           notes: u.notes || '',
@@ -112,7 +122,12 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
     setIsLoading(true);
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 500));
-    onUpdateUniversity({ ...university, ...values });
+    onUpdateUniversity({
+      ...university,
+      ...values,
+      // Only ticked levels are saved, and only the boxes that were actually filled in.
+      entryRequirements: cleanEntryRequirements(values.entryRequirements, values.entryLevels),
+    });
     setIsLoading(false);
     setIsOpen(false);
   }
@@ -124,7 +139,7 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
             <FilePenLine className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Approved University</DialogTitle>
           <DialogDescription>
@@ -155,6 +170,26 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
                   <FormControl>
                     <Input placeholder="e.g., Computer Science" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="foundationName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Foundation Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., International Foundation in Science and Engineering"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Only if the Foundation programme is called something different from the major.
+                    Leave blank if they are the same.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -208,67 +243,24 @@ export function EditUniversityDialog({ university, onUpdateUniversity }: EditUni
             </div>
 
             <FormField
-              control={form.control}
-              name="entryLevels"
-              render={() => (
-                <FormItem>
-                  <div className="mb-4">
-                    <FormLabel>Allowed Entry Levels</FormLabel>
-                    <FormDescription>Select available entry points.</FormDescription>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    {ENTRY_LEVELS.map((level) => (
-                      <FormField
-                        key={level}
-                        control={form.control}
-                        name="entryLevels"
-                        render={({ field }) => {
-                          return (
-                            <FormItem
-                              key={level}
-                              className="flex flex-row items-start space-x-3 space-y-0 p-2 border rounded-md hover:bg-muted/50 cursor-pointer"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(level)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([...field.value, level])
-                                      : field.onChange(
-                                          field.value?.filter(
-                                            (value) => value !== level
-                                          )
-                                        )
-                                  }}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal cursor-pointer w-full">
-                                {level}
-                              </FormLabel>
-                            </FormItem>
-                          )
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
                 control={form.control}
                 name="ieltsScore"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>IELTS Score</FormLabel>
+                    <FormLabel>General IELTS Score</FormLabel>
                     <FormControl>
                         <Input type="number" step="0.5" {...field} />
                     </FormControl>
+                    <FormDescription>
+                      The school&apos;s overall requirement. Used for any entry level below that
+                      does not set its own.
+                    </FormDescription>
                     <FormMessage />
                     </FormItem>
                 )}
             />
+
+            <EntryRequirementsField />
 
             <FormField
                 control={form.control}

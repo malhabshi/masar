@@ -20,7 +20,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -31,16 +30,23 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
 import type { ApprovedUniversity, Country, UniversityCompany } from '@/lib/types';
+import {
+  EntryRequirementsField,
+  cleanEntryRequirements,
+  entryRequirementDefaults,
+  entryRequirementSchema,
+} from './entry-requirements';
 
-const ENTRY_LEVELS = ['Foundation', 'First Year', 'Bachelor Degree'];
 const COMPANIES: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
 
 const formSchema = z.object({
   name: z.string().min(3, { message: 'University name is required.' }),
   major: z.string().min(3, { message: 'Major is required.' }),
+  foundationName: z.string().optional(),
   country: z.enum(['UK', 'USA', 'Australia', 'New Zealand', 'Ireland']),
   category: z.enum(['MOHE', 'Merit', 'General']),
   entryLevels: z.array(z.string()).default([]),
+  entryRequirements: z.array(entryRequirementSchema).default([]),
   ieltsScore: z.coerce.number().min(0).max(9),
   isAvailable: z.boolean().default(false),
   notes: z.string().optional(),
@@ -70,9 +76,11 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
     defaultValues: {
       name: '',
       major: '',
+      foundationName: '',
       country: 'UK',
       category: 'General',
       entryLevels: [],
+      entryRequirements: entryRequirementDefaults(),
       ieltsScore: 6.5,
       isAvailable: true,
       notes: '',
@@ -89,7 +97,11 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
     setIsLoading(true);
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 500));
-    onAddUniversity(values);
+    onAddUniversity({
+      ...values,
+      // Only ticked levels are saved, and only the boxes that were actually filled in.
+      entryRequirements: cleanEntryRequirements(values.entryRequirements, values.entryLevels),
+    });
     setIsLoading(false);
     setIsOpen(false);
     form.reset();
@@ -98,7 +110,7 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Approved University</DialogTitle>
           <DialogDescription>
@@ -133,7 +145,27 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
                 </FormItem>
               )}
             />
-            
+            <FormField
+              control={form.control}
+              name="foundationName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Foundation Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., International Foundation in Science and Engineering"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Only if the Foundation programme is called something different from the major.
+                    Leave blank if they are the same.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
                 <FormField
                     control={form.control}
@@ -183,67 +215,24 @@ export function AddUniversityDialog({ children, onAddUniversity }: AddUniversity
             </div>
 
             <FormField
-              control={form.control}
-              name="entryLevels"
-              render={() => (
-                <FormItem>
-                  <div className="mb-4">
-                    <FormLabel>Allowed Entry Levels</FormLabel>
-                    <FormDescription>Select one or more available entry points.</FormDescription>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    {ENTRY_LEVELS.map((level) => (
-                      <FormField
-                        key={level}
-                        control={form.control}
-                        name="entryLevels"
-                        render={({ field }) => {
-                          return (
-                            <FormItem
-                              key={level}
-                              className="flex flex-row items-start space-x-3 space-y-0 p-2 border rounded-md hover:bg-muted/50 cursor-pointer"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(level)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([...field.value, level])
-                                      : field.onChange(
-                                          field.value?.filter(
-                                            (value) => value !== level
-                                          )
-                                        )
-                                  }}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal cursor-pointer w-full">
-                                {level}
-                              </FormLabel>
-                            </FormItem>
-                          )
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
                 control={form.control}
                 name="ieltsScore"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Required IELTS Score</FormLabel>
+                    <FormLabel>General IELTS Score</FormLabel>
                     <FormControl>
                         <Input type="number" step="0.5" {...field} />
                     </FormControl>
+                    <FormDescription>
+                      The school&apos;s overall requirement. Used for any entry level below that
+                      does not set its own.
+                    </FormDescription>
                     <FormMessage />
                     </FormItem>
                 )}
             />
+
+            <EntryRequirementsField />
 
             <FormField
                 control={form.control}

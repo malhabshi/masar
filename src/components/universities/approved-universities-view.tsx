@@ -83,14 +83,16 @@ export function ApprovedUniversitiesView() {
     const results = universitiesData.filter(uni => {
       const uniName = (uni.name || '').toLowerCase();
       const uniMajor = (uni.major || '').toLowerCase();
+      const uniFoundation = (uni.foundationName || '').toLowerCase();
       const uniCountry = (uni.country || '').toLowerCase();
       const uniCategory = (uni.category || '').toLowerCase();
       const uniImportant = (uni.importantNote || '').toLowerCase();
 
       const matchesSearch = searchWords.every(word => 
         uniName.includes(word) || 
-        uniMajor.includes(word) || 
-        uniCountry.includes(word) || 
+        uniMajor.includes(word) ||
+        uniFoundation.includes(word) ||
+        uniCountry.includes(word) ||
         uniCategory.includes(word) ||
         uniImportant.includes(word)
       );
@@ -225,7 +227,7 @@ export function ApprovedUniversitiesView() {
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="search"
-                        placeholder="Search by university name, major, country or category..."
+                        placeholder="Search by university name, major, foundation name, country or category..."
                         className="pl-8"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}

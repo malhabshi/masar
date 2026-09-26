@@ -2720,6 +2720,25 @@ export async function deleteUniversity(id: string, adminId: string) {
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+/**
+ * Drop every undefined, at any depth.
+ *
+ * Firestore rejects undefined anywhere in a write, and a top-level filter is not enough
+ * now that universities carry an array of per-entry-level requirements — an undefined band
+ * inside one of those objects would reject the whole save.
+ */
+function stripUndefinedDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUndefinedDeep);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, stripUndefinedDeep(v)]),
+    );
+  }
+  return value;
+}
+
 // Add an approved university. Server-side (admin SDK) so it never depends on client
 // Firestore rules — client writes were failing silently, so add/close did nothing.
 export async function addUniversity(data: Record<string, unknown>, userId: string) {
@@ -2727,7 +2746,9 @@ export async function addUniversity(data: Record<string, unknown>, userId: strin
   try {
     const user = await getUser(userId);
     if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
-    const clean = Object.fromEntries(Object.entries(data || {}).filter(([, v]) => v !== undefined));
+    const clean = stripUndefinedDeep(
+      Object.fromEntries(Object.entries(data || {}).filter(([, v]) => v !== undefined)),
+    ) as Record<string, unknown>;
     const ref = await adminDb!.collection('approved_universities').add(clean);
     return { success: true, id: ref.id, message: 'University added.' };
   } catch (error: any) { return { success: false, message: error.message }; }
@@ -2741,7 +2762,9 @@ export async function updateUniversity(id: string, data: Record<string, unknown>
     if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
     const ref = adminDb!.collection('approved_universities').doc(id);
     if (!(await ref.get()).exists) return { success: false, message: 'University not found.' };
-    const clean = Object.fromEntries(Object.entries(data || {}).filter(([k, v]) => k !== 'id' && v !== undefined));
+    const clean = stripUndefinedDeep(
+      Object.fromEntries(Object.entries(data || {}).filter(([k, v]) => k !== 'id' && v !== undefined)),
+    ) as Record<string, unknown>;
     await ref.update(clean);
     return { success: true, message: 'University updated.' };
   } catch (error: any) { return { success: false, message: error.message }; }

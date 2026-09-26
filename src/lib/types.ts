@@ -537,17 +537,52 @@ export interface NotificationTemplate {
 export type UniversityCategory = 'MOHE' | 'Merit' | 'General';
 export type UniversityCompany = 'Into' | 'Studygroup' | 'Kaplan' | 'OnCampus' | 'Navitas' | 'Other' | 'Inhouse';
 
+/**
+ * English and academic requirements for ONE entry level at one school + major.
+ *
+ * These are held per level because they genuinely differ: Foundation is usually where
+ * the IELTS requirement sits, while First Year tends to ask for something else entirely
+ * (a completed Foundation, a school average, specific subjects).
+ *
+ * Every field is optional and a blank one is simply absent, never zero — `ieltsOverall: 0`
+ * would read on screen as "IELTS 0 required". A level with nothing recorded falls back to
+ * the row's `ieltsScore`, which is all that exists on rows created before this.
+ */
+export interface EntryLevelRequirement {
+  /** Matches an entry in `entryLevels` — 'Foundation', 'First Year', 'Bachelor Degree'. */
+  level: string;
+  ieltsOverall?: number;
+  ieltsListening?: number;
+  ieltsReading?: number;
+  ieltsWriting?: number;
+  ieltsSpeaking?: number;
+  /** Free text. Anything the school asks for that is not an IELTS band. */
+  otherRequirements?: string;
+}
+
 export interface ApprovedUniversity {
   id: string;
   name: string;
   major: string;
+  /**
+   * What the Foundation programme is called, when it differs from the degree major —
+   * a student reading "Computer Science" will not recognise "International Foundation in
+   * Science and Engineering" as the thing they are actually applying to.
+   */
+  foundationName?: string;
   country: Country;
+  /** The school's general IELTS requirement. Used for any entry level with no override. */
   ieltsScore: number;
   isAvailable: boolean;
   notes?: string;
   importantNote?: string; // High-priority red note
   category?: UniversityCategory;
   entryLevels?: string[]; // Foundation, First Year, Bachelor Degree
+  /**
+   * Per-level requirements, one entry per ticked level that has anything recorded.
+   * Absent on every row created before this field existed, so always guard on it.
+   */
+  entryRequirements?: EntryLevelRequirement[];
   company?: UniversityCompany;
   schoolOrder?: number;
   majorOrder?: number;
