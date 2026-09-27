@@ -30,6 +30,7 @@ import {
   Clock,
   ExternalLink,
   MessageSquare,
+  MessagesSquare,
   BellRing,
   Save,
   Building2,
@@ -48,6 +49,8 @@ import { useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sendChatMessage } from '@/lib/actions';
+import { useToast } from '@/hooks/use-toast';
 
 interface TaskDetailsDialogProps {
   isOpen: boolean;
@@ -133,6 +136,8 @@ export function TaskDetailsDialog({
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [isPaid, setIsPaid] = useState<boolean | undefined>(task.data?.isPaid);
+  const [isPostingReply, setIsPostingReply] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     setIsClient(true);
@@ -163,6 +168,45 @@ export function TaskDetailsDialog({
 
   const studentAge = calculateAge(student?.jotformData?.dob);
 
+  /**
+   * Who an internal comment should reach on the student's chat thread.
+   *
+   * `students.employeeId` holds a CIVIL ID, not a user id — a handful of legacy profiles
+   * hold a uid instead, so both are tried. The person who raised the request is added when
+   * that is someone else, because they are the one actually waiting on an answer and a
+   * reply they never see is worse than no reply.
+   *
+   * Only named recipients are used, never the `admins` or `departments` groups: a group
+   * mention is invisible to an employee by design and would not reach them at all.
+   */
+  const chatRecipients = useMemo(() => {
+    const ids: string[] = [];
+    const assignedKey = student?.employeeId;
+    if (assignedKey) {
+      const assigned =
+        Array.from(userMap.values()).find(u => u.civilId === assignedKey) || userMap.get(assignedKey);
+      if (assigned) ids.push(assigned.id);
+    }
+    if (task.authorId && userMap.has(task.authorId) && !ids.includes(task.authorId)) {
+      ids.push(task.authorId);
+    }
+    return ids.filter(id => id !== currentUser?.id);
+  }, [student?.employeeId, task.authorId, userMap, currentUser?.id]);
+
+  const chatRecipientNames = chatRecipients
+    .map(id => userMap.get(id)?.name)
+    .filter(Boolean) as string[];
+
+  /**
+   * Management posts into the student's chat thread instead of the task's own replies.
+   * Anyone else — and any task with no student or no reachable employee — keeps the old
+   * behaviour, so a system task or an orphaned request never swallows a message.
+   */
+  const routeReplyToChat =
+    !!task.studentId &&
+    chatRecipients.length > 0 &&
+    ['admin', 'adminplus', 'department'].includes(currentUser?.role ?? '');
+
   const uniLookupId = (data.selectedGlobalUniversityDetails?.id || data.selectedGlobalUniversityId) && !data.selectedGlobalUniversityDetails?.name
     ? (data.selectedGlobalUniversityDetails?.id || data.selectedGlobalUniversityId)
     : null;
@@ -181,8 +225,34 @@ export function TaskDetailsDialog({
 
   const handleReplyClick = async () => {
     if (!replyContent.trim()) return;
-    await onReply(task.id, replyContent);
-    setReplyContent('');
+    setIsPostingReply(true);
+    try {
+      if (routeReplyToChat) {
+        const result = await sendChatMessage(
+          task.studentId!,
+          currentUser.id,
+          replyContent,
+          chatRecipients,
+        );
+        if (!result?.success) {
+          toast({
+            variant: 'destructive',
+            title: 'Not sent',
+            description: result?.message || 'The message could not be posted to the chat.',
+          });
+          return;
+        }
+        toast({
+          title: 'Sent to internal chat',
+          description: `${chatRecipientNames.join(', ')} will see it on ${task.studentName}'s chat, and will reply there.`,
+        });
+      } else {
+        await onReply(task.id, replyContent);
+      }
+      setReplyContent('');
+    } finally {
+      setIsPostingReply(false);
+    }
   };
 
   const handleNotifClick = async () => {
@@ -585,6 +655,24 @@ export function TaskDetailsDialog({
               <UploadDocumentDialog student={student || { id: task.studentId }} />
             </div>
 
+            {routeReplyToChat && task.studentId && (
+              // The conversation now lives on the student's thread, so there has to be a
+              // way to get there from here — otherwise replies are somewhere the admin
+              // was never told to look.
+              <Link
+                href={`/student/${task.studentId}`}
+                className="flex items-center justify-between gap-2 border-b bg-info-soft/60 px-4 py-2 text-[11px] font-medium text-info transition-colors hover:bg-info-soft"
+              >
+                <span className="flex items-center gap-1.5">
+                  <MessagesSquare className="h-3.5 w-3.5 shrink-0" />
+                  Replies happen in the internal chat
+                </span>
+                <span className="flex shrink-0 items-center gap-1 font-semibold">
+                  Open <ExternalLink className="h-3 w-3" />
+                </span>
+              </Link>
+            )}
+
             <ScrollArea className="flex-1">
               <div className="space-y-4 p-4">
                 {taskThread.length === 0 ? (
@@ -664,21 +752,38 @@ export function TaskDetailsDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-                  <MessageSquare className="h-3 w-3" /> Add Internal Comment
+                  <MessageSquare className="h-3 w-3" />
+                  {routeReplyToChat ? 'Message the Employee' : 'Add Internal Comment'}
                 </Label>
                 <Textarea
-                  placeholder="Type comment..."
+                  placeholder={
+                    routeReplyToChat
+                      ? `Message ${chatRecipientNames[0] || 'the employee'}...`
+                      : 'Type comment...'
+                  }
                   className="min-h-[60px] text-xs"
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
                 />
+                {routeReplyToChat && (
+                  // Say where it lands. The old box was labelled "internal" while quietly
+                  // WhatsApping the employee, and nobody could tell from the screen.
+                  <p className="flex items-start gap-1.5 text-[10px] leading-snug text-muted-foreground">
+                    <MessagesSquare className="mt-px h-3 w-3 shrink-0" />
+                    <span>
+                      Goes to <strong className="font-semibold text-foreground">{chatRecipientNames.join(', ')}</strong>{' '}
+                      in {task.studentName}&apos;s internal chat. Replies appear there, not here.
+                    </span>
+                  </p>
+                )}
                 <Button
                   size="sm"
-                  className="h-8 w-full"
+                  className="h-8 w-full gap-2"
                   onClick={handleReplyClick}
-                  disabled={!replyContent.trim()}
+                  disabled={!replyContent.trim() || isPostingReply}
                 >
-                  Post
+                  {isPostingReply && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {routeReplyToChat ? 'Send to Internal Chat' : 'Post'}
                 </Button>
               </div>
             </div>
