@@ -3477,6 +3477,8 @@ const STAFF_NAME_LABELS_EN: Record<string, string> = {
   'خالد الهدهود': 'Khaled Alhadhoud',
   'ابراهيم': 'Ibrahim',
   'دلال': 'Dalal',
+  'مريم الاحمد': 'Mariam Alahmad',
+  'زهراء الحداد': 'Zahraa Alhaddad',
 };
 const toDisplayLabel = (map: Record<string, string>, raw?: string): string | undefined =>
   raw ? (map[raw] || raw) : raw;
@@ -3623,6 +3625,8 @@ const STAFF_CIVIL_ID_MAP: Record<string, string> = {
   'يوسف سليمان':       '304052500624',
   'ابراهيم':           '305061500954',
   'دلال':              '306021400064',
+  'مريم الاحمد':       '603200606032',
+  'زهراء الحداد':      '922173209221',
 };
 
 export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean; detail?: string }[]; studentCreated: boolean }> {
