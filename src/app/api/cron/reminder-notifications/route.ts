@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processReminderStages } from '@/lib/actions';
+import { runAllSiteWatches } from '@/lib/site-watch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +37,20 @@ export async function GET(req: NextRequest) {
     result.details.length ? result.details.join(' ') : '(nothing due)',
   );
 
+  // The official-sites watch rides on this job so it needs no scheduler of its own. It
+  // runs strictly AFTER the reminders are out, is throttled to once every 24 hours,
+  // carries its own time budget, and can never fail this response.
+  let siteWatch: unknown = null;
+  try {
+    siteWatch = await runAllSiteWatches();
+    if ((siteWatch as { ran?: boolean })?.ran) console.log('[cron/site-watch]', JSON.stringify(siteWatch));
+  } catch (e) {
+    console.error('[cron/site-watch] failed:', e);
+    siteWatch = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
+    siteWatch,
     success: true,
     messagesSent: result.sent,
     details: result.details,

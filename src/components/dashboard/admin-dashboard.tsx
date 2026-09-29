@@ -13,6 +13,7 @@ import { where } from 'firebase/firestore';
 import { TaskList } from '@/components/dashboard/task-list';
 import { getAdminDashboardStats, type AdminDashboardStats } from '@/lib/actions';
 import { RequestUpdatesCard } from '@/components/dashboard/request-updates-card';
+import { SiteWatchCard } from '@/components/dashboard/site-watch-card';
 import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import type { AppUser } from '@/hooks/use-user';
@@ -259,6 +260,7 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           </Card>
 
           <SendTaskForm currentUser={currentUser} />
+          <SiteWatchCard currentUser={currentUser} />
           <RequestUpdatesCard currentUser={currentUser} />
           <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
         </div>

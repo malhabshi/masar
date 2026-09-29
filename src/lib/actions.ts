@@ -1152,6 +1152,78 @@ export async function markRequestUpdatesRead(taskIds: string[], userId: string) 
   }
 }
 
+// ---------------------------------------------------------------------------------
+// Official-sites watch (Cultural Offices, MOHE) — alerts written by src/lib/site-watch.ts.
+//
+// Read through the server rather than from the browser: the alerts live in their own
+// collection so they do not add to the tasks backlog, and Firestore rules have no entry
+// for it, so a client read would be refused.
+// ---------------------------------------------------------------------------------
+
+const SITE_WATCH_ROLES = ['admin', 'adminplus'];
+
+/** Unread official-site alerts for this admin, newest first, plus when the site was last checked. */
+export async function getSiteWatchAlerts(userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available', alerts: [], lastCheckedAt: null };
+  try {
+    const user = await getUser(userId);
+    if (!user || !SITE_WATCH_ROLES.includes(user.role)) {
+      return { success: false, message: 'Unauthorized.', alerts: [], lastCheckedAt: null };
+    }
+    const [snap, state] = await Promise.all([
+      adminDb!.collection('site_watch_alerts').orderBy('createdAt', 'desc').limit(40).get(),
+      adminDb!.collection('site_watch').get(),
+    ]);
+    // Read state is per admin: one admin clearing an alert must not hide it from another.
+    const alerts = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }) as Record<string, any>)
+      .filter(a => !((a.readBy as string[] | undefined) || []).includes(userId))
+      .map(a => ({
+        id: a.id as string,
+        kind: a.kind as string,
+        siteName: (a.siteName as string) || 'Kuwait Cultural Office · London',
+        title: (a.title as string) || '',
+        url: (a.url as string) || '',
+        summary: (a.summary as string) || '',
+        added: (a.added as string[]) || [],
+        removed: (a.removed as string[]) || [],
+        addedCount: (a.addedCount as number) ?? 0,
+        removedCount: (a.removedCount as number) ?? 0,
+        createdAt: a.createdAt as string,
+      }));
+    return {
+      success: true,
+      alerts,
+      // The most recent check across every watched source.
+      lastCheckedAt:
+        state.docs
+          .map(d => d.data()?.lastCompletedAt as string | undefined)
+          .filter((v): v is string => !!v)
+          .sort()
+          .pop() ?? null,
+    };
+  } catch (error: any) {
+    return { success: false, message: error.message, alerts: [], lastCheckedAt: null };
+  }
+}
+
+export async function markSiteWatchAlertsRead(alertIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  if (!alertIds?.length) return { success: true, message: 'Nothing to mark.' };
+  try {
+    const user = await getUser(userId);
+    if (!user || !SITE_WATCH_ROLES.includes(user.role)) return { success: false, message: 'Unauthorized.' };
+    const batch = adminDb!.batch();
+    for (const id of alertIds.slice(0, 50)) {
+      batch.update(adminDb!.collection('site_watch_alerts').doc(id), { readBy: FieldValue.arrayUnion(userId) });
+    }
+    await batch.commit();
+    return { success: true, message: 'Marked as read.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
 export type AdminDashboardStats = {
   total: number;
   assigned: number;
