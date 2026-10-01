@@ -3701,6 +3701,18 @@ const STAFF_CIVIL_ID_MAP: Record<string, string> = {
   'زهراء الحداد':      '922173209221',
 };
 
+/**
+ * Undo the usual way an Arabic filename arrives broken: its UTF-8 bytes read as Latin-1,
+ * so "شهادة" shows as "Ø´ÙØ§Ø¯Ø©". Only names that are plainly in that state are touched —
+ * a name already holding real Arabic, and a genuine Latin-1 name like "résumé", both come
+ * back unchanged, and so does one too damaged to recover.
+ */
+function repairFileName(name: string): string {
+  if (!name || /[^\x00-\xff]/.test(name)) return name;
+  const repaired = Buffer.from(name, 'latin1').toString('utf8');
+  return repaired.includes('\uFFFD') ? name : repaired;
+}
+
 export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean; detail?: string }[]; studentCreated: boolean }> {
   const jotformResults: { country: string; success: boolean; detail?: string }[] = [];
 
@@ -4003,8 +4015,15 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     try {
       const now = new Date().toISOString();
 
-      // Upload all document types to Storage and collect URLs
-      const passportDocs: Record<string, unknown>[] = [];
+      // Upload all document types to Storage and collect URLs.
+      //
+      // Every uploaded file also becomes a real document on the profile. It used to be the
+      // passport alone: certificates, IELTS results, degrees, letters and statements were
+      // uploaded and then kept only as links under jotformData.documents, which nothing on
+      // the profile displays — staff had to ask the student again for files they had.
+      // Those links stay exactly as they were; resending to another country reads them.
+      const profileDocs: Record<string, unknown>[] = [];
+      const profileDocsByKey: Record<string, Record<string, unknown>[]> = {};
       const jotformDocUrls: Record<string, string[]> = {
         passport: [], secondaryCerts: [], ieltsFile: [], otherFiles: [],
         universityDegree: [], recommendationLetter: [], personalStatement: [], transcript: [],
@@ -4027,9 +4046,19 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
             const encodedPath = encodeURIComponent(storagePath);
             const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
             urls.push(url);
-            if (docKey === 'passport') {
-              passportDocs.push({ id: `passport-${Date.now()}-${i}`, name: docLabel, originalName: f.name, size: f.buffer.byteLength, url, uploadedAt: now, authorId: creatingUserId });
-            }
+            (profileDocsByKey[docKey] ||= []).push({
+              // The uploads run in parallel, so a timestamp alone can repeat across types.
+              id: `jotform-${docKey}-${Date.now()}-${i}-${crypto.randomUUID().slice(0, 8)}`,
+              name: filesData.length > 1 ? `${docLabel} (${i + 1})` : docLabel,
+              originalName: repairFileName(f.name),
+              size: f.buffer.byteLength,
+              url,
+              uploadedAt: now,
+              authorId: creatingUserId,
+              // Always the student's own documents. Untagged, they landed in whichever
+              // section matched the role of whoever happened to submit the form.
+              section: 'employee',
+            });
           }
           return urls;
         };
@@ -4048,6 +4077,11 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         // Fold transcript URLs into "otherFiles" so a later resend (addCountryApplication,
         // which only re-downloads jd.documents.otherFiles) also carries the transcript.
         jotformDocUrls.otherFiles = [...jotformDocUrls.otherFiles, ...jotformDocUrls.transcript];
+
+        // A fixed order, passport first. The uploads finish in whatever order they finish.
+        for (const key of ['passport', 'secondaryCerts', 'transcript', 'ieltsFile', 'universityDegree', 'recommendationLetter', 'personalStatement', 'otherFiles']) {
+          profileDocs.push(...(profileDocsByKey[key] || []));
+        }
       }
 
       const builtApplicationsJson = (formData.get('builtApplications') as string) || '[]';
@@ -4104,7 +4138,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
             metadata: { contentType: 'application/pdf', metadata: { firebaseStorageDownloadTokens: downloadToken } },
           });
           const pdfUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(pdfPath)}?alt=media&token=${downloadToken}`;
-          passportDocs.push({
+          profileDocs.push({
             id: `application-summary-${Date.now()}`,
             name: 'Application Summary (PDF)',
             originalName: 'application-summary.pdf',
@@ -4112,6 +4146,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
             url: pdfUrl,
             uploadedAt: now,
             authorId: creatingUserId,
+            section: 'employee', // beside the files it summarises
           });
         } catch (pdfErr) {
           console.error('[Jotform] Failed to generate/upload application summary PDF:', pdfErr);
@@ -4129,7 +4164,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         applications: builtApplications,
         employeeNotes: [],
         adminNotes: [],
-        documents: passportDocs,
+        documents: profileDocs,
         createdAt: now,
         lastActivityAt: now,
         createdBy: creatingUserId,
