@@ -32,6 +32,7 @@ import {
 import type { Document as StudentDocument } from '@/lib/types';
 import { replyWithReceipt } from './reply-receipt';
 import { statusChangeLines, updateApplicationsFromEmail } from './application-status';
+import { rememberEmail, syncSentMail } from './memory';
 import {
   analyseEmail,
   emailDocumentNote,
@@ -229,6 +230,8 @@ async function log(entry: Record<string, unknown>): Promise<void> {
  */
 /** Draft any replies whose requested documents have now arrived. Never throws. */
 async function runFulfilment(result: IntakeResult): Promise<void> {
+  // The agency's own replies go into the memory too.
+  await syncSentMail().catch((e) => console.error('[email-intake] sent-mail sync failed:', e));
   try {
     if (!(await getIntakeSettings()).draftReplies) return;
     const r = await fulfilEmailRequests();
@@ -501,6 +504,20 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           await updateApplicationsFromEmail({ message, studentId: match.student.id }),
         );
       }
+
+      // Keep it in the student's email memory, so the AI knows the whole story later.
+      await rememberEmail({
+        studentId: match.student.id,
+        studentName: match.student.name,
+        direction: 'in',
+        date: message.date,
+        from: message.fromName ? `${message.fromName} <${message.from}>` : message.from,
+        to: process.env.SMTP_USER ?? '',
+        subject: message.subject,
+        messageId: message.messageId,
+        body: message.text,
+        attachments: attachmentNames,
+      });
 
       // Announce it in the student's internal chat so the employee, the admins and the
       // relevant department are all notified — this is how staff find out at all.

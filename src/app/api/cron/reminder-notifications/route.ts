@@ -14,6 +14,7 @@ import { getDocumentReaderSettings, readPendingDocuments } from '@/lib/ai/docume
 import { isAiConfigured } from '@/lib/ai/config';
 import { fulfilEmailRequests } from '@/lib/email/requests';
 import { getIntakeSettings } from '@/lib/email/intake-settings';
+import { syncSentMail } from '@/lib/email/memory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,10 +75,20 @@ export async function GET(req: NextRequest) {
     emailDrafts = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // The agency's sent replies, into each student's email memory.
+  let sentMail: unknown = null;
+  try {
+    sentMail = await syncSentMail();
+  } catch (e) {
+    console.error('[cron/sent-mail] failed:', e);
+    sentMail = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
     siteWatch,
     documents,
     emailDrafts,
+    sentMail,
     success: true,
     messagesSent: result.sent,
     details: result.details,

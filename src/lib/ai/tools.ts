@@ -23,6 +23,7 @@ import { countRecords } from './count';
 import { findChatsAwaitingReply, readStudentChat, replyInStudentChat } from './chat-tools';
 import { addTeamNote, getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
 import { getStudentDocumentCards, readStudentDocuments } from './documents';
+import { backfillStudentEmails, getStudentEmailTimeline } from '@/lib/email/memory';
 
 export type ToolContext = {
   actor: Actor;
@@ -434,6 +435,50 @@ const readStudentDocumentsTool: AiTool = {
 };
 
 // --------------------------------------------------------------------------
+// Email memory
+// --------------------------------------------------------------------------
+
+const getStudentEmailsTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'get_student_emails',
+    description:
+      "A student's email history, newest first: every email received from or sent to " +
+      'universities, agents, the KCO and the family, one line each — what it said, what it ' +
+      'asked for, what was attached. Use it for "what is happening with…", "did we send…", ' +
+      '"what did the university say…". filter narrows to one university or sender. If it is ' +
+      'empty for a student who should have emails, fill it with load_student_emails.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentId: { type: 'string' },
+        filter: { type: 'string', description: 'University or sender, e.g. "Liverpool", "Merit".' },
+        limit: { type: 'integer', description: 'Most recent N, default 40.' },
+      },
+      required: ['studentId'],
+    },
+  },
+  handler: (input) => getStudentEmailTimeline(input.studentId, { filter: input.filter, limit: input.limit }),
+};
+
+const loadStudentEmailsTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'load_student_emails',
+    description:
+      "Search the agency mailbox for every email with this student's name and add them to " +
+      'their email history (read-only on the mailbox). Takes a little while for students with ' +
+      'many emails. Then call get_student_emails.',
+    input_schema: {
+      type: 'object',
+      properties: { studentId: { type: 'string' } },
+      required: ['studentId'],
+    },
+  },
+  handler: (input) => backfillStudentEmails(input.studentId),
+};
+
+// --------------------------------------------------------------------------
 // Counting
 // --------------------------------------------------------------------------
 
@@ -638,6 +683,8 @@ export const AI_TOOLS: AiTool[] = [
   getStudentTool,
   getStudentDocumentsTool,
   readStudentDocumentsTool,
+  getStudentEmailsTool,
+  loadStudentEmailsTool,
   listTasksTool,
   listEmployeesTool,
   listUniversitiesTool,

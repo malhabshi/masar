@@ -56,13 +56,19 @@ function extractText(content: Anthropic.ContentBlock[]): string {
     .trim();
 }
 
-/** Tool results are JSON-stringified for the model; oversized payloads are truncated. */
-const MAX_TOOL_RESULT_CHARS = 15_000;
+/**
+ * Tool results are JSON-stringified for the model; oversized payloads are truncated.
+ * 15k cut a student's 21 document cards in half, and the assistant then reported files
+ * as missing that were on the profile. A student's full record, documents and email
+ * history fit comfortably in 60k.
+ */
+const MAX_TOOL_RESULT_CHARS = 60_000;
 
 function serializeToolResult(result: unknown): string {
   let text: string;
   try {
-    text = JSON.stringify(result, null, 2);
+    // Compact: indentation spent a third of the budget on spaces.
+    text = JSON.stringify(result);
   } catch {
     text = String(result);
   }

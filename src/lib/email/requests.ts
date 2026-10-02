@@ -24,6 +24,7 @@ import { DOC_TYPES, getDocumentReaderSettings, readDocument, type DocCard, type 
 import { storagePathFromUrl } from '@/lib/mcp/document-tools';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured, type InboxMessage } from './inbox';
+import { recentEmailLines } from './memory';
 
 export const EMAIL_REQUESTS_COLLECTION = 'email_requests';
 const BUCKET = 'studio-9484431255-91d96.firebasestorage.app';
@@ -356,6 +357,7 @@ Write only the body text. Plain text, no markdown. Be as short as possible:
 - For information: give the answer only, from the student record provided. If the record does not contain it, write "[ADD: <what is needed>]" in its place — never invent one.
 - If the same email asked for other things that are still to come, add one line saying they will follow shortly, naming them, e.g. "The signed offer acceptance form and the underage consent form will follow shortly."
 - Urgency: you are given today's date and the student's offers. Only if something makes this reply time-critical — most often, the course start date has already passed or is within two weeks and no CAS has been issued — add ONE short question that resolves it, e.g. "As the course started on 14 September, could you please confirm the latest arrival date?" If nothing is urgent, add nothing. Never add a question for its own sake.
+- You are given the recent emails with this sender. Do not repeat what the agency already told them, and do not announce as "attached" something already sent.
 - Do NOT repeat the student's name, reference numbers, course or anything else already in the thread. Do NOT explain what a document contains or why it is sent.
 - No closing line, no sign-off, no name — the signature is added afterwards.`;
 
@@ -368,6 +370,8 @@ async function writeDraftBody(input: {
   studentRecord: string;
   /** What the student's offers and CAS say (from the document cards), for the urgency check. */
   offers: string[];
+  /** Recent emails with this sender, so the reply does not repeat or contradict them. */
+  history?: string[];
 }): Promise<string> {
   const res = await getAnthropicClient().messages.create({
     model: AI_DOC_MODEL,
@@ -390,6 +394,8 @@ async function writeDraftBody(input: {
           '',
           `Today: ${new Date().toISOString().slice(0, 10)}`,
           `Student's offers and CAS on file: ${input.offers.length ? '\n' + input.offers.join('\n') : 'none read yet'}`,
+          '',
+          `Recent emails with this sender: ${input.history?.length ? '\n' + input.history.join('\n') : 'none recorded'}`,
           '',
           'Student record (for information answers):',
           input.studentRecord,
@@ -576,6 +582,7 @@ export async function fulfilEmailRequests(opts: { limit?: number } = {}) {
           studentRecord: studentRecordForReply(s),
           pendingItems: items.filter((it) => it.status === 'waiting' && it.kind !== 'action'),
           offers: offerLines(docs),
+          history: await recentEmailLines(request.studentId, request.organisation ?? request.replyTo.split('@')[1], 8),
         });
         const saved = await saveDraft({ request, body, attachments });
         if (!saved.ok) throw new Error(saved.error ?? 'Could not save the draft.');
