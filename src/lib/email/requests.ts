@@ -354,14 +354,20 @@ Write only the body text. Plain text, no markdown. Be as short as possible:
 - Greet with "Dear <organisation or Admissions> Team," (or the sender's name when it is a person).
 - For documents: one line saying what is attached, by its short name, e.g. "Please find the signed offer acceptance form attached." or "Please find attached the FGL and the passport copy."
 - For information: give the answer only, from the student record provided. If the record does not contain it, write "[ADD: <what is needed>]" in its place — never invent one.
-- Do NOT repeat the student's name, reference numbers, course, dates or anything else already in the thread. Do NOT explain what a document contains or why it is sent.
+- If the same email asked for other things that are still to come, add one line saying they will follow shortly, naming them, e.g. "The signed offer acceptance form and the underage consent form will follow shortly."
+- Urgency: you are given today's date and the student's offers. Only if something makes this reply time-critical — most often, the course start date has already passed or is within two weeks and no CAS has been issued — add ONE short question that resolves it, e.g. "As the course started on 14 September, could you please confirm the latest arrival date?" If nothing is urgent, add nothing. Never add a question for its own sake.
+- Do NOT repeat the student's name, reference numbers, course or anything else already in the thread. Do NOT explain what a document contains or why it is sent.
 - No closing line, no sign-off, no name — the signature is added afterwards.`;
 
 async function writeDraftBody(input: {
   request: EmailRequest;
   items: RequestItem[];
+  /** Items from the same email that have not arrived yet — the reply says they will follow. */
+  pendingItems: RequestItem[];
   attachmentNames: string[];
   studentRecord: string;
+  /** What the student's offers and CAS say (from the document cards), for the urgency check. */
+  offers: string[];
 }): Promise<string> {
   const res = await getAnthropicClient().messages.create({
     model: AI_DOC_MODEL,
@@ -379,6 +385,11 @@ async function writeDraftBody(input: {
           ...input.items.map((it) => `- [${it.kind}] ${it.text}: "${it.detail}"`),
           '',
           `Attached files: ${input.attachmentNames.join(', ') || 'none'}`,
+          '',
+          `Still to come from the same email: ${input.pendingItems.map((it) => it.text).join('; ') || 'nothing'}`,
+          '',
+          `Today: ${new Date().toISOString().slice(0, 10)}`,
+          `Student's offers and CAS on file: ${input.offers.length ? '\n' + input.offers.join('\n') : 'none read yet'}`,
           '',
           'Student record (for information answers):',
           input.studentRecord,
@@ -419,6 +430,18 @@ function studentRecordForReply(s: Record<string, any>): string {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/** One line per offer / CAS the reader has already understood, for the urgency check. */
+function offerLines(docs: StoredDoc[]): string[] {
+  return docs
+    .filter((d) => d.ai?.status === 'read' && ['offer', 'cas', 'i20'].includes(d.ai.type))
+    .sort((a, b) => String(b.uploadedAt ?? '').localeCompare(String(a.uploadedAt ?? '')))
+    .slice(0, 6)
+    .map((d) => {
+      const f = d.ai!.facts;
+      return `- ${d.ai!.title}: ${f.offerType ?? d.ai!.type}${f.course ? `, ${f.course}` : ''}${f.startDate ? `, starts ${f.startDate}` : ''} (uploaded ${String(d.uploadedAt ?? '').slice(0, 10)})`;
+    });
 }
 
 async function downloadDoc(doc: StoredDoc): Promise<{ filename: string; content: Buffer } | null> {
@@ -551,6 +574,8 @@ export async function fulfilEmailRequests(opts: { limit?: number } = {}) {
           items: ready,
           attachmentNames: attachments.map((a) => a.filename),
           studentRecord: studentRecordForReply(s),
+          pendingItems: items.filter((it) => it.status === 'waiting' && it.kind !== 'action'),
+          offers: offerLines(docs),
         });
         const saved = await saveDraft({ request, body, attachments });
         if (!saved.ok) throw new Error(saved.error ?? 'Could not save the draft.');
