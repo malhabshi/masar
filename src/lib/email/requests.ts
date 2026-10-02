@@ -27,6 +27,8 @@ import { appendDraft, isInboxConfigured, type InboxMessage } from './inbox';
 
 export const EMAIL_REQUESTS_COLLECTION = 'email_requests';
 const BUCKET = 'studio-9484431255-91d96.firebasestorage.app';
+/** Every reply draft is signed with this, below "Kind regards,". */
+const DRAFT_SIGNATURE = 'MMohammed';
 /** Gmail rejects messages over 25 MB; stay under it with room for encoding. */
 const MAX_DRAFT_ATTACHMENT_BYTES = 17 * 1024 * 1024;
 
@@ -353,7 +355,7 @@ Write only the body text. Plain text, no markdown.
 - Name the student and any reference number from the original email.
 - For each document item: say it is attached.
 - For each information item: give the answer from the student record provided. If the record does not contain the answer, write "[ADD: <what is needed>]" in its place — never invent one.
-- One short closing line, then "Kind regards," on its own line. No name after it.
+- One short closing line. No sign-off and no name — the signature is added afterwards.
 - Keep it under 120 words.`;
 
 async function writeDraftBody(input: {
@@ -391,7 +393,9 @@ async function writeDraftBody(input: {
     .join('\n')
     .trim();
   if (!text) throw new Error('The reply could not be written.');
-  return text;
+  // The sign-off is added here, not by the model, so every draft ends the same way.
+  const withoutSignOff = text.replace(/\n*(kind regards|best regards|regards|sincerely)[,.]?\s*$/i, '').trimEnd();
+  return `${withoutSignOff}\n\nKind regards,\n${DRAFT_SIGNATURE}`;
 }
 
 function studentRecordForReply(s: Record<string, any>): string {
