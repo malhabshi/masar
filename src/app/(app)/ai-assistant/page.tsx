@@ -10,6 +10,7 @@ import {
   ChevronRight,
   FileSearch,
   Loader2,
+  Wallet,
   MessageSquare,
   Plus,
   Send,
@@ -301,6 +302,8 @@ export default function AiAssistantPage() {
         <ResponderControls settings={responder} saving={savingResponder} onChange={updateResponder} />
       )}
 
+      {user && <SpendingPanel authedFetch={authedFetch} />}
+
       {user && <DocumentReader authedFetch={authedFetch} />}
 
       {user && <TeamNotes authedFetch={authedFetch} />}
@@ -347,6 +350,178 @@ export default function AiAssistantPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+const FEATURE_LABELS: Record<string, string> = {
+  assistant: 'AI Assistant (this page)',
+  chat: 'Internal chat replies',
+  documents: 'Reading documents',
+  passport: 'JotForm passport reader',
+  requests: 'Requests (add schools / update emails)',
+  'email-status': 'Email → application status',
+  'email-requests': 'Email requests & reply drafts',
+  'email-memory': 'Email memory',
+  'email-naming': 'Naming emailed files',
+  'email-chat-note': 'Email chat notes',
+  'email-versions': 'Comparing reissued documents',
+  notices: 'Company notices',
+  'follow-ups': 'Follow-ups',
+  'company-playbooks': 'Learning company playbooks',
+  'daily-report': 'Daily employee report',
+  other: 'Other',
+};
+
+type Spending = {
+  status: {
+    month: string;
+    spent: number;
+    budget: number;
+    percent: number;
+    paused: boolean;
+    byFeature: Array<{ feature: string; cost: number; calls: number }>;
+    byDay: Array<{ day: string; cost: number }>;
+  };
+  settings: { monthlyBudgetUsd: number; alertPercent: number; prices: Record<string, { input: number; output: number }> };
+};
+
+/**
+ * What the AI costs this month, where it goes, and the budget. At the budget the
+ * automatic jobs pause; anything started by hand keeps working.
+ */
+function SpendingPanel({ authedFetch }: { authedFetch: (url: string, init?: RequestInit) => Promise<Response> }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<Spending | null>(null);
+  const [budget, setBudget] = useState('');
+  const [alertAt, setAlertAt] = useState('');
+  const [prices, setPrices] = useState<Record<string, { input: string; output: string }>>({});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const apply = (d: Spending) => {
+    setData(d);
+    setBudget(String(d.settings.monthlyBudgetUsd));
+    setAlertAt(String(d.settings.alertPercent));
+    setPrices(Object.fromEntries(Object.entries(d.settings.prices).map(([m, p]) => [m, { input: String(p.input), output: String(p.output) }])));
+  };
+
+  useEffect(() => {
+    authedFetch('/api/ai/usage')
+      .then(async (r) => {
+        const d = await r.json();
+        if (r.ok) apply(d);
+        else setMessage(d.error ?? 'Could not load spending.');
+      })
+      .catch((e) => setMessage(e instanceof Error ? e.message : String(e)));
+  }, [authedFetch]);
+
+  const save = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const r = await authedFetch('/api/ai/usage', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          monthlyBudgetUsd: Number(budget),
+          alertPercent: Number(alertAt),
+          prices: Object.fromEntries(Object.entries(prices).map(([m, p]) => [m, { input: Number(p.input), output: Number(p.output) }])),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? 'Could not save.');
+      apply(d);
+      setMessage('Saved.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const st = data?.status;
+  const usd = (v: number) => `$${v.toFixed(v < 10 ? 2 : 0)}`;
+
+  return (
+    <Card>
+      <CardHeader className="cursor-pointer pb-3" onClick={() => setOpen((v) => !v)}>
+        <CardTitle className="flex items-center gap-2 text-base">
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <Wallet className="h-4 w-4" />
+          AI spending
+          {st && (
+            <Badge variant={st.paused ? 'destructive' : st.percent >= (data?.settings.alertPercent ?? 80) ? 'secondary' : 'outline'}>
+              {usd(st.spent)}{st.budget ? ` of ${usd(st.budget)}` : ''} this month
+            </Badge>
+          )}
+        </CardTitle>
+        <CardDescription>
+          Estimated from the tokens each feature uses. At the budget, the automatic jobs pause until next month;
+          anything you start by hand still works. Check the prices against your Anthropic bill.
+        </CardDescription>
+      </CardHeader>
+      {open && st && (
+        <CardContent className="space-y-4 pt-0">
+          {st.paused && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>The budget is used up — automatic AI jobs are paused. Raise the budget to restart them.</AlertDescription>
+            </Alert>
+          )}
+          {st.budget > 0 && (
+            <div className="space-y-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn('h-full transition-all', st.paused ? 'bg-destructive' : st.percent >= (data!.settings.alertPercent ?? 80) ? 'bg-warning' : 'bg-primary')}
+                  style={{ width: `${Math.min(100, st.percent)}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">{st.percent}% of the {st.month} budget</p>
+            </div>
+          )}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold">Where it goes</p>
+            {st.byFeature.length === 0 && <p className="text-xs text-muted-foreground">Nothing yet this month.</p>}
+            {st.byFeature.map((f) => (
+              <div key={f.feature} className="flex items-center justify-between gap-2 text-sm">
+                <span>{FEATURE_LABELS[f.feature] ?? f.feature}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {usd(f.cost)} · {f.calls} calls
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-end gap-3 border-t pt-3">
+            <label className="space-y-1 text-xs">
+              <span className="font-semibold">Monthly budget (USD, 0 = no limit)</span>
+              <input value={budget} onChange={(e) => setBudget(e.target.value)} inputMode="decimal" className="block h-8 w-28 rounded-md border bg-background px-2 text-sm" />
+            </label>
+            <label className="space-y-1 text-xs">
+              <span className="font-semibold">Alert at (%)</span>
+              <input value={alertAt} onChange={(e) => setAlertAt(e.target.value)} inputMode="numeric" className="block h-8 w-20 rounded-md border bg-background px-2 text-sm" />
+            </label>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold">Prices (USD per million tokens)</p>
+            {Object.entries(prices).map(([m, p]) => (
+              <div key={m} className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="w-48 font-mono">{m}</span>
+                in
+                <input value={p.input} onChange={(e) => setPrices((x) => ({ ...x, [m]: { ...x[m], input: e.target.value } }))} className="h-7 w-16 rounded-md border bg-background px-2" />
+                out
+                <input value={p.output} onChange={(e) => setPrices((x) => ({ ...x, [m]: { ...x[m], output: e.target.value } }))} className="h-7 w-16 rounded-md border bg-background px-2" />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            {message && <span className="text-xs text-muted-foreground">{message}</span>}
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+            </Button>
+          </div>
+        </CardContent>
+      )}
+    </Card>
   );
 }
 

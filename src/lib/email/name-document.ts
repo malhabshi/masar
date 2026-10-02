@@ -61,7 +61,7 @@ export async function nameDocument(input: {
   if (!isAiConfigured()) return { name: fallback, source: 'fallback' };
 
   try {
-    const client = getAnthropicClient();
+    const client = getAnthropicClient('email-naming');
     const response = await client.messages.create({
       model: AI_MODEL,
       max_tokens: 100,

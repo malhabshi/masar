@@ -19,6 +19,7 @@ import { followUpsIfDue } from '@/lib/email/followups';
 import { automateRecentTasks } from '@/lib/ai/task-automation';
 import { currentSlot, isSlotDone } from '@/lib/email/schedule';
 import { buildTodayIfDue } from '@/lib/reports/employee-daily';
+import { automaticAiAllowed } from '@/lib/ai/usage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,11 +59,15 @@ export async function GET(req: NextRequest) {
     siteWatch = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Every job below uses the AI. Once this month's budget is used up they all pause until
+  // the month ends or the budget is raised; the reminders above never depend on it.
+  const aiAllowed = await automaticAiAllowed();
+
   // Read newly uploaded documents, a few per run. Every five minutes keeps up with uploads
   // without one run holding the job open; switched on from the AI Assistant page.
   let documents: unknown = null;
   try {
-    if (isAiConfigured() && (await getDocumentReaderSettings()).autoRead) {
+    if (aiAllowed && isAiConfigured() && (await getDocumentReaderSettings()).autoRead) {
       documents = await readPendingDocuments({ limit: 8, concurrency: 4 });
     }
   } catch (e) {
@@ -73,7 +78,7 @@ export async function GET(req: NextRequest) {
   // Replies waiting on a document: draft the ones whose files are now on the profile.
   let emailDrafts: unknown = null;
   try {
-    if ((await getIntakeSettings()).draftReplies) emailDrafts = await fulfilEmailRequests();
+    if (aiAllowed && (await getIntakeSettings()).draftReplies) emailDrafts = await fulfilEmailRequests();
   } catch (e) {
     console.error('[cron/email-drafts] failed:', e);
     emailDrafts = { error: e instanceof Error ? e.message : String(e) };
@@ -82,7 +87,7 @@ export async function GET(req: NextRequest) {
   // The agency's sent replies, into each student's email memory.
   let sentMail: unknown = null;
   try {
-    sentMail = await syncSentMail();
+    if (aiAllowed) sentMail = await syncSentMail();
   } catch (e) {
     console.error('[cron/sent-mail] failed:', e);
     sentMail = { error: e instanceof Error ? e.message : String(e) };
@@ -91,7 +96,7 @@ export async function GET(req: NextRequest) {
   // Once a day: draft update requests for applications submitted 5+ days with no offer.
   let followUps: unknown = null;
   try {
-    if ((await getIntakeSettings()).followUps) followUps = await followUpsIfDue();
+    if (aiAllowed && (await getIntakeSettings()).followUps) followUps = await followUpsIfDue();
   } catch (e) {
     console.error('[cron/follow-ups] failed:', e);
     followUps = { error: e instanceof Error ? e.message : String(e) };
@@ -103,7 +108,7 @@ export async function GET(req: NextRequest) {
   let inbox: unknown = null;
   try {
     const slot = currentSlot();
-    if (slot && (await getIntakeSettings()).scheduledIntake && !(await isSlotDone(slot))) {
+    if (aiAllowed && slot && (await getIntakeSettings()).scheduledIntake && !(await isSlotDone(slot))) {
       const started = fetch(new URL('/api/email/intake', req.nextUrl.origin), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
@@ -121,7 +126,7 @@ export async function GET(req: NextRequest) {
   // The day's employee report, built by itself after 22:00 Kuwait time.
   let dailyReport: unknown = null;
   try {
-    dailyReport = await buildTodayIfDue();
+    if (aiAllowed) dailyReport = await buildTodayIfDue();
   } catch (e) {
     console.error('[cron/daily-report] failed:', e);
     dailyReport = { error: e instanceof Error ? e.message : String(e) };
@@ -130,7 +135,7 @@ export async function GET(req: NextRequest) {
   // Requests no browser triggered (add schools / draft the update email).
   let taskAutomation: unknown = null;
   try {
-    if (isAiConfigured()) taskAutomation = await automateRecentTasks();
+    if (aiAllowed && isAiConfigured()) taskAutomation = await automateRecentTasks();
   } catch (e) {
     console.error('[cron/task-automation] failed:', e);
     taskAutomation = { error: e instanceof Error ? e.message : String(e) };
@@ -145,6 +150,7 @@ export async function GET(req: NextRequest) {
     taskAutomation,
     inbox,
     dailyReport,
+    aiAllowed,
     success: true,
     messagesSent: result.sent,
     details: result.details,

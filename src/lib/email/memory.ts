@@ -121,7 +121,7 @@ async function summarise(input: {
   attachments: string[];
   studentName: string;
 }) {
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('email-memory').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 600,
     system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],

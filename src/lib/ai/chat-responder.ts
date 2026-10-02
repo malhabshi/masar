@@ -24,6 +24,7 @@ import {
   getResponderSettings,
 } from './chat-bot';
 import { isAiConfigured } from './config';
+import { automaticAiAllowed } from './usage';
 import { countRecords } from './count';
 import { getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
 import { getStudentDocumentCards } from './documents';
@@ -380,6 +381,9 @@ export async function respondToStudentChat(studentId: string): Promise<Responder
     if (!settings.enabled || !isAiConfigured()) {
       return { studentId, status: 'disabled', reason: !settings.enabled ? 'responder disabled' : 'no API key' };
     }
+    if (!(await automaticAiAllowed())) {
+      return { studentId, status: 'disabled', reason: "this month's AI budget is used up" };
+    }
     if (settings.mutedStudentIds.includes(studentId)) {
       return { studentId, status: 'muted' };
     }
@@ -478,6 +482,7 @@ ${addressesBot(last)
       toolset,
       system,
       maxIterations: 8,
+      feature: 'chat',
     });
 
     const outcome: ResponderOutcome = {

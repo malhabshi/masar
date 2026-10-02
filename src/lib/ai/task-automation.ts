@@ -201,7 +201,7 @@ async function draftUpdate(task: Record<string, any>, dryRun = false): Promise<s
   const apps = (s.applications ?? []) as Application[];
   const note = String(task.data?.notes ?? task.content ?? '').trim();
 
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('requests').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 1500,
     system: UPDATE_SYSTEM,

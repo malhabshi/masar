@@ -80,7 +80,7 @@ export async function readPassport(bytes: Buffer, mimeType: string): Promise<Pas
     throw new Error('Use a photo (JPG or PNG) or a PDF of the passport page.');
   }
 
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('passport').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 1500,
     system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],

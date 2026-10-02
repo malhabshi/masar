@@ -367,7 +367,7 @@ function kuwaitClock(iso: string | null): string | null {
 }
 
 async function review(date: string, employees: EmployeeDay[]) {
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('daily-report').messages.create({
     model: AI_MODEL,
     max_tokens: 6000,
     thinking: { type: 'adaptive' },

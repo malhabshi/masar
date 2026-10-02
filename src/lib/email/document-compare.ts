@@ -105,7 +105,7 @@ export async function compareDocumentVersions(input: {
   }
 
   try {
-    const client = getAnthropicClient();
+    const client = getAnthropicClient('email-versions');
     const response = await client.messages.create({
       model: AI_MODEL,
       max_tokens: 500,

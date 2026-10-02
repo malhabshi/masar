@@ -107,7 +107,7 @@ const MATCH_TOOL: Anthropic.Tool = {
 };
 
 async function detect(message: InboxMessage): Promise<Notice[]> {
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('notices').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 1200,
     system: [{ type: 'text', text: DETECT_SYSTEM, cache_control: { type: 'ephemeral' } }],
@@ -165,7 +165,7 @@ async function candidatesFor(n: Notice): Promise<Candidate[]> {
 
 async function affected(n: Notice, candidates: Candidate[]): Promise<Candidate[]> {
   if (!candidates.length) return [];
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('notices').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 1500,
     system: MATCH_SYSTEM,

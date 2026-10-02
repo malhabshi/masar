@@ -145,7 +145,7 @@ export async function analyseEmail(input: {
 }): Promise<EmailAnalysis | null> {
   if (!isAiConfigured()) return null;
   try {
-    const res = await getAnthropicClient().messages.create({
+    const res = await getAnthropicClient('email-requests').messages.create({
       model: AI_DOC_MODEL,
       max_tokens: 2000,
       system: [{ type: 'text', text: ANALYSE_SYSTEM, cache_control: { type: 'ephemeral' } }],
@@ -327,7 +327,7 @@ async function matchDocuments(
   docs: StoredDoc[],
 ): Promise<Array<{ requestId: string; documentId: string }>> {
   if (!items.length || !docs.length) return [];
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('email-requests').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 1000,
     system: MATCH_SYSTEM,
@@ -385,7 +385,7 @@ async function writeDraftBody(input: {
   /** Recent emails with this sender, so the reply does not repeat or contradict them. */
   history?: string[];
 }): Promise<string> {
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('email-requests').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 800,
     system: DRAFT_SYSTEM,

@@ -26,6 +26,8 @@ export type AgentRunInput = {
   system?: Anthropic.TextBlockParam[];
   /** Lower the tool-round ceiling for short-lived agents. */
   maxIterations?: number;
+  /** What the cost meter files this run under. Default "assistant". */
+  feature?: string;
 };
 
 export type AgentRunResult = {
@@ -100,7 +102,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
 
   let client: Anthropic;
   try {
-    client = getAnthropicClient();
+    client = getAnthropicClient(input.feature ?? 'assistant');
   } catch (e) {
     if (e instanceof AiNotConfiguredError) return { ...base(), error: e.message };
     throw e;

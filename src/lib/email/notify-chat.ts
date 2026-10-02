@@ -61,7 +61,7 @@ async function summarise(subject: string, body: string): Promise<EmailSummary> {
   if (!isAiConfigured()) return fallback;
 
   try {
-    const client = getAnthropicClient();
+    const client = getAnthropicClient('email-chat-note');
     const response = await client.messages.create({
       model: AI_MODEL,
       max_tokens: 400,

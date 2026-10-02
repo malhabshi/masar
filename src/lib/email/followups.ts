@@ -70,7 +70,7 @@ const PICK_TOOL: Anthropic.Tool = {
 };
 
 async function pickThreads(apps: Application[], emails: EmailMemoryEntry[]): Promise<Map<number, number>> {
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('follow-ups').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 800,
     system: PICK_SYSTEM,

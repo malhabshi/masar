@@ -154,7 +154,7 @@ export async function updateApplicationsFromEmail(input: {
 
     const { message } = input;
     const attachments = await attachmentText(message);
-    const res = await getAnthropicClient().messages.create({
+    const res = await getAnthropicClient('email-status').messages.create({
       model: AI_DOC_MODEL,
       max_tokens: 1500,
       system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],

@@ -251,7 +251,7 @@ export async function learnCompanyPlaybook(id: string, opts: { received?: number
   }
   if (!received.length) throw new Error(`No emails from ${company.name} were found.`);
 
-  const res = await getAnthropicClient().messages.create({
+  const res = await getAnthropicClient('company-playbooks').messages.create({
     model: AI_MODEL,
     max_tokens: 4000,
     thinking: { type: 'adaptive' },

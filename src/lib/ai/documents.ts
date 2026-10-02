@@ -289,7 +289,7 @@ export async function readDocument(
       return quickCard(nameType, name, 'unreadable', `${mime} files are not read; identified by name only.`);
     }
 
-    const client = getAnthropicClient();
+    const client = getAnthropicClient('documents');
     const res = await client.messages.create({
       model: AI_DOC_MODEL,
       max_tokens: 4000,
