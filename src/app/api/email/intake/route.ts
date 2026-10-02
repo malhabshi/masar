@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
     domains?: string;
     followUps?: boolean;
     reactToNotices?: boolean;
+    taskAddSchools?: boolean;
+    taskUpdateDrafts?: boolean;
   };
   try {
     body = await req.json();
@@ -179,6 +181,8 @@ export async function POST(req: NextRequest) {
         autoApplicationStatus: body.autoApplicationStatus,
         followUps: body.followUps,
         reactToNotices: body.reactToNotices,
+        taskAddSchools: body.taskAddSchools,
+        taskUpdateDrafts: body.taskUpdateDrafts,
       });
       return NextResponse.json({ success: true, settings: saved });
     }

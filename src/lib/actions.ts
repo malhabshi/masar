@@ -828,7 +828,7 @@ export async function createStudentTask(authorId: string, studentId: string, req
       return triggerWhatsAppNotification('new_task_assigned', { recipientName: recipient.name, staffName: creator?.name || 'Staff', taskName: requestTypeData.name, taskTitle: requestTypeData.name, taskDescription: description, studentName: studentData.name, assignedBy: creator?.name || 'Staff', taskUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/tasks` }, recipient.phone);
     });
     await Promise.all(notificationPromises);
-    return { success: true, message: 'Task created.' };
+    return { success: true, message: 'Task created.', taskId: taskRef.id };
   } catch (error: any) {
     return { success: false, message: error.message };
   }

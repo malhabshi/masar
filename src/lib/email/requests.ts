@@ -454,7 +454,7 @@ function offerLines(docs: StoredDoc[]): string[] {
     });
 }
 
-async function downloadDoc(doc: StoredDoc): Promise<{ filename: string; content: Buffer } | null> {
+export async function downloadDoc(doc: StoredDoc): Promise<{ filename: string; content: Buffer } | null> {
   if (!storage) return null;
   const path = storagePathFromUrl(doc.url, BUCKET);
   if (!path) return null;

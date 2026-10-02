@@ -50,6 +50,8 @@ type IntakeSettings = {
   autoApplicationStatus: boolean;
   followUps: boolean;
   reactToNotices: boolean;
+  taskAddSchools: boolean;
+  taskUpdateDrafts: boolean;
 };
 
 type EmailRequestRow = {
@@ -324,6 +326,40 @@ export default function EmailIntakePage() {
                   {status.settings.followUps ? 'Turn off' : 'Turn on'}
                 </Button>
               </span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <strong>Add-school requests:</strong>{' '}
+                {status.settings.taskAddSchools
+                  ? 'on — the schools chosen in an add-school request are added to the student as Pending.'
+                  : 'off.'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  act({ action: 'settings', taskAddSchools: !status.settings.taskAddSchools }, status.settings.taskAddSchools ? 'Turned off' : 'Turned on')
+                }
+              >
+                {status.settings.taskAddSchools ? 'Turn off' : 'Turn on'}
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <strong>Update requests:</strong>{' '}
+                {status.settings.taskUpdateDrafts
+                  ? 'on — a "Request Update" task gets its email drafted in the conversation with the company, with any document it names attached.'
+                  : 'off.'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  act({ action: 'settings', taskUpdateDrafts: !status.settings.taskUpdateDrafts }, status.settings.taskUpdateDrafts ? 'Turned off' : 'Turned on')
+                }
+              >
+                {status.settings.taskUpdateDrafts ? 'Turn off' : 'Turn on'}
+              </Button>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span>

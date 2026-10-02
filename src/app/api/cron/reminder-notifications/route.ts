@@ -16,6 +16,7 @@ import { fulfilEmailRequests } from '@/lib/email/requests';
 import { getIntakeSettings } from '@/lib/email/intake-settings';
 import { syncSentMail } from '@/lib/email/memory';
 import { followUpsIfDue } from '@/lib/email/followups';
+import { automateRecentTasks } from '@/lib/ai/task-automation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -94,12 +95,22 @@ export async function GET(req: NextRequest) {
     followUps = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Requests no browser triggered (add schools / draft the update email).
+  let taskAutomation: unknown = null;
+  try {
+    if (isAiConfigured()) taskAutomation = await automateRecentTasks();
+  } catch (e) {
+    console.error('[cron/task-automation] failed:', e);
+    taskAutomation = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
     siteWatch,
     documents,
     emailDrafts,
     sentMail,
     followUps,
+    taskAutomation,
     success: true,
     messagesSent: result.sent,
     details: result.details,

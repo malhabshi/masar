@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useCollection, updateDocumentNonBlocking } from '@/firebase/client';
-import { firestore } from '@/firebase';
+import { auth, firestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RequestType, Student } from '@/lib/types';
@@ -69,6 +69,25 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
     setSelectedRequestType(type || null);
   };
 
+  // Hand the new request to the AI (add the schools / draft the update email). Not
+  // awaited: the employee never waits on it, and the cron picks up anything missed.
+  const automate = (taskId?: string) => {
+    if (!taskId) return;
+    void (async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        await fetch('/api/ai/task-automation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ taskId }),
+        });
+      } catch {
+        /* best-effort */
+      }
+    })();
+  };
+
   const handleSimpleSubmit = async (values: { description: string }) => {
     if (!selectedRequestType) return;
     
@@ -81,6 +100,7 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
     );
 
     if (result.success) {
+      automate((result as { taskId?: string }).taskId);
       toast({ title: 'Task Created', description: result.message });
       handleClose();
     } else {
@@ -138,6 +158,7 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
     );
 
     if (result.success) {
+      automate((result as { taskId?: string }).taskId);
       toast({ title: 'Task Created', description: result.message });
       handleClose();
     } else {

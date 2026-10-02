@@ -26,6 +26,10 @@ export type IntakeSettings = {
   followUps: boolean;
   /** Apply company-wide notices (course closed, reopened…) to every affected student. */
   reactToNotices: boolean;
+  /** Add-school requests put the chosen schools on the student as Pending. */
+  taskAddSchools: boolean;
+  /** "Request Update" requests get the email drafted in the company conversation. */
+  taskUpdateDrafts: boolean;
 };
 
 export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
@@ -37,6 +41,8 @@ export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
   autoApplicationStatus: true,
   followUps: true,
   reactToNotices: true,
+  taskAddSchools: true,
+  taskUpdateDrafts: true,
 };
 
 export async function getIntakeSettings(): Promise<IntakeSettings> {
@@ -56,6 +62,8 @@ export async function getIntakeSettings(): Promise<IntakeSettings> {
       autoApplicationStatus: d.autoApplicationStatus !== false,
       followUps: d.followUps !== false,
       reactToNotices: d.reactToNotices !== false,
+      taskAddSchools: d.taskAddSchools !== false,
+      taskUpdateDrafts: d.taskUpdateDrafts !== false,
     };
   } catch {
     return DEFAULT_INTAKE_SETTINGS;
@@ -80,6 +88,8 @@ export async function saveIntakeSettings(patch: Partial<IntakeSettings>): Promis
       typeof patch.autoApplicationStatus === 'boolean' ? patch.autoApplicationStatus : current.autoApplicationStatus,
     followUps: typeof patch.followUps === 'boolean' ? patch.followUps : current.followUps,
     reactToNotices: typeof patch.reactToNotices === 'boolean' ? patch.reactToNotices : current.reactToNotices,
+    taskAddSchools: typeof patch.taskAddSchools === 'boolean' ? patch.taskAddSchools : current.taskAddSchools,
+    taskUpdateDrafts: typeof patch.taskUpdateDrafts === 'boolean' ? patch.taskUpdateDrafts : current.taskUpdateDrafts,
   };
   await adminDb
     .collection(SETTINGS.collection)
