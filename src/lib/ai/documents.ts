@@ -20,6 +20,7 @@ import { getAnthropicClient } from './client';
 import { AI_DOC_MODEL, isAiConfigured } from './config';
 import { extractPdfText } from '@/lib/email/document-compare';
 import { mimeFromName, storagePathFromUrl } from '@/lib/mcp/document-tools';
+import { applyDocumentFacts } from './autofill';
 
 const BUCKET = 'studio-9484431255-91d96.firebasestorage.app';
 
@@ -108,6 +109,8 @@ export type DocumentReaderSettings = {
   autoRead: boolean;
   /** Send passport images to the model. Off means passports are identified by name only. */
   readPassports: boolean;
+  /** Fill the profile from what documents say (IELTS score, checklist ticks, Missing Items). */
+  autoFill: boolean;
 };
 
 const SETTINGS_REF = () => db().collection('app_settings').doc('ai_documents');
@@ -115,9 +118,9 @@ const SETTINGS_REF = () => db().collection('app_settings').doc('ai_documents');
 export async function getDocumentReaderSettings(): Promise<DocumentReaderSettings> {
   try {
     const d = (await SETTINGS_REF().get()).data() ?? {};
-    return { autoRead: d.autoRead === true, readPassports: d.readPassports === true };
+    return { autoRead: d.autoRead === true, readPassports: d.readPassports === true, autoFill: d.autoFill !== false };
   } catch {
-    return { autoRead: false, readPassports: false };
+    return { autoRead: false, readPassports: false, autoFill: true };
   }
 }
 
@@ -126,6 +129,7 @@ export async function saveDocumentReaderSettings(patch: Partial<DocumentReaderSe
   const next: DocumentReaderSettings = {
     autoRead: typeof patch.autoRead === 'boolean' ? patch.autoRead : cur.autoRead,
     readPassports: typeof patch.readPassports === 'boolean' ? patch.readPassports : cur.readPassports,
+    autoFill: typeof patch.autoFill === 'boolean' ? patch.autoFill : cur.autoFill,
   };
   await SETTINGS_REF().set({ ...next, updatedAt: new Date().toISOString() }, { merge: true });
   return next;
@@ -387,6 +391,7 @@ export async function readStudentDocuments(studentId: string, opts: { force?: bo
   for (const d of todo) {
     const card = await readDocument(d, { name: s.name }, settings);
     await saveCard(studentId, d.id!, card);
+    if (settings.autoFill) await applyDocumentFacts(studentId, { ...d, ai: card });
     cards.push({ documentId: d.id!, card });
   }
   return { studentId, read: cards.length, alreadyRead: docs.length - todo.length, cards };
@@ -423,7 +428,8 @@ export async function readPendingDocuments(opts: { limit?: number; concurrency?:
     while (next < batch.length) {
       const item = batch[next++];
       const card = await readDocument(item.doc, { name: item.studentName }, settings);
-      await saveCard(item.studentId, item.doc.id!, card).catch(() => false);
+      const saved = await saveCard(item.studentId, item.doc.id!, card).catch(() => false);
+      if (saved && settings.autoFill) await applyDocumentFacts(item.studentId, { ...item.doc, ai: card });
       if (card.status === 'read') totals.read++;
       else if (card.status === 'named_only') totals.namedOnly++;
       else if (card.status === 'unreadable') totals.unreadable++;

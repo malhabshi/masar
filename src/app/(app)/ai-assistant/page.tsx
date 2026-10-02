@@ -549,7 +549,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
  */
 function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: RequestInit) => Promise<Response> }) {
   const [open, setOpen] = useState(false);
-  const [settings, setSettings] = useState<{ autoRead: boolean; readPassports: boolean } | null>(null);
+  const [settings, setSettings] = useState<{ autoRead: boolean; readPassports: boolean; autoFill: boolean } | null>(null);
   const [progress, setProgress] = useState<DocProgress | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -573,7 +573,7 @@ function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: Req
     loadProgress().catch(fail);
   }, [authedFetch, loadProgress]);
 
-  const save = async (patch: Partial<{ autoRead: boolean; readPassports: boolean }>) => {
+  const save = async (patch: Partial<{ autoRead: boolean; readPassports: boolean; autoFill: boolean }>) => {
     setBusy('settings');
     try {
       const r = await authedFetch('/api/ai/documents', {
@@ -694,6 +694,17 @@ function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: Req
                 />
                 <Label htmlFor="docs-passports" className="cursor-pointer text-sm">
                   Include passports
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="docs-autofill"
+                  checked={settings.autoFill}
+                  disabled={busy !== null}
+                  onCheckedChange={(v) => save({ autoFill: v })}
+                />
+                <Label htmlFor="docs-autofill" className="cursor-pointer text-sm">
+                  Fill the profile from documents
                 </Label>
               </div>
             </div>

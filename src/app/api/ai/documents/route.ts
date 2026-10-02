@@ -60,6 +60,7 @@ export async function PATCH(req: NextRequest) {
   const settings = await saveDocumentReaderSettings({
     autoRead: typeof body.autoRead === 'boolean' ? body.autoRead : undefined,
     readPassports: typeof body.readPassports === 'boolean' ? body.readPassports : undefined,
+    autoFill: typeof body.autoFill === 'boolean' ? body.autoFill : undefined,
   });
   return NextResponse.json({ settings });
 }
