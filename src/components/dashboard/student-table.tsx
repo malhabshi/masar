@@ -58,6 +58,14 @@ interface StudentTableProps {
   showDaysSinceCreated?: boolean;
 }
 
+/**
+ * Deliberately raw Tailwind shades, not the theme's status tokens.
+ *
+ * These statuses are *named* by their colour — staff say "he's orange" — so the swatch is
+ * the meaning, and they only read as a scale if all six come from one palette. Swapping
+ * green and red for `success` and `danger` would leave yellow and orange from a different
+ * family and break the run.
+ */
 const pipelineStatusStyles: { [key: string]: string } = {
   green: 'bg-green-500 text-primary-foreground',
   yellow: 'bg-yellow-400 text-black',
@@ -66,6 +74,16 @@ const pipelineStatusStyles: { [key: string]: string } = {
   black: 'bg-black text-white',
   none: 'bg-gray-400 text-primary-foreground',
 };
+/**
+ * One value from the two fields the intake is stored in. Students with neither get
+ * 'none' so they can be filtered for — 878 of 1,384 open students have no intake set,
+ * and finding them is half the point of the filter.
+ */
+const intakeTermOf = (s: { academicIntakeSemester?: string; academicIntakeYear?: number }) =>
+  s.academicIntakeSemester || s.academicIntakeYear
+    ? `${s.academicIntakeSemester ?? '?'} ${s.academicIntakeYear ?? '?'}`.trim()
+    : 'none';
+
 const pipelineStatusLabels: { [key: string]: string } = {
     green: 'Green',
     yellow: 'Yellow',
@@ -96,6 +114,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
   const [acceptedCountryFilter, setAcceptedCountryFilter] = useState<string[]>([]);
   const [acceptedMajorFilter, setAcceptedMajorFilter] = useState<string[]>([]);
   const [foundationCategoryFilter, setFoundationCategoryFilter] = useState<string[]>([]);
+  // Intake term: semester and year are two fields, filtered as one value ("FALL (8/9) 2026").
+  const [intakeTermFilter, setIntakeTermFilter] = useState<string[]>([]);
   const [isClient, setIsClient] = useState(false);
 
   // Checklist filters
@@ -138,6 +158,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setAcceptedCountryFilter([]);
     setAcceptedMajorFilter([]);
     setFoundationCategoryFilter([]);
+    setIntakeTermFilter([]);
     setShowAllStudents(false);
     try {
       const raw = sessionStorage.getItem(`applicants_filters_${currentUser.id}`);
@@ -148,6 +169,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         if (Array.isArray(f.employeeFilter))   setEmployeeFilter(f.employeeFilter);
         if (Array.isArray(f.genderFilter))     setGenderFilter(f.genderFilter);
         if (Array.isArray(f.studyLevelFilter))   setStudyLevelFilter(f.studyLevelFilter);
+        if (Array.isArray(f.intakeTermFilter))   setIntakeTermFilter(f.intakeTermFilter);
         if (Array.isArray(f.schoolTypeFilter))   setSchoolTypeFilter(f.schoolTypeFilter);
         if (Array.isArray(f.countryFilter))      setCountryFilter(f.countryFilter);
         if (f.ieltsFilter !== undefined)           setIeltsFilter(f.ieltsFilter);
@@ -186,11 +208,11 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     try {
       sessionStorage.setItem(`applicants_filters_${currentUser.id}`, JSON.stringify({
         searchQuery, pipelineFilter, employeeFilter,
-        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, showAllStudents,
+        genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, intakeTermFilter, showAllStudents,
         checklistItemFilter, checklistStatusFilter,
       }));
     } catch {}
-  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
+  }, [isClient, currentUser?.id, searchQuery, pipelineFilter, employeeFilter, genderFilter, studyLevelFilter, countryFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, intakeTermFilter, showAllStudents, checklistItemFilter, checklistStatusFilter]);
 
   // Identify duplicate phones across all currently loaded students (all phone fields)
   const duplicatePhoneSet = useMemo(() => {
@@ -240,6 +262,21 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     const seen = new Set(students.map(s => s.id));
     return [...students, ...closedStudents.filter(s => !seen.has(s.id))];
   }, [students, closedStudents]);
+
+    // Offered options come from the data, so a new intake year appears without a code
+  // change and dead ones drop off.
+  const intakeTermOptions = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const s of sourceStudents) {
+      const key = intakeTermOf(s);
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
+    const real = [...seen.keys()].filter(k => k !== 'none').sort().reverse();
+    return [
+      ...real.map(k => ({ label: k, value: k })),
+      ...(seen.has('none') ? [{ label: 'No intake set', value: 'none' }] : []),
+    ];
+  }, [sourceStudents]);
 
   const displayedStudents = useMemo(() => {
     const filtered = sourceStudents.filter(student => {
@@ -295,6 +332,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
 
         const matchesGender = genderFilter.length === 0 || genderFilter.includes(student.gender ?? '');
         const matchesStudyLevel = studyLevelFilter.length === 0 || studyLevelFilter.includes(student.studyLevel ?? '');
+        const matchesIntakeTerm = intakeTermFilter.length === 0 || intakeTermFilter.includes(intakeTermOf(student));
         const matchesSchoolType = schoolTypeFilter.length === 0 || (student.studyLevel === 'Foundation' && schoolTypeFilter.some(f => f === 'none' ? !student.schoolType : student.schoolType === f));
 
         let matchesChecklist = true;
@@ -307,16 +345,10 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
           matchesChecklist = checklistStatusFilter === 'checked' ? isChecked : !isChecked;
         }
 
-        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesAcceptedCountry && matchesAcceptedMajor && matchesFoundationCategory && matchesGender && matchesStudyLevel && matchesSchoolType && matchesChecklist;
+        return matchesSearch && matchesPipeline && matchesEmployee && matchesIelts && matchesImportType && matchesAccepted && matchesAcceptedCountry && matchesAcceptedMajor && matchesFoundationCategory && matchesGender && matchesStudyLevel && matchesIntakeTerm && matchesSchoolType && matchesChecklist;
     });
 
-    return [...filtered].sort((a, b) => {
-        // Closed profiles always go last
-        if (!!a.isClosed !== !!b.isClosed) return a.isClosed ? 1 : -1;
-        if (a.isClosed && b.isClosed) return 0;
-
-        if (!!a.changeAgentRequired !== !!b.changeAgentRequired) return a.changeAgentRequired ? -1 : 1;
-        const getNotificationScore = (s: Student) => {
+    const getNotificationScore = (s: Student) => {
             let score = 0;
             if (s.markedUnreadBy?.includes(currentUser.id)) score += 200;
             if (currentUser.role === 'admin' || currentUser.role === 'adminplus' || currentUser.role === 'department') {
@@ -332,7 +364,36 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 if (s.isNewForEmployee) score += 50;
             }
             return score;
-        };
+    };
+
+    // A student with a final university choice is essentially done, so they belong at
+    // the bottom of the list rather than taking up room at the top. They come back to
+    // their normal position the moment something happens: a notification for this user,
+    // or any activity in the last week — submitting a task updates lastActivityAt, so a
+    // newly submitted request brings the student straight back up.
+    const FINALIZED_QUIET_MS = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const isSettledFinalized = (s: Student) => {
+      if (!s.finalChoiceUniversity) return false;
+      if (s.changeAgentRequired) return false;
+      if (getNotificationScore(s) > 0) return false;
+      const last = Date.parse(s.lastActivityAt || s.createdAt || '');
+      if (Number.isFinite(last) && now - last < FINALIZED_QUIET_MS) return false;
+      return true;
+    };
+
+    return [...filtered].sort((a, b) => {
+        // Closed profiles always go last
+        if (!!a.isClosed !== !!b.isClosed) return a.isClosed ? 1 : -1;
+        if (a.isClosed && b.isClosed) return 0;
+
+        if (!!a.changeAgentRequired !== !!b.changeAgentRequired) return a.changeAgentRequired ? -1 : 1;
+
+        // Finished and quiet students sink — just above the closed ones.
+        const settledA = isSettledFinalized(a);
+        const settledB = isSettledFinalized(b);
+        if (settledA !== settledB) return settledA ? 1 : -1;
+
         const scoreA = getNotificationScore(a);
         const scoreB = getNotificationScore(b);
         
@@ -353,7 +414,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
         const dateB = new Date(b.createdAt).getTime() || 0;
         return dateB - dateA;
     });
-  }, [sourceStudents, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, genderFilter, studyLevelFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
+  }, [sourceStudents, debouncedSearchQuery, pipelineFilter, employeeFilter, ieltsFilter, importTypeFilter, acceptedFilter, acceptedCountryFilter, acceptedMajorFilter, foundationCategoryFilter, genderFilter, studyLevelFilter, intakeTermFilter, schoolTypeFilter, countryFilter, employeeMapByCivilId, currentUser, showAllStudents, effectiveRole, checklistItemFilter, checklistStatusFilter]);
 
   useEffect(() => {
     if (!isClient || !currentUser?.id) return;
@@ -379,6 +440,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
     setFoundationCategoryFilter([]);
     setGenderFilter([]);
     setStudyLevelFilter([]);
+    setIntakeTermFilter([]);
     setSchoolTypeFilter([]);
     setCountryFilter([]);
     setShowAllStudents(false);
@@ -389,7 +451,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
       sessionStorage.removeItem(`applicants_nav_ids_${currentUser?.id}`);
     } catch {}
   };
-  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || acceptedFilter !== 'all' || acceptedCountryFilter.length > 0 || acceptedMajorFilter.length > 0 || foundationCategoryFilter.length > 0 || genderFilter.length > 0 || studyLevelFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
+  const isFiltered = !!searchQuery || pipelineFilter.length > 0 || employeeFilter.length > 0 || ieltsFilter !== 'all' || importTypeFilter !== 'all' || acceptedFilter !== 'all' || acceptedCountryFilter.length > 0 || acceptedMajorFilter.length > 0 || foundationCategoryFilter.length > 0 || genderFilter.length > 0 || studyLevelFilter.length > 0 || intakeTermFilter.length > 0 || schoolTypeFilter.length > 0 || countryFilter.length > 0 || showAllStudents || checklistItemFilter !== 'all';
 
   const getEmployeeName = (employeeId: string | null) => {
     if (!employeeId) return 'Unassigned';
@@ -516,6 +578,15 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                     selected={studyLevelFilter}
                     onChange={setStudyLevelFilter}
                     className="flex-1 min-w-[110px]"
+                  />
+                )}
+                {isClient && intakeTermOptions.length > 0 && (
+                  <MultiSelectFilter
+                    label="Intake Term"
+                    options={intakeTermOptions}
+                    selected={intakeTermFilter}
+                    onChange={setIntakeTermFilter}
+                    className="flex-1 min-w-[140px]"
                   />
                 )}
                 {isClient && (
@@ -772,7 +843,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                 const daysSinceCreated = createdDate ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 86400000)) : null;
 
                 return (
-                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-red-50/20", student.isClosed && "opacity-60 bg-gray-100/60", selectedIds.includes(student.id) && "bg-primary/5")}>
+                <TableRow key={student.id} className={cn(student.changeAgentRequired && "bg-danger-soft/20", student.isClosed && "opacity-60 bg-muted/60", selectedIds.includes(student.id) && "bg-primary/5")}>
                   {isAdminDept && (
                     <TableCell>
                       <Checkbox 
@@ -795,8 +866,8 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           {student.importMatchType && (
                             <Badge className={cn("text-[10px] font-semibold px-1.5 h-4 w-fit border",
                               student.importMatchType === 'new'
-                                ? "bg-green-100 text-green-800 border-green-300"
-                                : "bg-slate-100 text-slate-700 border-slate-300")}>
+                                ? "bg-success-soft text-success border-success-border"
+                                : "bg-muted text-muted-foreground border-border")}>
                               {student.importMatchType === 'new' ? 'NEW IMPORT' : 'EXISTING'}
                             </Badge>
                           )}
@@ -808,7 +879,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                           <span>{student.name || 'Unknown Student'}</span>
                           {student.acceptedInfo && (
                             <span title={`Accepted: ${student.acceptedInfo.country} · ${student.acceptedInfo.major}`} className="inline-flex shrink-0">
-                              <CheckCircle2 className="h-4 w-4 text-green-600 stroke-[3]" />
+                              <CheckCircle2 className="h-4 w-4 text-success stroke-[3]" />
                             </span>
                           )}
                           {student.foundationCategory && (
@@ -817,21 +888,21 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             </Badge>
                           )}
                           {student.isClosed && <Badge className="bg-black text-white border-white border uppercase tracking-widest text-[10px] h-5 px-1.5">CLOSED</Badge>}
-                          {student.changeAgentRequired && <Badge className="bg-black text-red-500 border-red-500 border animate-pulse uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
-                          {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-blue-500 hover:bg-blue-600">New</Badge>}
+                          {student.changeAgentRequired && <Badge className="bg-black text-danger border-danger border uppercase tracking-wider text-[10px] h-5 px-1.5">CHANGE AGENT</Badge>}
+                          {isCurrentUserAssigned && student.isNewForEmployee && <Badge className="bg-info hover:bg-info/90">New</Badge>}
                           {isAdminDept && (student.chatUnreadCountByUser?.[currentUser.id] || 0) > 0 ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.chatUnreadCountByUser![currentUser.id]}</span></Badge> : null}
-                          {isAdminDept && student.newDocumentsForAdmin && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
+                          {isAdminDept && student.newDocumentsForAdmin && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-info"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForAdmin}</span></Badge> : null}
                           {isCurrentUserAssigned && student.employeeUnreadMessages && (!student.updatesViewedBy || !student.updatesViewedBy.includes(currentUser.id)) ? <Badge variant="destructive" className="flex items-center gap-1 p-1 h-6"><MessageSquare className="h-3 w-3" /><span>{student.employeeUnreadMessages}</span></Badge> : null}
-                          {isCurrentUserAssigned && student.newDocumentsForEmployee && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-blue-500"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
-                          {isAdminDept && (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForAdmin}</span></Badge> : null}
-                          {isCurrentUserAssigned && (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-green-500 text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForEmployee}</span></Badge> : null}
-                          {isCurrentUserAssigned && student.newMissingItemsForEmployee && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-yellow-500 text-black"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
-                          {student.markedUnreadBy?.includes(currentUser.id) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-amber-500 text-white"><Bell className="h-3 w-3" /></Badge> : null}
+                          {isCurrentUserAssigned && student.newDocumentsForEmployee && (!student.newDocsViewedBy || !student.newDocsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-info"><FilePlus className="h-3 w-3" /><span>{student.newDocumentsForEmployee}</span></Badge> : null}
+                          {isAdminDept && (student.newPublicUploadsForAdmin || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-success text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForAdmin}</span></Badge> : null}
+                          {isCurrentUserAssigned && (student.newPublicUploadsForEmployee || 0) > 0 && (!student.publicUploadsViewedBy || !student.publicUploadsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-success text-white"><Upload className="h-3 w-3" /><span>{student.newPublicUploadsForEmployee}</span></Badge> : null}
+                          {isCurrentUserAssigned && student.newMissingItemsForEmployee && (!student.missingItemsViewedBy || !student.missingItemsViewedBy.includes(currentUser.id)) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-warning text-warning-foreground"><AlertTriangle className="h-3 w-3" /><span>{student.newMissingItemsForEmployee}</span></Badge> : null}
+                          {student.markedUnreadBy?.includes(currentUser.id) ? <Badge className="flex items-center gap-1 p-1 h-6 bg-warning text-warning-foreground"><Bell className="h-3 w-3" /></Badge> : null}
                           {student.transferRequested && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="border-yellow-500 text-yellow-600 cursor-help">
+                                  <Badge variant="outline" className="border-warning text-warning cursor-help">
                                     <ArrowRightLeft className="mr-1 h-3 w-3" />
                                     Transfer Requested
                                   </Badge>
@@ -844,12 +915,12 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                             </TooltipProvider>
                           )}
                           {student.deletionRequested?.status === 'pending' && isAdminDept && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="destructive" className="flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Deletion Requested</Badge></TooltipTrigger><TooltipContent><p>Requested by {requester?.name || '...'} {isClient ? formatRelativeTime(student.deletionRequested.requestedAt) : ''}</p></TooltipContent></Tooltip></TooltipProvider>}
-                          {wasTransferred && <Badge variant="outline" className="border-blue-500 text-blue-600"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
+                          {wasTransferred && <Badge variant="outline" className="border-info text-info"><Repeat className="mr-1 h-3 w-3" />Transferred</Badge>}
                         </div>
                       </Link>
                       {showDaysSinceCreated && daysSinceCreated !== null && (
                         <div className="flex">
-                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 text-[10px] h-5 px-1.5 gap-1 font-semibold">
+                          <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning text-[10px] h-5 px-1.5 gap-1 font-semibold">
                             <Calendar className="h-2.5 w-2.5" />
                             {daysSinceCreated === 0 ? 'Added today' : `Added ${daysSinceCreated} day${daysSinceCreated === 1 ? '' : 's'} ago`}
                           </Badge>
@@ -857,7 +928,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                       )}
                       {isDuplicate && (
                         <div className="flex">
-                          <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-black uppercase tracking-tighter gap-1">
+                          <Badge className="bg-info hover:bg-info/90 text-info-foreground text-[9px] h-4 py-0 font-semibold uppercase tracking-tighter gap-1">
                             <AlertTriangle className="h-2 w-2" />
                             Duplicate Profile
                           </Badge>
@@ -893,7 +964,7 @@ export function StudentTable({ students, currentUser: propUser, allUsers, emptyS
                   </TableCell>
                   <TableCell>
                     {student.jotform ? (
-                      <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50 flex items-center gap-1 w-fit whitespace-nowrap">
+                      <Badge variant="outline" className="border-success text-success bg-success-soft flex items-center gap-1 w-fit whitespace-nowrap">
                         <CheckCircle2 className="h-3 w-3" />
                         Completed
                       </Badge>

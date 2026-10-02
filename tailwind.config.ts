@@ -45,9 +45,32 @@ export default {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
         },
+        // Semantic status colours, defined once in globals.css. Components should reach
+        // for these rather than picking a raw Tailwind shade — greens were appearing at
+        // 500, 600 and 700, and orange, amber and yellow all meant "warning".
         success: {
           DEFAULT: 'hsl(var(--success))',
           foreground: 'hsl(var(--success-foreground))',
+          soft: 'hsl(var(--success-soft))',
+          border: 'hsl(var(--success-border))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
+          soft: 'hsl(var(--warning-soft))',
+          border: 'hsl(var(--warning-border))',
+        },
+        danger: {
+          DEFAULT: 'hsl(var(--danger))',
+          foreground: 'hsl(var(--danger-foreground))',
+          soft: 'hsl(var(--danger-soft))',
+          border: 'hsl(var(--danger-border))',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          foreground: 'hsl(var(--info-foreground))',
+          soft: 'hsl(var(--info-soft))',
+          border: 'hsl(var(--info-border))',
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

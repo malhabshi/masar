@@ -107,24 +107,24 @@ export function EmployeeStatsView() {
                     <CardContent className="py-4">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-green-700 uppercase">Green</span>
-                          <div className="text-2xl font-black text-green-700">{employeeStat.pipelineBreakdown.green}</div>
+                          <span className="text-[10px] font-semibold text-green-700 uppercase">Green</span>
+                          <div className="text-2xl font-semibold text-green-700">{employeeStat.pipelineBreakdown.green}</div>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-yellow-600 uppercase">Yellow</span>
-                          <div className="text-2xl font-black text-yellow-600">{employeeStat.pipelineBreakdown.yellow}</div>
+                          <span className="text-[10px] font-semibold text-yellow-600 uppercase">Yellow</span>
+                          <div className="text-2xl font-semibold text-yellow-600">{employeeStat.pipelineBreakdown.yellow}</div>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-orange-700 uppercase">Orange</span>
-                          <div className="text-2xl font-black text-orange-700">{employeeStat.pipelineBreakdown.orange}</div>
+                          <span className="text-[10px] font-semibold text-orange-700 uppercase">Orange</span>
+                          <div className="text-2xl font-semibold text-orange-700">{employeeStat.pipelineBreakdown.orange}</div>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-red-700 uppercase">Red</span>
-                          <div className="text-2xl font-black text-red-700">{employeeStat.pipelineBreakdown.red}</div>
+                          <span className="text-[10px] font-semibold text-red-700 uppercase">Red</span>
+                          <div className="text-2xl font-semibold text-red-700">{employeeStat.pipelineBreakdown.red}</div>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black text-muted-foreground uppercase">No Status</span>
-                          <div className="text-2xl font-black text-muted-foreground">{employeeStat.pipelineBreakdown.none}</div>
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase">No Status</span>
+                          <div className="text-2xl font-semibold text-muted-foreground">{employeeStat.pipelineBreakdown.none}</div>
                         </div>
                       </div>
                     </CardContent>

@@ -110,7 +110,7 @@ export function GradeCard({ student, currentUser }: GradeCardProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-3xl font-black text-primary">
+        <p className="text-3xl font-semibold text-primary">
           {student.highSchoolGrade || 'Not Added'}
         </p>
       </CardContent>

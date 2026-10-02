@@ -114,6 +114,18 @@ export function CreateStudentTaskDialog({ student, currentUser }: CreateStudentT
       } catch { /* best-effort; task creation still proceeds */ }
     }
 
+    // Keep the UK contact details and references on the student, so the next
+    // application pre-fills them instead of asking for them again.
+    const ukDetails: Record<string, string> = {};
+    for (const key of ['ukPhone', 'ukAddress', 'reference1Name', 'reference1Email', 'reference2Name', 'reference2Email'] as const) {
+      if (data[key]) ukDetails[`jotformData.${key}`] = data[key];
+    }
+    if (Object.keys(ukDetails).length > 0) {
+      try {
+        updateDocumentNonBlocking(doc(firestore, 'students', student.id), ukDetails as any);
+      } catch { /* best-effort; the task still goes through */ }
+    }
+
     // Dynamic forms usually have their own summary/description or we generate one
     const description = data.notes || `Dynamic request: ${selectedRequestType.name}`;
 

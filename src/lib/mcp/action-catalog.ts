@@ -735,7 +735,7 @@ export const ACTION_CATALOG: CatalogAction[] = [
     "params": [
       {
         "name": "values",
-        "type": "{ studentName: string; studentEmail?: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }",
+        "type": "{ studentName: string; studentEmail?: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; schoolName?: string; schoolType?: 'Private' | 'Public'; targetCountries: string[]; otherCountry?: string; notes?: string; }",
         "optional": false
       },
       {
@@ -2534,6 +2534,11 @@ export const ACTION_CATALOG: CatalogAction[] = [
       {
         "name": "applicationEntries",
         "type": "{ university: string; major: string; country: string }[]",
+        "optional": true
+      },
+      {
+        "name": "ukDetails",
+        "type": "{ acceptanceType?: string; scholarshipType?: string; civilId?: string; schoolName?: string }",
         "optional": true
       }
     ]

@@ -1,0 +1,59 @@
+// Scheduled sending of student-reminder WhatsApps.
+//
+// Every reminder fires four times — on creation, a day before, an hour before, and
+// five minutes before — so this must run FREQUENTLY (every 5 minutes) for the last
+// stage to be accurate. Sending is idempotent, so running it more often is harmless.
+//
+// Trigger it with:
+//   curl -H "Authorization: Bearer $CRON_SECRET" https://<app>/api/cron/reminder-notifications
+
+import { NextRequest, NextResponse } from 'next/server';
+import { processReminderStages } from '@/lib/actions';
+import { runAllSiteWatches } from '@/lib/site-watch';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
+
+export async function GET(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+
+  // An unset secret must FAIL, not wave everyone through. Comparing against
+  // `Bearer ${undefined}` would let anyone in who sends the literal string.
+  if (!secret) {
+    console.error('[cron/reminders] CRON_SECRET is not set — refusing to run.');
+    return NextResponse.json({ error: 'Scheduler is not configured.' }, { status: 503 });
+  }
+  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const startedAt = Date.now();
+  const result = await processReminderStages();
+
+  // Logged so a failing run is visible in Cloud Logging rather than silent.
+  console.log(
+    `[cron/reminders] sent=${result.sent} in ${Date.now() - startedAt}ms`,
+    result.details.length ? result.details.join(' ') : '(nothing due)',
+  );
+
+  // The official-sites watch rides on this job so it needs no scheduler of its own. It
+  // runs strictly AFTER the reminders are out, is throttled to once every 24 hours,
+  // carries its own time budget, and can never fail this response.
+  let siteWatch: unknown = null;
+  try {
+    siteWatch = await runAllSiteWatches();
+    if ((siteWatch as { ran?: boolean })?.ran) console.log('[cron/site-watch]', JSON.stringify(siteWatch));
+  } catch (e) {
+    console.error('[cron/site-watch] failed:', e);
+    siteWatch = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  return NextResponse.json({
+    siteWatch,
+    success: true,
+    messagesSent: result.sent,
+    details: result.details,
+    ranAt: new Date().toISOString(),
+  });
+}

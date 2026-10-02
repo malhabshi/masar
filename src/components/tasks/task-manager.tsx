@@ -38,7 +38,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
     if (!currentUser) return null;
     
     if (currentUser.role === 'admin' || currentUser.role === 'adminplus') {
-      return query(collection(firestore, 'tasks'), orderBy('createdAt', 'desc'));
+      // Only requests are ever rendered (see categorizedTasks), so only requests are
+      // fetched: 6.6k documents instead of the whole collection's 27k, most of which
+      // are system notifications. No orderBy here — that would need a composite index
+      // on (category, createdAt); the list is sorted client-side below instead.
+      return query(collection(firestore, 'tasks'), where('category', '==', 'request'));
     }
 
     if (currentUser.role === 'employee') {
@@ -63,7 +67,11 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
   }, [currentUser]);
 
   const { data: tasksData, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
-  const tasks = useMemo(() => tasksData || [], [tasksData]);
+  // Newest first, whichever query produced the data.
+  const tasks = useMemo(
+    () => [...(tasksData || [])].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [tasksData],
+  );
 
   useEffect(() => {
     if (!tasks || tasks.length === 0 || !currentUser) return;
@@ -101,6 +109,9 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
             }
         });
         task.replies?.forEach(reply => userIds.add(reply.authorId));
+        // Quick Notifications are part of the same thread in the details dialog and are
+        // labelled from this map; without their senders the dialog showed "System".
+        task.notifications?.forEach(n => userIds.add(n.fromId));
     });
     return Array.from(userIds);
   }, [tasks]);
@@ -183,10 +194,15 @@ export function TaskManager({ currentUser }: TaskManagerProps) {
       let reason = undefined;
       
       if (status === 'denied') {
-          // A premium-feeling prompt (native but effective for quick workflow)
-          const resp = window.prompt("Why is this task being denied? (Optional)");
+          // Required, not optional: the reason is what the employee is shown on their
+          // dashboard. Without it they only learn that the answer was no.
+          const resp = window.prompt("Why is this task being denied? The employee will see this.");
           if (resp === null) return; // User cancelled
-          reason = resp.trim() || undefined;
+          if (!resp.trim()) {
+              toast({ variant: 'destructive', title: "A reason is required", description: "The employee needs to know why it was denied." });
+              return;
+          }
+          reason = resp.trim();
       }
 
       setIsUpdatingStatus(taskId);

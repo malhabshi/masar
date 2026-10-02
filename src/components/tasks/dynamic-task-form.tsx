@@ -12,14 +12,25 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search, Key } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, GraduationCap, Building2, Search, Key, Paperclip, Users } from 'lucide-react';
 import { addDays, format, startOfDay } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn, calculateAge } from '@/lib/utils';
+import {
+  COMPANY_LIMIT,
+  buildCompanyLookup,
+  countByCompany,
+  schoolsAlreadyHeld,
+  schoolsInOpenRequests,
+  wouldExceedLimit,
+} from '@/lib/school-quota';
 import { UploadDocumentDialog } from '../student/upload-document-dialog';
 import { Badge } from '../ui/badge';
 import { useCollection } from '@/firebase/client';
+import { useUser } from '@/hooks/use-user';
+import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
+import { where } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
 interface DynamicTaskFormProps {
@@ -31,7 +42,88 @@ interface DynamicTaskFormProps {
 }
 
 const COMPANY_ORDER: UniversityCompany[] = ['Into', 'Studygroup', 'Kaplan', 'OnCampus', 'Navitas', 'Other', 'Inhouse'];
-const COMPANY_LIMIT = 5;
+
+/** Optional attachments on a UK First Year application. None of them is required. */
+const FIRST_YEAR_ATTACHMENTS = [
+  { key: 'shareCodeEvisa', label: 'Share Code + eVisa' },
+  { key: 'casDocument', label: 'CAS (picture or PDF)' },
+  { key: 'foundationTranscript', label: 'Foundation Transcript' },
+] as const;
+
+type TaskAttachment = { label: string; name: string; url: string };
+
+/**
+ * One optional attachment slot.
+ *
+ * The file goes to the student's own documents through the existing upload route, so
+ * it lives on the profile as well as on this request — nothing is stranded inside a
+ * task. The request keeps a link to it.
+ */
+function AttachmentSlot({
+  student,
+  label,
+  value,
+  onChange,
+}: {
+  student: Student;
+  label: string;
+  value: TaskAttachment | null;
+  onChange: (next: TaskAttachment | null) => void;
+}) {
+  const { auth: authUser } = useUser();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = async (file: File) => {
+    const check = validateFile(file);
+    if (!check.isValid) { setError(check.message ?? 'Invalid file.'); return; }
+    if (!authUser) { setError('Not signed in.'); return; }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('destination', 'student');
+      fd.append('studentId', student.id);
+      fd.append('customName', label);
+      const token = await authUser.getIdToken();
+      const res = await fetch('/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const result = await res.json();
+      if (!res.ok || !result.success) throw new Error(result.error || 'Upload failed.');
+      onChange({ label, name: result.document?.name || file.name, url: result.document?.url || '' });
+    } catch (e: any) {
+      setError(e?.message || 'Upload failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <FormLabel className="text-xs font-semibold">{label} <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+      {value ? (
+        <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5">
+          <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="flex-1 truncate text-xs font-medium">{value.name}</span>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => onChange(null)}>
+            Remove
+          </Button>
+        </div>
+      ) : (
+        <Input
+          type="file"
+          className="text-xs"
+          disabled={busy}
+          accept={ALLOWED_FILE_EXTENSIONS}
+          onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
+        />
+      )}
+      {busy && <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Uploading…</p>}
+      {error && <p className="text-[11px] font-semibold text-destructive">{error}</p>}
+    </div>
+  );
+}
 const COMPANY_COLORS: Record<string, string> = {
   Into:       'bg-blue-100 text-blue-800 border-blue-300',
   Studygroup: 'bg-violet-100 text-violet-800 border-violet-300',
@@ -66,6 +158,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     config?.useApprovedUniversitiesList ? 'approved_universities' : ''
   );
 
+  // This student's own requests. Schools are chosen one request at a time, so five
+  // separate open requests would otherwise slip past the company limit together.
+  const { data: studentRequests } = useCollection<{ status?: string; category?: string; data?: unknown }>(
+    config?.useApprovedUniversitiesList ? 'tasks' : '',
+    where('studentId', '==', student.id),
+  );
+
   // Fetch unified exam dates
   const { data: unifiedExamDates } = useCollection<UnifiedExamDate>(
     config?.examTypes?.includes('unified_exam') ? 'unified_exam_dates' : ''
@@ -96,8 +195,11 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
 
     if (config.examTypes?.includes('ielts_retake')) {
       schemaFields.examType = z.literal('ielts_retake').optional();
-      schemaFields.idpUsername = z.string().min(1, 'IDP Username is required');
-      schemaFields.idpPassword = z.string().min(1, 'IDP Password is required');
+      // Required only when no saved portal reference is chosen — see the refine below.
+      // A portal reference already holds the same IDP login, so asking again would mean
+      // typing the same credentials twice and risking them disagreeing.
+      schemaFields.idpUsername = z.string().optional();
+      schemaFields.idpPassword = z.string().optional();
       schemaFields.retakeSection = z.string({ required_error: 'Select a section to retake' });
       schemaFields.preferredDate = z.date({ required_error: 'Preferred date is required' });
       schemaFields.preferredTime = z.enum(['10:00 AM', '1:30 PM', '5:00 PM'], { required_error: 'Preferred time is required' });
@@ -136,6 +238,18 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     schemaFields.selectedApplicationDetails = z.any().optional();
   }
 
+  // Every First Year extra is optional by design — the employee fills in whatever the
+  // student has so far, and the request is never blocked on a missing document.
+  if (config?.firstYearUkFields) {
+    schemaFields.ukPhone = z.string().optional();
+    schemaFields.ukAddress = z.string().optional();
+    schemaFields.reference1Name = z.string().optional();
+    schemaFields.reference1Email = z.string().optional();
+    schemaFields.reference2Name = z.string().optional();
+    schemaFields.reference2Email = z.string().optional();
+    schemaFields.attachments = z.array(z.any()).optional();
+  }
+
   if (config?.useApprovedUniversitiesList) {
     if (config.allowMultipleUniversitySelection) {
       schemaFields.selectedGlobalUniversityIds = z.array(z.string()).min(1, 'Please select at least one university');
@@ -165,6 +279,22 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     message: "Please select the LRW time.",
     path: ["lrwTime"]
   }).refine(data => {
+    // An IELTS retake needs the IDP login — either typed in, or taken from a saved
+    // portal reference.
+    if (data.examType !== 'ielts_retake') return true;
+    if (data.selectedPortalId) return true;
+    return !!data.idpUsername?.trim();
+  }, {
+    message: 'Enter the IDP username, or choose a saved portal reference above.',
+    path: ['idpUsername'],
+  }).refine(data => {
+    if (data.examType !== 'ielts_retake') return true;
+    if (data.selectedPortalId) return true;
+    return !!data.idpPassword?.trim();
+  }, {
+    message: 'Enter the IDP password, or choose a saved portal reference above.',
+    path: ['idpPassword'],
+  }).refine(data => {
     // For under-18 students, parent/guardian info is mandatory on IELTS/TOEFL exams.
     if (!isMinor) return true;
     if (data.examType !== 'ielts' && data.examType !== 'toefl') return true;
@@ -189,6 +319,14 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       originalExamDate: undefined,
       preferredDate: undefined,
       examType: config?.examTypes?.length === 1 ? config.examTypes[0] : undefined,
+      // Pre-filled from the profile so a second application doesn't ask again.
+      ukPhone: student.jotformData?.ukPhone || '',
+      ukAddress: student.jotformData?.ukAddress || '',
+      reference1Name: student.jotformData?.reference1Name || '',
+      reference1Email: student.jotformData?.reference1Email || '',
+      reference2Name: student.jotformData?.reference2Name || '',
+      reference2Email: student.jotformData?.reference2Email || '',
+      attachments: [],
       selectedApplicationId: '',
       selectedGlobalUniversityId: '',
       selectedPortalId: '',
@@ -216,11 +354,17 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
   const effectiveAge = calculateAge(effectiveDob);
   const effectiveIsMinor = effectiveAge != null && effectiveAge < 18;
   const isExamTask = !!(requestType.isSpecialTask && config?.examTypes);
-  const needsDobEntry = isExamTask && !profileDob;
+  // Parent/guardian details exist for one reason: the exam board requires them to register
+  // an under-18 candidate for a NEW IELTS/TOEFL sitting. Courses, retakes and the unified
+  // exam carry no such requirement, so they must never ask for a guardian — or for the DOB
+  // that only exists to decide whether a guardian is needed.
+  const isNewExamBooking = watchExamType === 'ielts' || watchExamType === 'toefl';
+  const requiresGuardian = isNewExamBooking && effectiveIsMinor;
+  const needsDobEntry = isNewExamBooking && !profileDob;
 
-  // Block submission of an exam task until DOB is known, and require guardian info for minors.
+  // Block submission of a new exam booking until DOB is known, and require guardian info for minors.
   const handleGuardedSubmit = (values: any) => {
-    if (isExamTask) {
+    if (isNewExamBooking) {
       if (!effectiveDob) {
         form.setError('studentDob', { type: 'manual', message: "Please add the student's date of birth." });
         return;
@@ -247,22 +391,68 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchExamType]);
 
+  // A chosen portal reference already carries the IDP login for a retake.
+  const watchPortalId = form.watch('selectedPortalId');
+  const selectedPortal = student.studentLogins?.find(p => p.id === watchPortalId) ?? null;
+  const usingSavedPortal = !!watchPortalId && !!selectedPortal;
+
   const watchDocs = form.watch('selectedDocuments') || [];
   const watchMultiUnis = form.watch('selectedGlobalUniversityIds') || [];
 
-  // Count distinct schools (by schoolOrder fallback to name) per company for Foundation students
-  const companySchoolCounts = useMemo(() => {
-    if (student.studyLevel !== 'Foundation' || !config?.allowMultipleUniversitySelection) return {} as Record<string, number>;
-    if (!globalUniversities || watchMultiUnis.length === 0) return {} as Record<string, number>;
-    const sets: Record<string, Set<string>> = {};
-    watchMultiUnis.forEach((id: string) => {
-      const u = globalUniversities.find(g => g.id === id);
-      if (!u || !u.company || u.company === 'Inhouse') return;
-      if (!sets[u.company]) sets[u.company] = new Set();
-      sets[u.company].add(u.schoolOrder != null ? String(u.schoolOrder) : u.name);
-    });
-    return Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, v.size]));
-  }, [watchMultiUnis, globalUniversities, student.studyLevel, config?.allowMultipleUniversitySelection]);
+  // The company limit applies to Foundation students on any form that picks from the
+  // approved list. It used to also require config.allowMultipleUniversitySelection,
+  // which is not set on ANY request type — so the limit never actually ran.
+  // skipCompanyLimit exempts a request type entirely — the First Year application is
+  // not part of a pathway company's allocation.
+  const companyLimitApplies =
+    student.studyLevel === 'Foundation' &&
+    !!config?.useApprovedUniversitiesList &&
+    !config?.skipCompanyLimit;
+
+  /** Which company each approved school belongs to, keyed so spelling variants agree. */
+  const companyLookup = useMemo(() => buildCompanyLookup(globalUniversities || []), [globalUniversities]);
+
+  /**
+   * Schools the student ALREADY holds. Counted against the limit, so five Kaplan
+   * schools spread over three separate requests is still five — and removing one from
+   * the profile frees its place straight away.
+   */
+  const heldSchools = useMemo(
+    () => (companyLimitApplies
+      ? [
+          ...schoolsAlreadyHeld(student.applications, companyLookup),
+          ...schoolsInOpenRequests(studentRequests, companyLookup),
+        ]
+      : []),
+    [companyLimitApplies, student.applications, studentRequests, companyLookup],
+  );
+
+  /** Everything counted: already held, plus what is being picked right now. */
+  const companySchoolSets = useMemo(() => {
+    if (!companyLimitApplies) return {} as Record<string, Set<string>>;
+    const picked = (watchMultiUnis as string[])
+      .map(id => globalUniversities?.find(g => g.id === id))
+      .filter((u): u is ApprovedUniversity => !!u && !!u.company)
+      .map((u: ApprovedUniversity) => ({ name: u.name, company: u.company as string }));
+    return countByCompany([...heldSchools, ...picked]);
+  }, [companyLimitApplies, watchMultiUnis, globalUniversities, heldSchools]);
+
+  const companySchoolCounts = useMemo(
+    () => Object.fromEntries(Object.entries(companySchoolSets).map(([k, v]) => [k, v.size])),
+    [companySchoolSets],
+  );
+
+  /** Companies with no places left. */
+  const fullCompanies = useMemo(
+    () => Object.entries(companySchoolSets).filter(([, v]) => v.size >= COMPANY_LIMIT).map(([c]) => c),
+    [companySchoolSets],
+  );
+
+  /** How many of a company's places were already taken before this request. */
+  const heldCounts = useMemo(
+    () => Object.fromEntries(Object.entries(countByCompany(heldSchools)).map(([k, v]) => [k, v.size])),
+    [heldSchools],
+  );
 
   const handleDocToggle = (docId: string) => {
     const current = form.getValues('selectedDocuments') || [];
@@ -281,22 +471,8 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
       form.setValue('selectedGlobalUniversityIds', currentIds.filter((id: string) => id !== uni.id));
       form.setValue('selectedGlobalUniversities', currentDetails.filter((d: any) => d.id !== uni.id));
     } else {
-      // Enforce company limit for Foundation students
-      if (student.studyLevel === 'Foundation' && uni.company && uni.company !== 'Inhouse') {
-        const thisSchoolKey = uni.schoolOrder != null ? String(uni.schoolOrder) : uni.name;
-        const isSchoolAlreadyIn = currentIds.some((id: string) => {
-          const u = globalUniversities?.find(g => g.id === id);
-          return !!u && u.company === uni.company && (u.schoolOrder != null ? String(u.schoolOrder) : u.name) === thisSchoolKey;
-        });
-        if (!isSchoolAlreadyIn) {
-          const schoolsForCompany = new Set<string>();
-          currentIds.forEach((id: string) => {
-            const u = globalUniversities?.find(g => g.id === id);
-            if (u && u.company === uni.company) schoolsForCompany.add(u.schoolOrder != null ? String(u.schoolOrder) : u.name);
-          });
-          if (schoolsForCompany.size >= COMPANY_LIMIT) return;
-        }
-      }
+      // Enforce the company limit, counting the schools already on the student.
+      if (companyLimitApplies && wouldExceedLimit(uni, companySchoolSets)) return;
       form.setValue('selectedGlobalUniversityIds', [...currentIds, uni.id]);
       form.setValue('selectedGlobalUniversities', [...currentDetails, {
         id: uni.id,
@@ -510,7 +686,7 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                           </FormItem>
                         ))
                       ) : (
-                        <div className="text-center py-8 border rounded-lg border-dashed bg-red-50 text-red-600">
+                        <div className="text-center py-8 border rounded-lg border-dashed bg-danger-soft text-danger">
                             <p className="text-sm font-bold">No active applications found for this student.</p>
                             <p className="text-xs mt-1">Please add a university application to the profile first.</p>
                         </div>
@@ -542,17 +718,37 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             </div>
             
             <div className="space-y-3">
-              {/* Company quota summary — Foundation students only */}
-              {student.studyLevel === 'Foundation' && config.allowMultipleUniversitySelection && Object.keys(companySchoolCounts).length > 0 && (
+              {/* Named up front, so the reason a school is greyed out is never a mystery. */}
+              {companyLimitApplies && fullCompanies.length > 0 && (
+                <div className="rounded-lg border border-danger-border bg-danger-soft p-3 text-sm">
+                  <p className="font-bold text-danger">
+                    Limit reached for {fullCompanies.join(' and ')}.
+                  </p>
+                  <p className="text-xs text-danger">
+                    This student already has {COMPANY_LIMIT} schools with{' '}
+                    {fullCompanies.length > 1 ? 'each of those companies' : fullCompanies[0]}, so those schools
+                    cannot be chosen. Remove one from the student to free a place. Other companies are unaffected.
+                  </p>
+                </div>
+              )}
+
+              {/* Company quota summary — Foundation students only. Counts the schools
+                  already on the student as well as the ones being picked here. */}
+              {companyLimitApplies && Object.keys(companySchoolCounts).length > 0 && (
                 <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-lg border text-xs">
-                  <span className="font-bold text-muted-foreground w-full text-[10px] uppercase tracking-wide">Company Limits</span>
+                  <span className="font-bold text-muted-foreground w-full text-[10px] uppercase tracking-wide">
+                    Company Limits — {COMPANY_LIMIT} schools each, including schools already on this student
+                  </span>
                   {COMPANY_ORDER.filter(c => c !== 'Inhouse').map(company => {
                     const count = companySchoolCounts[company] || 0;
                     if (count === 0) return null;
+                    const held = heldCounts[company] || 0;
                     const atLimit = count >= COMPANY_LIMIT;
                     return (
-                      <Badge key={company} variant="outline" className={cn('text-[10px] font-bold', atLimit ? 'bg-red-100 text-red-800 border-red-400' : COMPANY_COLORS[company])}>
-                        {company}: {count}/{COMPANY_LIMIT}{atLimit ? ' FULL' : ''}
+                      <Badge key={company} variant="outline" className={cn('text-[10px] font-bold', atLimit ? 'bg-danger-soft text-danger border-danger' : COMPANY_COLORS[company])}>
+                        {company}: {count}/{COMPANY_LIMIT}
+                        {held > 0 ? ` (${held} already)` : ''}
+                        {atLimit ? ' FULL' : ''}
                       </Badge>
                     );
                   })}
@@ -569,26 +765,22 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                       const showGroupHeader = !prevUni || prevUni.company !== uni.company;
                       const isSelected = watchMultiUnis.includes(uni.id);
 
-                      // Determine if adding this uni would exceed company limit (Foundation only)
-                      let isDisabled = false;
-                      if (config.allowMultipleUniversitySelection && !isSelected && student.studyLevel === 'Foundation' && uni.company && uni.company !== 'Inhouse') {
-                        const thisSchoolKey = uni.schoolOrder != null ? String(uni.schoolOrder) : uni.name;
-                        const schoolAlreadyIn = watchMultiUnis.some((id: string) => {
-                          const u = globalUniversities?.find(g => g.id === id);
-                          return !!u && u.company === uni.company && (u.schoolOrder != null ? String(u.schoolOrder) : u.name) === thisSchoolKey;
-                        });
-                        if (!schoolAlreadyIn && (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT) {
-                          isDisabled = true;
-                        }
-                      }
+                      // Would picking this one break the company limit? Another major at
+                      // a school already counted is always allowed — it takes no new place.
+                      // This covers BOTH pickers: the multi-select one and the single
+                      // checkbox below, which is what these forms actually render.
+                      const singleSelected = form.watch('selectedGlobalUniversityId') === uni.id;
+                      const alreadyChosen = isSelected || singleSelected;
+                      const isDisabled =
+                        !alreadyChosen && companyLimitApplies && wouldExceedLimit(uni, companySchoolSets);
 
                       return (
                         <div key={uni.id}>
                           {showGroupHeader && uni.company && (
                             <div className={cn('px-3 py-1.5 flex items-center justify-between border-b', COMPANY_COLORS[uni.company] || 'bg-muted/40')}>
-                              <span className="text-[10px] font-black uppercase tracking-wider">{uni.company}</span>
-                              {uni.company !== 'Inhouse' && student.studyLevel === 'Foundation' && config.allowMultipleUniversitySelection && (
-                                <span className={cn('text-[10px] font-bold', (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT ? 'text-red-700' : 'opacity-70')}>
+                              <span className="text-[10px] font-semibold uppercase tracking-wider">{uni.company}</span>
+                              {uni.company !== 'Inhouse' && companyLimitApplies && (
+                                <span className={cn('text-[10px] font-bold', (companySchoolCounts[uni.company] || 0) >= COMPANY_LIMIT ? 'text-danger' : 'opacity-70')}>
                                   {companySchoolCounts[uni.company] || 0}/{COMPANY_LIMIT} schools
                                 </span>
                               )}
@@ -603,15 +795,22 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                               />
                             ) : (
                               <Checkbox
-                                checked={form.watch('selectedGlobalUniversityId') === uni.id}
-                                onCheckedChange={() => handleGlobalUniSelect(uni)}
+                                checked={singleSelected}
+                                onCheckedChange={() => !isDisabled && handleGlobalUniSelect(uni)}
+                                disabled={isDisabled}
                               />
                             )}
                             <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
                               <div className="space-y-0.5">
                                 <span className="block text-sm font-bold">{uni.name}</span>
                                 <span className="block text-xs text-muted-foreground">{uni.major}</span>
-                                {uni.importantNote && <span className="block text-[10px] text-red-600 font-black uppercase">⚠️ {uni.importantNote}</span>}
+                                {isDisabled && (
+                                  <span className="block text-[11px] font-bold text-danger">
+                                    Limit reached — this student already has {COMPANY_LIMIT} {uni.company} schools.
+                                    Remove one to add another.
+                                  </span>
+                                )}
+                                {uni.importantNote && <span className="block text-[10px] text-danger font-semibold uppercase">⚠️ {uni.importantNote}</span>}
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <Badge variant="outline" className="text-[10px] font-mono">{uni.country}</Badge>
@@ -640,15 +839,16 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
           </div>
         )}
 
-        {/* Student age — important for IELTS/TOEFL (under-18 needs a guardian). */}
+        {/* Student age — shown as context on exam tasks. The guardian warning is reserved for
+            a new IELTS/TOEFL booking, the only case that actually needs a parent. */}
         {isExamTask && (
           <div className={cn(
             "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold",
-            effectiveIsMinor ? "border-amber-300 bg-amber-50 text-amber-800" : "border-muted bg-muted/30 text-foreground"
+            requiresGuardian ? "border-warning-border bg-warning-soft text-warning" : "border-muted bg-muted/30 text-foreground"
           )}>
             <CalendarIcon className="h-4 w-4" />
             Student Age: {effectiveAge != null ? `${effectiveAge} years` : 'N/A (no date of birth on file)'}
-            {effectiveIsMinor && <span className="uppercase tracking-wide text-[11px]">· Under 18 — guardian required</span>}
+            {requiresGuardian && <span className="uppercase tracking-wide text-[11px]">· Under 18 — guardian required</span>}
           </div>
         )}
 
@@ -658,12 +858,12 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
             control={form.control}
             name="studentDob"
             render={({ field }) => (
-              <FormItem className="rounded-md border border-amber-300 bg-amber-50 p-3">
-                <FormLabel className="font-bold text-amber-800">Student Date of Birth * (missing from profile)</FormLabel>
+              <FormItem className="rounded-md border border-warning-border bg-warning-soft p-3">
+                <FormLabel className="font-bold text-warning">Student Date of Birth * (missing from profile)</FormLabel>
                 <FormControl>
                   <Input type="date" max={new Date().toISOString().slice(0, 10)} className="max-w-[220px]" {...field} />
                 </FormControl>
-                <FormDescription className="text-amber-700">
+                <FormDescription className="text-warning">
                   This student has no date of birth on file. Add it to confirm their age{effectiveAge != null ? ` (currently ${effectiveAge})` : ''}. If under 18, parent/guardian details are required below. It will be saved to the profile.
                 </FormDescription>
                 <FormMessage />
@@ -809,13 +1009,13 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
               )}
             />
 
-            {effectiveIsMinor && (
-              <div className="space-y-4 rounded-md border border-amber-300 bg-amber-50 p-4">
+            {requiresGuardian && (
+              <div className="space-y-4 rounded-md border border-warning-border bg-warning-soft p-4">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-bold text-amber-800">
+                  <p className="text-sm font-bold text-warning">
                     Parent / Guardian details required (student is {effectiveAge})
                   </p>
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-warning">
                     The student is under 18. Enter the parent/guardian information in English for the exam registration.
                   </p>
                 </div>
@@ -875,30 +1075,53 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
         {/* IELTS RETAKE LOGIC */}
         {watchExamType === 'ielts_retake' && config && (
           <div className="space-y-6 border-t pt-4 animate-in fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="idpUsername"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>IDP Username *</FormLabel>
-                    <FormControl><Input placeholder="Enter username" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="idpPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>IDP Password *</FormLabel>
-                    <FormControl><Input type="text" placeholder="Enter password" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* The IDP login IS the portal reference. When one is chosen the credentials
+                come from it, so asking again would mean typing the same thing twice and
+                risking the two disagreeing. */}
+            {usingSavedPortal ? (
+              <div className="flex items-start gap-2.5 rounded-lg border border-success-border bg-success-soft p-3">
+                <Key className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-bold text-success">
+                    Using the saved portal reference{selectedPortal?.description ? ` — ${selectedPortal.description}` : ''}
+                  </p>
+                  <p className="text-xs text-success">
+                    IDP username <span className="font-semibold">{selectedPortal?.username || '—'}</span> and its
+                    password are taken from the saved login, so they are not asked for again.
+                    Clear the selection above to type them in instead.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="idpUsername"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>IDP Username *</FormLabel>
+                      <FormControl><Input placeholder="Enter username" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="idpPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>IDP Password *</FormLabel>
+                      <FormControl><Input type="text" placeholder="Enter password" {...field} /></FormControl>
+                      <FormMessage />
+                      <FormDescription className="text-[10px]">
+                        Saved to this student&apos;s portal references as “IDP PASSWORD”, so the next
+                        retake can reuse it.
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
             <div className="space-y-3">
               <FormLabel>Select Section to Retake *</FormLabel>
               <FormField
@@ -1100,6 +1323,78 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                 </FormItem>
               )}
             />
+          </div>
+        )}
+
+        {/* UK First Year extras — every field optional. */}
+        {config?.firstYearUkFields && (
+          <div className="space-y-4 border-t pt-4">
+            <FormLabel className="text-base font-bold flex items-center gap-2">
+              <Paperclip className="h-5 w-5 text-primary" />
+              Supporting Documents & UK Details
+              <span className="text-xs font-normal text-muted-foreground">all optional</span>
+            </FormLabel>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {FIRST_YEAR_ATTACHMENTS.map(slot => {
+                const current: TaskAttachment[] = form.watch('attachments') || [];
+                const existing = current.find(a => a.label === slot.label) ?? null;
+                return (
+                  <AttachmentSlot
+                    key={slot.key}
+                    student={student}
+                    label={slot.label}
+                    value={existing}
+                    onChange={next => {
+                      const rest = current.filter(a => a.label !== slot.label);
+                      form.setValue('attachments', next ? [...rest, next] : rest);
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField control={form.control} name="ukPhone" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>UK Phone Number</FormLabel>
+                  <FormControl><Input placeholder="e.g. +44 7700 900000" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="ukAddress" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>UK Address</FormLabel>
+                  <FormControl><Input placeholder="Street, city, postcode" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            <div className="space-y-3">
+              <FormLabel className="flex items-center gap-2 text-sm font-bold">
+                <Users className="h-4 w-4 text-primary" />
+                References
+              </FormLabel>
+              {[1, 2].map(n => (
+                <div key={n} className="grid gap-4 md:grid-cols-2 rounded-md border bg-muted/20 p-3">
+                  <FormField control={form.control} name={`reference${n}Name`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Reference {n} — Name</FormLabel>
+                      <FormControl><Input placeholder="Full name" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name={`reference${n}Email`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Reference {n} — Email</FormLabel>
+                      <FormControl><Input type="email" placeholder="name@school.edu" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

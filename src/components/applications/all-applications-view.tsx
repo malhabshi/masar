@@ -251,7 +251,7 @@ export function AllApplicationsView() {
                               </Link>
                               {isDuplicate && (
                                 <div className="mt-1">
-                                  <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-black uppercase tracking-tighter gap-1">
+                                  <Badge className="bg-blue-900 hover:bg-blue-800 text-white text-[9px] h-4 py-0 font-semibold uppercase tracking-tighter gap-1">
                                     <AlertTriangle className="h-2 w-2" />
                                     Duplicate Profile
                                   </Badge>

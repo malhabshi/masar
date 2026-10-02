@@ -86,7 +86,7 @@ export function DuplicateWarningBanner({ student, currentUser }: DuplicateWarnin
       <AlertTriangle className="h-5 w-5" />
       <div className="flex flex-col gap-2 w-full">
         <div>
-          <AlertTitle className="text-red-800 font-black uppercase tracking-tight">Duplicate Phone Number Detected</AlertTitle>
+          <AlertTitle className="text-red-800 font-semibold uppercase tracking-tight">Duplicate Phone Number Detected</AlertTitle>
           <AlertDescription className="text-red-700 mt-1 font-medium">
             {conflicts.length === 1 ? (
               <>

@@ -33,6 +33,10 @@ const formSchema = z.object({
   phone3: z.string().min(8, { message: 'Phone number must be at least 8 digits.' }).optional().or(z.literal('')),
   gender: z.enum(['M', 'F'], { required_error: 'Please select a gender.' }),
   internalNumber: z.string().optional(),
+  // Optional, same as on Add New Student. A value set at creation must be correctable
+  // here, otherwise a typo in the school name is permanent.
+  schoolName: z.string().optional(),
+  schoolType: z.enum(['Private', 'Public']).optional(),
 });
 
 interface EditStudentDialogProps {
@@ -54,6 +58,8 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
       phone3: student.phone3 || '',
       gender: (student.gender as any) || 'M',
       internalNumber: student.internalNumber || '',
+      schoolName: student.jotformData?.schoolName || '',
+      schoolType: student.schoolType || undefined,
     },
   });
 
@@ -67,6 +73,8 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
             phone3: student.phone3 || '',
             gender: (student.gender as any) || 'M',
             internalNumber: student.internalNumber || '',
+            schoolName: student.jotformData?.schoolName || '',
+            schoolType: student.schoolType || undefined,
         });
     }
   }, [isOpen, student, form]);
@@ -74,7 +82,14 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     const studentDocRef = doc(firestore, 'students', student.id);
-    updateDocumentNonBlocking(studentDocRef, values);
+    // schoolName lives under jotformData (the field the rest of the app reads), so it
+    // is written by dot-path rather than as a top-level key; schoolType is top-level.
+    const { schoolName, schoolType, ...rest } = values;
+    updateDocumentNonBlocking(studentDocRef, {
+      ...rest,
+      schoolType: schoolType ?? null,
+      'jotformData.schoolName': schoolName?.trim() || null,
+    } as any);
 
     // Re-check duplicate warnings in the background after phone fields may have changed
     refreshStudentDuplicateWarning(student.id).catch(() => {});
@@ -131,6 +146,41 @@ export function EditStudentDialog({ student }: EditStudentDialogProps) {
                     <Input {...field} />
                   </FormControl>
                   <FormDescription>Internal tracking number.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="schoolName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>School Name <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+                  <FormControl>
+                    <Input placeholder="Secondary school name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="schoolType"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormLabel>School Type <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+                  <FormControl>
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange(field.value === 'Private' ? undefined : 'Private')}>
+                        <input type="radio" checked={field.value === 'Private'} onChange={() => {}} className="accent-primary" />
+                        <span className="text-sm font-medium">Private School</span>
+                      </div>
+                      <div className="flex items-center space-x-2 border rounded-md p-2 px-4 cursor-pointer hover:bg-muted transition-colors w-full" onClick={() => field.onChange(field.value === 'Public' ? undefined : 'Public')}>
+                        <input type="radio" checked={field.value === 'Public'} onChange={() => {}} className="accent-primary" />
+                        <span className="text-sm font-medium">Public School</span>
+                      </div>
+                    </div>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

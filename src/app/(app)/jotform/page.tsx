@@ -12,7 +12,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const ACCEPTANCE_OPTIONS = ['Foundation', 'First Year', 'General English', 'ESL', 'ESL + Foundation', 'Masters'];
 import { cn } from '@/lib/utils';
-import { submitJotformApplications } from '@/lib/actions';
+import { Badge } from '@/components/ui/badge';
+import {
+  COMPANY_LIMIT,
+  buildCompanyLookup,
+  countByCompany,
+  schoolKey,
+  wouldExceedLimit,
+} from '@/lib/school-quota';
+import { submitJotformApplications, findExistingStudentsByNumber, type ExistingStudentMatch } from '@/lib/actions';
 import { useUser } from '@/hooks/use-user';
 import { useCollection } from '@/firebase';
 import type { ApprovedUniversity, Application, Country } from '@/lib/types';
@@ -21,6 +29,7 @@ const STAFF_NAMES = [
   'طلال', 'محمد سليمان', 'خالد الشمري', 'يوسف سليمان', 'عبدالرحمن العنزي',
   'طلال العنزي', 'زينب دشتي', 'دنيا', 'عايشه', 'مريم العنزي',
   'حنان الكندري', 'فاطمه الشمري', 'خالد الهدهود', 'ابراهيم', 'دلال',
+  'مريم الاحمد', 'زهراء الحداد',
 ];
 
 const SCHOLARSHIP_OPTIONS = [
@@ -63,6 +72,107 @@ const emptyPick = (): CountryPick => ({ majorSearch: '', showSugs: false, addedM
 
 const COUNTRY_KEY_LABEL: Record<string, string> = { UK: 'UK', AUNZ: 'AU / NZ', USA: 'USA' };
 
+// Worst case first: a confirmed duplicate, then one we cannot judge, then a confirmed
+// different person.
+const RELATION_RANK = { 'same-student': 0, 'unknown': 1, 'different-person': 2 } as const;
+
+/**
+ * "This number already belongs to someone." Shown under a number field as soon as the
+ * employee finishes typing, with enough detail to tell whether it is the same person:
+ * who they are, who handles them, and where they applied.
+ */
+function ExistingStudentNote({
+  matches,
+  label,
+  checking,
+  typedCivilId,
+}: {
+  matches: ExistingStudentMatch[];
+  label: string;
+  checking: boolean;
+  typedCivilId: string;
+}) {
+  if (checking) {
+    return (
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Checking for an existing student…
+      </p>
+    );
+  }
+  if (matches.length === 0) return null;
+
+  // Siblings share a parent's number, so a shared number is not by itself a duplicate.
+  // The CIVIL ID decides it: one per person, unlike a name. Names are deliberately not
+  // compared — brothers share almost every part of a Kuwaiti name.
+  const typed = typedCivilId.replace(/\D/g, '');
+  const judged = matches
+    .map(m => ({
+      ...m,
+      relation: !typed || !m.civilId
+        ? ('unknown' as const)
+        : m.civilId === typed
+          ? ('same-student' as const)
+          : ('different-person' as const),
+    }))
+    .sort((a, b) => RELATION_RANK[a.relation] - RELATION_RANK[b.relation]);
+
+  const looksDuplicate = judged.some(m => m.relation === 'same-student');
+  const allFamily = judged.length > 0 && judged.every(m => m.relation === 'different-person');
+
+  const tone = looksDuplicate
+    ? { border: 'border-red-400', bg: 'bg-red-50', head: 'text-red-900', body: 'text-red-800' }
+    : allFamily
+      ? { border: 'border-sky-300', bg: 'bg-sky-50', head: 'text-sky-900', body: 'text-sky-800' }
+      : { border: 'border-amber-400', bg: 'bg-amber-50', head: 'text-amber-900', body: 'text-amber-800' };
+
+  const heading = looksDuplicate
+    ? 'Same Civil ID — this student is already in the system'
+    : allFamily
+      ? `This ${label} belongs to a different person (different Civil ID)`
+      : `This ${label} is already in the system`;
+
+  return (
+    <div className={cn('rounded-md border p-2.5 space-y-1.5', tone.border, tone.bg)}>
+      <p className={cn('text-xs font-bold', tone.head)}>
+        {looksDuplicate ? '⚠️ ' : 'ℹ️ '}{heading}:
+      </p>
+      {judged.map(m => (
+        <div key={m.id} className="space-y-0.5">
+          <a
+            href={`/student/${m.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className={cn('block text-xs font-semibold underline underline-offset-2', tone.head)}
+          >
+            {m.name}
+            {m.isClosed && <span className="font-normal"> · closed</span>}
+            <span className="font-normal">
+              {' · '}
+              {m.employeeName ?? 'unassigned'}
+              {m.targetCountries.length > 0 && ` · ${m.targetCountries.join(', ')}`}
+            </span>
+          </a>
+          <p className={cn('text-[10px]', tone.body)}>
+            {m.relation === 'same-student'
+              ? `Civil ID ${m.civilId} matches — submitting would create a second profile for this student.`
+              : m.relation === 'different-person'
+                ? `Different Civil ID (${m.civilId}) — a different person, most likely a brother or sister on the same number.`
+                : m.civilId
+                  ? 'Enter the Civil ID to confirm whether this is the same student.'
+                  : 'No Civil ID on that profile, so it cannot be confirmed from here — open it to check.'}
+          </p>
+        </div>
+      ))}
+      <p className={cn('text-[10px] italic', tone.body)}>
+        {allFamily
+          ? 'Different Civil ID, so this is a different student — carry on.'
+          : 'Open the profile to check before submitting.'}
+      </p>
+    </div>
+  );
+}
+
 export default function JotformPage() {
   const { toast } = useToast();
   const { user } = useUser();
@@ -78,6 +188,12 @@ export default function JotformPage() {
   const [kuwaitAddress, setKuwaitAddress] = useState('');
   const [kuwaitPhone, setKuwaitPhone] = useState('');
   const [civilId, setCivilId] = useState('');
+
+  // Live duplicate check. The employee is told the student already exists WHILE typing
+  // the number, rather than finding out after a second profile has been created.
+  const [phoneMatches, setPhoneMatches] = useState<ExistingStudentMatch[]>([]);
+  const [civilMatches, setCivilMatches] = useState<ExistingStudentMatch[]>([]);
+  const [checkingNumber, setCheckingNumber] = useState<'phone' | 'civilId' | null>(null);
   const [schoolName, setSchoolName] = useState('');
   const [scholarshipType, setScholarshipType] = useState('');
   const [acceptanceType, setAcceptanceType] = useState('');
@@ -101,6 +217,36 @@ export default function JotformPage() {
   }, [user?.name]);
 
   // Academic term follows the destination country: UK → Fall 2027, USA & AU/NZ → Spring 2027
+  // Look the number up once the employee stops typing, and only once it is complete —
+  // a partial number would match half the list and the lookup would run on every key.
+  useEffect(() => {
+    const digits = kuwaitPhone.replace(/\D/g, '');
+    if (digits.length !== 8) { setPhoneMatches([]); return; }
+    let cancelled = false;
+    setCheckingNumber('phone');
+    const timer = setTimeout(async () => {
+      const found = await findExistingStudentsByNumber(digits, 'phone');
+      if (cancelled) return;
+      setPhoneMatches(found);
+      setCheckingNumber(null);
+    }, 450);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [kuwaitPhone]);
+
+  useEffect(() => {
+    const digits = civilId.replace(/\D/g, '');
+    if (digits.length !== 12) { setCivilMatches([]); return; }
+    let cancelled = false;
+    setCheckingNumber('civilId');
+    const timer = setTimeout(async () => {
+      const found = await findExistingStudentsByNumber(digits, 'civilId');
+      if (cancelled) return;
+      setCivilMatches(found);
+      setCheckingNumber(null);
+    }, 450);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [civilId]);
+
   // (UK takes priority if combined). This mirrors the server-side rule in submitJotformApplications.
   useEffect(() => {
     const hasUK = selectedCountries.includes('UK');
@@ -145,6 +291,24 @@ export default function JotformPage() {
   [selectedCountries]);
 
   const getPick = (key: string): CountryPick => picks[key] || emptyPick();
+
+  // The 5-school company limit is counted ACROSS COUNTRIES, not per country. INTO runs
+  // schools in the UK, the USA and Australia, and the allocation is with INTO — so five
+  // INTO schools is the maximum in total, however they are spread. Counting per country
+  // would have allowed fifteen.
+  const companyOfAll = useMemo(() => buildCompanyLookup(allApprovedUnis || []), [allApprovedUnis]);
+  const companySets = useMemo(() => {
+    const chosen = Object.values(picks)
+      .flatMap(p => Object.values(p.selectedUniNamesByMajor).flat())
+      .filter(n => n.toLowerCase().trim() !== 'best option')
+      .map(name => ({ name, company: companyOfAll.get(schoolKey(name)) }))
+      .filter((u): u is { name: string; company: string } => !!u.company);
+    return countByCompany(chosen);
+  }, [picks, companyOfAll]);
+  const fullCompanies = useMemo(
+    () => Object.entries(companySets).filter(([, v]) => v.size >= COMPANY_LIMIT).map(([c]) => c),
+    [companySets],
+  );
 
   const updPick = (key: string, update: Partial<CountryPick> | ((prev: CountryPick) => Partial<CountryPick>)) => {
     setPicks(prev => {
@@ -253,7 +417,9 @@ export default function JotformPage() {
       toast({ variant: 'destructive', title: 'Kuwaiti Phone must be 8 digits' });
       return;
     }
-    if (isUKorAUNZ && civilId.replace(/\D/g, '').length !== 12) {
+    // Required for every country. Only the UK and AU/NZ JotForms have a Civil ID question,
+    // but the profile needs it regardless (duplicate check, internal number for USA).
+    if (civilId.replace(/\D/g, '').length !== 12) {
       toast({ variant: 'destructive', title: 'Civil ID must be 12 digits' });
       return;
     }
@@ -562,6 +728,10 @@ export default function JotformPage() {
                 const BEST_UNI = 'Best Option';
                 const showBestUni = key !== 'USA';
 
+                // companySets / fullCompanies are computed once for ALL countries above —
+                // the limit belongs to the company, not to a country.
+                const companyOf = companyOfAll;
+
                 // All unique majors in DB for this country (for autocomplete)
                 const allMajorsInDB = [...new Set(unis.map(u => u.major.trim()))].sort();
                 const majorSugs = pick.majorSearch.trim()
@@ -618,6 +788,35 @@ export default function JotformPage() {
                 return (
                   <div key={key} className="border rounded-lg p-4 space-y-3 bg-muted/10">
                     <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{COUNTRY_KEY_LABEL[key]}</div>
+
+                    {/* Running count per company across EVERY country chosen, so the
+                        totals read the same wherever you are looking. */}
+                    {Object.keys(companySets).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          All countries:
+                        </span>
+                        {Object.entries(companySets).sort().map(([company, set]) => (
+                          <Badge key={company} variant="outline"
+                            className={cn('text-[10px] font-bold', set.size >= COMPANY_LIMIT && 'bg-red-100 text-red-800 border-red-400')}>
+                            {company}: {set.size}/{COMPANY_LIMIT}{set.size >= COMPANY_LIMIT ? ' FULL' : ''}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {fullCompanies.length > 0 && (
+                      <div className="rounded-md border border-red-300 bg-red-50 p-2.5">
+                        <p className="text-sm font-bold text-red-800">
+                          You have reached the limit for {fullCompanies.join(' and ')}.
+                        </p>
+                        <p className="text-xs text-red-700">
+                          {COMPANY_LIMIT} schools per company is the maximum, counted across every
+                          country — {fullCompanies[0]} schools in the UK, the USA and Australia all come
+                          out of the same {COMPANY_LIMIT}. Deselect one to choose another.
+                          Other companies are unaffected.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Major search */}
                     <div className="flex gap-2 items-start">
@@ -692,12 +891,20 @@ export default function JotformPage() {
                                 const isSelected = selectedForMajor.some(n => n.toLowerCase().trim() === norm);
                                 const conflict = !isSelected && elsewhere.has(norm);
                                 const disabledByBest = bestActive && !isSelected;
-                                const disabled = conflict || disabledByBest;
+                                const uniCompany = companyOf.get(schoolKey(uniName));
+                                const atCompanyLimit =
+                                  !isSelected && wouldExceedLimit({ name: uniName, company: uniCompany }, companySets);
+                                const disabled = conflict || disabledByBest || atCompanyLimit;
                                 return (
                                   <label key={uniName} className={cn('flex items-center gap-2.5 text-sm select-none', disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer')}>
                                     <Checkbox checked={isSelected} disabled={disabled} onCheckedChange={() => !disabled && toggleUni(major, uniName)} />
                                     <span className="flex-1">{uniName}</span>
                                     {conflict && <span className="text-xs text-muted-foreground italic">taken</span>}
+                                    {atCompanyLimit && (
+                                      <span className="text-[11px] font-bold text-red-700">
+                                        {uniCompany} limit reached ({COMPANY_LIMIT})
+                                      </span>
+                                    )}
                                   </label>
                                 );
                               }) : (
@@ -734,13 +941,26 @@ export default function JotformPage() {
                 <div className="space-y-2">
                   <Label>Kuwaiti Phone Number *</Label>
                   <Input value={kuwaitPhone} onChange={e => setKuwaitPhone(e.target.value)} required placeholder="8-digit number" maxLength={8} inputMode="numeric" />
+                  <ExistingStudentNote
+                    matches={phoneMatches}
+                    label="phone number"
+                    checking={checkingNumber === 'phone'}
+                    typedCivilId={civilId}
+                  />
                 </div>
-                {isUKorAUNZ && (
-                  <div className="space-y-2">
-                    <Label>Civil ID Number *</Label>
-                    <Input value={civilId} onChange={e => setCivilId(e.target.value)} required placeholder="12-digit Civil ID" maxLength={12} inputMode="numeric" />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label>Civil ID Number *</Label>
+                  <Input value={civilId} onChange={e => setCivilId(e.target.value)} required placeholder="12-digit Civil ID" maxLength={12} inputMode="numeric" />
+                  {isUSA && !isUKorAUNZ && (
+                    <p className="text-xs text-muted-foreground">Saved to the student profile only. The USA form has no Civil ID question.</p>
+                  )}
+                  <ExistingStudentNote
+                    matches={civilMatches}
+                    label="Civil ID"
+                    checking={checkingNumber === 'civilId'}
+                    typedCivilId={civilId}
+                  />
+                </div>
               </div>
               {isUK && (
                 <div className="space-y-2">

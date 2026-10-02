@@ -8,6 +8,20 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # Shared secret for the scheduled routes under /api/cron. Without it those routes
+  # refuse to run — never leave it unset, or the comparison becomes "Bearer undefined",
+  # which anyone can send.
+  - variable: CRON_SECRET
+    value: hT6Ha1d5PWfd5Nmx_13mr4QTOSUI3Ah9
+    availability:
+      - RUNTIME
+  # Used to build the links inside WhatsApp notifications. When unset, every message
+  # goes out with a relative path like "/tasks" instead of a working URL.
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://studio--studio-9484431255-91d96.us-central1.hosted.app
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: MCP_OWNER_SECRET
     value: InqpKIlBJ8Yo1eREveEGen4ZjFoo4J0n
     availability:

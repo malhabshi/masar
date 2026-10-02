@@ -93,7 +93,7 @@ export function FinalizedStudentsTable({ students, showEmployee = true, currentU
                       )}
                       <span className="font-medium">{student.name}</span>
                       {currentUserId && (!student.finalizedViewedBy || !student.finalizedViewedBy.includes(currentUserId)) && (
-                        <Badge className="bg-yellow-500 text-white animate-pulse text-[9px] h-4 px-1">NEW</Badge>
+                        <Badge className="bg-yellow-500 text-white text-[9px] h-4 px-1">NEW</Badge>
                       )}
                       {student.profileCompletionStatus?.readyToTravel && (
                           <Badge variant="outline" className="border-success text-success font-normal">

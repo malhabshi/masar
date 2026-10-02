@@ -1,3 +1,5 @@
+import type { StageLog } from './reminder-stages';
+
 export type UserRole = 'admin' | 'adminplus' | 'employee' | 'department' | 'student';
 
 export interface User {
@@ -199,6 +201,14 @@ export interface Student {
     // registration and reused for future tasks while the student is still a minor.
     guardianFirstNameEn?: string;
     guardianLastNameEn?: string;
+    // UK contact details and academic references, captured on a First Year application
+    // and kept so a later request pre-fills them instead of asking again.
+    ukPhone?: string;
+    ukAddress?: string;
+    reference1Name?: string;
+    reference1Email?: string;
+    reference2Name?: string;
+    reference2Email?: string;
     followUpPerson?: string;
     documents?: {
       passport?: string[];
@@ -224,11 +234,22 @@ export interface Student {
   importMatchType?: 'new' | 'existing'; // set by bulk import: 'new' = created by import, 'existing' = matched an existing profile
 }
 
+/**
+ * Who has read a message, keyed by user id, value = ISO time of the first read.
+ * A map rather than an array so one user's read is a single dot-path write that
+ * never races another reader's, and so the time survives for the tooltip.
+ */
+export type ReadReceipts = Record<string, string>;
+
 export interface ChatMessage {
   id: string;
   authorId: string;
   content: string;
   timestamp: string;
+  recipientLabel?: string;
+  targetUserIds?: string[];
+  targetGroups?: string[];
+  readBy?: ReadReceipts;
   document?: {
     name: string;
     url: string;
@@ -289,6 +310,13 @@ export interface Task {
   notifications?: TaskNotification[];
   isPrioritized?: boolean;
   denialReason?: string;
+  // Set on the 'system' notification raised when a request is completed or denied, so
+  // the author's dashboard can show the outcome rather than a line of prose.
+  relatedTaskId?: string;
+  newStatus?: TaskStatus;
+  updatedByName?: string;
+  // Set on 'update' broadcasts: which recipients have had it on screen, and when.
+  readBy?: ReadReceipts;
 }
 
 export interface ResourceLink {
@@ -381,6 +409,12 @@ export interface SpecialTaskConfig {
   requireUniversitySelection?: boolean;
   useApprovedUniversitiesList?: boolean; // Toggles selection from Global Approved Universities
   allowMultipleUniversitySelection?: boolean; // Allow picking more than one school
+  // Exempts this request from the 5-schools-per-company rule. Used by the First Year
+  // application, where the company allocation does not apply.
+  skipCompanyLimit?: boolean;
+  // Extra optional fields for a UK First Year application: share code / eVisa, CAS and
+  // foundation transcript attachments, a UK phone and address, and two references.
+  firstYearUkFields?: boolean;
   countryFilter?: Country | 'all'; // Filters the selection list by country
   allowPortalReferenceSelection?: boolean; // Optional selection of stored student logins
   studentInfo: {
@@ -503,17 +537,52 @@ export interface NotificationTemplate {
 export type UniversityCategory = 'MOHE' | 'Merit' | 'General';
 export type UniversityCompany = 'Into' | 'Studygroup' | 'Kaplan' | 'OnCampus' | 'Navitas' | 'Other' | 'Inhouse';
 
+/**
+ * English and academic requirements for ONE entry level at one school + major.
+ *
+ * These are held per level because they genuinely differ: Foundation is usually where
+ * the IELTS requirement sits, while First Year tends to ask for something else entirely
+ * (a completed Foundation, a school average, specific subjects).
+ *
+ * Every field is optional and a blank one is simply absent, never zero — `ieltsOverall: 0`
+ * would read on screen as "IELTS 0 required". A level with nothing recorded falls back to
+ * the row's `ieltsScore`, which is all that exists on rows created before this.
+ */
+export interface EntryLevelRequirement {
+  /** Matches an entry in `entryLevels` — 'Foundation', 'First Year', 'Bachelor Degree'. */
+  level: string;
+  ieltsOverall?: number;
+  ieltsListening?: number;
+  ieltsReading?: number;
+  ieltsWriting?: number;
+  ieltsSpeaking?: number;
+  /** Free text. Anything the school asks for that is not an IELTS band. */
+  otherRequirements?: string;
+}
+
 export interface ApprovedUniversity {
   id: string;
   name: string;
   major: string;
+  /**
+   * What the Foundation programme is called, when it differs from the degree major —
+   * a student reading "Computer Science" will not recognise "International Foundation in
+   * Science and Engineering" as the thing they are actually applying to.
+   */
+  foundationName?: string;
   country: Country;
+  /** The school's general IELTS requirement. Used for any entry level with no override. */
   ieltsScore: number;
   isAvailable: boolean;
   notes?: string;
   importantNote?: string; // High-priority red note
   category?: UniversityCategory;
   entryLevels?: string[]; // Foundation, First Year, Bachelor Degree
+  /**
+   * Per-level requirements, one entry per ticked level that has anything recorded.
+   * Absent on every row created before this field existed, so always guard on it.
+   */
+  entryRequirements?: EntryLevelRequirement[];
   company?: UniversityCompany;
   schoolOrder?: number;
   majorOrder?: number;
@@ -607,10 +676,19 @@ export interface Reminder {
   dueAt: string;
   recipientType: ReminderRecipientType;
   recipientUserIds?: string[];
+  /**
+   * Civil ID of the employee assigned to the student when the reminder was made.
+   * 'Employee (assigned)' means THAT employee — without this, the check could only ask
+   * "is this person an employee?", which is true of all of them.
+   */
+  studentEmployeeId?: string | null;
   createdBy: string;
   createdByName: string;
   createdAt: string;
   status: 'active' | 'dismissed';
   notifyWhatsApp: boolean;
+  /** Superseded by `stages`; kept so reminders created before staged sending still read correctly. */
   whatsAppSentAt?: string;
+  /** Per-stage send record: ISO timestamp once sent, or 'skipped'. See lib/reminder-stages.ts. */
+  stages?: StageLog;
 }

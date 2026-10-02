@@ -4,7 +4,23 @@ import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { jsPDF } from 'jspdf';
 import { formatKuwaitTime } from '@/lib/timestamp-utils';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
-import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ChecklistConfigItem, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry } from './types';
+import {
+  COMPANY_LIMIT,
+  buildCompanyLookup,
+  countByCompany,
+  schoolKey,
+  schoolsAlreadyHeld,
+  schoolsInOpenRequests,
+} from '@/lib/school-quota';
+import {
+  initialStageLog,
+  migrateLegacyStages,
+  stagePhrase,
+  stagesDueNow,
+  SKIPPED,
+  type ReminderStage,
+} from '@/lib/reminder-stages';
+import type { User, Student, Application, ApplicationStatus, Task, Note, TaskStatus, Country, UserRole, ChecklistConfigItem, TimeLog, ReportStats, UpcomingEvent, EmployeeStats, Document as StudentDoc, StudentLogin, RequestType, NotificationTemplate, NotificationType, Invoice, InvoiceStatus, InvoiceTemplate, InvoiceSavedItem, ResourceLink, SharedDocument, MissingItem, Reminder, ChangeAgentLogEntry, ChatMessage } from './types';
 import {
   isWithinInterval,
   parseISO,
@@ -187,7 +203,16 @@ async function sendWhatsAppViaWebhook(webhookUrl: string, phone: string, variabl
     });
 
     if (!response.ok) {
-      return { success: false, message: 'Failed to trigger WANotifier webhook' };
+      // Surface WaNotifier's own reason ("Notification not found", "Invalid API key"…).
+      // A generic "failed" once hid a deleted notification for an afternoon.
+      let reason = '';
+      try {
+        const text = await response.text();
+        try { reason = JSON.parse(text)?.message || text; } catch { reason = text; }
+      } catch { /* body unreadable */ }
+      reason = (reason || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      console.error(`[whatsapp] webhook ${response.status} for ${webhookUrl.replace(/key=.*/, 'key=…')}: ${reason}`);
+      return { success: false, message: `WaNotifier ${response.status}${reason ? `: ${reason}` : ''}` };
     }
 
     return { success: true };
@@ -200,8 +225,10 @@ export async function triggerWhatsAppNotification(
   type: NotificationType,
   variables: Record<string, string>,
   recipientPhone?: string
-) {
-  if (!checkAdminServices() || !recipientPhone) return;
+): Promise<{ success: boolean; message?: string }> {
+  if (!checkAdminServices() || !recipientPhone) {
+    return { success: false, message: 'No recipient phone number.' };
+  }
 
   try {
     const templateQuery = await adminDb!
@@ -211,14 +238,14 @@ export async function triggerWhatsAppNotification(
       .limit(1)
       .get();
 
-    if (templateQuery.empty) return;
+    if (templateQuery.empty) return { success: false, message: `No active template for "${type}".` };
 
     const template = templateQuery.docs[0].data() as NotificationTemplate;
-    if (template.webhookUrl) {
-      await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables, template.variableMapping);
-    }
-  } catch (e) {
+    if (!template.webhookUrl) return { success: false, message: 'Template has no webhook URL.' };
+    return await sendWhatsAppViaWebhook(template.webhookUrl, recipientPhone, variables, template.variableMapping);
+  } catch (e: any) {
     console.error('WhatsApp trigger failed:', e);
+    return { success: false, message: e?.message || String(e) };
   }
 }
 
@@ -264,7 +291,12 @@ export async function sendSampleWebhookRequest(webhookUrl: string, mapping: Reco
     pendingTasksCount: '5',
     oldestTaskDate: '2025-01-01',
     submissionDate: '2025-01-01',
-    studentUrl: 'https://uniapplyhub.com/student/sample'
+    studentUrl: 'https://uniapplyhub.com/student/sample',
+    // Without these two the reminder template's {{3}} and {{4}} arrive empty, and
+    // WANotifier shows no sample value to map against.
+    reminderTitle: 'University Interview',
+    reminderDescription: 'Online interview with admissions',
+    dueAt: 'in 1 hour — Sep 15, 2026, 7:14 PM'
   };
   return await sendWhatsAppViaWebhook(webhookUrl, '00000000', dummyVars, mapping);
 }
@@ -642,6 +674,45 @@ export async function createStudentTask(authorId: string, studentId: string, req
     const studentDoc = await adminDb!.collection('students').doc(studentId).get();
     if (!studentDoc.exists) return { success: false, message: 'Student not found.' };
     const studentData = studentDoc.data() as Student;
+
+    // A Foundation student may hold at most COMPANY_LIMIT schools from any one pathway
+    // company. Checked here as well as in the form, so the rule holds no matter how the
+    // request is created — the form's version can be bypassed, this one cannot.
+    // These forms pick ONE school per request (selectedGlobalUniversityDetails); the
+    // multi-select array is only used when a request type enables it, which none do.
+    // Checking just the array meant this never ran.
+    const pickedNames: string[] = [
+      dynamicData?.selectedGlobalUniversityDetails?.name,
+      ...((dynamicData?.selectedGlobalUniversities || []) as { name?: string }[]).map(u => u?.name),
+    ].filter((n): n is string => !!n);
+
+    if (studentData.studyLevel === 'Foundation' && pickedNames.length > 0) {
+      const approvedSnap = await adminDb!.collection('approved_universities').select('name', 'company').get();
+      const lookup = buildCompanyLookup(approvedSnap.docs.map(d => d.data() as { name: string; company?: string }));
+
+      // Everything holding a place: schools on the profile, plus requests still open.
+      const openSnap = await adminDb!.collection('tasks').where('studentId', '==', studentId).get();
+      const held = [
+        ...schoolsAlreadyHeld(studentData.applications, lookup),
+        ...schoolsInOpenRequests(openSnap.docs.map(d => d.data()), lookup),
+      ];
+
+      const counted = countByCompany([
+        ...held,
+        ...pickedNames
+          .map(name => ({ name, company: lookup.get(schoolKey(name)) }))
+          .filter((u): u is { name: string; company: string } => !!u.company),
+      ]);
+      const over = Object.entries(counted).filter(([, set]) => set.size > COMPANY_LIMIT);
+      if (over.length > 0) {
+        const detail = over.map(([c, set]) => `${c} ${set.size}/${COMPANY_LIMIT}`).join(', ');
+        return {
+          success: false,
+          message: `Over the school limit for this student: ${detail}. Each company allows ${COMPANY_LIMIT} schools, counting the ones already on the profile.`,
+        };
+      }
+    }
+
     const recipientGroups: string[] = [];
     const specificUserIds: string[] = [];
     if (requestTypeData.recipients) {
@@ -662,6 +733,80 @@ export async function createStudentTask(authorId: string, studentId: string, req
       taskType: requestTypeData.name, requestTypeId: requestTypeId,
       data: { ...(dynamicData || {}), studentName: studentData.name, studentEmail: studentData.email, studentPhone: studentData.phone, requestedBy: creator?.email, requestedByName: creator?.name }
     });
+    // An IELTS retake taken WITHOUT choosing a saved portal reference means the IDP
+    // login was typed by hand. Keep it as a portal reference so the next retake can be
+    // taken straight from the saved login instead of asking for it again.
+    if (
+      dynamicData?.examType === 'ielts_retake' &&
+      !dynamicData?.selectedPortalId &&
+      dynamicData?.idpUsername?.trim()
+    ) {
+      const username = String(dynamicData.idpUsername).trim();
+      const password = String(dynamicData.idpPassword ?? '').trim();
+      const logins = [...((studentData.studentLogins || []) as StudentLogin[])];
+      const existing = logins.findIndex(
+        l => (l.username || '').trim().toLowerCase() === username.toLowerCase(),
+      );
+
+      if (existing >= 0) {
+        // Same account — refresh the password rather than storing it twice.
+        logins[existing] = { ...logins[existing], username, password: password || logins[existing].password };
+      } else {
+        logins.push({
+          id: `portal-idp-${taskRef.id}`,
+          description: 'IDP PASSWORD',
+          username,
+          password,
+          notes: `Saved from an IELTS retake request on ${formatKuwaitTime(new Date().toISOString())}.`,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      await adminDb!.collection('students').doc(studentId).update({ studentLogins: logins })
+        .catch(e => console.error('[createStudentTask] could not save the IDP portal reference:', e));
+    }
+
+    // Record what was submitted on the student's Admin Notes. The task itself can be
+    // closed, reassigned or lost in a long list; the note keeps the details — schools,
+    // UK contact, references and which documents came in — on the profile for later.
+    if (requestTypeData.specialConfig?.firstYearUkFields) {
+      const d = dynamicData || {};
+      const lines: string[] = [`${requestTypeData.name.trim()} — submitted by ${creator?.name || 'Staff'}`];
+
+      const schools = (d.selectedGlobalUniversities || []) as { name?: string; major?: string }[];
+      const single = d.selectedGlobalUniversityDetails as { name?: string; major?: string } | undefined;
+      const chosen = schools.length > 0 ? schools : single ? [single] : [];
+      if (chosen.length > 0) {
+        lines.push('Schools:');
+        for (const s of chosen) lines.push(`  • ${s?.name || '(unnamed)'}${s?.major ? ` — ${s.major}` : ''}`);
+      }
+
+      if (d.ukPhone) lines.push(`UK phone: ${d.ukPhone}`);
+      if (d.ukAddress) lines.push(`UK address: ${d.ukAddress}`);
+      for (const n of [1, 2]) {
+        const name = d[`reference${n}Name`];
+        const email = d[`reference${n}Email`];
+        if (name || email) lines.push(`Reference ${n}: ${name || '(no name)'}${email ? ` <${email}>` : ''}`);
+      }
+
+      const attachments = (d.attachments || []) as { label?: string; name?: string }[];
+      if (attachments.length > 0) {
+        lines.push(`Documents added to the profile: ${attachments.map(a => `${a?.label} (${a?.name})`).join(', ')}`);
+      }
+
+      // Only worth a note if something beyond the heading was actually filled in.
+      if (lines.length > 1) {
+        await adminDb!.collection('students').doc(studentId).update({
+          adminNotes: FieldValue.arrayUnion({
+            id: `note-request-${taskRef.id}`,
+            authorId,
+            content: lines.join('\n'),
+            createdAt: new Date().toISOString(),
+          }),
+        }).catch(e => console.error('[createStudentTask] could not write the admin note:', e));
+      }
+    }
+
     await refreshStudentActivity(studentId);
     const usersToNotify = new Map<string, User>();
     for (const uid of specificUserIds) {
@@ -706,6 +851,80 @@ export async function markMultipleTasksAsSeen(taskIds: string[], userId: string,
     for (const id of taskIds) batch.update(adminDb!.collection('tasks').doc(id), { viewedBy: FieldValue.arrayUnion({ userId, userName, timestamp }) });
     await batch.commit();
     return { success: true };
+  } catch (e: any) { return { success: false, message: e.message }; }
+}
+
+/**
+ * Record that `userId` has had these chat messages on screen.
+ *
+ * Only messages addressed to the user count, and only once: the first read time
+ * is what the sender sees, so a later visit must not move it. Runs server-side so
+ * the check "is this user actually a recipient" is not left to the client.
+ */
+export async function markChatMessagesRead(studentId: string, messageIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  const ids = Array.from(new Set((messageIds || []).filter(Boolean))).slice(0, 300);
+  if (!ids.length) return { success: true, marked: 0 };
+  try {
+    const user = await getUser(userId);
+    if (!user) return { success: false, message: 'User not found.' };
+
+    const col = adminDb!.collection('chats').doc(studentId).collection('messages');
+    const snaps = await adminDb!.getAll(...ids.map(id => col.doc(id)));
+    const now = new Date().toISOString();
+    const batch = adminDb!.batch();
+    let marked = 0;
+
+    for (const snap of snaps) {
+      if (!snap.exists) continue;
+      const m = snap.data() as ChatMessage;
+      if (m.authorId === userId || m.readBy?.[userId]) continue;
+      const targeted =
+        m.targetUserIds?.includes(userId) ||
+        m.targetGroups?.includes('all') ||
+        (m.targetGroups?.includes('admins') && user.role === 'admin') ||
+        (m.targetGroups?.includes('departments') && user.role === 'department');
+      if (!targeted) continue;
+      batch.update(snap.ref, new FieldPath('readBy', userId), now);
+      marked++;
+    }
+
+    if (marked) await batch.commit();
+    return { success: true, marked };
+  } catch (e: any) { return { success: false, message: e.message }; }
+}
+
+/** Same as markChatMessagesRead, for the management "Updates" broadcasts on the dashboard. */
+export async function markUpdatesRead(taskIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  const ids = Array.from(new Set((taskIds || []).filter(Boolean))).slice(0, 300);
+  if (!ids.length) return { success: true, marked: 0 };
+  try {
+    const user = await getUser(userId);
+    if (!user) return { success: false, message: 'User not found.' };
+
+    const snaps = await adminDb!.getAll(...ids.map(id => adminDb!.collection('tasks').doc(id)));
+    const now = new Date().toISOString();
+    const batch = adminDb!.batch();
+    let marked = 0;
+
+    for (const snap of snaps) {
+      if (!snap.exists) continue;
+      const t = snap.data() as Task;
+      if (t.category !== 'update' || t.authorId === userId || t.readBy?.[userId]) continue;
+      const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
+      const targeted =
+        targets.includes(userId) ||
+        targets.includes('all') ||
+        (user.role === 'admin' && targets.includes('admins')) ||
+        (!!user.department && targets.includes(`dept:${user.department}`));
+      if (!targeted) continue;
+      batch.update(snap.ref, new FieldPath('readBy', userId), now);
+      marked++;
+    }
+
+    if (marked) await batch.commit();
+    return { success: true, marked };
   } catch (e: any) { return { success: false, message: e.message }; }
 }
 
@@ -873,7 +1092,22 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
         message = `Status updated to 'Denied' by ${updater.name}. Reason: ${reason}`;
       }
 
-      await adminDb!.collection('tasks').add({ authorId: 'system', createdBy: 'system', recipientId: taskData.authorId, recipientIds: [taskData.authorId], content: message, createdAt: new Date().toISOString(), status: 'new', category: 'system', replies: [] });
+      // Structured alongside the text, so the employee's dashboard can show a proper
+      // status badge and link back to the request instead of a line of prose.
+      await adminDb!.collection('tasks').add({
+        authorId: 'system', createdBy: 'system',
+        recipientId: taskData.authorId, recipientIds: [taskData.authorId],
+        content: message,
+        createdAt: new Date().toISOString(),
+        status: 'new', category: 'system', replies: [],
+        relatedTaskId: taskId,
+        newStatus: status,
+        taskType: taskData.taskType || null,
+        studentId: taskData.studentId || null,
+        studentName: taskData.studentName || null,
+        denialReason: status === 'denied' ? (reason || null) : null,
+        updatedByName: updater.name || null,
+      });
       const recipient = await getUser(taskData.authorId);
       if (recipient?.phone) {
         let type: NotificationType = 'task_status_in_progress';
@@ -884,6 +1118,199 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus, updat
     }
     return { success: true, message: 'Status updated.' };
   } catch (error: any) { return { success: false, message: error.message }; }
+}
+
+/**
+ * Mark request-outcome notifications as read for the person they belong to.
+ *
+ * Only touches notifications addressed to that user, so one employee can never clear
+ * another's. Capped because the collection holds thousands of historic ones.
+ */
+export async function markRequestUpdatesRead(taskIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  if (!taskIds?.length) return { success: true, message: 'Nothing to mark.' };
+
+  try {
+    const ids = taskIds.slice(0, 50);
+    const batch = adminDb!.batch();
+    let marked = 0;
+
+    const docs = await Promise.all(ids.map(id => adminDb!.collection('tasks').doc(id).get()));
+    for (const doc of docs) {
+      if (!doc.exists) continue;
+      const t = doc.data() as Task;
+      const targets = t.recipientIds || (t.recipientId ? [t.recipientId] : []);
+      if (!targets.includes(userId)) continue; // not this user's to clear
+      batch.update(doc.ref, { status: 'completed' });
+      marked++;
+    }
+
+    if (marked > 0) await batch.commit();
+    return { success: true, message: `${marked} update(s) marked as read.` };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+// ---------------------------------------------------------------------------------
+// Official-sites watch (Cultural Offices, MOHE) — alerts written by src/lib/site-watch.ts.
+//
+// Read through the server rather than from the browser: the alerts live in their own
+// collection so they do not add to the tasks backlog, and Firestore rules have no entry
+// for it, so a client read would be refused.
+// ---------------------------------------------------------------------------------
+
+const SITE_WATCH_ROLES = ['admin', 'adminplus'];
+
+/** Unread official-site alerts for this admin, newest first, plus when the site was last checked. */
+export async function getSiteWatchAlerts(userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available', alerts: [], lastCheckedAt: null };
+  try {
+    const user = await getUser(userId);
+    if (!user || !SITE_WATCH_ROLES.includes(user.role)) {
+      return { success: false, message: 'Unauthorized.', alerts: [], lastCheckedAt: null };
+    }
+    const [snap, state] = await Promise.all([
+      adminDb!.collection('site_watch_alerts').orderBy('createdAt', 'desc').limit(40).get(),
+      adminDb!.collection('site_watch').get(),
+    ]);
+    // Read state is per admin: one admin clearing an alert must not hide it from another.
+    const alerts = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }) as Record<string, any>)
+      .filter(a => !((a.readBy as string[] | undefined) || []).includes(userId))
+      .map(a => ({
+        id: a.id as string,
+        kind: a.kind as string,
+        siteName: (a.siteName as string) || 'Kuwait Cultural Office · London',
+        title: (a.title as string) || '',
+        url: (a.url as string) || '',
+        summary: (a.summary as string) || '',
+        added: (a.added as string[]) || [],
+        removed: (a.removed as string[]) || [],
+        addedCount: (a.addedCount as number) ?? 0,
+        removedCount: (a.removedCount as number) ?? 0,
+        createdAt: a.createdAt as string,
+      }));
+    return {
+      success: true,
+      alerts,
+      // The most recent check across every watched source.
+      lastCheckedAt:
+        state.docs
+          .map(d => d.data()?.lastCompletedAt as string | undefined)
+          .filter((v): v is string => !!v)
+          .sort()
+          .pop() ?? null,
+    };
+  } catch (error: any) {
+    return { success: false, message: error.message, alerts: [], lastCheckedAt: null };
+  }
+}
+
+export async function markSiteWatchAlertsRead(alertIds: string[], userId: string) {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  if (!alertIds?.length) return { success: true, message: 'Nothing to mark.' };
+  try {
+    const user = await getUser(userId);
+    if (!user || !SITE_WATCH_ROLES.includes(user.role)) return { success: false, message: 'Unauthorized.' };
+    const batch = adminDb!.batch();
+    for (const id of alertIds.slice(0, 50)) {
+      batch.update(adminDb!.collection('site_watch_alerts').doc(id), { readBy: FieldValue.arrayUnion(userId) });
+    }
+    await batch.commit();
+    return { success: true, message: 'Marked as read.' };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+}
+
+export type AdminDashboardStats = {
+  total: number;
+  assigned: number;
+  unassigned: number;
+  apps: { total: number; pending: number; submitted: number; missingItems: number; accepted: number; rejected: number };
+  pipeline: { green: number; yellow: number; orange: number; red: number; black: number; none: number };
+  agentBreakdown: { id: string; name: string; role: string; total: number; green: number; yellow: number; orange: number; red: number; black: number; none: number }[];
+};
+
+/**
+ * The admin dashboard's counters, computed here instead of in the browser.
+ *
+ * The dashboard used to download every student to add them up — 1,960 documents and
+ * 9.7 MB, including documents, notes and jotform data it never looked at — which is
+ * what made the page take minutes to appear. The client SDK cannot ask for a subset of
+ * fields; the Admin SDK can, so the five fields that matter are read here and only the
+ * totals cross the wire.
+ */
+export async function getAdminDashboardStats(userId: string): Promise<AdminDashboardStats | null> {
+  if (!checkAdminServices()) return null;
+  try {
+    const user = await getUser(userId);
+    if (!user || !['admin', 'adminplus', 'department'].includes(user.role)) return null;
+
+    const [studentsSnap, usersSnap] = await Promise.all([
+      adminDb!.collection('students').select('isClosed', 'employeeId', 'pipelineStatus', 'applications').get(),
+      adminDb!.collection('users').select('name', 'role', 'civilId').get(),
+    ]);
+
+    const validCivilIds = new Set<string>();
+    const validUserIds = new Set<string>();
+    const statsMap = new Map<string, AdminDashboardStats['agentBreakdown'][number]>();
+    for (const doc of usersSnap.docs) {
+      const u = doc.data();
+      validUserIds.add(doc.id);
+      if (u.civilId) {
+        validCivilIds.add(u.civilId);
+        statsMap.set(u.civilId, { id: doc.id, name: u.name, role: u.role, total: 0, green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 });
+      }
+    }
+
+    let assigned = 0;
+    let unassigned = 0;
+    const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
+    const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
+    const bump = (bucket: Record<string, number>, key: string) => {
+      if (key in bucket) bucket[key] += 1; else bucket.none += 1;
+    };
+
+    for (const doc of studentsSnap.docs) {
+      const s = doc.data();
+      if (s.isClosed) continue;
+
+      const hasAgent = !!s.employeeId;
+      const isGhost = hasAgent && !validCivilIds.has(s.employeeId) && !validUserIds.has(s.employeeId);
+      const status = s.pipelineStatus || 'none';
+
+      if (!hasAgent) unassigned++;
+      else if (!isGhost) { assigned++; bump(pipeline, status); }
+
+      if (!isGhost) {
+        for (const app of (s.applications || []) as Application[]) {
+          apps.total++;
+          if (app.status === 'Pending') apps.pending++;
+          else if (app.status === 'Submitted') apps.submitted++;
+          else if (app.status === 'Missing Items') apps.missingItems++;
+          else if (app.status === 'Accepted') apps.accepted++;
+          else if (app.status === 'Rejected') apps.rejected++;
+        }
+      }
+
+      const entry = s.employeeId ? statsMap.get(s.employeeId) : undefined;
+      if (entry) { entry.total++; bump(entry as unknown as Record<string, number>, status); }
+    }
+
+    return {
+      total: assigned + unassigned,
+      assigned,
+      unassigned,
+      apps,
+      pipeline,
+      agentBreakdown: [...statsMap.values()].filter(a => a.total > 0),
+    };
+  } catch (e) {
+    console.error('[getAdminDashboardStats] failed:', e);
+    return null;
+  }
 }
 
 export async function toggleTaskPriority(taskId: string, isPrioritized: boolean) {
@@ -922,18 +1349,40 @@ export async function createNewUser(userData: { name: string; email: string; pas
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
-export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
+export async function createStudent(values: { studentName: string; studentEmail?: string; phone: string; phone2?: string; phone3?: string; gender?: 'M' | 'F'; internalNumber?: string; highSchoolGrade?: string; schoolName?: string; schoolType?: 'Private' | 'Public'; targetCountries: string[]; otherCountry?: string; notes?: string; }, creatingUserId: string, creatingUserRole: UserRole, creatingUserCivilId?: string | null, assignedEmployeeId?: string | null) {
   if (!checkAdminServices()) return { success: false, message: 'DB not available' };
-  const { studentName, studentEmail, phone, phone2, phone3, gender, internalNumber, highSchoolGrade, targetCountries, otherCountry, notes } = values;
-  let finalTargetCountries = targetCountries;
+  const { studentName, studentEmail, phone, phone2, phone3, gender, internalNumber, highSchoolGrade, schoolName, schoolType, targetCountries, otherCountry, notes } = values || {};
+
+  // Validate before touching Firestore. Callers that reach this action directly (the MCP
+  // dispatcher passes `values` through untouched) previously got the failure second-hand
+  // and unrecognisable: a missing studentName surfaced as «Cannot use "undefined" as a
+  // Firestore value (found in field name)», and a missing phone as «'IN' requires a
+  // non-empty ArrayValue» from the duplicate-phone query below. Both read as backend
+  // bugs rather than as "you left a required field out".
+  const cleanName = String(studentName ?? '').trim();
+  const cleanPhone = String(phone ?? '').trim();
+  if (!cleanName || !cleanPhone) {
+    const missing = [!cleanName && 'studentName', !cleanPhone && 'phone'].filter(Boolean).join(' and ');
+    return {
+      success: false,
+      message: `createStudent is missing ${missing}. The first argument is a single "values" object: { studentName, phone, targetCountries, studentEmail?, phone2?, phone3?, gender?, internalNumber?, highSchoolGrade?, schoolName?, schoolType?, otherCountry?, notes? }. Note it is "studentName", not "name", and every field goes inside "values" — not at the top level.`,
+    };
+  }
+
+  // Accept a missing or malformed list rather than throwing on the spread below.
+  let finalTargetCountries: string[] = Array.isArray(targetCountries) ? [...targetCountries] : [];
   if (otherCountry && otherCountry.trim()) finalTargetCountries = [...finalTargetCountries, otherCountry.trim()];
   try {
-    const newPhones = [phone, phone2, phone3].filter(Boolean) as string[];
+    const newPhones = [cleanPhone, phone2, phone3].map(p => String(p ?? '').trim()).filter(Boolean);
     const existingIds = new Set<string>();
-    await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
-      const snap = await adminDb!.collection('students').where(field, 'in', newPhones).get();
-      snap.docs.forEach(d => existingIds.add(d.id));
-    }));
+    // Firestore rejects an `in` filter with an empty array, so only run the duplicate
+    // check when there is something to look for.
+    if (newPhones.length) {
+      await Promise.all(['phone', 'phone2', 'phone3'].map(async field => {
+        const snap = await adminDb!.collection('students').where(field, 'in', newPhones.slice(0, 30)).get();
+        snap.docs.forEach(d => existingIds.add(d.id));
+      }));
+    }
     let duplicateInfo = {};
     if (existingIds.size > 0) duplicateInfo = { duplicatePhoneWarning: true, duplicateOfStudentIds: [...existingIds] };
     const fallbackId = Math.random().toString(36).substring(2, 9);
@@ -942,8 +1391,8 @@ export async function createStudent(values: { studentName: string; studentEmail?
     const studentRef = adminDb!.collection('students').doc(studentId);
     const now = new Date().toISOString();
     // If this person is on a previously-imported accepted list, inherit their acceptance.
-    const acceptedMatch = await lookupAcceptedList([phone, phone2, phone3]);
-    await studentRef.set({ id: studentId, name: studentName, email: studentEmail || '', phone: phone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isClosed: false, isNewForEmployee: !!assignedEmployeeId, ...(acceptedMatch ? { acceptedInfo: { country: acceptedMatch.country, major: acceptedMatch.major }, ...(acceptedMatch.listName ? { importListName: acceptedMatch.listName } : {}) } : {}), profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
+    const acceptedMatch = await lookupAcceptedList([cleanPhone, phone2, phone3]);
+    await studentRef.set({ id: studentId, name: cleanName, email: studentEmail || '', phone: cleanPhone, ...(phone2 ? { phone2 } : {}), ...(phone3 ? { phone3 } : {}), gender: gender || null, internalNumber: internalNumber || '', highSchoolGrade: highSchoolGrade || '', schoolType: schoolType || null, ...(schoolName?.trim() ? { jotformData: { schoolName: schoolName.trim() } } : {}), employeeId: assignedEmployeeId || null, applications: [], employeeNotes: [], adminNotes: notes ? [{ id: `note-${Date.now()}`, authorId: creatingUserId, content: notes, createdAt: now }] : [], documents: [], createdAt: now, lastActivityAt: now, createdBy: creatingUserId, targetCountries: finalTargetCountries as Country[], missingItems: [], pipelineStatus: 'none', isClosed: false, isNewForEmployee: !!assignedEmployeeId, ...(acceptedMatch ? { acceptedInfo: { country: acceptedMatch.country, major: acceptedMatch.major }, ...(acceptedMatch.listName ? { importListName: acceptedMatch.listName } : {}) } : {}), profileCompletionStatus: { submitUniversityApplication: false, applyMoheScholarship: false, submitKcoRequest: false, receivedCasOrI20: false, appliedForVisa: false, documentsSubmittedToMohe: false, readyToTravel: false, financialStatementsProvided: false, visaGranted: false, medicalFitnessSubmitted: false }, ...duplicateInfo });
     
     // Auto-post initial notes to chat if they exist
     if (notes && notes.trim()) {
@@ -967,7 +1416,7 @@ export async function createStudent(values: { studentName: string; studentEmail?
         for (const adminDoc of adminsSnapshot.docs) {
           batch.set(adminDb!.collection('tasks').doc(), { authorId: creatingUserId, createdBy: creatingUserId, recipientId: adminDoc.id, recipientIds: [adminDoc.id], content: `New student '${studentName}' added.`, status: 'new', category: 'system', studentId: studentRef.id, studentName: studentName, createdAt: new Date().toISOString(), replies: [] });
           const adminData = adminDoc.data() as User;
-          await triggerWhatsAppNotification('new_student_added', { adminName: adminData.name, studentName: studentName, studentEmail: studentEmail || 'N/A', studentPhone: phone, submissionDate: new Date().toLocaleDateString(), studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/unassigned-students` }, adminData.phone);
+          await triggerWhatsAppNotification('new_student_added', { adminName: adminData.name, studentName: cleanName, studentEmail: studentEmail || 'N/A', studentPhone: cleanPhone, submissionDate: new Date().toLocaleDateString(), studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/unassigned-students` }, adminData.phone);
         }
         await batch.commit();
       }
@@ -2343,6 +2792,25 @@ export async function deleteUniversity(id: string, adminId: string) {
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 
+/**
+ * Drop every undefined, at any depth.
+ *
+ * Firestore rejects undefined anywhere in a write, and a top-level filter is not enough
+ * now that universities carry an array of per-entry-level requirements — an undefined band
+ * inside one of those objects would reject the whole save.
+ */
+function stripUndefinedDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUndefinedDeep);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, stripUndefinedDeep(v)]),
+    );
+  }
+  return value;
+}
+
 // Add an approved university. Server-side (admin SDK) so it never depends on client
 // Firestore rules — client writes were failing silently, so add/close did nothing.
 export async function addUniversity(data: Record<string, unknown>, userId: string) {
@@ -2350,7 +2818,9 @@ export async function addUniversity(data: Record<string, unknown>, userId: strin
   try {
     const user = await getUser(userId);
     if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
-    const clean = Object.fromEntries(Object.entries(data || {}).filter(([, v]) => v !== undefined));
+    const clean = stripUndefinedDeep(
+      Object.fromEntries(Object.entries(data || {}).filter(([, v]) => v !== undefined)),
+    ) as Record<string, unknown>;
     const ref = await adminDb!.collection('approved_universities').add(clean);
     return { success: true, id: ref.id, message: 'University added.' };
   } catch (error: any) { return { success: false, message: error.message }; }
@@ -2364,7 +2834,9 @@ export async function updateUniversity(id: string, data: Record<string, unknown>
     if (!user || !['admin', 'department'].includes(user.role)) return { success: false, message: 'Unauthorized.' };
     const ref = adminDb!.collection('approved_universities').doc(id);
     if (!(await ref.get()).exists) return { success: false, message: 'University not found.' };
-    const clean = Object.fromEntries(Object.entries(data || {}).filter(([k, v]) => k !== 'id' && v !== undefined));
+    const clean = stripUndefinedDeep(
+      Object.fromEntries(Object.entries(data || {}).filter(([k, v]) => k !== 'id' && v !== undefined)),
+    ) as Record<string, unknown>;
     await ref.update(clean);
     return { success: true, message: 'University updated.' };
   } catch (error: any) { return { success: false, message: error.message }; }
@@ -2658,6 +3130,226 @@ export async function rejectStudentDeletion(studentId: string, adminId: string, 
 }
 
 
+/**
+ * Everyone who should get a WhatsApp for this reminder, de-duplicated by phone.
+ *
+ * Note: 'all' deliberately does NOT include department users — that matches how this
+ * has always behaved, and widening it would silently add people to existing reminders.
+ */
+async function resolveReminderRecipients(reminder: Reminder): Promise<{ phone: string; name: string }[]> {
+  const found: { phone: string; name: string }[] = [];
+  const { recipientType, recipientUserIds } = reminder;
+
+  const add = (data: FirebaseFirestore.DocumentData | undefined, fallback: string) => {
+    if (data?.phone) found.push({ phone: data.phone, name: data.name || fallback });
+  };
+
+  if (recipientType === 'admin' || recipientType === 'all') {
+    const admins = await adminDb!.collection('users').where('role', '==', 'admin').get();
+    admins.docs.forEach(d => add(d.data(), 'Admin'));
+  }
+  if (recipientType === 'employee' || recipientType === 'all') {
+    const studentDoc = await adminDb!.collection('students').doc(reminder.studentId).get();
+    const employeeId = (studentDoc.data() as Student | undefined)?.employeeId;
+    if (employeeId) {
+      const emp = await adminDb!.collection('users').where('civilId', '==', employeeId).limit(1).get();
+      emp.docs.forEach(d => add(d.data(), 'Employee'));
+    }
+  }
+  if (recipientType === 'department') {
+    const depts = await adminDb!.collection('users').where('role', '==', 'department').get();
+    depts.docs.forEach(d => add(d.data(), 'Team'));
+  }
+  if (recipientType === 'custom' && recipientUserIds?.length) {
+    const docs = await Promise.all(recipientUserIds.map(uid => adminDb!.collection('users').doc(uid).get()));
+    docs.forEach(d => { if (d.exists) add(d.data(), 'Team'); });
+  }
+
+  const seen = new Set<string>();
+  return found.filter(r => {
+    if (seen.has(r.phone)) return false;
+    seen.add(r.phone);
+    return true;
+  });
+}
+
+/**
+ * Claim the stages that are due for one reminder, then send them.
+ *
+ * The claim is a transaction, so two overlapping runs — the cron and someone opening
+ * the site at the same moment — can never both send the same stage. A stage whose
+ * messages all fail is released so the next run retries it.
+ */
+async function sendDueStagesFor(
+  ref: FirebaseFirestore.DocumentReference,
+  now: Date,
+): Promise<{ stage: ReminderStage; recipients: number }[]> {
+  const nowIso = now.toISOString();
+
+  const claim = await adminDb!.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const reminder = { id: snap.id, ...snap.data() } as Reminder;
+    if (reminder.status !== 'active' || !reminder.notifyWhatsApp) return null;
+
+    // A reminder from before staged sending has no log; arm it as if created now, so
+    // its already-passed stages are recorded rather than fired all at once.
+    const migrated = migrateLegacyStages(reminder, now);
+    if (migrated) reminder.stages = migrated;
+
+    const { send, skip } = stagesDueNow(reminder, now);
+
+    const update: Record<string, string> = {};
+    if (migrated) for (const [key, value] of Object.entries(migrated)) update[`stages.${key}`] = value;
+    for (const s of send) update[`stages.${s}`] = nowIso;
+    for (const s of skip) update[`stages.${s}`] = SKIPPED;
+    if (!Object.keys(update).length) return null;
+    tx.update(ref, update);
+
+    return { reminder, send };
+  });
+
+  if (!claim || !claim.send.length) return [];
+
+  const { reminder, send } = claim;
+  const recipients = await resolveReminderRecipients(reminder);
+  const results: { stage: ReminderStage; recipients: number }[] = [];
+
+  for (const stage of send) {
+    let delivered = 0;
+    for (const { phone, name } of recipients) {
+      const res = await triggerWhatsAppNotification('student_reminder', {
+        recipientName: name,
+        studentName: reminder.studentName,
+        reminderTitle: reminder.title,
+        reminderDescription: reminder.description || '',
+        dueAt: stagePhrase(stage, reminder.dueAt),
+      }, phone);
+      if (res?.success) delivered++;
+    }
+
+    if (delivered === 0 && recipients.length > 0) {
+      // Nothing got through — let the next run try this stage again.
+      await ref.update({ [`stages.${stage}`]: FieldValue.delete() }).catch(() => {});
+      console.error(`[reminders] stage "${stage}" failed for ${ref.id}, released for retry`);
+      continue;
+    }
+    results.push({ stage, recipients: delivered });
+  }
+
+  // Kept in step with the stage log so older screens still show a last-sent time.
+  if (results.length) await ref.update({ whatsAppSentAt: nowIso }).catch(() => {});
+  return results;
+}
+
+/**
+ * Send every reminder stage that is due right now, for every student.
+ *
+ * Called by the scheduler (every few minutes) and as a fallback whenever someone loads
+ * the app. Idempotent — running it twice in the same minute sends nothing twice.
+ */
+export async function processReminderStages(): Promise<{ sent: number; details: string[] }> {
+  if (!checkAdminServices()) return { sent: 0, details: [] };
+  try {
+    const now = new Date();
+    // Every active reminder, not only those due within 24h: a "created" announcement
+    // that failed to send (WaNotifier down, notification deleted) is released for retry,
+    // and it must be retried right away even when the event is a week out. The active
+    // set is a few dozen documents, so the wider query costs nothing.
+    const snapshot = await adminDb!
+      .collection('student_reminders')
+      .where('status', '==', 'active')
+      .get();
+
+    const details: string[] = [];
+    let sent = 0;
+
+    for (const doc of snapshot.docs) {
+      const results = await sendDueStagesFor(doc.ref, now);
+      for (const r of results) {
+        sent += r.recipients;
+        details.push(`${doc.id}:${r.stage}->${r.recipients}`);
+      }
+    }
+
+    return { sent, details };
+  } catch (e: any) {
+    // Loud on purpose. A silent failure here once hid a broken index for three months.
+    console.error('[reminders] processReminderStages FAILED:', e?.message || e);
+    return { sent: 0, details: [`ERROR: ${e?.message || e}`] };
+  }
+}
+
+/**
+ * Set up a reminder's stages, and announce it immediately when it is newly created.
+ *
+ * Called right after the reminder is written, and again whenever its date changes
+ * (edit or snooze) so the day/hour/final stages are re-armed for the new time.
+ */
+export async function initialiseReminderStages(
+  reminderId: string,
+  options: { announce: boolean } = { announce: true },
+): Promise<{ success: boolean; message?: string }> {
+  if (!checkAdminServices()) return { success: false, message: 'DB not available' };
+  try {
+    const ref = adminDb!.collection('student_reminders').doc(reminderId);
+    const snap = await ref.get();
+    if (!snap.exists) return { success: false, message: 'Reminder not found.' };
+    const reminder = { id: snap.id, ...snap.data() } as Reminder;
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const stages = initialStageLog(reminder.dueAt, now);
+
+    // On an edit the reminder has already been announced; don't announce it twice.
+    if (!options.announce) {
+      const previous = reminder.stages?.created;
+      if (previous) stages.created = previous;
+    }
+
+    const shouldAnnounce = options.announce && reminder.notifyWhatsApp;
+    if (shouldAnnounce) stages.created = nowIso;
+
+    await ref.set({ stages }, { merge: true });
+
+    if (shouldAnnounce) {
+      const recipients = await resolveReminderRecipients(reminder);
+      let delivered = 0;
+      let lastError = '';
+      for (const { phone, name } of recipients) {
+        const res = await triggerWhatsAppNotification('student_reminder', {
+          recipientName: name,
+          studentName: reminder.studentName,
+          reminderTitle: reminder.title,
+          reminderDescription: reminder.description || '',
+          dueAt: stagePhrase('created', reminder.dueAt),
+        }, phone);
+        if (res?.success) delivered++;
+        else if (res?.message) lastError = res.message;
+      }
+      if (delivered > 0) await ref.update({ whatsAppSentAt: nowIso });
+      else if (recipients.length > 0) {
+        await ref.update({ 'stages.created': FieldValue.delete() }).catch(() => {});
+        return {
+          success: false,
+          message: `Reminder saved, but the WhatsApp could not be sent${lastError ? ` (${lastError})` : ''}. Check the Student Reminder template under WA Templates.`,
+        };
+      }
+    }
+
+    return { success: true };
+  } catch (e: any) {
+    console.error('[reminders] initialiseReminderStages failed:', e);
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Reminders this user should see as a toast, and a fallback run of the scheduler.
+ *
+ * The WhatsApp sending itself lives in processReminderStages — this only decides what
+ * to pop up on screen for whoever is looking.
+ */
 export async function processStudentReminders(params: {
   userId: string;
   userRole: string;
@@ -2665,6 +3357,11 @@ export async function processStudentReminders(params: {
   userCivilId?: string;
 }): Promise<{ triggered: Reminder[] }> {
   if (!checkAdminServices()) return { triggered: [] };
+
+  // Fallback for as long as no scheduler is configured. Independent of the toasts
+  // below, and idempotent, so it is safe on every page load.
+  const stageRun = processReminderStages();
+
   try {
     const now = new Date().toISOString();
     const snapshot = await adminDb!
@@ -2673,74 +3370,35 @@ export async function processStudentReminders(params: {
       .where('dueAt', '<=', now)
       .get();
 
-    if (snapshot.empty) return { triggered: [] };
-
     const triggered: Reminder[] = [];
 
     for (const doc of snapshot.docs) {
       const reminder = { id: doc.id, ...doc.data() } as Reminder;
-
-      // Check if this user is a recipient
       const { recipientType, recipientUserIds } = reminder;
+
       let isRecipient = false;
       if (recipientType === 'all') isRecipient = true;
       else if (recipientType === 'admin' && params.userRole === 'admin') isRecipient = true;
-      else if (recipientType === 'employee' && params.userRole === 'employee') isRecipient = true;
+      // The student's OWN employee, not any employee — this used to pop the reminder
+      // toast on every employee's screen. Reminders saved before studentEmployeeId
+      // existed keep the old behaviour rather than silently stopping.
+      else if (recipientType === 'employee' && params.userRole === 'employee') {
+        isRecipient = reminder.studentEmployeeId
+          ? reminder.studentEmployeeId === params.userCivilId
+          : true;
+      }
       else if (recipientType === 'department' && params.userRole === 'department') isRecipient = true;
       else if (recipientType === 'custom' && recipientUserIds?.includes(params.userId)) isRecipient = true;
 
-      if (!isRecipient) continue;
-
-      triggered.push(scrub(reminder));
-
-      // Send WhatsApp if not yet sent
-      if (reminder.notifyWhatsApp && !reminder.whatsAppSentAt) {
-        const recipients: { phone: string; name: string }[] = [];
-
-        if (recipientType === 'admin' || recipientType === 'all') {
-          const admins = await adminDb!.collection('users').where('role', '==', 'admin').get();
-          admins.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Admin' }); });
-        }
-        if (recipientType === 'employee' || recipientType === 'all') {
-          // Get student's assigned employee
-          const studentDoc = await adminDb!.collection('students').doc(reminder.studentId).get();
-          if (studentDoc.exists) {
-            const student = studentDoc.data() as Student;
-            if (student.employeeId) {
-              const emp = await adminDb!.collection('users').where('civilId', '==', student.employeeId).limit(1).get();
-              emp.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Employee' }); });
-            }
-          }
-        }
-        if (recipientType === 'department') {
-          const depts = await adminDb!.collection('users').where('role', '==', 'department').get();
-          depts.docs.forEach(d => { if (d.data().phone) recipients.push({ phone: d.data().phone, name: d.data().name || 'Team' }); });
-        }
-        if (recipientType === 'custom' && recipientUserIds?.length) {
-          const docs = await Promise.all(recipientUserIds.map(uid => adminDb!.collection('users').doc(uid).get()));
-          docs.forEach(d => { if (d.exists && d.data()?.phone) recipients.push({ phone: d.data()!.phone, name: d.data()!.name || 'Team' }); });
-        }
-
-        const seen = new Set<string>();
-        for (const { phone, name } of recipients) {
-          if (seen.has(phone)) continue;
-          seen.add(phone);
-          await triggerWhatsAppNotification('student_reminder', {
-            recipientName: name,
-            studentName: reminder.studentName,
-            reminderTitle: reminder.title,
-            reminderDescription: reminder.description || '',
-            dueAt: formatKuwaitTime(reminder.dueAt),
-          }, phone);
-        }
-
-        await doc.ref.update({ whatsAppSentAt: now });
-      }
+      if (isRecipient) triggered.push(scrub(reminder));
     }
 
+    await stageRun;
     return { triggered };
   } catch (e: any) {
-    console.error('processStudentReminders failed:', e);
+    // Loud on purpose — this failed silently against a missing index for three months.
+    console.error('[reminders] processStudentReminders FAILED:', e?.message || e);
+    await stageRun.catch(() => {});
     return { triggered: [] };
   }
 }
@@ -2891,6 +3549,8 @@ const STAFF_NAME_LABELS_EN: Record<string, string> = {
   'خالد الهدهود': 'Khaled Alhadhoud',
   'ابراهيم': 'Ibrahim',
   'دلال': 'Dalal',
+  'مريم الاحمد': 'Mariam Alahmad',
+  'زهراء الحداد': 'Zahraa Alhaddad',
 };
 const toDisplayLabel = (map: Record<string, string>, raw?: string): string | undefined =>
   raw ? (map[raw] || raw) : raw;
@@ -3037,7 +3697,21 @@ const STAFF_CIVIL_ID_MAP: Record<string, string> = {
   'يوسف سليمان':       '304052500624',
   'ابراهيم':           '305061500954',
   'دلال':              '306021400064',
+  'مريم الاحمد':       '603200606032',
+  'زهراء الحداد':      '922173209221',
 };
+
+/**
+ * Undo the usual way an Arabic filename arrives broken: its UTF-8 bytes read as Latin-1,
+ * so "شهادة" shows as "Ø´ÙØ§Ø¯Ø©". Only names that are plainly in that state are touched —
+ * a name already holding real Arabic, and a genuine Latin-1 name like "résumé", both come
+ * back unchanged, and so does one too damaged to recover.
+ */
+function repairFileName(name: string): string {
+  if (!name || /[^\x00-\xff]/.test(name)) return name;
+  const repaired = Buffer.from(name, 'latin1').toString('utf8');
+  return repaired.includes('\uFFFD') ? name : repaired;
+}
 
 export async function submitJotformApplications(formData: FormData): Promise<{ jotformResults: { country: string; success: boolean; detail?: string }[]; studentCreated: boolean }> {
   const jotformResults: { country: string; success: boolean; detail?: string }[] = [];
@@ -3058,6 +3732,37 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
   const civilId = (formData.get('civilId') as string) || '';
   const schoolName = (formData.get('schoolName') as string) || '';
   const ieltsScore = (formData.get('ieltsScore') as string) || '';
+
+  // At most 5 schools per pathway company. Checked BEFORE anything is posted to
+  // Jotform, so an over-limit submission is refused outright rather than reaching the
+  // form and then failing to produce a student.
+  try {
+    const chosen = JSON.parse((formData.get('builtApplications') as string) || '[]') as
+      { university?: string }[];
+    if (Array.isArray(chosen) && chosen.length > 0 && adminDb) {
+      const approvedSnap = await adminDb.collection('approved_universities').select('name', 'company').get();
+      const lookup = buildCompanyLookup(approvedSnap.docs.map(d => d.data() as { name: string; company?: string }));
+      const counted = countByCompany(
+        chosen
+          .map(a => ({ name: a.university || '', company: lookup.get(schoolKey(a.university || '')) }))
+          .filter((u): u is { name: string; company: string } => !!u.name && !!u.company),
+      );
+      const over = Object.entries(counted).filter(([, set]) => set.size > COMPANY_LIMIT);
+      if (over.length > 0) {
+        const detail = over.map(([c, set]) => `${c} ${set.size}/${COMPANY_LIMIT}`).join(', ');
+        return {
+          jotformResults: [{
+            country: 'UK',
+            success: false,
+            detail: `Over the school limit: ${detail}. Each company allows ${COMPANY_LIMIT} schools — deselect the extras and submit again.`,
+          }],
+          studentCreated: false,
+        };
+      }
+    }
+  } catch {
+    // A malformed payload is not a reason to block the submission.
+  }
   const followUpPerson = (formData.get('followUpPerson') as string) || '';
   const guardianName = (formData.get('guardianName') as string) || '';
   const guardianEmail = (formData.get('guardianEmail') as string) || '';
@@ -3310,8 +4015,15 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
     try {
       const now = new Date().toISOString();
 
-      // Upload all document types to Storage and collect URLs
-      const passportDocs: Record<string, unknown>[] = [];
+      // Upload all document types to Storage and collect URLs.
+      //
+      // Every uploaded file also becomes a real document on the profile. It used to be the
+      // passport alone: certificates, IELTS results, degrees, letters and statements were
+      // uploaded and then kept only as links under jotformData.documents, which nothing on
+      // the profile displays — staff had to ask the student again for files they had.
+      // Those links stay exactly as they were; resending to another country reads them.
+      const profileDocs: Record<string, unknown>[] = [];
+      const profileDocsByKey: Record<string, Record<string, unknown>[]> = {};
       const jotformDocUrls: Record<string, string[]> = {
         passport: [], secondaryCerts: [], ieltsFile: [], otherFiles: [],
         universityDegree: [], recommendationLetter: [], personalStatement: [], transcript: [],
@@ -3334,9 +4046,19 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
             const encodedPath = encodeURIComponent(storagePath);
             const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
             urls.push(url);
-            if (docKey === 'passport') {
-              passportDocs.push({ id: `passport-${Date.now()}-${i}`, name: docLabel, originalName: f.name, size: f.buffer.byteLength, url, uploadedAt: now, authorId: creatingUserId });
-            }
+            (profileDocsByKey[docKey] ||= []).push({
+              // The uploads run in parallel, so a timestamp alone can repeat across types.
+              id: `jotform-${docKey}-${Date.now()}-${i}-${crypto.randomUUID().slice(0, 8)}`,
+              name: filesData.length > 1 ? `${docLabel} (${i + 1})` : docLabel,
+              originalName: repairFileName(f.name),
+              size: f.buffer.byteLength,
+              url,
+              uploadedAt: now,
+              authorId: creatingUserId,
+              // Always the student's own documents. Untagged, they landed in whichever
+              // section matched the role of whoever happened to submit the form.
+              section: 'employee',
+            });
           }
           return urls;
         };
@@ -3355,6 +4077,11 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         // Fold transcript URLs into "otherFiles" so a later resend (addCountryApplication,
         // which only re-downloads jd.documents.otherFiles) also carries the transcript.
         jotformDocUrls.otherFiles = [...jotformDocUrls.otherFiles, ...jotformDocUrls.transcript];
+
+        // A fixed order, passport first. The uploads finish in whatever order they finish.
+        for (const key of ['passport', 'secondaryCerts', 'transcript', 'ieltsFile', 'universityDegree', 'recommendationLetter', 'personalStatement', 'otherFiles']) {
+          profileDocs.push(...(profileDocsByKey[key] || []));
+        }
       }
 
       const builtApplicationsJson = (formData.get('builtApplications') as string) || '[]';
@@ -3411,7 +4138,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
             metadata: { contentType: 'application/pdf', metadata: { firebaseStorageDownloadTokens: downloadToken } },
           });
           const pdfUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(pdfPath)}?alt=media&token=${downloadToken}`;
-          passportDocs.push({
+          profileDocs.push({
             id: `application-summary-${Date.now()}`,
             name: 'Application Summary (PDF)',
             originalName: 'application-summary.pdf',
@@ -3419,6 +4146,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
             url: pdfUrl,
             uploadedAt: now,
             authorId: creatingUserId,
+            section: 'employee', // beside the files it summarises
           });
         } catch (pdfErr) {
           console.error('[Jotform] Failed to generate/upload application summary PDF:', pdfErr);
@@ -3436,7 +4164,7 @@ export async function submitJotformApplications(formData: FormData): Promise<{ j
         applications: builtApplications,
         employeeNotes: [],
         adminNotes: [],
-        documents: passportDocs,
+        documents: profileDocs,
         createdAt: now,
         lastActivityAt: now,
         createdBy: creatingUserId,
@@ -3507,7 +4235,22 @@ export async function addCountryApplication(
   userId: string,
   semesterOverride?: string,
   guardianDobOverride?: string,
-  applicationEntries?: { university: string; major: string; country: string }[]
+  applicationEntries?: { university: string; major: string; country: string }[],
+  /**
+   * Details the UK form requires that the student's original submission may not hold.
+   * A student who came in through the USA form has no scholarship type, civil ID or
+   * school name — the USA form never asks for them — yet the UK form rejects a
+   * submission without all three.
+   *
+   * `acceptanceType` marks THIS application as Foundation without changing the
+   * student's profile study level.
+   */
+  ukDetails?: {
+    acceptanceType?: string;
+    scholarshipType?: string;
+    civilId?: string;
+    schoolName?: string;
+  }
 ): Promise<{ success: boolean; message: string }> {
   'use server';
   if (!adminDb) return { success: false, message: 'Server not configured.' };
@@ -3588,16 +4331,16 @@ export async function addCountryApplication(
   const email = student.email || '';
   const kuwaitPhone = student.phone || '';
   const dob = jd.dob || '';
-  const civilId = jd.civilId || '';
+  const civilId = jd.civilId || ukDetails?.civilId || '';
   const kuwaitAddress = jd.kuwaitAddress || '';
-  const schoolName = jd.schoolName || '';
+  const schoolName = jd.schoolName || ukDetails?.schoolName || '';
   const ieltsScore = jd.ieltsScore || '';
   const followUpPerson = jd.followUpPerson || '';
   const guardianName = jd.guardianName || '';
   const guardianEmail = jd.guardianEmail || '';
   const guardianPhone = jd.guardianPhone || '';
-  const scholarshipType = jd.scholarshipType || '';
-  const acceptanceType = jd.acceptanceType || '';
+  const scholarshipType = jd.scholarshipType || ukDetails?.scholarshipType || '';
+  const acceptanceType = ukDetails?.acceptanceType || jd.acceptanceType || '';
   const semester = semesterOverride || jd.semester || '';
   const guardianDob = guardianDobOverride || jd.guardianDob || '';
 
@@ -3633,17 +4376,57 @@ export async function addCountryApplication(
       method: 'POST',
       body: fd,
     });
-    let detail = '';
-    try { detail = await res.text(); } catch { /* ignore */ }
-    const textPreview = detail.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
-    console.log(`[Jotform] ${formId} → HTTP ${res.status} | ${textPreview}`);
-    return { ok: res.ok, status: res.status, detail };
+    let body = '';
+    try { body = await res.text(); } catch { /* ignore */ }
+
+    // JotForm rejects with an error "message" and/or an error <title> ("Incomplete
+    // Values", file-too-large, ...) — often still with HTTP 200. Reading res.ok alone
+    // reported those rejections as success, so the application was written to the
+    // student and the employee was told it had been submitted when nothing was saved.
+    const jfError = (
+      body.match(/"message"\s*:\s*"([^"]+)"/)?.[1] ||
+      /<title>\s*(Incomplete Values|Unable[^<]*|Submission Error[^<]*|[^<]*cannot be bigger[^<]*)\s*<\/title>/i.exec(body)?.[1] ||
+      ''
+    ).replace(/\\u0026lt;/g, '<').replace(/\\u0026gt;/g, '>').replace(/\\\//g, '/').replace(/<[^>]+>/g, '').trim();
+
+    const accepted = res.ok && !jfError;
+    const textPreview = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
+    console.log(`[Jotform] ${formId} → HTTP ${res.status} accepted=${accepted}${jfError ? ` error="${jfError}"` : ''} | ${textPreview}`);
+
+    return {
+      ok: accepted,
+      status: accepted ? res.status : (res.status === 200 ? 422 : res.status || 502),
+      detail: jfError || body,
+    };
   };
 
   let jotformResult: { ok: boolean; status: number; detail: string } = { ok: false, status: 0, detail: '' };
 
   try {
     if (country === 'UK') {
+      // Checked before posting so the employee is told exactly what is missing. The UK
+      // form requires all of these and refuses the submission otherwise; a student who
+      // arrived through the USA form has none of the last three.
+      const missingUK: string[] = [];
+      if (!firstName) missingUK.push('student name');
+      if (!dob) missingUK.push('date of birth');
+      if (!email) missingUK.push('email');
+      if (!kuwaitAddress) missingUK.push('Kuwait address');
+      if (!kuwaitPhone) missingUK.push('Kuwait phone');
+      if (!guardianName) missingUK.push("guardian's name");
+      if (!guardianEmail) missingUK.push("guardian's email");
+      if (!guardianPhone) missingUK.push("guardian's phone");
+      if (!followUpPerson) missingUK.push('follow-up person');
+      if (!scholarshipType) missingUK.push('scholarship type');
+      if (!civilId) missingUK.push('civil ID');
+      if (!schoolName) missingUK.push('school name');
+      if (passportData.length === 0) missingUK.push('passport file');
+      if (secondaryCertsData.length === 0) missingUK.push('secondary certificates');
+      if (missingUK.length > 0) {
+        console.log('[addCountryApplication] UK missing:', missingUK);
+        return { success: false, message: `The UK form needs: ${missingUK.join(', ')}.` };
+      }
+
       const fd = buildBase(JOTFORM_UK_FORM_ID);
       if (major) fd.append('q7_input7', major);
       if (universities) fd.append('q8_input8', universities);
@@ -3654,6 +4437,38 @@ export async function addCountryApplication(
       if (scholarshipType) fd.append('q37_input37', scholarshipType);
       if (acceptanceType) fd.append('q38_input38', acceptanceType);
       if (followUpPerson) fd.append('q39_input39', followUpPerson);
+
+      // q21 (program) and q36 (scholarship) are REQUIRED checkboxes on the UK form —
+      // JotForm rejects the whole submission without them. The original submission path
+      // sends both; this one never did, so every UK application added from an existing
+      // student was refused by JotForm.
+      const ukProgramMap: Record<string, string> = {
+        'Foundation': 'I want to apply for foundation',
+        'First Year': 'I want to apply for first year',
+        'General English': 'General English معهد اللغة',
+        'ESL': 'General English معهد اللغة',
+        'ESL + Foundation': 'I want to apply for foundation',
+        'Masters': 'Masters',
+      };
+      const ukProgram = acceptanceType ? ukProgramMap[acceptanceType] : '';
+      if (ukProgram) fd.append('q21_input21[]', ukProgram);
+
+      const ukScholarshipMap: Record<string, string> = {
+        'MOHE - التعليم العالي': 'بعثة التعليم العالي',
+        'خطة الايفاد':          'بعثة الإيفاد',
+        'بعثه متميزه':          'بعثة متميزة',
+        'Self Funded - حساب الخاص': 'حساب خاص',
+      };
+      if (scholarshipType) {
+        const mappedScholarship = ukScholarshipMap[scholarshipType];
+        if (mappedScholarship) {
+          fd.append('q36_input36[]', mappedScholarship);
+        } else {
+          // No matching option (e.g. طلبة الثانويه العامه, PAEET) — send as "Other" + text.
+          fd.append('q36_input36[other]', scholarshipType);
+        }
+      }
+
       jotformResult = await postToJotform(JOTFORM_UK_FORM_ID, fd);
     } else if (country === 'Australia / New Zealand') {
       const fd = buildBase(JOTFORM_AUNZ_FORM_ID);
@@ -3759,13 +4574,118 @@ export async function addCountryApplication(
         updatedAt: now,
       }];
 
+  // Keep details supplied for this submission, so the next country doesn't ask again.
+  // Only ever FILLS A GAP — an existing value is never overwritten, and the student's
+  // studyLevel is deliberately left alone: marking one application as Foundation does
+  // not make the whole student a Foundation student.
+  const backfill: Record<string, string> = {};
+  if (!jd.civilId && ukDetails?.civilId) backfill['jotformData.civilId'] = ukDetails.civilId;
+  if (!jd.schoolName && ukDetails?.schoolName) backfill['jotformData.schoolName'] = ukDetails.schoolName;
+  if (!jd.scholarshipType && ukDetails?.scholarshipType) backfill['jotformData.scholarshipType'] = ukDetails.scholarshipType;
+
   await adminDb.collection('students').doc(studentId).update({
     applications: [...existingApps, ...newApplications],
     targetCountries: updatedCountries,
     lastActivityAt: now,
+    ...backfill,
   });
 
   return { success: true, message: `Application for ${country} submitted successfully.` };
+}
+
+export type ExistingStudentMatch = {
+  id: string;
+  name: string;
+  matchedOn: 'phone' | 'civilId';
+  /** The civil ID on file, which is what decides whether this is the same person. */
+  civilId: string | null;
+  employeeName: string | null;
+  isClosed: boolean;
+  targetCountries: string[];
+  createdAt: string | null;
+};
+
+/**
+ * Who in the system already has this number.
+ *
+ * Used while an employee is still typing a Jotform submission, so an existing student
+ * is spotted BEFORE a duplicate profile is created rather than after. Phones are held
+ * in three separate fields and the civil ID in two, so each is queried in turn —
+ * every one is a single equality filter, which needs no composite index.
+ */
+export async function findExistingStudentsByNumber(
+  raw: string,
+  kind: 'phone' | 'civilId',
+): Promise<ExistingStudentMatch[]> {
+  if (!checkAdminServices()) return [];
+
+  const digits = (raw || '').replace(/\D/g, '');
+  // Too short to be meaningful — searching on a partial number would match half the list.
+  if (kind === 'phone' && digits.length !== 8) return [];
+  if (kind === 'civilId' && digits.length !== 12) return [];
+
+  const fields = kind === 'phone'
+    ? ['phone', 'phone2', 'phone3']
+    : ['civilId', 'jotformData.civilId'];
+
+  // Most numbers are stored bare, but a handful carry a leading zero or a country code
+  // ("096666379", "96560014066"). Equality is exact, so those variants are searched too.
+  const candidates = kind === 'phone'
+    ? [...new Set([digits, `0${digits}`, `965${digits}`])]
+    : [digits];
+
+  try {
+    const snaps = await Promise.all(
+      fields.flatMap(f =>
+        candidates.map(value =>
+          adminDb!
+            .collection('students')
+            .where(f, '==', value)
+            .select('name', 'employeeId', 'isClosed', 'targetCountries', 'createdAt', 'civilId', 'jotformData.civilId')
+            .limit(5)
+            .get()
+            .catch(() => null),
+        ),
+      ),
+    );
+
+    const found = new Map<string, ExistingStudentMatch & { employeeId?: string }>();
+    for (const snap of snaps) {
+      for (const doc of snap?.docs ?? []) {
+        if (found.has(doc.id)) continue;
+        const d = doc.data();
+        const onFile = (d.jotformData?.civilId || d.civilId || '').replace(/\D/g, '');
+        found.set(doc.id, {
+          id: doc.id,
+          name: d.name || '(no name)',
+          matchedOn: kind,
+          civilId: onFile || null,
+          employeeName: null,
+          isClosed: !!d.isClosed,
+          targetCountries: d.targetCountries || [],
+          createdAt: d.createdAt || null,
+          employeeId: d.employeeId,
+        });
+      }
+    }
+    if (found.size === 0) return [];
+
+    // Name the assigned employee, so the note says who to speak to.
+    const civilIds = [...new Set([...found.values()].map(m => m.employeeId).filter(Boolean) as string[])];
+    const employeeByCivilId = new Map<string, string>();
+    await Promise.all(civilIds.map(async cid => {
+      const u = await adminDb!.collection('users').where('civilId', '==', cid).select('name').limit(1).get();
+      if (!u.empty) employeeByCivilId.set(cid, u.docs[0].data().name || 'Employee');
+    }));
+
+    return [...found.values()].map(({ employeeId, ...m }) => ({
+      ...m,
+      employeeName: employeeId ? employeeByCivilId.get(employeeId) ?? null : null,
+    }));
+  } catch (e) {
+    console.error('[duplicate-check] lookup failed:', e);
+    return [];
+  }
 }
 
 export async function refreshStudentDuplicateWarning(studentId: string): Promise<void> {

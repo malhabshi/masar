@@ -68,7 +68,7 @@ export function InactivityReportSection({ student, currentUser }: InactivityRepo
     <Card className="border-orange-500 bg-orange-50 shadow-lg animate-in fade-in slide-in-from-top-4 duration-500">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2 text-orange-700">
-          <AlertCircle className="h-5 w-5 animate-pulse" />
+          <AlertCircle className="h-5 w-5" />
           <CardTitle className="text-lg">Inactivity Alert: Give a report on the student after you contact him</CardTitle>
         </div>
         <CardDescription className="text-orange-600 font-medium">

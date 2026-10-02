@@ -9,7 +9,11 @@ import Link from 'next/link';
 
 // Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { where } from 'firebase/firestore';
 import { TaskList } from '@/components/dashboard/task-list';
+import { getAdminDashboardStats, type AdminDashboardStats } from '@/lib/actions';
+import { RequestUpdatesCard } from '@/components/dashboard/request-updates-card';
+import { SiteWatchCard } from '@/components/dashboard/site-watch-card';
 import { SendTaskForm } from '@/components/dashboard/send-task-form';
 import { UpcomingEventsCard } from '@/components/dashboard/upcoming-events-card';
 import type { AppUser } from '@/hooks/use-user';
@@ -26,19 +30,43 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     setIsClient(true);
   }, []);
 
+  // Only the students that are actually shown as badges. The counters come from
+  // getAdminDashboardStats instead of downloading all 1,960 records.
   const studentsPath = (isClient && isAdmin) ? 'students' : '';
   const tasksPath = (isClient && currentUser) ? 'tasks' : '';
   const usersPath = (isClient && isAdmin) ? 'users' : '';
 
-  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(studentsPath);
-  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(tasksPath);
+  const { data: studentsData, isLoading: studentsLoading } = useCollection<Student>(
+    studentsPath, where('changeAgentRequired', '==', true),
+  );
+
+  // Counters computed server-side — see getAdminDashboardStats.
+  const [serverStats, setServerStats] = useState<AdminDashboardStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  useEffect(() => {
+    if (!isClient || !currentUser?.id) return;
+    let cancelled = false;
+    setStatsLoading(true);
+    getAdminDashboardStats(currentUser.id).then(res => {
+      if (cancelled) return;
+      setServerStats(res);
+      setStatsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [isClient, currentUser?.id]);
+  // TaskList renders ONLY category 'update' notes written by management — 15 documents
+  // in the whole system. This used to fetch the entire tasks collection instead: 26,806
+  // documents, 13.5 MB, on every dashboard load.
+  const { data: tasksData, isLoading: tasksLoading } = useCollection<Task>(
+    tasksPath, where('category', '==', 'update'),
+  );
   const { data: usersData, isLoading: usersLoading } = useCollection<User>(usersPath);
 
   const students = useMemo(() => studentsData || [], [studentsData]);
   const tasks = useMemo(() => tasksData || [], [tasksData]);
   const users = useMemo(() => usersData || [], [usersData]);
   
-  const isLoading = studentsLoading || tasksLoading || usersLoading;
+  const isLoading = statsLoading || tasksLoading;
 
   const changeAgentStudents = useMemo(() => {
     return students.filter(s => s.changeAgentRequired);
@@ -49,102 +77,30 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
     return [...tasks].sort((a,b) => sortByDate(a,b));
   }, [tasks]);
 
-  const stats = useMemo(() => {
-    if (!students || !users) return { 
-      total: 0, 
-      assigned: 0, 
-      unassigned: 0, 
-      apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
-      pipeline: { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 }
-    };
-    
-    const validCivilIds = new Set(users.map(u => u.civilId).filter(Boolean));
-    const validUserIds = new Set(users.map(u => u.id));
-
-    let assigned = 0;
-    let unassigned = 0;
-    const apps = { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 };
-    const pipeline = { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 };
-
-    students.forEach(s => {
-      if (s.isClosed) return;
-
-      const hasAgent = !!s.employeeId;
-      const isGhost = hasAgent && !validCivilIds.has(s.employeeId!) && !validUserIds.has(s.employeeId!);
-
-      if (!hasAgent) {
-        unassigned++;
-      } else if (!isGhost) {
-        assigned++;
-        // Count pipeline status for assigned students
-        const status = s.pipelineStatus || 'none';
-        if (status === 'green') pipeline.green++;
-        else if (status === 'yellow') pipeline.yellow++;
-        else if (status === 'orange') pipeline.orange++;
-        else if (status === 'red') pipeline.red++;
-        else if (status === 'black') pipeline.black++;
-        else pipeline.none++;
-      }
-
-      // Stats Breakdown (Exclude ghosts from official metrics)
-      if (!isGhost) {
-        (s.applications || []).forEach(app => {
-          apps.total++;
-          const status = app.status;
-          if (status === 'Pending') apps.pending++;
-          else if (status === 'Submitted') apps.submitted++;
-          else if (status === 'Missing Items') apps.missingItems++;
-          else if (status === 'Accepted') apps.accepted++;
-          else if (status === 'Rejected') apps.rejected++;
-        });
-      }
-    });
-    
-    const total = assigned + unassigned;
-    return { total, assigned, unassigned, apps, pipeline };
-  }, [students, users]);
+  // Counters come from the server now — see getAdminDashboardStats. The browser used
+  // to download all 1,960 students (9.7 MB) purely to add them up.
+  const EMPTY_STATS: AdminDashboardStats = {
+    total: 0, assigned: 0, unassigned: 0,
+    apps: { total: 0, pending: 0, submitted: 0, missingItems: 0, accepted: 0, rejected: 0 },
+    pipeline: { green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 },
+    agentBreakdown: [],
+  };
+  const stats = serverStats ?? EMPTY_STATS;
 
   // Per-User Portfolio Breakdown - Includes all staff who have students assigned
-  const agentBreakdown = useMemo(() => {
-    if (!isClient || !users || !students) return [];
-
-    const statsMap = new Map<string, { id: string, name: string, role: string, total: number, green: number, yellow: number, orange: number, red: number, black: number, none: number }>();
-
-    // Initialize map with all users who have a Civil ID (potential agents)
-    users.forEach(u => {
-      if (u.civilId) {
-        statsMap.set(u.civilId, { id: u.id, name: u.name, role: u.role, total: 0, green: 0, yellow: 0, orange: 0, red: 0, black: 0, none: 0 });
-      }
-    });
-
-    students.forEach(s => {
-      if (s.isClosed) return;
-      if (s.employeeId && statsMap.has(s.employeeId)) {
-        const entry = statsMap.get(s.employeeId)!;
-        entry.total++;
-        const status = s.pipelineStatus || 'none';
-        if (status === 'green') entry.green++;
-        else if (status === 'yellow') entry.yellow++;
-        else if (status === 'orange') entry.orange++;
-        else if (status === 'red') entry.red++;
-        else if (status === 'black') entry.black++;
-        else entry.none++;
-      }
-    });
-
-    return Array.from(statsMap.values())
-      .filter(s => s.total > 0)
-      .sort((a, b) => b.total - a.total);
-  }, [isClient, users, students]);
+  const agentBreakdown = useMemo(
+    () => [...stats.agentBreakdown].sort((a, b) => b.total - a.total),
+    [stats.agentBreakdown],
+  );
 
   if (!isAdmin) return null;
 
   return (
     <div className="space-y-6">
       {changeAgentStudents.length > 0 && (
-        <Card className="border-red-500 bg-red-50/10">
+        <Card className="border-danger bg-danger-soft/40">
           <CardHeader className="pb-3">
-            <div className="flex items-center gap-2 text-red-600">
+            <div className="flex items-center gap-2 text-danger">
               <AlertCircle className="h-5 w-5" />
               <CardTitle className="text-lg">Change Agent Monitoring</CardTitle>
             </div>
@@ -154,10 +110,10 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
             <div className="flex flex-wrap gap-3">
               {changeAgentStudents.map(student => (
                 <Link key={student.id} href={`/student/${student.id}`}>
-                  <Badge className="bg-black text-red-500 border-red-500 border-2 hover:bg-black/90 px-4 py-2 flex items-center gap-3 transition-transform hover:scale-105 group">
+                  <Badge className="bg-black text-danger border-danger border-2 hover:bg-black/90 px-4 py-2 flex items-center gap-3 transition-transform hover:scale-105 group">
                     <div className="flex flex-col items-start leading-none">
-                      <span className="font-black text-xs uppercase animate-pulse">{student.name}</span>
-                      <span className="text-[8px] text-red-400 font-bold opacity-70">URGENT REVIEW</span>
+                      <span className="font-semibold text-xs uppercase">{student.name}</span>
+                      <span className="text-[8px] text-danger/70 font-bold opacity-70">URGENT REVIEW</span>
                     </div>
                     <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                   </Badge>
@@ -175,79 +131,79 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black">{isLoading ? '...' : stats.total}</div>
+            <div className="text-3xl font-semibold">{isLoading ? '...' : stats.total}</div>
             <div className="flex items-center gap-1 mt-1">
               <Badge variant="outline" className="text-[9px] h-4 bg-primary/5 text-primary border-primary/20">Active Students</Badge>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-green-200">
+        <Card className="border-success-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-green-700 tracking-widest">Officially Assigned</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-xs font-bold uppercase text-success tracking-widest">Officially Assigned</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-green-700 mb-3">{isLoading ? '...' : stats.assigned}</div>
+            <div className="text-3xl font-semibold text-success mb-3">{isLoading ? '...' : stats.assigned}</div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
                 <span className="text-green-700 uppercase font-bold">Green</span>
-                <span className="font-black text-green-700">{stats.pipeline.green}</span>
+                <span className="font-semibold text-green-700">{stats.pipeline.green}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] bg-orange-50 px-2 py-1 rounded">
                 <span className="text-orange-700 uppercase font-bold">Orange</span>
-                <span className="font-black text-orange-700">{stats.pipeline.orange}</span>
+                <span className="font-semibold text-orange-700">{stats.pipeline.orange}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
                 <span className="text-red-700 uppercase font-bold">Red</span>
-                <span className="font-black text-red-700">{stats.pipeline.red}</span>
+                <span className="font-semibold text-red-700">{stats.pipeline.red}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                 <span className="text-muted-foreground uppercase font-bold">No Status</span>
-                <span className="font-black text-muted-foreground">{stats.pipeline.none}</span>
+                <span className="font-semibold text-muted-foreground">{stats.pipeline.none}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-orange-200">
+        <Card className="border-warning-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-orange-700 tracking-widest">Unassigned Leads</CardTitle>
-            <UserPlus className="h-4 w-4 text-orange-600" />
+            <CardTitle className="text-xs font-bold uppercase text-warning tracking-widest">Unassigned Leads</CardTitle>
+            <UserPlus className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-orange-700">{isLoading ? '...' : stats.unassigned}</div>
-            <p className="text-[10px] text-orange-600 font-medium mt-1">Pending assignment.</p>
+            <div className="text-3xl font-semibold text-warning">{isLoading ? '...' : stats.unassigned}</div>
+            <p className="text-[10px] text-warning font-medium mt-1">Pending assignment.</p>
           </CardContent>
         </Card>
 
-        <Card className="border-blue-200">
+        <Card className="border-info-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase text-blue-700 tracking-widest">Total Applications</CardTitle>
-            <FileText className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-xs font-bold uppercase text-info tracking-widest">Total Applications</CardTitle>
+            <FileText className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-blue-700 mb-3">{isLoading ? '...' : stats.apps.total}</div>
+            <div className="text-3xl font-semibold text-info mb-3">{isLoading ? '...' : stats.apps.total}</div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                 <span className="text-muted-foreground uppercase font-bold">Pending</span>
-                <span className="font-black text-yellow-600">{stats.apps.pending}</span>
+                <span className="font-semibold text-warning">{stats.apps.pending}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                 <span className="text-muted-foreground uppercase font-bold">Submitted</span>
-                <span className="font-black text-blue-600">{stats.apps.submitted}</span>
+                <span className="font-semibold text-info">{stats.apps.submitted}</span>
               </div>
               <div className="flex items-center justify-between text-[10px] bg-muted/50 px-2 py-1 rounded">
                 <span className="text-muted-foreground uppercase font-bold">Missing Items</span>
-                <span className="font-black text-purple-600">{stats.apps.missingItems}</span>
+                <span className="font-semibold text-purple-600">{stats.apps.missingItems}</span>
               </div>
-              <div className="flex items-center justify-between text-[10px] bg-green-50 px-2 py-1 rounded">
-                <span className="text-green-700 uppercase font-bold">Accepted</span>
-                <span className="font-black text-green-700">{stats.apps.accepted}</span>
+              <div className="flex items-center justify-between text-[10px] bg-success-soft px-2 py-1 rounded">
+                <span className="text-success uppercase font-bold">Accepted</span>
+                <span className="font-semibold text-success">{stats.apps.accepted}</span>
               </div>
-              <div className="flex items-center justify-between text-[10px] bg-red-50 px-2 py-1 rounded">
-                <span className="text-red-700 uppercase font-bold">Rejected</span>
-                <span className="font-black text-red-700">{stats.apps.rejected}</span>
+              <div className="flex items-center justify-between text-[10px] bg-danger-soft px-2 py-1 rounded">
+                <span className="text-danger uppercase font-bold">Rejected</span>
+                <span className="font-semibold text-danger">{stats.apps.rejected}</span>
               </div>
             </div>
           </CardContent>
@@ -268,12 +224,12 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30">
-                      <TableHead className="text-[10px] font-black uppercase">Staff Member</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center">Total</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center text-green-700">Green</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center text-orange-700">Orange</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center text-red-700">Red</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center text-muted-foreground">None</TableHead>
+                      <TableHead className="text-[10px] font-semibold uppercase">Staff Member</TableHead>
+                      <TableHead className="text-[10px] font-semibold uppercase text-center">Total</TableHead>
+                      <TableHead className="text-[10px] font-semibold uppercase text-center text-green-700">Green</TableHead>
+                      <TableHead className="text-[10px] font-semibold uppercase text-center text-orange-700">Orange</TableHead>
+                      <TableHead className="text-[10px] font-semibold uppercase text-center text-red-700">Red</TableHead>
+                      <TableHead className="text-[10px] font-semibold uppercase text-center text-muted-foreground">None</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -286,9 +242,9 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
                           )}
                         </TableCell>
                         <TableCell className="text-center"><Badge variant="outline" className="font-mono text-[10px]">{agent.total}</Badge></TableCell>
-                        <TableCell className="text-center font-black text-green-700 text-xs">{agent.green}</TableCell>
-                        <TableCell className="text-center font-black text-orange-700 text-xs">{agent.orange}</TableCell>
-                        <TableCell className="text-center font-black text-red-700 text-xs">{agent.red}</TableCell>
+                        <TableCell className="text-center font-semibold text-green-700 text-xs">{agent.green}</TableCell>
+                        <TableCell className="text-center font-semibold text-orange-700 text-xs">{agent.orange}</TableCell>
+                        <TableCell className="text-center font-semibold text-red-700 text-xs">{agent.red}</TableCell>
                         <TableCell className="text-center font-bold text-muted-foreground text-xs">{agent.none}</TableCell>
                       </TableRow>
                     ))}
@@ -304,6 +260,8 @@ export default function AdminDashboard({ currentUser }: { currentUser: AppUser }
           </Card>
 
           <SendTaskForm currentUser={currentUser} />
+          <SiteWatchCard currentUser={currentUser} />
+          <RequestUpdatesCard currentUser={currentUser} />
           <TaskList tasks={sortedTasks} currentUser={currentUser} isLoading={isLoading} />
         </div>
         <div className="space-y-6">

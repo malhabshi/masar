@@ -15,7 +15,13 @@ import Link from 'next/link';
 function isReminderForUser(r: Reminder, user: AppUser): boolean {
   if (r.recipientType === 'all') return true;
   if (r.recipientType === 'admin' && (user.role === 'admin' || user.role === 'adminplus')) return true;
-  if (r.recipientType === 'employee' && user.role === 'employee') return true;
+  // 'Employee (assigned)' is the student's OWN employee. This used to return true for
+  // any employee at all, so a reminder about Talal's student appeared on every
+  // employee's dashboard. Reminders written before this field exists fall back to the
+  // old behaviour rather than vanishing.
+  if (r.recipientType === 'employee' && user.role === 'employee') {
+    return r.studentEmployeeId ? r.studentEmployeeId === user.civilId : true;
+  }
   if (r.recipientType === 'department' && user.role === 'department') return true;
   if (r.recipientType === 'custom' && r.recipientUserIds?.includes(user.id)) return true;
   return false;

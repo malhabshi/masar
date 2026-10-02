@@ -1,12 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   staticPageGenerationTimeout: 180,
   experimental: {
-    // pdf-parse pulls in pdfjs-dist, which webpack rewrites into something broken
-    // ("Object.defineProperty called on non-object") and silently returns no text.
-    // Loading them at runtime instead of bundling keeps extraction working.
+    // pdf-parse (email intake) and pdfjs (the MCP document reader, which pulls text out of
+    // offer letters) ship as ESM with their own worker plumbing. Bundling them through
+    // webpack breaks that at runtime, so require them from node_modules on the server instead.
     serverComponentsExternalPackages: ['pdf-parse', 'pdfjs-dist'],
+    // pdfjs pulls its worker in through a computed, webpackIgnore'd import, which file
+    // tracing cannot follow — so the standalone build shipped without it and every PDF
+    // read failed. Name the files so they are copied regardless.
+    outputFileTracingIncludes: {
+      '/api/mcp': [
+        './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
+        './node_modules/pdfjs-dist/legacy/build/pdf.mjs',
+      ],
+    },
   },
   // Serve OAuth well-known metadata from normal route handlers (app-router ignores dot-folders).
   async rewrites() {

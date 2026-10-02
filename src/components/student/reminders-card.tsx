@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { initialiseReminderStages } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 import { Bell, Plus, AlarmClock, Trash2, Pencil, Clock, MapPin, MessageSquare, Loader2 } from 'lucide-react';
 import { addHours, addDays, isPast } from 'date-fns';
@@ -60,7 +61,11 @@ function SnoozeDialog({ reminder, open, onClose }: { reminder: Reminder; open: b
       await updateDoc(doc(firestore, 'student_reminders', reminder.id), {
         dueAt: isoDate,
         whatsAppSentAt: deleteField(),
+        stages: deleteField(),
       });
+      // Re-arm the day / hour / 5-minute stages around the new time. `announce: false`
+      // because the reminder was already announced when it was created.
+      await initialiseReminderStages(reminder.id, { announce: false });
       toast({ title: 'Reminder snoozed' });
       onClose();
     } catch (e: any) {
@@ -114,7 +119,7 @@ const BLANK_FORM = {
   location: '',
   date: '',
   time: '',
-  recipientType: 'admin' as ReminderRecipientType,
+  recipientType: 'employee' as ReminderRecipientType,
   recipientUserIds: [] as string[],
   notifyWhatsApp: false,
 };
@@ -187,19 +192,32 @@ function ReminderFormDialog({
         await updateDoc(doc(firestore, 'student_reminders', editing.id), {
           ...payload,
           whatsAppSentAt: deleteField(),
+          stages: deleteField(),
         });
+        // Re-arm the stages around the new date without announcing it again.
+        await initialiseReminderStages(editing.id, { announce: false });
+        toast({ title: 'Reminder updated' });
       } else {
-        await addDoc(collection(firestore, 'student_reminders'), {
+        const created = await addDoc(collection(firestore, 'student_reminders'), {
           ...payload,
           studentId: student.id,
           studentName: student.name,
+          // So "Employee (assigned)" can mean this student's employee specifically.
+          studentEmployeeId: student.employeeId ?? null,
           createdBy: currentUser.id,
           createdByName: currentUser.name,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
+        // Sends the "created" WhatsApp straight away and arms the day / hour / 5-minute
+        // stages. Any stage already in the past is skipped rather than fired at once.
+        const res = await initialiseReminderStages(created.id, { announce: true });
+        toast(
+          res.success
+            ? { title: 'Reminder created', description: payload.notifyWhatsApp ? 'WhatsApp sent.' : undefined }
+            : { variant: 'destructive', title: 'Reminder created', description: res.message },
+        );
       }
-      toast({ title: editing ? 'Reminder updated' : 'Reminder created' });
       onClose();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed', description: e.message });
@@ -208,7 +226,9 @@ function ReminderFormDialog({
     }
   };
 
-  const staffUsers = allUsers.filter(u => u.role !== 'student');
+  // Admins and department users only. Other employees are deliberately not offered —
+  // a reminder goes to the student's own employee, not to everyone else's.
+  const staffUsers = allUsers.filter(u => ['admin', 'adminplus', 'department'].includes(u.role));
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -249,18 +269,25 @@ function ReminderFormDialog({
             <Select value={form.recipientType} onValueChange={v => set('recipientType', v as ReminderRecipientType)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
+                {/* Only these two. A reminder belongs to the student's own employee;
+                    anything wider was tagging colleagues who had no part in it. */}
                 <SelectItem value="employee">Employee (assigned)</SelectItem>
-                <SelectItem value="department">Department</SelectItem>
-                <SelectItem value="all">Everyone</SelectItem>
                 <SelectItem value="custom">Custom users</SelectItem>
+                {/* An older reminder may still be set to Admin, Department or Everyone.
+                    Keep its own value selectable so editing one shows what it is rather
+                    than an empty box — it just can't be chosen fresh. */}
+                {!['employee', 'custom'].includes(form.recipientType) && (
+                  <SelectItem value={form.recipientType}>
+                    {RECIPIENT_LABELS[form.recipientType]} (old setting)
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
 
           {form.recipientType === 'custom' && (
             <div className="space-y-1.5">
-              <Label>Select users</Label>
+              <Label>Select users <span className="font-normal text-muted-foreground">(admins and departments)</span></Label>
               <div className="max-h-36 overflow-y-auto border rounded-md divide-y">
                 {staffUsers.map(u => (
                   <label key={u.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/50">

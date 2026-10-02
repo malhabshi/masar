@@ -42,6 +42,9 @@ export function TaskHistory({ tasks, studentId, currentUser, isLoading }: TaskHi
             });
         }
         (task.replies || []).forEach(reply => ids.add(reply.authorId));
+        // Quick Notification senders share the details dialog's thread; without them
+        // those entries are labelled "System".
+        (task.notifications || []).forEach(n => ids.add(n.fromId));
     });
     return Array.from(ids);
   }, [tasks]);
@@ -49,8 +52,21 @@ export function TaskHistory({ tasks, studentId, currentUser, isLoading }: TaskHi
   const { userMap } = useUserCacheById(authorIds);
 
   const handleStatusChange = async (taskId: string, status: TaskStatus) => {
+    // Declining from here never asked for a reason, so 74 of 377 declined requests
+    // carry none and the employee was told "denied" with no explanation.
+    let reason: string | undefined;
+    if (status === 'denied') {
+      const resp = window.prompt('Why is this request being denied? The employee will see this.');
+      if (resp === null) return;
+      if (!resp.trim()) {
+        toast({ variant: 'destructive', title: 'A reason is required', description: 'The employee needs to know why it was denied.' });
+        return;
+      }
+      reason = resp.trim();
+    }
+
     setIsUpdatingStatus(taskId);
-    const result = await updateTaskStatus(taskId, status, currentUser.id);
+    const result = await updateTaskStatus(taskId, status, currentUser.id, reason);
     if (result.success) {
         toast({
             title: "Task Status Updated",
