@@ -12,6 +12,8 @@ import { processReminderStages } from '@/lib/actions';
 import { runAllSiteWatches } from '@/lib/site-watch';
 import { getDocumentReaderSettings, readPendingDocuments } from '@/lib/ai/documents';
 import { isAiConfigured } from '@/lib/ai/config';
+import { fulfilEmailRequests } from '@/lib/email/requests';
+import { getIntakeSettings } from '@/lib/email/intake-settings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,9 +65,19 @@ export async function GET(req: NextRequest) {
     documents = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Replies waiting on a document: draft the ones whose files are now on the profile.
+  let emailDrafts: unknown = null;
+  try {
+    if ((await getIntakeSettings()).draftReplies) emailDrafts = await fulfilEmailRequests();
+  } catch (e) {
+    console.error('[cron/email-drafts] failed:', e);
+    emailDrafts = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
     siteWatch,
     documents,
+    emailDrafts,
     success: true,
     messagesSent: result.sent,
     details: result.details,

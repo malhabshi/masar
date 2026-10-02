@@ -8,6 +8,7 @@ import {
 } from '@/lib/email/intake';
 import { isInboxConfigured, verifyInboxConnection } from '@/lib/email/inbox';
 import { getIntakeSettings, saveIntakeSettings } from '@/lib/email/intake-settings';
+import { fulfilEmailRequests, listEmailRequests } from '@/lib/email/requests';
 import type { User } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
     settings: await getIntakeSettings(),
     pendingCount: queue.length,
     queue,
+    requests: await listEmailRequests(40).catch(() => []),
   });
 }
 
@@ -84,6 +86,7 @@ export async function POST(req: NextRequest) {
     restrictToStudentName?: string | null;
     aiRenameDocuments?: boolean;
     postToChat?: boolean;
+    draftReplies?: boolean;
   };
   try {
     body = await req.json();
@@ -94,6 +97,11 @@ export async function POST(req: NextRequest) {
   switch (body.action ?? 'run') {
     case 'run': {
       const result = await runEmailIntake({ limit: body.limit });
+      return NextResponse.json(result);
+    }
+    case 'drafts': {
+      // Check now for requests whose documents have arrived, instead of waiting for the next run.
+      const result = await fulfilEmailRequests();
       return NextResponse.json(result);
     }
     case 'resolve': {
@@ -116,6 +124,7 @@ export async function POST(req: NextRequest) {
         restrictToStudentName: body.restrictToStudentName,
         aiRenameDocuments: body.aiRenameDocuments,
         postToChat: body.postToChat,
+        draftReplies: body.draftReplies,
       });
       return NextResponse.json({ success: true, settings: saved });
     }

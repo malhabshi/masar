@@ -9,6 +9,7 @@ import {
   Inbox,
   Loader2,
   Mail,
+  MailCheck,
   RefreshCw,
   Search,
   X,
@@ -24,6 +25,7 @@ import { useCollection, useMemoFirebase, firestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { auth } from '@/firebase';
 import type { Student } from '@/lib/types';
+import Link from 'next/link';
 
 type QueueAttachment = { filename: string; contentType: string; size: number; url: string | null };
 
@@ -44,6 +46,20 @@ type IntakeSettings = {
   restrictToStudentName: string | null;
   aiRenameDocuments: boolean;
   postToChat: boolean;
+  draftReplies: boolean;
+};
+
+type EmailRequestRow = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  organisation: string | null;
+  replyTo: string;
+  subject: string;
+  receivedAt: string;
+  status: 'waiting' | 'drafted' | 'closed';
+  items: Array<{ id: string; text: string; kind: 'document' | 'information' | 'action'; status: 'waiting' | 'ready' | 'drafted' | 'closed' }>;
+  drafts: Array<{ at: string; items: string[]; attachments: string[] }>;
 };
 
 type IntakeStatus = {
@@ -52,6 +68,7 @@ type IntakeStatus = {
   settings: IntakeSettings;
   pendingCount: number;
   queue: QueueItem[];
+  requests?: EmailRequestRow[];
 };
 
 export default function EmailIntakePage() {
@@ -112,7 +129,8 @@ export default function EmailIntakePage() {
             data.processed === 0
               ? 'No new emails.'
               : `${data.processed} email(s): ${data.filed} filed, ${data.notified} posted to chat, ` +
-                `${data.queued} need review, ${data.skipped} skipped, ${data.failed} failed.`,
+                `${data.queued} need review, ${data.skipped} skipped, ${data.failed} failed.` +
+                (data.draftsCreated ? ` ${data.draftsCreated} reply draft(s) saved in Gmail.` : ''),
         });
       }
       await load();
@@ -238,6 +256,12 @@ export default function EmailIntakePage() {
         </Alert>
       )}
 
+      <RequestsCard
+        requests={status?.requests ?? []}
+        enabled={status?.settings.draftReplies !== false}
+        onAct={act}
+      />
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
@@ -261,6 +285,120 @@ export default function EmailIntakePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+const ITEM_STYLE: Record<string, { label: string; className: string }> = {
+  waiting: { label: 'Waiting for upload', className: 'border-warning-border bg-warning-soft text-warning' },
+  ready: { label: 'Ready', className: 'border-info-border bg-info-soft text-info' },
+  drafted: { label: 'Draft saved', className: 'border-success-border bg-success-soft text-success' },
+  closed: { label: 'No reply needed', className: 'text-muted-foreground' },
+};
+
+/**
+ * What emails asked for, and where each reply stands. A request waits until the file is
+ * on the profile; then its reply is saved in Gmail Drafts for someone to check and send.
+ */
+function RequestsCard({
+  requests,
+  enabled,
+  onAct,
+}: {
+  requests: EmailRequestRow[];
+  enabled: boolean;
+  onAct: (payload: Record<string, unknown>, successMessage: string) => Promise<void>;
+}) {
+  const [checking, setChecking] = useState(false);
+  const waiting = requests.filter((r) => r.status === 'waiting').length;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MailCheck className="h-4 w-4" />
+              Requests &amp; reply drafts
+              {waiting > 0 && <Badge variant="outline">{waiting} waiting</Badge>}
+            </CardTitle>
+            <CardDescription>
+              What universities ask for by email goes onto the student as a Missing Item. When it is
+              uploaded, a reply with the file attached is saved in Gmail Drafts — nothing is sent
+              until you send it.
+            </CardDescription>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={checking || !enabled}
+              onClick={async () => {
+                setChecking(true);
+                await onAct({ action: 'drafts' }, 'Checked for uploaded documents');
+                setChecking(false);
+              }}
+            >
+              {checking ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+              Check uploads now
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                onAct(
+                  { action: 'settings', draftReplies: !enabled },
+                  enabled ? 'Request tracking turned off' : 'Request tracking turned on',
+                )
+              }
+            >
+              {enabled ? 'Turn off' : 'Turn on'}
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {requests.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            {enabled ? 'No requests yet. They appear here as emails are checked.' : 'Request tracking is off.'}
+          </p>
+        ) : (
+          requests.map((r) => (
+            <div key={r.id} className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <p className="text-sm font-semibold">
+                  <Link href={`/student/${r.studentId}`} className="hover:underline">
+                    {r.studentName}
+                  </Link>
+                  <span className="font-normal text-muted-foreground"> · {r.organisation ?? r.replyTo}</span>
+                </p>
+                <span className="text-[11px] text-muted-foreground">
+                  {new Date(r.receivedAt).toLocaleDateString()}
+                </span>
+              </div>
+              <p className="truncate text-xs text-muted-foreground" title={r.subject}>
+                {r.subject}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {r.items.map((it) => {
+                  const look = it.kind === 'action' ? ITEM_STYLE.closed : ITEM_STYLE[it.status] ?? ITEM_STYLE.waiting;
+                  return (
+                    <Badge key={it.id} variant="outline" className={`text-[11px] font-normal ${look.className}`}>
+                      {it.text} · {it.kind === 'action' ? 'to do' : look.label}
+                    </Badge>
+                  );
+                })}
+              </div>
+              {r.drafts.length > 0 && (
+                <p className="text-[11px] text-success">
+                  {r.drafts.length} draft{r.drafts.length > 1 ? 's' : ''} saved in Gmail — last on{' '}
+                  {new Date(r.drafts[r.drafts.length - 1].at).toLocaleString()}
+                </p>
+              )}
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

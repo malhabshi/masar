@@ -18,6 +18,8 @@ export type IntakeSettings = {
   aiRenameDocuments: boolean;
   /** Announce identified emails in the student's internal chat. */
   postToChat: boolean;
+  /** Turn what an email asks for into Missing Items, and draft the reply in Gmail once it is on the profile. */
+  draftReplies: boolean;
 };
 
 export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
@@ -25,6 +27,7 @@ export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
   restrictToStudentName: null,
   aiRenameDocuments: true,
   postToChat: true,
+  draftReplies: true,
 };
 
 export async function getIntakeSettings(): Promise<IntakeSettings> {
@@ -40,6 +43,7 @@ export async function getIntakeSettings(): Promise<IntakeSettings> {
         typeof d.restrictToStudentName === 'string' && d.restrictToStudentName ? d.restrictToStudentName : null,
       aiRenameDocuments: d.aiRenameDocuments !== false,
       postToChat: d.postToChat !== false,
+      draftReplies: d.draftReplies !== false,
     };
   } catch {
     return DEFAULT_INTAKE_SETTINGS;
@@ -59,6 +63,7 @@ export async function saveIntakeSettings(patch: Partial<IntakeSettings>): Promis
     aiRenameDocuments:
       typeof patch.aiRenameDocuments === 'boolean' ? patch.aiRenameDocuments : current.aiRenameDocuments,
     postToChat: typeof patch.postToChat === 'boolean' ? patch.postToChat : current.postToChat,
+    draftReplies: typeof patch.draftReplies === 'boolean' ? patch.draftReplies : current.draftReplies,
   };
   await adminDb
     .collection(SETTINGS.collection)

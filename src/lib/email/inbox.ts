@@ -49,6 +49,11 @@ export type InboxMessage = {
   fromName: string;
   subject: string;
   date: string;
+  /** Where a reply should go when the sender set Reply-To; otherwise null (use `from`). */
+  replyTo?: string | null;
+  replyToName?: string | null;
+  /** Message-IDs of the earlier messages in this conversation, for threading a reply. */
+  references?: string[];
   /** Plain-text body, or the stripped-down HTML when there is no text part. */
   text: string;
   attachments: InboxAttachment[];
@@ -183,6 +188,8 @@ export async function fetchMessageByUid(uid: number): Promise<InboxMessage | nul
       }
 
       const fromAddr = parsed.from?.value?.[0];
+      const replyAddr = parsed.replyTo?.value?.[0];
+      const refs = parsed.references;
       return {
         uid,
         messageId: parsed.messageId ?? null,
@@ -190,6 +197,9 @@ export async function fetchMessageByUid(uid: number): Promise<InboxMessage | nul
         fromName: fromAddr?.name ?? '',
         subject: parsed.subject ?? '',
         date: (parsed.date ?? new Date()).toISOString(),
+        replyTo: replyAddr?.address ?? null,
+        replyToName: replyAddr?.name ?? null,
+        references: Array.isArray(refs) ? refs : refs ? [refs] : [],
         text: parsed.text ?? (parsed.html ? String(parsed.html).replace(/<[^>]+>/g, ' ') : ''),
         attachments,
       };
@@ -250,6 +260,31 @@ export async function appendSeenMessage(raw: Buffer | string): Promise<boolean> 
   } catch (e) {
     console.error('[inbox] Could not append receipt:', e);
     return false;
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
+/**
+ * Save a message as a DRAFT in the mailbox. It is never sent — it waits in Drafts until
+ * someone opens Gmail and presses Send. Gmail threads it under the original email from
+ * its In-Reply-To / References headers.
+ *
+ * The Drafts folder is found by its special-use flag, because Gmail localises its name
+ * ("[Gmail]/Drafts", "[Gmail]/المسودات"…).
+ */
+export async function appendDraft(raw: Buffer | string): Promise<{ ok: boolean; folder?: string; error?: string }> {
+  const config = imapConfig();
+  if (!config) return { ok: false, error: 'Inbox is not configured.' };
+  const client = new ImapFlow(config);
+  try {
+    await client.connect();
+    const boxes = await client.list();
+    const drafts = boxes.find((b) => b.specialUse === '\\Drafts')?.path ?? '[Gmail]/Drafts';
+    const res = await client.append(drafts, raw, ['\\Draft', '\\Seen']);
+    return res ? { ok: true, folder: drafts } : { ok: false, error: 'The mailbox did not accept the draft.' };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   } finally {
     await client.logout().catch(() => {});
   }

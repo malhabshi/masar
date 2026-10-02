@@ -31,6 +31,13 @@ import {
 } from './document-compare';
 import type { Document as StudentDocument } from '@/lib/types';
 import { replyWithReceipt } from './reply-receipt';
+import {
+  analyseEmail,
+  emailDocumentNote,
+  fulfilEmailRequests,
+  getOpenMissingItemTexts,
+  recordEmailRequests,
+} from './requests';
 
 export const INTAKE_QUEUE_COLLECTION = 'email_intake_queue';
 export const INTAKE_LOG_COLLECTION = 'email_intake_log';
@@ -41,6 +48,9 @@ export const EMAIL_INTAKE_USER_ID = 'email-intake';
 export type IntakeItemStatus = 'filed' | 'pending_review' | 'failed';
 
 export type IntakeResult = {
+  /** Gmail drafts created this run for requests that are now fulfilled. */
+  draftsCreated?: number;
+  draftErrors?: string[];
   processed: number;
   filed: number;
   queued: number;
@@ -216,6 +226,18 @@ async function log(entry: Record<string, unknown>): Promise<void> {
 /**
  * Run one intake pass. Never throws — returns a summary of what happened.
  */
+/** Draft any replies whose requested documents have now arrived. Never throws. */
+async function runFulfilment(result: IntakeResult): Promise<void> {
+  try {
+    if (!(await getIntakeSettings()).draftReplies) return;
+    const r = await fulfilEmailRequests();
+    result.draftsCreated = r.drafted;
+    if (r.errors.length) result.draftErrors = r.errors;
+  } catch (e) {
+    console.error('[email-intake] fulfilment failed:', e);
+  }
+}
+
 export async function runEmailIntake(options: { limit?: number } = {}): Promise<IntakeResult> {
   const result: IntakeResult = {
     processed: 0,
@@ -245,7 +267,10 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     return result;
   }
 
-  if (headers.length === 0) return result;
+  if (headers.length === 0) {
+    await runFulfilment(result);
+    return result;
+  }
 
   const mailbox = (process.env.SMTP_USER ?? '').toLowerCase();
 
@@ -274,7 +299,10 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     }
   }
 
-  if (messages.length === 0) return result;
+  if (messages.length === 0) {
+    await runFulfilment(result);
+    return result;
+  }
 
   const settings = await getIntakeSettings();
   const students = await loadStudentNames();
@@ -420,7 +448,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         customName: named.name,
         content: att.content,
         contentType: att.contentType,
-        note: `Received by email from ${message.from} — "${message.subject}"`,
+        note: emailDocumentNote(message.from, message.subject),
         section: 'admin',
         uploaderId: EMAIL_INTAKE_USER_ID,
         // The same offer letter is often re-sent, or already saved by hand.
@@ -437,6 +465,33 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     }
 
     if (allOk) {
+      // What does the email ask for? Each ask becomes a Missing Item; asks that need an
+      // answer are remembered so a reply can be drafted once they are on the profile.
+      let requestLines: string[] = [];
+      if (settings.draftReplies) {
+        const analysis = await analyseEmail({
+          subject: message.subject,
+          from: message.from,
+          fromName: message.fromName,
+          body: message.text,
+          attachmentNames,
+          studentName: match.student.name,
+          openMissingItems: await getOpenMissingItemTexts(match.student.id),
+        });
+        if (analysis) {
+          const recorded = await recordEmailRequests({
+            message,
+            studentId: match.student.id,
+            studentName: match.student.name,
+            analysis,
+          }).catch((e) => {
+            console.error('[email-intake] could not record requests:', e);
+            return { requestId: null, chatLines: [] as string[] };
+          });
+          requestLines = recorded.chatLines;
+        }
+      }
+
       // Announce it in the student's internal chat so the employee, the admins and the
       // relevant department are all notified — this is how staff find out at all.
       const employeeCivilId = await getStudentEmployeeCivilId(match.student.id);
@@ -449,6 +504,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         body: message.text,
         filedAttachments: filedNames,
         versionNotes,
+        requestNotes: requestLines,
       });
 
       await replyWithReceipt(message, {
@@ -457,6 +513,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         studentName: match.student.name,
         documents: filedNames,
         versionNotes,
+        requestNotes: requestLines,
         chatPosted: announcement.posted,
         chatRecipients: announcement.recipients ?? [],
       });
@@ -515,6 +572,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     }
   }
 
+  await runFulfilment(result);
   return result;
 }
 

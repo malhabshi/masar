@@ -119,6 +119,8 @@ export type ChatAnnouncement = {
   filedAttachments: string[];
   /** Warnings about a document superseding one already on file. */
   versionNotes?: string[];
+  /** What the email asks for, now on the profile as Missing Items. */
+  requestNotes?: string[];
 };
 
 /**
@@ -177,6 +179,9 @@ export async function announceEmailInChat(
     }
     // Version warnings go last so they are the final thing read — a reissued offer with
     // changed conditions is the most consequential thing in the message.
+    if (input.requestNotes?.length) {
+      lines.push('', ...input.requestNotes);
+    }
     if (input.versionNotes?.length) {
       lines.push('', ...input.versionNotes);
     }

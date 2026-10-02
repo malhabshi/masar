@@ -16,6 +16,7 @@ export type ReceiptOutcome =
       studentName: string;
       documents: string[];
       versionNotes: string[];
+      requestNotes?: string[];
       chatPosted: boolean;
       chatRecipients: string[];
     }
@@ -54,6 +55,9 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
           ? `Documents added to the profile:\n${outcome.documents.map((d) => `  • ${d}`).join('\n')}`
           : 'No attachments — the update was recorded, nothing was added to the profile.',
       );
+      if (outcome.requestNotes?.length) {
+        lines.push('', 'REQUESTS:', ...outcome.requestNotes.map((l) => `  ${l}`));
+      }
       if (outcome.versionNotes.length) {
         lines.push(
           '',
