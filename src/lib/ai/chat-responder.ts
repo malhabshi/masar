@@ -28,7 +28,10 @@ import { automaticAiAllowed } from './usage';
 import { countRecords } from './count';
 import { getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
 import { getStudentDocumentCards } from './documents';
-import { getStudentEmailTimeline } from '@/lib/email/memory';
+import { backfillStudentEmails, getStudentEmailTimeline } from '@/lib/email/memory';
+import { deadlinesFor } from './deadlines';
+import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
+import { adminDb as db } from '@/lib/firebase/admin';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
 import { createStudentTask, sendChatMessage } from '@/lib/actions';
 import type { User } from '@/lib/types';
@@ -121,6 +124,13 @@ const SYSTEM = `You are ${CHAT_BOT_NAME}, an assistant that sits inside the inte
 
 Your job is to help when you genuinely can, and otherwise to stay quiet.
 
+## "شنو صار عليه؟" — status questions
+"شنو صار عليه / عليها؟", "وش صار", "شصار", "any update?", "what's the status?" — someone wants to know where the student stands. You MUST answer (post_reply), never stay silent. Call \`get_student_status\` first; it has everything in one place. Answer in the language of the question, in 2–5 short lines:
+- each application that is still alive (not Rejected): university — status, and the latest news with its date (from the emails);
+- what is pending and on whom (missing items, a document a university is waiting for, a reply the agency owes);
+- a deadline coming up, if there is one.
+Leave out Rejected applications unless the question is about them. If the record has nothing new, say so plainly and say who would know (the department handling it, or the assigned employee). Never invent progress.
+
 ## When you are addressed directly
 If the newest message was sent to ${CHAT_BOT_NAME} or mentions you ("@ai", "Masar AI"), someone is waiting on you: you MUST call \`post_reply\`, never \`stay_silent\`. If you cannot find the answer, say exactly what you could not find and who would know (usually the assigned employee or the department).
 
@@ -209,6 +219,19 @@ function buildToolset(opts: {
   ];
 
   tools.push(
+    {
+      write: false,
+      definition: {
+        name: 'get_student_status',
+        description:
+          "Everything about where this student stands, in one call: each application with its status and when it " +
+          'last changed, the final choice, the latest emails with universities and agents (what they said and asked), ' +
+          'what is still waiting (missing items, documents a university asked for), change agent, and upcoming ' +
+          'deadlines. Use it first for any "what happened / any update / status" question.',
+        input_schema: { type: 'object', properties: {} },
+      },
+      handler: () => studentStatus(studentId),
+    },
     {
       write: false,
       definition: {
@@ -355,6 +378,52 @@ const ACKNOWLEDGEMENT =
  * other — a full agent run only to conclude stay_silent. Deliberately conservative: an
  * attachment, a question mark, or any message of real length always reaches the model.
  */
+/** One digest of where a student stands — for status questions. */
+async function studentStatus(studentId: string) {
+  if (!db) return { error: 'Database not available' };
+  const snap = await db.collection('students').doc(studentId).get();
+  const s = snap.data();
+  if (!s) return { error: 'Student not found.' };
+  let emails = await getStudentEmailTimeline(studentId, { limit: 8 });
+  // Never loaded for this student: fill the memory from the mailbox once.
+  if (!emails.count) {
+    await backfillStudentEmails(studentId, { limit: 60 }).catch(() => undefined);
+    emails = await getStudentEmailTimeline(studentId, { limit: 8 });
+  }
+  const waiting = (await db.collection(EMAIL_REQUESTS_COLLECTION).where('studentId', '==', studentId).get()).docs
+    .map((d) => d.data())
+    .filter((r) => r.status === 'waiting')
+    .flatMap((r) =>
+      (r.items ?? [])
+        .filter((it: { status: string }) => it.status === 'waiting')
+        .map((it: { text: string }) => `${it.text} — asked by ${r.organisation ?? r.replyTo} on ${String(r.receivedAt).slice(0, 10)}`),
+    );
+  return {
+    name: s.name,
+    finalChoice: s.finalChoiceUniversity ?? null,
+    applications: (s.applications ?? []).map((a: { university: string; major: string; status: string; updatedAt?: string; rejectionReason?: string }) => ({
+      university: a.university,
+      major: a.major,
+      status: a.status,
+      since: String(a.updatedAt ?? '').slice(0, 10) || null,
+      ...(a.rejectionReason ? { rejectionReason: a.rejectionReason } : {}),
+    })),
+    latestEmails: emails.timeline,
+    missingItems: ((s.missingItems ?? []) as Array<string | { text?: string }>).map((m) => (typeof m === 'string' ? m : m.text)),
+    documentsUniversitiesAreWaitingFor: waiting,
+    changeAgent: s.changeAgentRequired ? s.changeAgentUniversities ?? true : false,
+    upcomingDeadlines: deadlinesFor(studentId, s).map((d) => `${d.date} — ${d.label}`),
+    readiness: s.profileCompletionStatus ?? null,
+  };
+}
+
+/** "شنو صار عليه؟", "any update?" — someone asking where the student stands. */
+function asksForStatus(m: ChatMessage): boolean {
+  return /شنو\s*صار|وش\s*صار|شصار|ش\s*صار|ايش\s*صار|شنو\s*الوضع|وين\s*وصل|اب\s*ديت|ابديت|any\s*update|what'?s?\s*(the\s*)?(status|update)|status\s*\?|update\s*\?/i.test(
+    m.content ?? '',
+  );
+}
+
 /** Was this message sent to the bot, or does it call it by name? */
 function addressesBot(m: ChatMessage): boolean {
   if ((m.targetUserIds ?? []).includes(CHAT_BOT_USER_ID)) return true;
@@ -362,7 +431,7 @@ function addressesBot(m: ChatMessage): boolean {
 }
 
 function needsModel(m: ChatMessage): boolean {
-  if (addressesBot(m)) return true;
+  if (addressesBot(m) || asksForStatus(m)) return true;
   if (m.document) return true;
   const text = (m.content ?? '').trim();
   if (!text) return false;
@@ -375,9 +444,15 @@ function needsModel(m: ChatMessage): boolean {
 /**
  * Examine a student's chat thread and act if useful. Never throws.
  */
-export async function respondToStudentChat(studentId: string): Promise<ResponderOutcome> {
+export async function respondToStudentChat(
+  studentId: string,
+  /** Preview: treat this as the newest message, post nothing, claim and log nothing. */
+  preview?: { content: string; authorId: string },
+): Promise<ResponderOutcome> {
   try {
-    const settings = await getResponderSettings();
+    const settings = preview
+      ? { ...(await getResponderSettings()), enabled: true, observeOnly: true, allowTaskCreation: false }
+      : await getResponderSettings();
     if (!settings.enabled || !isAiConfigured()) {
       return { studentId, status: 'disabled', reason: !settings.enabled ? 'responder disabled' : 'no API key' };
     }
@@ -391,6 +466,9 @@ export async function respondToStudentChat(studentId: string): Promise<Responder
     const { messages } = (await getStudentChat(studentId, THREAD_WINDOW)) as unknown as {
       messages: ChatMessage[];
     };
+    if (preview) {
+      messages.push({ id: 'preview', authorId: preview.authorId, content: preview.content, timestamp: new Date().toISOString() });
+    }
     if (!messages.length) return { studentId, status: 'no_new_message' };
 
     const last = messages[messages.length - 1];
@@ -408,7 +486,7 @@ export async function respondToStudentChat(studentId: string): Promise<Responder
     // Duplicate guard. Two triggers can fire for the same message (the sender's browser
     // plus a queue drain), so claim the message id transactionally — only the first
     // caller through proceeds.
-    const claimed = await claimMessage(studentId, last.id);
+    const claimed = preview ? true : await claimMessage(studentId, last.id);
     if (!claimed) return { studentId, status: 'already_replied', reason: 'message already processed' };
 
     const [student, requestTypes, authors] = await Promise.all([
@@ -453,8 +531,10 @@ ${requestTypeList || '(none configured)'}
 ## Chat thread (oldest first, newest last)
 ${transcript}
 
-${addressesBot(last)
-  ? `The newest message is addressed to you. Answer it with post_reply (creating a task first if one was asked for).`
+${addressesBot(last) || asksForStatus(last)
+  ? asksForStatus(last)
+    ? `The newest message asks where the student stands. Call get_student_status, then answer it with post_reply.`
+    : `The newest message is addressed to you. Answer it with post_reply (creating a task first if one was asked for).`
   : `The newest message is the one to react to. Decide whether to help or stay quiet, then call exactly one of stay_silent or post_reply (creating a task first if one was asked for).`}`;
 
     const state: ResponderState = { reply: undefined, silentReason: undefined, tasks: [] };
@@ -495,7 +575,7 @@ ${addressesBot(last)
       usage: { inputTokens: run.usage.inputTokens, outputTokens: run.usage.outputTokens },
     };
 
-    await log({
+    if (!preview) await log({
       studentId,
       studentName: (student as any).name ?? null,
       triggeredByMessage: last.content ?? null,
