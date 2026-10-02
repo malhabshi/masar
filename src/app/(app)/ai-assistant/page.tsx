@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  FileSearch,
   Loader2,
   MessageSquare,
   Plus,
@@ -300,6 +301,8 @@ export default function AiAssistantPage() {
         <ResponderControls settings={responder} saving={savingResponder} onChange={updateResponder} />
       )}
 
+      {user && <DocumentReader authedFetch={authedFetch} />}
+
       {user && <TeamNotes authedFetch={authedFetch} />}
 
       <Card className="flex min-h-0 flex-1 flex-col">
@@ -344,6 +347,177 @@ export default function AiAssistantPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+type DocProgress = {
+  total: number;
+  read: number;
+  namedOnly: number;
+  unreadable: number;
+  errors: number;
+  notYetRead: number;
+  byType: Record<string, number>;
+};
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  offer: 'Offers', passport: 'Passports', ielts: 'IELTS', toefl: 'TOEFL', transcript: 'Transcripts',
+  school_certificate: 'Certificates', cas: 'CAS', i20: 'I-20', visa: 'Visas', receipt: 'Receipts',
+  financial: 'Financial', mohe: 'MOHE / KCO', personal_statement: 'Statements', recommendation: 'References',
+  jotform_summary: 'JotForm summaries', photo: 'Photos', civil_id: 'Civil IDs', medical: 'Medical', cv: 'CVs', other: 'Other',
+};
+
+/**
+ * Reading students' documents: how far it has got, whether new uploads are read
+ * automatically, whether passports are included, and a button to read the next batch.
+ * Collapsed by default, like the notes.
+ */
+function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: RequestInit) => Promise<Response> }) {
+  const [open, setOpen] = useState(false);
+  const [settings, setSettings] = useState<{ autoRead: boolean; readPassports: boolean } | null>(null);
+  const [progress, setProgress] = useState<DocProgress | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const r = await authedFetch('/api/ai/documents');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error ?? 'Could not load document reading.');
+    setSettings(data.settings);
+    setProgress(data.progress);
+  }, [authedFetch]);
+
+  useEffect(() => {
+    load().catch((e) => setMessage(e instanceof Error ? e.message : String(e)));
+  }, [load]);
+
+  const save = async (patch: Partial<{ autoRead: boolean; readPassports: boolean }>) => {
+    setBusy('settings');
+    try {
+      const r = await authedFetch('/api/ai/documents', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? 'Could not save.');
+      setSettings(data.settings);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const readBatch = async () => {
+    setBusy('read');
+    setMessage(null);
+    try {
+      const r = await authedFetch('/api/ai/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 50 }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? 'Reading failed.');
+      setMessage(
+        `Read ${data.read} of ${data.processed}` +
+          (data.namedOnly ? `, ${data.namedOnly} identified by name only` : '') +
+          (data.unreadable ? `, ${data.unreadable} unreadable` : '') +
+          (data.errors ? `, ${data.errors} failed` : '') +
+          `. ${data.pendingAfter} still to read.`,
+      );
+      await load();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const done = progress ? progress.total - progress.notYetRead : 0;
+  const pct = progress && progress.total ? Math.round((done / progress.total) * 100) : 0;
+
+  return (
+    <Card>
+      <CardHeader className="cursor-pointer pb-3" onClick={() => setOpen((v) => !v)}>
+        <CardTitle className="flex items-center gap-2 text-base">
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <FileSearch className="h-4 w-4" />
+          Student documents
+          {progress && <Badge variant="outline">{pct}% read</Badge>}
+        </CardTitle>
+        <CardDescription>
+          The AI reads each document once — offers, CAS, IELTS, transcripts, passports — and keeps
+          what it says, so it can answer questions and spot mismatches.
+        </CardDescription>
+      </CardHeader>
+      {open && (
+        <CardContent className="space-y-3 pt-0">
+          {progress && (
+            <div className="space-y-1.5">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {done.toLocaleString()} of {progress.total.toLocaleString()} documents on open students
+                {progress.notYetRead > 0 && ` · ${progress.notYetRead.toLocaleString()} not read yet`}
+                {progress.errors > 0 && ` · ${progress.errors} failed (retried next time)`}
+              </p>
+              {Object.keys(progress.byType).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(progress.byType)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([t, n]) => (
+                      <Badge key={t} variant="secondary" className="text-[11px] font-normal">
+                        {DOC_TYPE_LABELS[t] ?? t} {n}
+                      </Badge>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+          {settings && (
+            <div className="flex flex-wrap gap-x-8 gap-y-3">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="docs-auto"
+                  checked={settings.autoRead}
+                  disabled={busy !== null}
+                  onCheckedChange={(v) => save({ autoRead: v })}
+                />
+                <Label htmlFor="docs-auto" className="cursor-pointer text-sm">
+                  Read new uploads automatically
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="docs-passports"
+                  checked={settings.readPassports}
+                  disabled={busy !== null}
+                  onCheckedChange={(v) => save({ readPassports: v })}
+                />
+                <Label htmlFor="docs-passports" className="cursor-pointer text-sm">
+                  Include passports
+                </Label>
+              </div>
+            </div>
+          )}
+          {settings && !settings.readPassports && (
+            <p className="text-xs text-muted-foreground">
+              Passports are recognised by name but their images are not sent to the AI.
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" className="h-8 gap-1" disabled={busy !== null || !progress?.notYetRead} onClick={readBatch}>
+              {busy === 'read' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSearch className="h-3.5 w-3.5" />}
+              {busy === 'read' ? 'Reading…' : 'Read the next 50 now'}
+            </Button>
+          </div>
+          {message && <p className="text-xs text-muted-foreground">{message}</p>}
+        </CardContent>
+      )}
+    </Card>
   );
 }
 

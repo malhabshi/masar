@@ -4,6 +4,10 @@
 
 export const AI_MODEL = 'claude-opus-5';
 
+// Reading uploaded documents is a high-volume, narrow job — one passport, offer or IELTS
+// result at a time, thousands of them — so it runs on a smaller model than the assistant.
+export const AI_DOC_MODEL = 'claude-sonnet-5-5';
+
 // Per-turn output cap. Each loop iteration is short (a sentence + some tool calls),
 // so this is generous headroom rather than a target.
 export const AI_MAX_TOKENS = 16000;

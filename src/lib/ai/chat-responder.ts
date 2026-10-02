@@ -26,6 +26,7 @@ import {
 import { isAiConfigured } from './config';
 import { countRecords } from './count';
 import { getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
+import { getStudentDocumentCards } from './documents';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
 import { createStudentTask, sendChatMessage } from '@/lib/actions';
 import type { User } from '@/lib/types';
@@ -132,6 +133,7 @@ Most messages do not need you. Call \`stay_silent\` when:
 ## Speak when you can actually help
 Call \`post_reply\` when:
 - Someone asks a factual question you can answer from the student's record (their applications, statuses, documents, assigned employee, IELTS score, deadlines).
+- Someone asks what a document says (is the offer conditional, the deposit deadline, the IELTS bands) — use \`get_student_documents\`.
 - Someone asks how the agency does something — read \`get_work_guide\` and answer from it. The team's notes in it override everything else.
 - Someone asks "how many" — use \`count_records\`, never guess, and say what you counted.
 - Someone asks for something that should become a task — create the task first, then say plainly what you created.
@@ -204,6 +206,18 @@ function buildToolset(opts: {
   ];
 
   tools.push(
+    {
+      write: false,
+      definition: {
+        name: 'get_student_documents',
+        description:
+          "What this student's documents say: each file's type, a one-line summary and the facts " +
+          'read from it (offer type and conditions, deposit, deadlines, IELTS bands, grades, ' +
+          'passport expiry). Use it for any question about an offer, CAS, IELTS or other document.',
+        input_schema: { type: 'object', properties: {} },
+      },
+      handler: () => getStudentDocumentCards(studentId),
+    },
     {
       write: false,
       definition: {

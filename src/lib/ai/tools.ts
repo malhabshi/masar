@@ -22,6 +22,7 @@ import type { Country, TaskStatus } from '@/lib/types';
 import { countRecords } from './count';
 import { findChatsAwaitingReply, readStudentChat, replyInStudentChat } from './chat-tools';
 import { addTeamNote, getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
+import { getStudentDocumentCards, readStudentDocuments } from './documents';
 
 export type ToolContext = {
   actor: Actor;
@@ -386,6 +387,53 @@ const saveTeamNoteTool: AiTool = {
 };
 
 // --------------------------------------------------------------------------
+// Documents
+// --------------------------------------------------------------------------
+
+const getStudentDocumentsTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'get_student_documents',
+    description:
+      "What is in a student's documents: for each file, its type (offer, passport, IELTS, " +
+      'transcript, CAS…), a one-line summary and the facts read from it — offer type and ' +
+      'conditions, deposit and deadlines, IELTS bands, grades, passport expiry. Use this for ' +
+      'any question about what a document says. Files marked "not yet read" can be read ' +
+      'with read_student_documents.',
+    input_schema: {
+      type: 'object',
+      properties: { studentId: { type: 'string' } },
+      required: ['studentId'],
+    },
+  },
+  handler: (input) => getStudentDocumentCards(input.studentId),
+};
+
+const readStudentDocumentsTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'read_student_documents',
+    description:
+      "Read a student's documents that have not been read yet (or all of them again with " +
+      'force) and store what each one says. Takes a few seconds per file. Afterwards call ' +
+      'get_student_documents.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentId: { type: 'string' },
+        force: { type: 'boolean', description: 'Re-read documents that were already read.' },
+      },
+      required: ['studentId'],
+    },
+  },
+  handler: async (input) => {
+    const r = await readStudentDocuments(input.studentId, { force: input.force === true });
+    if ('error' in r) return r;
+    return { studentId: r.studentId, read: r.read, alreadyRead: r.alreadyRead, next: 'Call get_student_documents to see the results.' };
+  },
+};
+
+// --------------------------------------------------------------------------
 // Counting
 // --------------------------------------------------------------------------
 
@@ -588,6 +636,8 @@ export const AI_TOOLS: AiTool[] = [
   listStudentsTool,
   searchStudentsTool,
   getStudentTool,
+  getStudentDocumentsTool,
+  readStudentDocumentsTool,
   listTasksTool,
   listEmployeesTool,
   listUniversitiesTool,

@@ -10,6 +10,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processReminderStages } from '@/lib/actions';
 import { runAllSiteWatches } from '@/lib/site-watch';
+import { getDocumentReaderSettings, readPendingDocuments } from '@/lib/ai/documents';
+import { isAiConfigured } from '@/lib/ai/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,8 +51,21 @@ export async function GET(req: NextRequest) {
     siteWatch = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Read newly uploaded documents, a few per run. Every five minutes keeps up with uploads
+  // without one run holding the job open; switched on from the AI Assistant page.
+  let documents: unknown = null;
+  try {
+    if (isAiConfigured() && (await getDocumentReaderSettings()).autoRead) {
+      documents = await readPendingDocuments({ limit: 8, concurrency: 4 });
+    }
+  } catch (e) {
+    console.error('[cron/documents] failed:', e);
+    documents = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
     siteWatch,
+    documents,
     success: true,
     messagesSent: result.sent,
     details: result.details,
