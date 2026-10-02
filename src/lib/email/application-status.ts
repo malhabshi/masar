@@ -32,6 +32,7 @@ export { newestMessage };
 import type { InboxMessage } from './inbox';
 import type { Application, ApplicationStatus } from '@/lib/types';
 import { handleChangeAgentEvent, type ChangeAgentEvent } from './change-agent';
+import { logAiAction } from '@/lib/ai/action-log';
 
 const SETTABLE: ApplicationStatus[] = ['Submitted', 'Missing Items', 'Accepted', 'Rejected'];
 const FINAL: ApplicationStatus[] = ['Accepted', 'Rejected'];
@@ -231,6 +232,16 @@ export async function updateApplicationsFromEmail(input: {
       );
       change.applied = result.success === true;
       if (!change.applied) change.note = result.message;
+      else {
+        await logAiAction({
+          source: 'email',
+          summary: `${app.university}: ${app.status} → ${to} (${change.reason})`,
+          reason: `Email from ${message.fromName || message.from}, "${message.subject}": "${change.evidence}"`,
+          studentId: input.studentId,
+          studentName: s.name ?? null,
+          undo: { type: 'app_status', university: app.university, major: app.major, from: app.status, to, rejectionReason: app.rejectionReason ?? null },
+        });
+      }
       changes.push(change);
     }
 

@@ -23,6 +23,7 @@ import { appendDraft, isInboxConfigured } from './inbox';
 import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, type EmailMemoryEntry } from './memory';
 import { replyWithReceipt } from './reply-receipt';
 import type { Application } from '@/lib/types';
+import { logAiAction } from '@/lib/ai/action-log';
 
 const FOLLOWUP_COLLECTION = 'email_followups';
 const WAIT_DAYS = 5;
@@ -238,6 +239,14 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
           ),
         );
         result.drafted.push({ student: student.name, to: partner, applications: list });
+        await logAiAction({
+          source: 'followup',
+          summary: `Update request drafted in Gmail to ${org}: ${list.join(' · ')}`,
+          reason: `Submitted ${Math.max(...g.items.map((w) => w.days))} days ago with no offer`,
+          studentId: student.id,
+          studentName: student.name,
+          undo: { type: 'none' },
+        });
 
         await replyWithReceipt(
           { uid: 0, messageId: g.email.messageId, from: partner, fromName: org, subject: g.email.subject, date: g.email.date, text: '', attachments: [] },

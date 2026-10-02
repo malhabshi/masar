@@ -18,6 +18,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase/admin';
 import { triggerWhatsAppNotification } from '@/lib/actions';
 import type { ChangeAgentLogEntry, Student, User } from '@/lib/types';
+import { logAiAction } from '@/lib/ai/action-log';
 
 export const EMAIL_ACTOR_NAME = 'Masar AI (from email)';
 
@@ -108,6 +109,20 @@ export async function handleChangeAgentEvent(studentId: string, ev: ChangeAgentE
       changeAgentLog: FieldValue.arrayUnion(logEntry),
       adminNotes: FieldValue.arrayUnion(note(noteText)),
       lastActivityAt: now,
+    });
+    await logAiAction({
+      source: 'change_agent',
+      summary: `Change Agent switched on — ${ev.university}${ev.deadline ? ` (deadline ${ev.deadline})` : ''}`,
+      reason: `Email from ${ev.from}: "${ev.evidence}"`,
+      studentId,
+      studentName: student.name ?? null,
+      undo: {
+        type: 'change_agent',
+        university: ev.university,
+        logEntryId: logEntry.id,
+        wasRequired: student.changeAgentRequired === true,
+        previousUniversities: student.changeAgentUniversities ?? [],
+      },
     });
 
     // The same alerts the profile switch sends: a task + WhatsApp to the assigned employee,

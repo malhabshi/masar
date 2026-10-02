@@ -35,6 +35,7 @@ import { replyWithReceipt } from './reply-receipt';
 import { statusChangeLines, updateApplicationsFromEmail } from './application-status';
 import { rememberEmail, syncSentMail } from './memory';
 import { handleCompanyNotices } from './notices';
+import { logAiAction } from '@/lib/ai/action-log';
 import {
   analyseEmail,
   emailDocumentNote,
@@ -566,6 +567,16 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           chatRecipients: announcement.recipients ?? [],
         });
 
+        if (filedNames.length) {
+          await logAiAction({
+            source: 'email',
+            summary: `Filed from email: ${filedNames.join(' · ')}`,
+            reason: `Email from ${message.fromName || message.from}, "${message.subject}"`,
+            studentId: match.student.id,
+            studentName: match.student.name,
+            undo: { type: 'none' },
+          });
+        }
         await applyLabel(message.uid, INTAKE_LABELS.filed);
         result.filed++;
         result.notified += announcement.posted ? 1 : 0;

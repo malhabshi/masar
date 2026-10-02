@@ -27,6 +27,7 @@ import { appendDraft, isInboxConfigured } from '@/lib/email/inbox';
 import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, type EmailMemoryEntry } from '@/lib/email/memory';
 import { downloadDoc } from '@/lib/email/requests';
 import { replyWithReceipt } from '@/lib/email/reply-receipt';
+import { logAiAction } from './action-log';
 import type { Application } from '@/lib/types';
 
 const DRAFT_SIGNATURE = 'MMohammed';
@@ -122,6 +123,14 @@ async function addSchools(task: Record<string, any>, dryRun = false): Promise<st
     if (r.success) {
       have.add(key);
       lines.push(`✅ Added to University Applications as Pending: ${u.name} (${u.major})`);
+      await logAiAction({
+        source: 'task',
+        summary: `Added as Pending: ${u.name} (${u.major})`,
+        reason: `Request "${String(task.taskType ?? '').trim()}" by ${task.authorName ?? 'staff'}`,
+        studentId: task.studentId,
+        studentName: s.name ?? null,
+        undo: { type: 'remove_application', university: u.name, major: u.major },
+      });
     } else {
       lines.push(`⚠️ Could not add ${u.name}: ${r.message}`);
     }
@@ -267,6 +276,14 @@ async function draftUpdate(task: Record<string, any>, dryRun = false): Promise<s
       lines.push(`⚠️ Could not save the draft to ${to}: ${saved.error}`);
       continue;
     }
+    await logAiAction({
+      source: 'task',
+      summary: `Draft saved in Gmail to ${e.organisation ?? to}: ${d.about}`,
+      reason: `Request "${String(task.taskType ?? '').trim()}" by ${task.authorName ?? 'staff'}: "${note}"`,
+      studentId: task.studentId,
+      studentName: s.name ?? null,
+      undo: { type: 'none' },
+    });
     lines.push(
       `✉️ Draft ready in Gmail to ${e.organisation ?? to} ("${subject}"): ${d.about}` +
         (attachments.length ? ` — attached: ${attachments.map((a) => a.filename).join(', ')}` : '') +

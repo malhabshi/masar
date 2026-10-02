@@ -33,6 +33,7 @@ import { companyForAddress } from './companies';
 import { newestMessage } from './text';
 import type { InboxMessage } from './inbox';
 import type { Application, ApplicationStatus } from '@/lib/types';
+import { logAiAction } from '@/lib/ai/action-log';
 
 export const NOTICE_COLLECTION = 'company_notices';
 
@@ -205,6 +206,14 @@ async function updateApprovedUniversities(n: Notice, open: boolean): Promise<str
       importantNote: u.importantNote ? `${u.importantNote}\n${note}` : note,
     });
     changed.push(`${u.name} — ${u.major}`);
+    await logAiAction({
+      source: 'notice',
+      summary: `Approved Universities: ${u.name} — ${u.major} marked ${open ? 'open' : 'closed'}`,
+      reason: n.summary,
+      studentId: null,
+      studentName: null,
+      undo: { type: 'approved_university', universityId: d.id, isAvailable: u.isAvailable !== false, importantNote: u.importantNote ?? null },
+    });
   }
   return changed;
 }
@@ -246,6 +255,14 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
         if (opts.dryRun) continue;
 
         if (reject) {
+          await logAiAction({
+            source: 'notice',
+            summary: `${c.app.university}: ${c.app.status} → Rejected (notice from ${company})`,
+            reason: `${n.summary} — "${n.evidence}"`,
+            studentId: c.studentId,
+            studentName: c.studentName,
+            undo: { type: 'app_status', university: c.app.university, major: c.app.major, from: c.app.status, to: 'Rejected', rejectionReason: c.app.rejectionReason ?? null },
+          });
           await updateApplicationStatus(
             c.studentId,
             c.app.university,

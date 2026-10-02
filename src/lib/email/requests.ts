@@ -27,6 +27,7 @@ import { appendDraft, isInboxConfigured, type InboxMessage } from './inbox';
 import { recentEmailLines } from './memory';
 import { playbookFor } from './companies';
 import { replyWithReceipt } from './reply-receipt';
+import { logAiAction } from '@/lib/ai/action-log';
 
 export const EMAIL_REQUESTS_COLLECTION = 'email_requests';
 const BUCKET = 'studio-9484431255-91d96.firebasestorage.app';
@@ -236,6 +237,14 @@ export async function recordEmailRequests(input: {
     missingItems: FieldValue.arrayUnion(...missing),
     newMissingItemsForEmployee: FieldValue.increment(missing.length),
     lastActivityAt: now,
+  });
+  await logAiAction({
+    source: 'email',
+    summary: `Missing Items added: ${items.map((it) => it.text).join(' · ')}`,
+    reason: `Requested by ${from} by email, "${message.subject}"`,
+    studentId,
+    studentName,
+    undo: { type: 'remove_missing_items', ids: missing.map((m) => m.id) },
   });
 
   let requestId: string | null = null;
@@ -613,6 +622,14 @@ export async function fulfilEmailRequests(opts: { limit?: number } = {}) {
         });
         result.drafted++;
         result.itemsDrafted += ready.length;
+        await logAiAction({
+          source: 'email',
+          summary: `Reply draft saved in Gmail to ${request.organisation ?? request.replyTo}: ${ready.map((it) => it.text).join(' · ')}`,
+          reason: `Requested in "${request.subject}"; the document is now on the profile`,
+          studentId: request.studentId,
+          studentName: request.studentName,
+          undo: { type: 'none' },
+        });
 
         // The summary in the original thread, like every other email the system handles.
         await replyWithReceipt(
