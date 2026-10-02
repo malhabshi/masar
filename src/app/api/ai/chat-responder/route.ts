@@ -56,8 +56,16 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(outcome);
 }
 
-/** Current responder settings, for the UI to decide whether to bother triggering. */
-export async function GET() {
+/** Current responder settings, for the UI to decide whether to bother triggering. Staff only. */
+export async function GET(req: NextRequest) {
+  if (!adminAuth) return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 });
+  const header = req.headers.get('authorization') ?? '';
+  if (!header.startsWith('Bearer ')) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  try {
+    await adminAuth.verifyIdToken(header.slice('Bearer '.length));
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized: invalid or expired token.' }, { status: 401 });
+  }
   const settings = await getResponderSettings();
   return NextResponse.json({ ...settings, aiConfigured: isAiConfigured() });
 }

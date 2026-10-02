@@ -502,15 +502,26 @@ export async function fulfilEmailRequests(opts: { limit?: number } = {}) {
   const result = { checked: 0, drafted: 0, itemsDrafted: 0, errors: [] as string[] };
   if (!isAiConfigured() || !isInboxConfigured()) return result;
 
-  const snap = await db()
-    .collection(EMAIL_REQUESTS_COLLECTION)
-    .where('status', '==', 'waiting')
-    .limit(opts.limit ?? 50)
-    .get();
+  // All waiting requests, least recently checked first, so no request is starved when
+  // there are more than one run's worth.
+  const all = await db().collection(EMAIL_REQUESTS_COLLECTION).where('status', '==', 'waiting').get();
+  const batch = all.docs
+    .sort((a, b) => String(a.data().lastCheckedAt ?? '').localeCompare(String(b.data().lastCheckedAt ?? '')))
+    .slice(0, opts.limit ?? 50);
 
   const readerSettings = await getDocumentReaderSettings();
 
-  for (const reqDoc of snap.docs) {
+  for (const reqDoc of batch) {
+    // Claim it: the cron, the end of an inbox run and the button can all run this at
+    // once, and two of them must never draft the same reply.
+    const claimed = await db().runTransaction(async (tx) => {
+      const cur = await tx.get(reqDoc.ref);
+      const busySince = cur.data()?.draftingAt;
+      if (busySince && Date.now() - new Date(busySince).getTime() < 10 * 60_000) return false;
+      tx.update(reqDoc.ref, { draftingAt: new Date().toISOString(), lastCheckedAt: new Date().toISOString() });
+      return true;
+    });
+    if (!claimed) continue;
     const request = { ...(reqDoc.data() as EmailRequest), id: reqDoc.id };
     result.checked++;
     try {
@@ -574,18 +585,39 @@ export async function fulfilEmailRequests(opts: { limit?: number } = {}) {
         if (!openMissing.has(it.missingItemId)) it.status = 'closed';
       }
 
-      const ready = items.filter((it) => it.status === 'ready');
-      if (ready.length) {
-        const attachments: Array<{ filename: string; content: Buffer }> = [];
-        let total = 0;
-        for (const it of ready.filter((x) => x.fulfilledByDocId)) {
-          const d = docs.find((x) => x.id === it.fulfilledByDocId);
-          const file = d ? await downloadDoc(d) : null;
-          if (file && total + file.content.length <= MAX_DRAFT_ATTACHMENT_BYTES) {
-            attachments.push(file);
-            total += file.content.length;
-          }
+      // Only what can really go in the reply goes in it: a document whose file could not be
+      // fetched stays 'ready' for the next run; one too large for Gmail is closed with a
+      // note to send it by hand. Neither is reported as sent.
+      const attachments: Array<{ filename: string; content: Buffer }> = [];
+      const tooLarge: string[] = [];
+      let total = 0;
+      for (const it of items.filter((x) => x.status === 'ready' && x.kind === 'document' && x.fulfilledByDocId)) {
+        const d = docs.find((x) => x.id === it.fulfilledByDocId);
+        const file = d ? await downloadDoc(d).catch(() => null) : null;
+        if (!file) continue; // retried next run
+        if (total + file.content.length > MAX_DRAFT_ATTACHMENT_BYTES) {
+          it.status = 'closed';
+          tooLarge.push(it.text);
+          continue;
         }
+        attachments.push(file);
+        total += file.content.length;
+        (it as RequestItem & { attached?: boolean }).attached = true;
+      }
+      const ready = items.filter(
+        (it) => it.status === 'ready' && (it.kind !== 'document' || (it as RequestItem & { attached?: boolean }).attached),
+      );
+      for (const it of items) delete (it as RequestItem & { attached?: boolean }).attached;
+      if (tooLarge.length) {
+        await ensureChatBotUser();
+        await sendChatMessage(
+          request.studentId,
+          CHAT_BOT_USER_ID,
+          `⚠️ Too large to attach to a Gmail reply — please send by hand to ${request.organisation ?? request.replyTo}: ${tooLarge.join(' · ')}`,
+          ['admins'],
+        ).catch(() => undefined);
+      }
+      if (ready.length) {
         const body = await writeDraftBody({
           request,
           items: ready,
@@ -663,16 +695,17 @@ export async function fulfilEmailRequests(opts: { limit?: number } = {}) {
         ).catch(() => undefined);
       }
 
-      const stillWaiting = items.some((it) => it.status === 'waiting');
+      const stillWaiting = items.some((it) => it.status === 'waiting' || it.status === 'ready');
       const status: EmailRequest['status'] = stillWaiting
         ? 'waiting'
         : items.some((it) => it.status === 'drafted')
           ? 'drafted'
           : 'closed';
-      await reqDoc.ref.update({ items, status, seenDocIds: request.seenDocIds ?? [] });
+      await reqDoc.ref.update({ items, status, seenDocIds: request.seenDocIds ?? [], draftingAt: null });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       result.errors.push(`${request.studentName}: ${msg}`);
+      await reqDoc.ref.update({ draftingAt: null }).catch(() => undefined);
       console.error('[email-requests] fulfil failed for', request.id, msg);
     }
   }

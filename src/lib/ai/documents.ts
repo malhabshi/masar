@@ -87,6 +87,8 @@ export type DocCard = {
   via?: 'text' | 'pdf' | 'image' | 'name';
   reason?: string;
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
+  /** Failed readings so far; after 3 the file is left alone. */
+  attempts?: number;
 };
 
 type StoredDoc = {
@@ -278,6 +280,10 @@ export async function readDocument(
 
     let content: Anthropic.ContentBlockParam;
     let via: DocCard['via'];
+    if (mime.startsWith('image/') && !['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
+      // HEIC and other formats the model does not take: say so instead of failing every run.
+      return quickCard(nameType, name, 'unreadable', `${mime} photos cannot be read; identified by name only.`);
+    }
     if (mime.startsWith('image/')) {
       if (size > MAX_IMAGE_BYTES) return quickCard(nameType, name, 'unreadable', `Image is ${(size / 1e6).toFixed(1)} MB, too large to send.`);
       const [bytes] = await file.download();
@@ -357,7 +363,8 @@ export async function readDocument(
     };
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
-    return { ...quickCard(nameType, name, 'error', reason.slice(0, 300)), via: undefined };
+    const { via: _via, ...card } = quickCard(nameType, name, 'error', reason.slice(0, 300));
+    return card;
   }
 }
 
@@ -373,7 +380,11 @@ async function saveCard(studentId: string, docId: string, card: DocCard): Promis
     const i = docs.findIndex((d) => d.id === docId);
     if (i < 0) return false;
     const next = docs.slice();
-    next[i] = { ...next[i], ai: card };
+    // A failed reading counts its attempts, so a file the model cannot take is not
+    // downloaded and re-sent every five minutes forever.
+    const attempts = card.status === 'error' ? (next[i].ai?.status === 'error' ? (next[i].ai?.attempts ?? 1) + 1 : 1) : undefined;
+    // Firestore rejects undefined values; strip them rather than lose the whole save.
+    next[i] = JSON.parse(JSON.stringify({ ...next[i], ai: { ...card, ...(attempts ? { attempts } : {}) } }));
     tx.update(ref, { documents: next });
     return true;
   });
@@ -383,14 +394,16 @@ async function saveCard(studentId: string, docId: string, card: DocCard): Promis
 function reuseIdentical(d: StoredDoc & { sha256?: string }, all: Array<StoredDoc & { sha256?: string }>): DocCard | null {
   if (!d.sha256) return null;
   const twin = all.find((x) => x.id !== d.id && x.sha256 === d.sha256 && x.ai?.status === 'read');
-  return twin?.ai ? { ...twin.ai, readAt: new Date().toISOString(), usage: undefined } : null;
+  if (!twin?.ai) return null;
+  const { usage: _usage, ...card } = twin.ai;
+  return { ...card, readAt: new Date().toISOString() };
 }
 
 function needsReading(d: StoredDoc): boolean {
   if (!d.id) return false;
   if (!d.ai) return true;
   if (d.ai.version < CARD_VERSION) return true;
-  return d.ai.status === 'error';
+  return d.ai.status === 'error' && (d.ai.attempts ?? 1) < 3;
 }
 
 /** Read every unread document on one student. */
@@ -402,8 +415,18 @@ export async function readStudentDocuments(studentId: string, opts: { force?: bo
   const docs: StoredDoc[] = (s.documents as StoredDoc[]) ?? [];
   const todo = docs.filter((d) => d.id && (opts.force || needsReading(d)));
   const cards: Array<{ documentId: string; card: DocCard }> = [];
-  for (const d of todo) {
-    const card = (!opts.force && reuseIdentical(d, docs)) || (await readDocument(d, { name: s.name }, settings));
+  // Read four at a time (one by one, a student with twenty files took minutes); save one
+  // at a time, since each save rewrites the student's document list.
+  const read: Array<{ d: StoredDoc; card: DocCard }> = [];
+  for (let i = 0; i < todo.length; i += 4) {
+    const chunk = todo.slice(i, i + 4);
+    read.push(
+      ...(await Promise.all(
+        chunk.map(async (d) => ({ d, card: (!opts.force && reuseIdentical(d, docs)) || (await readDocument(d, { name: s.name }, settings)) })),
+      )),
+    );
+  }
+  for (const { d, card } of read) {
     await saveCard(studentId, d.id!, card);
     if (settings.autoFill) await applyDocumentFacts(studentId, { ...d, ai: card });
     cards.push({ documentId: d.id!, card });

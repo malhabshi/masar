@@ -77,6 +77,11 @@ export function deadlinesFor(studentId: string, s: Record<string, any>, now: str
       starts.filter((x) => x.start >= now).sort((a, b) => a.start.localeCompare(b.start))[0]?.start ||
       null;
 
+    const newestPassportExpiry = docs
+      .filter((x) => x.ai!.type === 'passport' && ISO.test(x.ai!.facts.expiryDate ?? ''))
+      .map((x) => x.ai!.facts.expiryDate!)
+      .sort()
+      .pop();
     for (const doc of docs) {
       const c = doc.ai!;
       const f = c.facts ?? {};
@@ -97,9 +102,9 @@ export function deadlinesFor(studentId: string, s: Record<string, any>, now: str
       }
       // A deadline printed on a CAS is usually the latest arrival / enrolment date — the
       // one date after which the place can be lost.
-      if (c.type === 'cas' && ISO.test(f.deadline ?? '') && f.deadline! >= now) {
+      const casForOtherSchool = c.type === 'cas' && !!final && !!f.university && !sameUniversity(final, f.university);
+      if (c.type === 'cas' && !casForOtherSchool && ISO.test(f.deadline ?? '') && f.deadline! >= now) {
         const uni = f.university ?? 'CAS';
-        if (final && !sameUniversity(final, uni)) continue;
         out.push({
           ...base,
           key: `${d.id}__casdeadline__${doc.id}__${f.deadline}`,
@@ -110,7 +115,7 @@ export function deadlinesFor(studentId: string, s: Record<string, any>, now: str
           warning: false,
         });
       }
-      if (c.type === 'cas' && !visaDone && ISO.test(f.expiryDate ?? '') && f.expiryDate! >= now) {
+      if (c.type === 'cas' && !casForOtherSchool && !visaDone && ISO.test(f.expiryDate ?? '') && f.expiryDate! >= now) {
         out.push({
           ...base,
           key: `${d.id}__cas__${doc.id}__${f.expiryDate}`,
@@ -121,7 +126,9 @@ export function deadlinesFor(studentId: string, s: Record<string, any>, now: str
           warning: false,
         });
       }
-      if (c.type === 'passport' && ISO.test(f.expiryDate ?? '')) {
+      // Only the passport that lasts longest counts — an old one left on file after a
+      // renewal is not a problem.
+      if (c.type === 'passport' && ISO.test(f.expiryDate ?? '') && f.expiryDate === newestPassportExpiry) {
         const against = start ?? now;
         const margin = daysBetween(against, f.expiryDate!);
         if (margin < 183) {

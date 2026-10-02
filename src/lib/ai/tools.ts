@@ -24,6 +24,8 @@ import { findChatsAwaitingReply, readStudentChat, replyInStudentChat } from './c
 import { addTeamNote, getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
 import { getStudentDocumentCards, readStudentDocuments } from './documents';
 import { backfillStudentEmails, getStudentEmailTimeline } from '@/lib/email/memory';
+import { collectDeadlines } from './deadlines';
+import { getCompanyProfile, listCompanyProfiles } from '@/lib/email/companies';
 
 export type ToolContext = {
   actor: Actor;
@@ -479,6 +481,61 @@ const loadStudentEmailsTool: AiTool = {
 };
 
 // --------------------------------------------------------------------------
+// Deadlines and company playbooks
+// --------------------------------------------------------------------------
+
+const upcomingDeadlinesTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'get_upcoming_deadlines',
+    description:
+      'Every upcoming deadline across all open students, read from their documents and change-of-agent ' +
+      'alerts: offer / deposit deadlines, deadlines on a CAS (usually the latest arrival date), CAS expiry ' +
+      'before the visa, change-of-agent decision dates, plus passports and IELTS results that will not last. ' +
+      'Use it for any "what is due / deadlines this week" question. Only documents already read are covered.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', description: 'How far ahead, default 30.' },
+        studentId: { type: 'string', description: 'Only this student.' },
+      },
+    },
+  },
+  handler: async (input) => {
+    const days = Math.min(Math.max(Number(input.days ?? 30), 1), 365);
+    const all = await collectDeadlines();
+    const rows = all.filter((d) => (d.warning || d.daysLeft <= days) && (!input.studentId || d.studentId === input.studentId));
+    return {
+      window: `next ${days} days (warnings regardless of date)`,
+      count: rows.length,
+      deadlines: rows.map((d) => ({ date: d.date, daysLeft: d.daysLeft, student: d.studentName, studentId: d.studentId, what: d.label, warning: d.warning })),
+    };
+  },
+};
+
+const companyPlaybookTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'get_company_playbook',
+    description:
+      'How a company (Merit, INTO, Study Group, Navitas, Malvern…) corresponds with the agency: subject ' +
+      'formats, reference numbers, how they announce offers / CAS / missing documents / change of agent, ' +
+      'what they usually ask for, how the agency replies, plus recent company-wide notices and the ' +
+      "team's own notes. Omit company to list the companies.",
+    input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Name or id, e.g. "Merit".' } } },
+  },
+  handler: async (input) => {
+    const list = await listCompanyProfiles();
+    if (!input.company) return { companies: list.map((c) => ({ id: c.id, name: c.name, domains: c.domains, learned: !!c.playbook })) };
+    const q = String(input.company).toLowerCase();
+    const c = list.find((x) => x.id === q || x.name.toLowerCase().includes(q) || x.domains.some((d) => d.includes(q)));
+    if (!c) return { error: `No company matches "${input.company}". Companies: ${list.map((x) => x.name).join(', ')}.` };
+    const p = await getCompanyProfile(c.id);
+    return { name: c.name, domains: c.domains, playbook: p?.playbook || 'not learned yet', teamNotes: p?.teamNotes || null };
+  },
+};
+
+// --------------------------------------------------------------------------
 // Counting
 // --------------------------------------------------------------------------
 
@@ -685,6 +742,8 @@ export const AI_TOOLS: AiTool[] = [
   readStudentDocumentsTool,
   getStudentEmailsTool,
   loadStudentEmailsTool,
+  upcomingDeadlinesTool,
+  companyPlaybookTool,
   listTasksTool,
   listEmployeesTool,
   listUniversitiesTool,

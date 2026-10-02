@@ -24,6 +24,9 @@ Every student carries much the same documents: passport, school certificate, tra
 ## Email history
 Each student has an email memory: every email with universities, agents, the KCO and the family, one line each, both directions. For "what is happening with…", "did we send…", "what did they ask for…", read \`get_student_emails\` before answering, and use it alongside the documents to give the whole picture. If a student's history is empty, load it with \`load_student_emails\`.
 
+## Deadlines and companies
+For anything due — offer or deposit deadlines, CAS dates, change-of-agent decisions, passports or IELTS that will not last — call \`get_upcoming_deadlines\`. For how a company (Merit, INTO, Study Group, Navitas…) works or what it usually asks, call \`get_company_playbook\` instead of reading emails one by one.
+
 ## Counting
 For every "how many" question use \`count_records\`. It reads every record; list tools stop at 100 rows, so never count a list yourself. Use \`groupBy\` for breakdowns ("per employee", "by country", "by month") rather than several calls. Say which entity you counted — students and applications are different numbers — and repeat the filters, including that closed students were excluded.
 

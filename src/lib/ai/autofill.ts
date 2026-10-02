@@ -95,7 +95,17 @@ export async function applyDocumentFacts(studentId: string, doc: StoredDoc, opts
         .map((d) => ({ id: d.id, when: d.ai!.facts.testDate ?? d.uploadedAt ?? '' }));
       if (!results.some((r) => r.id === doc.id)) results.push({ id: doc.id, when: f.testDate ?? doc.uploadedAt ?? '' });
       const latest = results.sort((a, b) => String(b.when).localeCompare(String(a.when)))[0];
-      if (latest?.id === doc.id && s.ieltsOverall !== f.ieltsOverall && opts.dryRun) {
+      // A score typed by staff after this test (or after this file was uploaded) wins.
+      const manualAt = ((s.adminNotes ?? []) as Array<{ content?: string; createdAt?: string; authorId?: string }>)
+        .filter((n) => /^IELTS updated to/.test(String(n.content ?? '')) && n.authorId !== 'email-intake')
+        .map((n) => String(n.createdAt ?? ''))
+        .sort()
+        .pop();
+      const evidenceAt = String(f.testDate ?? doc.uploadedAt ?? '');
+      const newerThanManual = !manualAt || !s.ieltsOverall || evidenceAt >= manualAt.slice(0, evidenceAt.length);
+      if (!newerThanManual) {
+        /* staff typed a score after this result — leave it */
+      } else if (latest?.id === doc.id && s.ieltsOverall !== f.ieltsOverall && opts.dryRun) {
         done.push(`[preview] would set IELTS to ${f.ieltsOverall} (now ${s.ieltsOverall ?? 'empty'})`);
       } else if (latest?.id === doc.id && s.ieltsOverall !== f.ieltsOverall) {
         await snap.ref.update({

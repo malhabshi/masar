@@ -222,7 +222,6 @@ async function countStudentsOrApplications(
     total,
     ...(groupBy !== 'none' ? finishBreakdown(groups) : {}),
     ...(listNames ? { names: matchedNames, namesTruncated: total > matchedNames.length } : {}),
-    scanned: snap.size,
   };
 }
 

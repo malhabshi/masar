@@ -419,8 +419,11 @@ async function studentStatus(studentId: string) {
 
 /** "شنو صار عليه؟", "any update?" — someone asking where the student stands. */
 function asksForStatus(m: ChatMessage): boolean {
-  return /شنو\s*صار|وش\s*صار|شصار|ش\s*صار|ايش\s*صار|شنو\s*الوضع|وين\s*وصل|اب\s*ديت|ابديت|any\s*update|what'?s?\s*(the\s*)?(status|update)|status\s*\?|update\s*\?/i.test(
-    m.content ?? '',
+  const t = m.content ?? '';
+  // "ابديت" alone is also how staff say "I did the update" — only a question counts.
+  return (
+    /شنو\s*صار|وش\s*صار|شصار|ايش\s*صار|شنو\s*الوضع|وين\s*وصل|any\s*update|what('?s|\s+is)?\s*(the\s*)?(status|update)/i.test(t) ||
+    /(اب\s*ديت|ابديت|update|status)\s*[?؟]/i.test(t)
   );
 }
 

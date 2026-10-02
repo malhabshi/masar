@@ -25,7 +25,14 @@ export type UndoSpec =
   | { type: 'restore_missing_items'; items: unknown[] }
   | { type: 'change_agent'; university: string; logEntryId: string; wasRequired: boolean; previousUniversities: string[] }
   | { type: 'set_field'; field: string; from: unknown; to: unknown }
-  | { type: 'approved_university'; universityId: string; isAvailable: boolean; importantNote: string | null }
+  | {
+      type: 'approved_university';
+      universityId: string;
+      isAvailable: boolean;
+      importantNote: string | null;
+      /** What the AI set, so Undo can tell whether someone has changed it since. */
+      setTo?: { isAvailable: boolean; importantNote: string };
+    }
   | { type: 'none' };
 
 export type AiAction = {
@@ -132,6 +139,15 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
           (m) => typeof m !== 'string' && u.ids.includes(m.id ?? ''),
         );
         if (items.length) await studentRef!.update({ missingItems: FieldValue.arrayRemove(...items) });
+        // The email request behind these items must stop waiting too — otherwise their
+        // disappearance reads as "received" and a reply would be drafted.
+        const reqs = await db().collection('email_requests').where('studentId', '==', a.studentId).get();
+        for (const r of reqs.docs) {
+          const its = (r.data().items ?? []) as Array<{ missingItemId: string; status: string }>;
+          if (!its.some((it) => u.ids.includes(it.missingItemId))) continue;
+          const next = its.map((it) => (u.ids.includes(it.missingItemId) ? { ...it, status: 'closed' } : it));
+          await r.ref.update({ items: next, status: next.some((it) => it.status === 'waiting') ? 'waiting' : 'closed' });
+        }
         return done(items.length ? `${items.length} Missing Item(s) removed.` : 'They were already gone.');
       }
       case 'restore_missing_items': {
@@ -142,7 +158,8 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
         const s = (await studentRef!.get()).data() ?? {};
         const log = ((s.changeAgentLog ?? []) as Array<{ id: string }>).filter((e) => e.id !== u.logEntryId);
         const unis = ((s.changeAgentUniversities ?? []) as string[]).filter((x) => x !== u.university);
-        const stillOn = u.wasRequired || unis.length > 0;
+        // Never switch Change Agent back on from an undo: if staff turned it off since, it stays off.
+        const stillOn = s.changeAgentRequired === true && unis.length > 0;
         await studentRef!.update({
           changeAgentLog: log,
           changeAgentUniversities: unis,
@@ -164,6 +181,10 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
         return done('Restored.');
       }
       case 'approved_university': {
+        const cur = (await db().collection('approved_universities').doc(u.universityId).get()).data() ?? {};
+        if (u.setTo && (cur.isAvailable !== u.setTo.isAvailable || String(cur.importantNote ?? '') !== u.setTo.importantNote)) {
+          return { ok: false, message: 'Not undone — the row has been changed since.' };
+        }
         await db().collection('approved_universities').doc(u.universityId).update({
           isAvailable: u.isAvailable,
           importantNote: u.importantNote ?? FieldValue.delete(),

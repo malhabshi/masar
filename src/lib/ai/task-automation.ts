@@ -60,7 +60,11 @@ async function claim(taskId: string): Promise<Record<string, any> | null> {
     const snap = await tx.get(ref);
     if (!snap.exists) return null;
     const t = snap.data()!;
-    if (t.aiAutomation?.status) return null;
+    // A run that crashed or timed out leaves 'processing' behind; after 15 minutes it is
+    // taken to be dead and the task is tried again.
+    const stale =
+      t.aiAutomation?.status === 'processing' && Date.now() - new Date(t.aiAutomation.at ?? 0).getTime() > 15 * 60_000;
+    if (t.aiAutomation?.status && !stale) return null;
     tx.update(ref, { aiAutomation: { status: 'processing', at: new Date().toISOString() } });
     return { id: snap.id, ...t };
   });
@@ -351,7 +355,13 @@ export async function automateRecentTasks(limit = 6) {
   const snap = await db().collection('tasks').where('createdAt', '>=', since).get();
   const pending = snap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as Record<string, any>)
-    .filter((t) => t.category === 'request' && !t.aiAutomation && kindOf(t));
+    .filter(
+      (t) =>
+        t.category === 'request' &&
+        kindOf(t) &&
+        (!t.aiAutomation ||
+          (t.aiAutomation.status === 'processing' && Date.now() - new Date(t.aiAutomation.at ?? 0).getTime() > 15 * 60_000)),
+    );
   const results: TaskAutomationResult[] = [];
   for (const t of pending.slice(0, limit)) results.push(await automateTask(t.id));
   return { found: pending.length, processed: results.length, results };

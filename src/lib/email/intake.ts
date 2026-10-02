@@ -370,8 +370,11 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
       // One cheap look decides which of the costly steps below this email needs at all.
       // Run lazily, once, and only if one of those steps is switched on.
+      // JotForm's own confirmation copies are already handled by the JotForm page: no AI.
+      const isFormCopy = /(^|\.)jotform\.com$/i.test(message.from.split('@')[1] ?? '');
       let screened: Awaited<ReturnType<typeof screenEmail>> | null = null;
-      const screen = async () => (screened ??= await screenEmail(message));
+      const screen = async () =>
+        (screened ??= isFormCopy ? { applicationNews: false, generalNotice: false, asksForSomething: false } : await screenEmail(message));
 
       // News for everyone ("applications for this course are closed") — read from every
       // company email, identified or not, since a general notice often names no student.

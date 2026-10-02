@@ -188,23 +188,53 @@ async function affected(n: Notice, candidates: Candidate[]): Promise<Candidate[]
   return candidates.filter((_, i) => ids.has(i));
 }
 
-/** Mark matching Approved Universities rows closed / open again. */
+/**
+ * Mark the Approved Universities rows the notice is about closed / open again.
+ *
+ * Word matching alone is not safe here — "University of East London" shares "east" with
+ * East Anglia, "INTO Manchester" with Manchester. Words only shortlist the rows; the model
+ * then picks the ones that really are the same university and course, the same way
+ * affected() picks applications. Rows with no major are never matched to a course notice.
+ */
 async function updateApprovedUniversities(n: Notice, open: boolean): Promise<string[]> {
   const words = keyWords(n.university);
+  if (!words.length) return [];
   const snap = await db().collection('approved_universities').get();
-  const course = (n.course ?? '').toLowerCase();
-  const changed: string[] = [];
-  for (const d of snap.docs) {
+  const shortlist = snap.docs.filter((d) => {
     const u = d.data();
+    if (u.isAvailable === open) return false;
+    if (n.course && !String(u.major ?? '').trim()) return false;
     const name = String(u.name ?? '').toLowerCase();
-    if (!words.length || !words.every((w) => name.includes(w))) continue;
-    if (course && !String(u.major ?? '').toLowerCase().includes(course) && !course.includes(String(u.major ?? '').toLowerCase())) continue;
-    if (u.isAvailable === open) continue;
+    return words.some((w) => name.includes(w));
+  });
+  if (!shortlist.length) return [];
+  const res = await getAnthropicClient('notices').messages.create({
+    model: AI_DOC_MODEL,
+    max_tokens: 800,
+    system: MATCH_SYSTEM,
+    tools: [MATCH_TOOL],
+    messages: [
+      {
+        role: 'user',
+        content: [
+          `Notice: ${n.kind} — ${n.university}${n.course ? ` — ${n.course}` : ' (whole university)'}`,
+          `"${n.evidence}"`,
+          '',
+          'Candidates (Approved Universities rows):',
+          ...shortlist.map((d, i) => `${i}. ${d.data().name} — ${d.data().major}`),
+        ].join('\n'),
+      },
+    ],
+  });
+  const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+  const ids = new Set(((use?.input as any)?.ids ?? []) as number[]);
+  const changed: string[] = [];
+  for (const [i, d] of shortlist.entries()) {
+    if (!ids.has(i)) continue;
+    const u = d.data();
     const note = `${open ? 'Reopened' : 'Closed'} per email ${new Date().toISOString().slice(0, 10)}: ${n.summary}`;
-    await d.ref.update({
-      isAvailable: open,
-      importantNote: u.importantNote ? `${u.importantNote}\n${note}` : note,
-    });
+    const newNote = u.importantNote ? `${u.importantNote}\n${note}` : note;
+    await d.ref.update({ isAvailable: open, importantNote: newNote });
     changed.push(`${u.name} — ${u.major}`);
     await logAiAction({
       source: 'notice',
@@ -212,7 +242,13 @@ async function updateApprovedUniversities(n: Notice, open: boolean): Promise<str
       reason: n.summary,
       studentId: null,
       studentName: null,
-      undo: { type: 'approved_university', universityId: d.id, isAvailable: u.isAvailable !== false, importantNote: u.importantNote ?? null },
+      undo: {
+        type: 'approved_university',
+        universityId: d.id,
+        isAvailable: u.isAvailable !== false,
+        importantNote: u.importantNote ?? null,
+        setTo: { isAvailable: open, importantNote: newNote },
+      },
     });
   }
   return changed;
@@ -226,6 +262,11 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
   if (!isAiConfigured() || !adminDb) return [];
   try {
     if (!(await companyForAddress(message.from))) return [];
+    // A retried email (released after a later step failed) must not apply its notices twice.
+    if (!opts.dryRun && message.messageId) {
+      const seen = await db().collection(NOTICE_COLLECTION).where('messageId', '==', message.messageId).limit(1).get();
+      if (!seen.empty) return [];
+    }
     const notices = await detect(message);
     const lines: string[] = [];
     const company = (await companyForAddress(message.from))?.name ?? message.from;
@@ -255,15 +296,7 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
         if (opts.dryRun) continue;
 
         if (reject) {
-          await logAiAction({
-            source: 'notice',
-            summary: `${c.app.university}: ${c.app.status} → Rejected (notice from ${company})`,
-            reason: `${n.summary} — "${n.evidence}"`,
-            studentId: c.studentId,
-            studentName: c.studentName,
-            undo: { type: 'app_status', university: c.app.university, major: c.app.major, from: c.app.status, to: 'Rejected', rejectionReason: c.app.rejectionReason ?? null },
-          });
-          await updateApplicationStatus(
+          const result = await updateApplicationStatus(
             c.studentId,
             c.app.university,
             c.app.major,
@@ -272,6 +305,16 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
             c.employeeId,
             `${company}: ${n.summary}`.slice(0, 200),
           );
+          if (result.success) {
+            await logAiAction({
+              source: 'notice',
+              summary: `${c.app.university}: ${c.app.status} → Rejected (notice from ${company})`,
+              reason: `${n.summary} — "${n.evidence}"`,
+              studentId: c.studentId,
+              studentName: c.studentName,
+              undo: { type: 'app_status', university: c.app.university, major: c.app.major, from: c.app.status, to: 'Rejected', rejectionReason: c.app.rejectionReason ?? null },
+            });
+          }
         }
         await db()
           .collection('students')
