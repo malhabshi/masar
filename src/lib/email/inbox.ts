@@ -124,6 +124,71 @@ export type MessageHeader = {
  * Used to decide what is worth downloading in full. Mail stays unread, so this list
  * repeats each run — which is exactly why the expensive fetch is deferred.
  */
+/**
+ * Every unread message in the inbox that the system has not labelled yet, newest first.
+ *
+ * Handled mail stays unread on purpose (unread is staff's to-do signal), so searching
+ * for unread alone would put already-handled mail in front of older unhandled mail, and
+ * the older mail would never be reached. Gmail's own search excludes what carries the
+ * masar/filed label; if that search is unavailable, all unread is returned and the
+ * Firestore claims (isAlreadyHandled) remain the filter.
+ */
+export async function listUnhandledUnreadUids(): Promise<number[]> {
+  const config = imapConfig();
+  if (!config) throw new Error('Inbox is not configured (SMTP_USER / SMTP_PASSWORD).');
+  const client = new ImapFlow(config);
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const label = INTAKE_LABELS.filed.replace(/\//g, '-');
+      let uids: number[] | false = false;
+      try {
+        uids = (await client.search({ gmraw: `is:unread -label:${label}` } as any, { uid: true })) || false;
+      } catch {
+        uids = false;
+      }
+      if (!uids) uids = (await client.search({ seen: false }, { uid: true })) || [];
+      return [...uids].sort((a, b) => b - a);
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
+/** Envelopes for the given messages, in the order given. */
+export async function fetchHeadersForUids(uids: number[]): Promise<MessageHeader[]> {
+  if (!uids.length) return [];
+  const config = imapConfig();
+  if (!config) throw new Error('Inbox is not configured (SMTP_USER / SMTP_PASSWORD).');
+  const client = new ImapFlow(config);
+  const byUid = new Map<number, MessageHeader>();
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      for await (const msg of client.fetch(uids.join(','), { envelope: true }, { uid: true })) {
+        const addr = msg.envelope?.from?.[0];
+        byUid.set(msg.uid, {
+          uid: msg.uid,
+          messageId: msg.envelope?.messageId ?? null,
+          from: addr?.address ?? '',
+          fromName: addr?.name ?? '',
+          subject: msg.envelope?.subject ?? '',
+          date: new Date(msg.envelope?.date ?? Date.now()).toISOString(),
+        });
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+  return uids.map((u) => byUid.get(u)).filter((h): h is MessageHeader => !!h);
+}
+
 export async function fetchUnreadHeaders(limit = 50): Promise<MessageHeader[]> {
   const config = imapConfig();
   if (!config) throw new Error('Inbox is not configured (SMTP_USER / SMTP_PASSWORD).');

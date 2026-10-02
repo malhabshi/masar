@@ -50,6 +50,8 @@ export interface Document {
   isNew?: boolean;
   viewedBy?: string[]; // User IDs who have viewed/downloaded this document
   note?: string;
+  /** SHA-256 of the file bytes — how a re-sent file is recognised as the same one. */
+  sha256?: string;
 }
 
 export type PipelineStatus = 'green' | 'yellow' | 'orange' | 'red' | 'black' | 'none';

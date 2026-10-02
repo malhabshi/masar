@@ -9,11 +9,12 @@
 // between two people — a passport on the wrong profile is a quiet, expensive error.
 
 import { adminDb, storage } from '@/lib/firebase/admin';
-import { uploadStudentDocument } from '@/lib/documents/upload';
+import { findIdenticalDocument, uploadStudentDocument } from '@/lib/documents/upload';
 import {
   applyLabel,
+  fetchHeadersForUids,
   fetchMessageByUid,
-  fetchUnreadHeaders,
+  listUnhandledUnreadUids,
   INTAKE_LABELS,
   isInboxConfigured,
   markMessageSeen,
@@ -200,6 +201,10 @@ async function queueForReview(
       url: await stashAttachment(att, key),
     })),
   );
+  // A queue item without its file would later be "resolved" with nothing to file. Fail
+  // instead: the caller releases the claim and the email is retried on the next run.
+  const missing = stashed.filter((a) => !a.url).map((a) => a.filename);
+  if (missing.length) throw new Error(`Could not store ${missing.join(', ')} for review.`);
 
   await adminDb.collection(INTAKE_QUEUE_COLLECTION).add({
     status: 'pending',
@@ -259,11 +264,14 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     return result;
   }
 
-  // Phase 1 — envelopes only. Mail is left unread, so this list repeats every run;
-  // downloading every attachment each time would be wasteful.
-  let headers: Awaited<ReturnType<typeof fetchUnreadHeaders>>;
+  // Phase 1 — which messages to look at. Unread mail the system has not labelled yet,
+  // newest first. Handled mail stays unread for staff, so a plain "unread" list would
+  // keep putting handled mail in front of older unhandled mail and the older mail would
+  // never be reached; the label search leaves it out, and the claims below catch anything
+  // whose label failed to apply.
+  let uids: number[];
   try {
-    headers = await fetchUnreadHeaders(Math.max((options.limit ?? 20) * 3, 50));
+    uids = await listUnhandledUnreadUids();
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     await log({ status: 'error', reason });
@@ -272,35 +280,36 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     return result;
   }
 
-  if (headers.length === 0) {
+  if (uids.length === 0) {
     await runFulfilment(result);
     return result;
   }
 
   const mailbox = (process.env.SMTP_USER ?? '').toLowerCase();
+  const limit = options.limit ?? 20;
 
-  // Phase 2a — tidy our own mail across the WHOLE unread list, before any limit applies.
-  //
-  // Receipts are ours and must never sit in the unread count, which is the signal staff
-  // rely on. This runs over every header rather than stopping at the processing limit;
-  // doing it inside the limited loop below left older receipts unread indefinitely.
-  const ours = mailbox ? headers.filter((h) => h.from.toLowerCase() === mailbox) : [];
-  for (const head of ours) await markMessageSeen(head.uid);
-
-  // Phase 2b — download in full only what has not been handled before, up to the limit.
+  // Phase 2 — walk the list a page of envelopes at a time until `limit` unhandled
+  // messages are found or the list ends; download in full only those.
   const messages: InboxMessage[] = [];
-  const candidates = headers.filter((h) => !mailbox || h.from.toLowerCase() !== mailbox);
-  for (const head of candidates) {
-    if (messages.length >= (options.limit ?? 20)) break;
+  for (let i = 0; i < uids.length && messages.length < limit; i += 50) {
+    const page = await fetchHeadersForUids(uids.slice(i, i + 50));
+    for (const head of page) {
+      // Our own receipts must never sit in the unread count staff rely on.
+      if (mailbox && head.from.toLowerCase() === mailbox) {
+        await markMessageSeen(head.uid);
+        continue;
+      }
+      if (messages.length >= limit) break;
 
-    // Already dealt with in an earlier run — skip without downloading attachments.
-    if (await isAlreadyHandled(head.messageId, head.uid)) continue;
+      // Already dealt with in an earlier run — skip without downloading attachments.
+      if (await isAlreadyHandled(head.messageId, head.uid)) continue;
 
-    try {
-      const full = await fetchMessageByUid(head.uid);
-      if (full) messages.push(full);
-    } catch (e) {
-      console.error('[email-intake] Could not download message', head.uid, e);
+      try {
+        const full = await fetchMessageByUid(head.uid);
+        if (full) messages.push(full);
+      } catch (e) {
+        console.error('[email-intake] Could not download message', head.uid, e);
+      }
     }
   }
 
@@ -313,298 +322,308 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
   const students = await loadStudentNames();
 
   for (const message of messages) {
-    result.processed++;
-    const attachmentNames = message.attachments.map((a) => a.filename);
+    // Once a message is claimed it counts as handled forever, so anything that fails
+    // after the claim must give it back — otherwise it is never retried.
+    let claimed = false;
+    try {
+      result.processed++;
+      const attachmentNames = message.attachments.map((a) => a.filename);
 
-    // Search the sender's display name, the subject and the body together.
-    const searchText = [message.fromName, message.subject, message.text].filter(Boolean).join(' \n ');
-    const match = matchStudentByName(searchText, students);
+      // Search the sender's display name, the subject and the body together.
+      const searchText = [message.fromName, message.subject, message.text].filter(Boolean).join(' \n ');
+      const match = matchStudentByName(searchText, students);
 
-    // Test restriction: anything that is not the chosen student is left completely
-    // untouched — including its unread flag — so a trial run consumes nothing else.
-    if (settings.restrictToStudentId) {
-      const isTarget = match.kind === 'matched' && match.student.id === settings.restrictToStudentId;
-      if (!isTarget) {
+      // Test restriction: anything that is not the chosen student is left completely
+      // untouched — including its unread flag — so a trial run consumes nothing else.
+      if (settings.restrictToStudentId) {
+        const isTarget = match.kind === 'matched' && match.student.id === settings.restrictToStudentId;
+        if (!isTarget) {
+          result.skipped++;
+          result.items.push({
+            subject: message.subject,
+            from: message.from,
+            status: 'pending_review',
+            reason: `Skipped — test mode is limited to ${settings.restrictToStudentName ?? 'one student'}. Left unread.`,
+            attachments: attachmentNames,
+          });
+          continue;
+        }
+      }
+
+      // Only claim once we know we are going to act on it — a message skipped by test mode
+      // must stay claimable for the real run later.
+      if (!(await claimMessage(message.messageId, message.uid))) {
         result.skipped++;
         result.items.push({
           subject: message.subject,
           from: message.from,
           status: 'pending_review',
-          reason: `Skipped — test mode is limited to ${settings.restrictToStudentName ?? 'one student'}. Left unread.`,
+          reason: 'Already processed in an earlier run — skipped to avoid a duplicate.',
           attachments: attachmentNames,
         });
         continue;
       }
-    }
+      claimed = true;
 
-    // Only claim once we know we are going to act on it — a message skipped by test mode
-    // must stay claimable for the real run later.
-    if (!(await claimMessage(message.messageId, message.uid))) {
-      result.skipped++;
-      result.items.push({
-        subject: message.subject,
-        from: message.from,
-        status: 'pending_review',
-        reason: 'Already processed in an earlier run — skipped to avoid a duplicate.',
-        attachments: attachmentNames,
-      });
-      continue;
-    }
+      // News for everyone ("applications for this course are closed") — read from every
+      // company email, identified or not, since a general notice often names no student.
+      // Skipped in test mode: it would act on students outside the test.
+      const noticeLines =
+        settings.reactToNotices && !settings.restrictToStudentId ? await handleCompanyNotices(message) : [];
 
-    // News for everyone ("applications for this course are closed") — read from every
-    // company email, identified or not, since a general notice often names no student.
-    // Skipped in test mode: it would act on students outside the test.
-    const noticeLines =
-      settings.reactToNotices && !settings.restrictToStudentId ? await handleCompanyNotices(message) : [];
+      if (match.kind !== 'matched') {
+        const reason =
+          match.kind === 'ambiguous'
+            ? `Name matched ${match.candidates.length} students — needs a human to choose.`
+            : 'No student name found in the email.';
 
-    if (match.kind !== 'matched') {
-      const reason =
-        match.kind === 'ambiguous'
-          ? `Name matched ${match.candidates.length} students — needs a human to choose.`
-          : 'No student name found in the email.';
+        // An unidentified email carrying a document must never be dropped. An unidentified
+        // email with no attachment is usually a newsletter or spam, so it is logged and
+        // marked read rather than filling the review queue.
+        if (message.attachments.length === 0) {
+          await replyWithReceipt(message, { kind: 'skipped', reason, notices: noticeLines });
+          await applyLabel(message.uid, INTAKE_LABELS.noAction);
+          result.skipped++;
+          await log({ status: 'skipped', reason, from: message.from, subject: message.subject });
+          result.items.push({
+            subject: message.subject,
+            from: message.from,
+            status: 'pending_review',
+            reason: `${reason} No attachment, so it was skipped rather than queued.`,
+            attachments: [],
+          });
+          continue;
+        }
 
-      // An unidentified email carrying a document must never be dropped. An unidentified
-      // email with no attachment is usually a newsletter or spam, so it is logged and
-      // marked read rather than filling the review queue.
-      if (message.attachments.length === 0) {
-        await replyWithReceipt(message, { kind: 'skipped', reason, notices: noticeLines });
-        await applyLabel(message.uid, INTAKE_LABELS.noAction);
-        result.skipped++;
-        await log({ status: 'skipped', reason, from: message.from, subject: message.subject });
+        const candidates = match.kind === 'ambiguous'
+          ? match.candidates.map((c) => ({ id: c.id, name: c.name }))
+          : [];
+        await queueForReview(message, reason, candidates);
+        await replyWithReceipt(message, { kind: 'queued', reason, attachments: attachmentNames, notices: noticeLines });
+        await applyLabel(message.uid, INTAKE_LABELS.review);
+        result.queued++;
         result.items.push({
           subject: message.subject,
           from: message.from,
           status: 'pending_review',
-          reason: `${reason} No attachment, so it was skipped rather than queued.`,
-          attachments: [],
+          reason,
+          attachments: attachmentNames,
         });
         continue;
       }
 
-      const candidates = match.kind === 'ambiguous'
-        ? match.candidates.map((c) => ({ id: c.id, name: c.name }))
-        : [];
-      await queueForReview(message, reason, candidates);
-      await replyWithReceipt(message, { kind: 'queued', reason, attachments: attachmentNames, notices: noticeLines });
-      await applyLabel(message.uid, INTAKE_LABELS.review);
-      result.queued++;
-      result.items.push({
-        subject: message.subject,
-        from: message.from,
-        status: 'pending_review',
-        reason,
-        attachments: attachmentNames,
-      });
-      continue;
-    }
+      // Exactly one student — file every attachment onto their profile.
+      let allOk = true;
+      let lastError: string | undefined;
+      const filedNames: string[] = [];
+      const versionNotes: string[] = [];
+      const existingDocs = await getStudentDocuments(match.student.id);
+      for (const att of message.attachments) {
+        // Attachments arrive named "WhatsApp Image 2026-09-01 at 12.12.26 AM.jpeg"; work
+        // out what the document actually is. The original filename is kept on the record.
+        const named = settings.aiRenameDocuments
+          ? await nameDocument({
+              filename: att.filename,
+              contentType: att.contentType,
+              subject: message.subject,
+              body: message.text,
+            })
+          : { name: att.filename.replace(/\.[^.]+$/, ''), source: 'fallback' as const };
+        filedNames.push(named.name);
 
-    // Exactly one student — file every attachment onto their profile.
-    let allOk = true;
-    let lastError: string | undefined;
-    const filedNames: string[] = [];
-    const versionNotes: string[] = [];
-    const existingDocs = await getStudentDocuments(match.student.id);
-    for (const att of message.attachments) {
-      // Attachments arrive named "WhatsApp Image 2026-09-01 at 12.12.26 AM.jpeg"; work
-      // out what the document actually is. The original filename is kept on the record.
-      const named = settings.aiRenameDocuments
-        ? await nameDocument({
-            filename: att.filename,
-            contentType: att.contentType,
-            subject: message.subject,
-            body: message.text,
-          })
-        : { name: att.filename.replace(/\.[^.]+$/, ''), source: 'fallback' as const };
-      filedNames.push(named.name);
+        // Does this supersede something already on file? An offer letter can be reissued
+        // with different conditions, and staff must not keep working from the old one.
+        const identical = await findIdenticalDocument(existingDocs, att.content, att.filename);
+        const superseded = identical ? null : findSupersededDocument(existingDocs, named.name);
 
-      // Does this supersede something already on file? An offer letter can be reissued
-      // with different conditions, and staff must not keep working from the old one.
-      const identical = existingDocs.find(
-        (d) => d.originalName === att.filename && d.size === att.content.length,
-      );
-      const superseded = identical ? null : findSupersededDocument(existingDocs, named.name);
+        if (identical) {
+          versionNotes.push(
+            `ℹ️ *${named.name}* is byte-identical to the copy already on file from ` +
+              `${String(identical.uploadedAt).slice(0, 10)} — nothing new to review.`,
+          );
+        } else if (superseded) {
+          const newText = await extractPdfText(att.content, att.contentType);
+          const oldText = await fetchDocumentText(superseded);
+          const comparison = await compareDocumentVersions({
+            documentName: named.name,
+            oldText,
+            newText,
+          });
+          const when = String(superseded.uploadedAt).slice(0, 10);
+          if (comparison.changed) {
+            versionNotes.push(
+              `⚠️ *${named.name}* is a NEW VERSION of the one on file from ${when}. What changed:\n${comparison.summary}`,
+            );
+          } else if (comparison.comparable) {
+            versionNotes.push(
+              `ℹ️ *${named.name}* matches the version already on file from ${when} — ${comparison.summary}`,
+            );
+          } else {
+            versionNotes.push(
+              `⚠️ *${named.name}* looks like another version of the one from ${when}, but ${comparison.summary}`,
+            );
+          }
+        }
 
-      if (identical) {
-        versionNotes.push(
-          `ℹ️ *${named.name}* is byte-identical to the copy already on file from ` +
-            `${String(identical.uploadedAt).slice(0, 10)} — nothing new to review.`,
-        );
-      } else if (superseded) {
-        const newText = await extractPdfText(att.content, att.contentType);
-        const oldText = await fetchDocumentText(superseded);
-        const comparison = await compareDocumentVersions({
-          documentName: named.name,
-          oldText,
-          newText,
+        const upload = await uploadStudentDocument({
+          studentId: match.student.id,
+          filename: att.filename,
+          customName: named.name,
+          content: att.content,
+          contentType: att.contentType,
+          note: emailDocumentNote(message.from, message.subject),
+          section: 'admin',
+          uploaderId: EMAIL_INTAKE_USER_ID,
+          // The same offer letter is often re-sent, or already saved by hand.
+          skipIfDuplicate: true,
+          notify: true,
         });
-        const when = String(superseded.uploadedAt).slice(0, 10);
-        if (comparison.changed) {
-          versionNotes.push(
-            `⚠️ *${named.name}* is a NEW VERSION of the one on file from ${when}. What changed:\n${comparison.summary}`,
-          );
-        } else if (comparison.comparable) {
-          versionNotes.push(
-            `ℹ️ *${named.name}* matches the version already on file from ${when} — ${comparison.summary}`,
-          );
-        } else {
-          versionNotes.push(
-            `⚠️ *${named.name}* looks like another version of the one from ${when}, but ${comparison.summary}`,
-          );
+        if (!upload.success) {
+          allOk = false;
+          lastError = upload.error;
+        } else if ('skipped' in upload) {
+          // Already on the profile — say so in the chat note instead of silently dropping it.
+          filedNames[filedNames.length - 1] = `${named.name} (already on file)`;
         }
       }
 
-      const upload = await uploadStudentDocument({
-        studentId: match.student.id,
-        filename: att.filename,
-        customName: named.name,
-        content: att.content,
-        contentType: att.contentType,
-        note: emailDocumentNote(message.from, message.subject),
-        section: 'admin',
-        uploaderId: EMAIL_INTAKE_USER_ID,
-        // The same offer letter is often re-sent, or already saved by hand.
-        skipIfDuplicate: true,
-        notify: true,
-      });
-      if (!upload.success) {
-        allOk = false;
-        lastError = upload.error;
-      } else if ('skipped' in upload) {
-        // Already on the profile — say so in the chat note instead of silently dropping it.
-        filedNames[filedNames.length - 1] = `${named.name} (already on file)`;
-      }
-    }
+      if (allOk) {
+        // What does the email ask for? Each ask becomes a Missing Item; asks that need an
+        // answer are remembered so a reply can be drafted once they are on the profile.
+        let requestLines: string[] = [];
+        if (settings.draftReplies) {
+          const analysis = await analyseEmail({
+            subject: message.subject,
+            from: message.from,
+            fromName: message.fromName,
+            body: message.text,
+            attachmentNames,
+            studentName: match.student.name,
+            openMissingItems: await getOpenMissingItemTexts(match.student.id),
+          });
+          if (analysis) {
+            const recorded = await recordEmailRequests({
+              message,
+              studentId: match.student.id,
+              studentName: match.student.name,
+              analysis,
+            }).catch((e) => {
+              console.error('[email-intake] could not record requests:', e);
+              return { requestId: null, chatLines: [] as string[] };
+            });
+            requestLines = recorded.chatLines;
+          }
+        }
 
-    if (allOk) {
-      // What does the email ask for? Each ask becomes a Missing Item; asks that need an
-      // answer are remembered so a reply can be drafted once they are on the profile.
-      let requestLines: string[] = [];
-      if (settings.draftReplies) {
-        const analysis = await analyseEmail({
+        // What does the email mean for the student's applications? An offer → Accepted,
+        // "application received" → Submitted, and so on, under the agency's rules.
+        let statusLines: string[] = [];
+        if (settings.autoApplicationStatus) {
+          statusLines = statusChangeLines(
+            await updateApplicationsFromEmail({ message, studentId: match.student.id }),
+          );
+        }
+
+        // Keep it in the student's email memory, so the AI knows the whole story later.
+        await rememberEmail({
+          studentId: match.student.id,
+          studentName: match.student.name,
+          direction: 'in',
+          date: message.date,
+          from: message.fromName ? `${message.fromName} <${message.from}>` : message.from,
+          to: process.env.SMTP_USER ?? '',
           subject: message.subject,
+          messageId: message.messageId,
+          body: message.text,
+          attachments: attachmentNames,
+        });
+
+        // Announce it in the student's internal chat so the employee, the admins and the
+        // relevant department are all notified — this is how staff find out at all.
+        const employeeCivilId = await getStudentEmployeeCivilId(match.student.id);
+        const announcement = await announceEmailInChat({
+          studentId: match.student.id,
+          employeeCivilId,
           from: message.from,
           fromName: message.fromName,
+          subject: message.subject,
           body: message.text,
-          attachmentNames,
-          studentName: match.student.name,
-          openMissingItems: await getOpenMissingItemTexts(match.student.id),
+          filedAttachments: filedNames,
+          versionNotes,
+          requestNotes: [...noticeLines, ...statusLines, ...requestLines],
         });
-        if (analysis) {
-          const recorded = await recordEmailRequests({
-            message,
-            studentId: match.student.id,
-            studentName: match.student.name,
-            analysis,
-          }).catch((e) => {
-            console.error('[email-intake] could not record requests:', e);
-            return { requestId: null, chatLines: [] as string[] };
-          });
-          requestLines = recorded.chatLines;
-        }
+
+        await replyWithReceipt(message, {
+          kind: 'filed',
+          studentId: match.student.id,
+          studentName: match.student.name,
+          documents: filedNames,
+          versionNotes,
+          requestNotes: requestLines,
+          statusNotes: statusLines,
+          notices: noticeLines,
+          chatPosted: announcement.posted,
+          chatRecipients: announcement.recipients ?? [],
+        });
+
+        await applyLabel(message.uid, INTAKE_LABELS.filed);
+        result.filed++;
+        result.notified += announcement.posted ? 1 : 0;
+        result.items.push({
+          subject: message.subject,
+          from: message.from,
+          status: 'filed',
+          studentId: match.student.id,
+          studentName: match.student.name,
+          // Show the names staff will actually see, with the original in brackets.
+          attachments: filedNames.map((n, i) => `${n}  (was: ${attachmentNames[i]})`),
+          chatPosted: announcement.posted,
+          chatError: announcement.error,
+        });
+        await log({
+          status: 'filed',
+          studentId: match.student.id,
+          studentName: match.student.name,
+          from: message.from,
+          subject: message.subject,
+          attachments: attachmentNames,
+          chatPosted: announcement.posted,
+          chatRecipients: announcement.recipients ?? null,
+          chatContent: announcement.content ?? null,
+          chatError: announcement.error ?? null,
+        });
+      } else {
+        // Upload failed: release the claim and apply no label, so the next run retries it.
+        await releaseClaim(message.messageId, message.uid);
+        await replyWithReceipt(message, {
+          kind: 'failed',
+          reason: lastError ?? 'unknown error',
+          studentName: match.student.name,
+        });
+        result.failed++;
+        result.items.push({
+          subject: message.subject,
+          from: message.from,
+          status: 'failed',
+          reason: lastError,
+          studentId: match.student.id,
+          studentName: match.student.name,
+          attachments: attachmentNames,
+        });
+        await log({
+          status: 'failed',
+          studentId: match.student.id,
+          from: message.from,
+          subject: message.subject,
+          reason: lastError,
+        });
       }
-
-      // What does the email mean for the student's applications? An offer → Accepted,
-      // "application received" → Submitted, and so on, under the agency's rules.
-      let statusLines: string[] = [];
-      if (settings.autoApplicationStatus) {
-        statusLines = statusChangeLines(
-          await updateApplicationsFromEmail({ message, studentId: match.student.id }),
-        );
-      }
-
-      // Keep it in the student's email memory, so the AI knows the whole story later.
-      await rememberEmail({
-        studentId: match.student.id,
-        studentName: match.student.name,
-        direction: 'in',
-        date: message.date,
-        from: message.fromName ? `${message.fromName} <${message.from}>` : message.from,
-        to: process.env.SMTP_USER ?? '',
-        subject: message.subject,
-        messageId: message.messageId,
-        body: message.text,
-        attachments: attachmentNames,
-      });
-
-      // Announce it in the student's internal chat so the employee, the admins and the
-      // relevant department are all notified — this is how staff find out at all.
-      const employeeCivilId = await getStudentEmployeeCivilId(match.student.id);
-      const announcement = await announceEmailInChat({
-        studentId: match.student.id,
-        employeeCivilId,
-        from: message.from,
-        fromName: message.fromName,
-        subject: message.subject,
-        body: message.text,
-        filedAttachments: filedNames,
-        versionNotes,
-        requestNotes: [...noticeLines, ...statusLines, ...requestLines],
-      });
-
-      await replyWithReceipt(message, {
-        kind: 'filed',
-        studentId: match.student.id,
-        studentName: match.student.name,
-        documents: filedNames,
-        versionNotes,
-        requestNotes: requestLines,
-        statusNotes: statusLines,
-        notices: noticeLines,
-        chatPosted: announcement.posted,
-        chatRecipients: announcement.recipients ?? [],
-      });
-
-      await applyLabel(message.uid, INTAKE_LABELS.filed);
-      result.filed++;
-      result.notified += announcement.posted ? 1 : 0;
-      result.items.push({
-        subject: message.subject,
-        from: message.from,
-        status: 'filed',
-        studentId: match.student.id,
-        studentName: match.student.name,
-        // Show the names staff will actually see, with the original in brackets.
-        attachments: filedNames.map((n, i) => `${n}  (was: ${attachmentNames[i]})`),
-        chatPosted: announcement.posted,
-        chatError: announcement.error,
-      });
-      await log({
-        status: 'filed',
-        studentId: match.student.id,
-        studentName: match.student.name,
-        from: message.from,
-        subject: message.subject,
-        attachments: attachmentNames,
-        chatPosted: announcement.posted,
-        chatRecipients: announcement.recipients ?? null,
-        chatContent: announcement.content ?? null,
-        chatError: announcement.error ?? null,
-      });
-    } else {
-      // Upload failed: release the claim and apply no label, so the next run retries it.
-      await releaseClaim(message.messageId, message.uid);
-      await replyWithReceipt(message, {
-        kind: 'failed',
-        reason: lastError ?? 'unknown error',
-        studentName: match.student.name,
-      });
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      if (claimed) await releaseClaim(message.messageId, message.uid).catch(() => undefined);
       result.failed++;
-      result.items.push({
-        subject: message.subject,
-        from: message.from,
-        status: 'failed',
-        reason: lastError,
-        studentId: match.student.id,
-        studentName: match.student.name,
-        attachments: attachmentNames,
-      });
-      await log({
-        status: 'failed',
-        studentId: match.student.id,
-        from: message.from,
-        subject: message.subject,
-        reason: lastError,
-      });
+      result.items.push({ subject: message.subject, from: message.from, status: 'failed', reason, attachments: message.attachments.map((a) => a.filename) });
+      await log({ status: 'failed', from: message.from, subject: message.subject, reason: `${reason} — will retry` });
     }
   }
 
@@ -635,6 +654,15 @@ export async function resolveQueuedItem(
   const attachments = item.attachments ?? [];
   let filed = 0;
 
+  const missing = attachments.filter((a) => !a.url).map((a) => a.filename);
+  if (missing.length) {
+    return {
+      success: false,
+      error: `${missing.join(', ')} was not stored when the email arrived — file it from the original email in Gmail.`,
+    };
+  }
+
+  const filedNames: string[] = [];
   for (const att of attachments) {
     if (!att.url) continue;
     let buffer: Buffer;
@@ -659,6 +687,7 @@ export async function resolveQueuedItem(
     });
     if (!upload.success) return { success: false, error: upload.error };
     if (!('skipped' in upload)) filed++;
+    filedNames.push('skipped' in upload ? `${att.filename} (already on file)` : att.filename);
   }
 
   // Same announcement as the automatic path, so a manually-filed document notifies the
@@ -671,7 +700,7 @@ export async function resolveQueuedItem(
     fromName: (item as { fromName?: string }).fromName,
     subject: item.subject ?? '',
     body: (item as { bodyPreview?: string }).bodyPreview ?? '',
-    filedAttachments: attachments.map((a) => a.filename),
+    filedAttachments: filedNames,
   });
 
   await ref.update({

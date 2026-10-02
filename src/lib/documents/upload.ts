@@ -6,7 +6,10 @@
 // directly and then performs the same Firestore bookkeeping the HTTP route does, so
 // documents uploaded this way show up and notify exactly like a manual upload.
 
+import { createHash, randomUUID } from 'crypto';
+import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb, storage } from '@/lib/firebase/admin';
+import { storagePathFromUrl } from '@/lib/mcp/document-tools';
 import { triggerDocumentUploadNotification } from '@/lib/actions';
 import type { Document as StudentDocument, Student } from '@/lib/types';
 
@@ -30,9 +33,10 @@ export type UploadStudentDocumentInput = {
   /** Set false to skip the WhatsApp notification (e.g. bulk backfills). */
   notify?: boolean;
   /**
-   * Skip the upload when the profile already holds a document with the same original
-   * filename and byte size. Used by email intake, where the same offer letter is often
-   * mailed more than once — or was already saved by hand.
+   * Skip the upload when the profile already holds a document with exactly the same
+   * bytes. Used by email intake, where the same offer letter is often mailed more than
+   * once — or was already saved by hand. A revised file with the same name and size is
+   * NOT a duplicate and is always saved.
    */
   skipIfDuplicate?: boolean;
 };
@@ -66,6 +70,38 @@ function guessContentType(filename: string): string {
 function sanitizeFilename(filename: string): string {
   const base = filename.split(/[/\\]/).pop() ?? 'file';
   return base.replace(/[^\w.\- ()\[\]]/g, '_').slice(0, 180) || 'file';
+}
+
+export function sha256(buffer: Buffer): string {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+/**
+ * The document on the profile with exactly these bytes, if any. Documents saved since
+ * hashes were added carry one; older ones are compared byte for byte, but only when the
+ * name and size already match, so this downloads at most a handful of files.
+ */
+export async function findIdenticalDocument(
+  documents: StudentDocument[],
+  buffer: Buffer,
+  filename: string,
+): Promise<StudentDocument | null> {
+  const hash = sha256(buffer);
+  const byHash = documents.find((d) => d.sha256 === hash);
+  if (byHash) return byHash;
+  if (!storage) return null;
+  for (const d of documents) {
+    if (d.sha256 || d.size !== buffer.length || d.originalName !== filename) continue;
+    const path = storagePathFromUrl(d.url);
+    if (!path) continue;
+    try {
+      const [bytes] = await storage.bucket().file(path).download();
+      if (bytes.equals(buffer)) return d;
+    } catch {
+      /* unreadable old file: not provably identical, so not a duplicate */
+    }
+  }
+  return null;
 }
 
 function toBuffer(content: Buffer | string): Buffer {
@@ -109,9 +145,7 @@ export async function uploadStudentDocument(
     const student = studentSnap.data() as Student;
 
     if (input.skipIfDuplicate) {
-      const existing = (student.documents || []).find(
-        (d) => d.originalName === filename && d.size === buffer.length,
-      );
+      const existing = await findIdenticalDocument(student.documents || [], buffer, filename);
       if (existing) {
         return {
           success: true,
@@ -123,7 +157,9 @@ export async function uploadStudentDocument(
     }
 
     const contentType = input.contentType || guessContentType(filename);
-    const filePath = `students/${input.studentId}/${Date.now()}_${filename}`;
+    // A random part as well as the time: two uploads of the same name in the same
+    // millisecond must not land on one storage object.
+    const filePath = `students/${input.studentId}/${Date.now()}_${randomUUID().slice(0, 8)}_${filename}`;
     const blob = storage.bucket().file(filePath);
     await blob.save(buffer, { metadata: { contentType } });
     const [url] = await blob.getSignedUrl({ action: 'read', expires: '03-09-2491' });
@@ -143,26 +179,22 @@ export async function uploadStudentDocument(
       isNew: true,
       viewedBy: [input.uploaderId],
       section,
+      sha256: sha256(buffer),
       ...(input.note ? { note: input.note } : {}),
     };
 
     // Same counter routing as /api/upload: an employee-section upload notifies admins,
     // an admin-section upload notifies the assigned employee.
-    const counterUpdate =
-      section === 'employee'
-        ? {
-            newDocumentsForAdmin: (student.newDocumentsForAdmin || 0) + 1,
-            newDocsViewedBy: [input.uploaderId],
-          }
-        : {
-            newDocumentsForEmployee: (student.newDocumentsForEmployee || 0) + 1,
-            newDocsViewedBy: [input.uploaderId],
-          };
-
+    //
+    // Appended and incremented in place rather than written back from the copy read
+    // above: two uploads to one student at the same moment would otherwise each write
+    // their own version of the list, and the second would erase the first.
+    const counterField = section === 'employee' ? 'newDocumentsForAdmin' : 'newDocumentsForEmployee';
     await studentRef.update({
-      documents: [...(student.documents || []), newDocument],
+      documents: FieldValue.arrayUnion(newDocument),
       lastActivityAt: now,
-      ...counterUpdate,
+      [counterField]: FieldValue.increment(1),
+      newDocsViewedBy: [input.uploaderId],
     });
 
     if (input.notify !== false) {
