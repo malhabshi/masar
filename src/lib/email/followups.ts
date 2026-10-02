@@ -16,7 +16,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import nodemailer from 'nodemailer';
 import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
-import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
+import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured } from './inbox';
@@ -71,7 +71,7 @@ const PICK_TOOL: Anthropic.Tool = {
 
 async function pickThreads(apps: Application[], emails: EmailMemoryEntry[]): Promise<Map<number, number>> {
   const res = await getAnthropicClient('follow-ups').messages.create({
-    model: AI_DOC_MODEL,
+    model: AI_FAST_MODEL,
     max_tokens: 800,
     system: PICK_SYSTEM,
     tools: [PICK_TOOL],

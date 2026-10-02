@@ -28,6 +28,10 @@ export type AgentRunInput = {
   maxIterations?: number;
   /** What the cost meter files this run under. Default "assistant". */
   feature?: string;
+  /** Model override. Default AI_MODEL (Opus) — the chat responder uses Sonnet. */
+  model?: string;
+  /** Extended thinking. Default on; off for short, simple jobs. */
+  thinking?: boolean;
 };
 
 export type AgentRunResult = {
@@ -120,7 +124,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     let response: Anthropic.Message;
     try {
       response = await client.messages.create({
-        model: AI_MODEL,
+        model: input.model ?? AI_MODEL,
         max_tokens: AI_MAX_TOKENS,
         // Without this only the system prefix is cached, so every iteration resends the
         // whole growing conversation — including every prior tool result — at full price,
@@ -129,7 +133,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         cache_control: { type: 'ephemeral' },
         system,
         tools,
-        thinking: { type: 'adaptive' },
+        ...(input.thinking === false ? {} : { thinking: { type: 'adaptive' as const } }),
         messages: working,
       });
     } catch (e) {

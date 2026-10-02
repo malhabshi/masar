@@ -23,7 +23,7 @@ import {
   ensureChatBotUser,
   getResponderSettings,
 } from './chat-bot';
-import { isAiConfigured } from './config';
+import { AI_DOC_MODEL, isAiConfigured } from './config';
 import { automaticAiAllowed } from './usage';
 import { countRecords } from './count';
 import { getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
@@ -437,8 +437,10 @@ function needsModel(m: ChatMessage): boolean {
   if (!text) return false;
   if (/[?؟]/.test(text)) return true;
   if (ACKNOWLEDGEMENT.test(text)) return false;
-  // Too short to carry a request. "book IELTS" (10) survives; "تم" and a bare emoji do not.
-  return text.length >= 8;
+  // Only a message that asks for something is worth a model call. A plain statement
+  // between colleagues ("sent it to Merit", "the student will come tomorrow") is not,
+  // and those are most of the chat.
+  return /\b(please|pls|plz|can you|could you|book|request|need|send)\b|ابي|ابغى|نبي|نبغى|ممكن|لو سمحت|حجز|احجز|ارسل|طلب/i.test(text);
 }
 
 /**
@@ -563,6 +565,9 @@ ${addressesBot(last) || asksForStatus(last)
       system,
       maxIterations: 8,
       feature: 'chat',
+      model: AI_DOC_MODEL,
+      // Short replies; extended thinking only added paid output tokens.
+      thinking: false,
     });
 
     const outcome: ResponderOutcome = {

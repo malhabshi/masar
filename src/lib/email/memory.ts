@@ -20,10 +20,10 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
 import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
-import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
+import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { loadStudentNames, matchStudentByName, type StudentNameRecord } from './matcher';
 import { newestMessage } from './text';
-import { playbookFor } from './companies';
+import { playbookBlock } from './companies';
 
 export const EMAIL_MEMORY_COLLECTION = 'email_memory';
 const STATE_DOC = { collection: 'app_settings', doc: 'email_memory_state' };
@@ -105,13 +105,6 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
-/** The company's playbook, when the address belongs to one we know. */
-async function companyContext(addresses: string): Promise<string> {
-  const first = addresses.match(/[\w.+-]+@[\w.-]+/)?.[0];
-  const pb = first ? await playbookFor(first) : '';
-  return pb ? `\n\n${pb}` : '';
-}
-
 async function summarise(input: {
   direction: 'in' | 'out';
   from: string;
@@ -122,9 +115,12 @@ async function summarise(input: {
   studentName: string;
 }) {
   const res = await getAnthropicClient('email-memory').messages.create({
-    model: AI_DOC_MODEL,
+    model: AI_FAST_MODEL,
     max_tokens: 600,
-    system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+    system: [
+      { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
+      ...(await playbookBlock((input.direction === 'in' ? input.from : input.to).match(/[\w.+-]+@[\w.-]+/)?.[0] ?? '')),
+    ],
     tools: [TOOL],
     messages: [
       {
@@ -138,7 +134,6 @@ async function summarise(input: {
           `Attachments: ${input.attachments.join(', ') || 'none'}`,
           '',
           newestMessage(input.body).slice(0, 5000) || '(no text)',
-          await companyContext(input.direction === 'in' ? input.from : input.to),
         ].join('\n'),
       },
     ],

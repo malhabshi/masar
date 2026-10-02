@@ -26,7 +26,7 @@ import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { updateApplicationStatus } from '@/lib/actions';
 import { extractPdfText } from './document-compare';
 import { newestMessage } from './text';
-import { playbookFor } from './companies';
+import { playbookBlock } from './companies';
 
 export { newestMessage };
 import type { InboxMessage } from './inbox';
@@ -157,7 +157,7 @@ export async function updateApplicationsFromEmail(input: {
     const res = await getAnthropicClient('email-status').messages.create({
       model: AI_DOC_MODEL,
       max_tokens: 1500,
-      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }, ...(await playbookBlock(message.from))],
       tools: [TOOL],
       messages: [
         {
@@ -173,7 +173,6 @@ export async function updateApplicationsFromEmail(input: {
             '',
             newestMessage(message.text).slice(0, 12_000),
             attachments ? `\n${attachments}` : '',
-            await playbookFor(message.from).then((pb) => (pb ? `\n\n${pb}` : '')),
           ].join('\n'),
         },
       ],

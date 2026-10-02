@@ -13,7 +13,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
-import { AI_MODEL, isAiConfigured } from '@/lib/ai/config';
+import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { getLateRules } from '@/lib/late-applications';
 import type { Application } from '@/lib/types';
 
@@ -368,9 +368,8 @@ function kuwaitClock(iso: string | null): string | null {
 
 async function review(date: string, employees: EmployeeDay[]) {
   const res = await getAnthropicClient('daily-report').messages.create({
-    model: AI_MODEL,
+    model: AI_DOC_MODEL,
     max_tokens: 6000,
-    thinking: { type: 'adaptive' },
     system: REVIEW_SYSTEM,
     tools: [REVIEW_TOOL],
     messages: [

@@ -25,7 +25,7 @@ import { storagePathFromUrl } from '@/lib/mcp/document-tools';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured, type InboxMessage } from './inbox';
 import { recentEmailLines } from './memory';
-import { playbookFor } from './companies';
+import { playbookBlock } from './companies';
 import { replyWithReceipt } from './reply-receipt';
 import { logAiAction } from '@/lib/ai/action-log';
 
@@ -148,7 +148,7 @@ export async function analyseEmail(input: {
     const res = await getAnthropicClient('email-requests').messages.create({
       model: AI_DOC_MODEL,
       max_tokens: 2000,
-      system: [{ type: 'text', text: ANALYSE_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: ANALYSE_SYSTEM, cache_control: { type: 'ephemeral' } }, ...(await playbookBlock(input.from))],
       tools: [ANALYSE_TOOL],
       messages: [
         {
@@ -161,7 +161,6 @@ export async function analyseEmail(input: {
             `Attachments: ${input.attachmentNames.join(', ') || 'none'}`,
             '',
             input.body.slice(0, 15_000),
-            await playbookFor(input.from).then((pb) => (pb ? `\n\n${pb}` : '')),
           ].join('\n'),
         },
       ],
@@ -388,7 +387,7 @@ async function writeDraftBody(input: {
   const res = await getAnthropicClient('email-requests').messages.create({
     model: AI_DOC_MODEL,
     max_tokens: 800,
-    system: DRAFT_SYSTEM,
+    system: [{ type: 'text', text: DRAFT_SYSTEM, cache_control: { type: 'ephemeral' } }, ...(await playbookBlock(input.request.replyTo))],
     messages: [
       {
         role: 'user',
@@ -411,7 +410,6 @@ async function writeDraftBody(input: {
           '',
           'Student record (for information answers):',
           input.studentRecord,
-          await playbookFor(input.request.replyTo).then((pb) => (pb ? `\n${pb}` : '')),
         ].join('\n'),
       },
     ],

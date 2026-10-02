@@ -8,7 +8,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient } from '@/lib/ai/client';
-import { AI_MODEL, isAiConfigured } from '@/lib/ai/config';
+import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
 import type { Document as StudentDocument } from '@/lib/types';
 
 /** Extract text from a PDF. Returns null for non-PDFs or unreadable files. */
@@ -107,7 +107,7 @@ export async function compareDocumentVersions(input: {
   try {
     const client = getAnthropicClient('email-versions');
     const response = await client.messages.create({
-      model: AI_MODEL,
+      model: AI_DOC_MODEL,
       max_tokens: 500,
       system: COMPARE_SYSTEM,
       messages: [

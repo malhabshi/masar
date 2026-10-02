@@ -10,7 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient } from '@/lib/ai/client';
-import { AI_MODEL, isAiConfigured } from '@/lib/ai/config';
+import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
 
 const SYSTEM = `You name documents for a Kuwaiti study-abroad agency's student files.
 
@@ -63,7 +63,7 @@ export async function nameDocument(input: {
   try {
     const client = getAnthropicClient('email-naming');
     const response = await client.messages.create({
-      model: AI_MODEL,
+      model: AI_FAST_MODEL,
       max_tokens: 100,
       system: SYSTEM,
       messages: [

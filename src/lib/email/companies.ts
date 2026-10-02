@@ -71,6 +71,16 @@ function blank(c: Company): CompanyProfile {
 }
 
 /** Every company: those saved by the team, plus defaults never saved. Removed ones excluded. */
+/**
+ * The playbook as a cached system block. It is the same few thousand tokens for every
+ * email from that company, so after the first one it is billed at the cached rate
+ * (about a tenth) instead of in full every time.
+ */
+export async function playbookBlock(address: string): Promise<Anthropic.TextBlockParam[]> {
+  const text = await playbookFor(address);
+  return text ? [{ type: 'text', text, cache_control: { type: 'ephemeral' } }] : [];
+}
+
 export async function listCompanyProfiles(): Promise<CompanyProfile[]> {
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.list;
   const snap = await db().collection(COMPANY_COLLECTION).get();

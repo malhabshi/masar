@@ -8,6 +8,11 @@ export const AI_MODEL = 'claude-opus-5';
 // result at a time, thousands of them — so it runs on a smaller model than the assistant.
 export const AI_DOC_MODEL = 'claude-sonnet-5-5';
 
+// Simple, high-volume jobs where a small model does as well: one-line email summaries,
+// naming files, choosing a thread, and the cheap first look at every email that decides
+// whether the Sonnet steps are needed at all. About a third of Sonnet's price.
+export const AI_FAST_MODEL = 'claude-haiku-4-5-20251001';
+
 // Per-turn output cap. Each loop iteration is short (a sentence + some tool calls),
 // so this is generous headroom rather than a target.
 export const AI_MAX_TOKENS = 16000;

@@ -35,6 +35,8 @@ import { replyWithReceipt } from './reply-receipt';
 import { statusChangeLines, updateApplicationsFromEmail } from './application-status';
 import { rememberEmail, syncSentMail } from './memory';
 import { handleCompanyNotices } from './notices';
+import { screenEmail } from './screen';
+import { companyForAddress } from './companies';
 import { logAiAction } from '@/lib/ai/action-log';
 import {
   analyseEmail,
@@ -366,11 +368,21 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       }
       claimed = true;
 
+      // One cheap look decides which of the costly steps below this email needs at all.
+      // Run lazily, once, and only if one of those steps is switched on.
+      let screened: Awaited<ReturnType<typeof screenEmail>> | null = null;
+      const screen = async () => (screened ??= await screenEmail(message));
+
       // News for everyone ("applications for this course are closed") — read from every
       // company email, identified or not, since a general notice often names no student.
       // Skipped in test mode: it would act on students outside the test.
       const noticeLines =
-        settings.reactToNotices && !settings.restrictToStudentId ? await handleCompanyNotices(message) : [];
+        settings.reactToNotices &&
+        !settings.restrictToStudentId &&
+        (await companyForAddress(message.from)) &&
+        (await screen()).generalNotice
+          ? await handleCompanyNotices(message)
+          : [];
 
       if (match.kind !== 'matched') {
         const reason =
@@ -492,7 +504,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         // What does the email ask for? Each ask becomes a Missing Item; asks that need an
         // answer are remembered so a reply can be drafted once they are on the profile.
         let requestLines: string[] = [];
-        if (settings.draftReplies) {
+        if (settings.draftReplies && (await screen()).asksForSomething) {
           const analysis = await analyseEmail({
             subject: message.subject,
             from: message.from,
@@ -519,7 +531,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         // What does the email mean for the student's applications? An offer → Accepted,
         // "application received" → Submitted, and so on, under the agency's rules.
         let statusLines: string[] = [];
-        if (settings.autoApplicationStatus) {
+        if (settings.autoApplicationStatus && (await screen()).applicationNews) {
           statusLines = statusChangeLines(
             await updateApplicationsFromEmail({ message, studentId: match.student.id }),
           );

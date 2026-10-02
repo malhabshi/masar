@@ -12,7 +12,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { sendChatMessage } from '@/lib/actions';
 import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
 import { getAnthropicClient } from '@/lib/ai/client';
-import { AI_MODEL, isAiConfigured } from '@/lib/ai/config';
+import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
 
 /** Look up the user id of the employee assigned to a student, given their civil ID. */
 export async function findEmployeeUserIdByCivilId(civilId?: string | null): Promise<string | null> {
@@ -63,7 +63,7 @@ async function summarise(subject: string, body: string): Promise<EmailSummary> {
   try {
     const client = getAnthropicClient('email-chat-note');
     const response = await client.messages.create({
-      model: AI_MODEL,
+      model: AI_FAST_MODEL,
       max_tokens: 400,
       system: SUMMARY_SYSTEM,
       messages: [

@@ -359,6 +359,7 @@ const FEATURE_LABELS: Record<string, string> = {
   documents: 'Reading documents',
   passport: 'JotForm passport reader',
   requests: 'Requests (add schools / update emails)',
+  'email-screen': 'Email first look (cheap)',
   'email-status': 'Email → application status',
   'email-requests': 'Email requests & reply drafts',
   'email-memory': 'Email memory',

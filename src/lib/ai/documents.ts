@@ -32,8 +32,12 @@ const MAX_IMAGE_BYTES = 3_700_000;
 const MAX_PDF_BYTES = 20_000_000;
 /** Below this much extracted text a PDF is a scan, and the page itself is sent instead. */
 const MIN_TEXT_CHARS = 200;
-/** Offer letters can run long; the facts are on the first pages. */
-const MAX_TEXT_CHARS = 40_000;
+/** Offer letters can run long; the facts are on the first pages. Sending all 40 pages of
+ *  terms and conditions only paid for text nobody reads. */
+const MAX_TEXT_CHARS = 18_000;
+
+/** Files not worth paying to read: payment receipts and the agency's own summary PDFs. */
+const NOT_WORTH_READING = /invoice|receipt|فاتور|ايصال|jotform summary|application summary/i;
 
 export const DOC_TYPES = [
   'offer', 'cas', 'i20', 'ielts', 'toefl', 'passport', 'civil_id', 'transcript',
@@ -252,6 +256,9 @@ export async function readDocument(
 
   try {
     if (!isAiConfigured()) return quickCard(nameType, name, 'named_only', 'The AI is not configured.');
+    if (NOT_WORTH_READING.test(`${doc.name ?? ''} ${doc.originalName ?? ''}`)) {
+      return quickCard(nameType === 'other' ? 'receipt' : nameType, name, 'named_only', 'Receipt or summary — identified by name, not read.');
+    }
     if (nameType === 'passport' && !settings.readPassports) {
       return quickCard('passport', 'Passport', 'named_only', 'Passport reading is switched off; identified by name only.');
     }
@@ -372,6 +379,13 @@ async function saveCard(studentId: string, docId: string, card: DocCard): Promis
   });
 }
 
+/** The same bytes were already read on this profile (sent twice, re-uploaded): reuse it. */
+function reuseIdentical(d: StoredDoc & { sha256?: string }, all: Array<StoredDoc & { sha256?: string }>): DocCard | null {
+  if (!d.sha256) return null;
+  const twin = all.find((x) => x.id !== d.id && x.sha256 === d.sha256 && x.ai?.status === 'read');
+  return twin?.ai ? { ...twin.ai, readAt: new Date().toISOString(), usage: undefined } : null;
+}
+
 function needsReading(d: StoredDoc): boolean {
   if (!d.id) return false;
   if (!d.ai) return true;
@@ -389,7 +403,7 @@ export async function readStudentDocuments(studentId: string, opts: { force?: bo
   const todo = docs.filter((d) => d.id && (opts.force || needsReading(d)));
   const cards: Array<{ documentId: string; card: DocCard }> = [];
   for (const d of todo) {
-    const card = await readDocument(d, { name: s.name }, settings);
+    const card = (!opts.force && reuseIdentical(d, docs)) || (await readDocument(d, { name: s.name }, settings));
     await saveCard(studentId, d.id!, card);
     if (settings.autoFill) await applyDocumentFacts(studentId, { ...d, ai: card });
     cards.push({ documentId: d.id!, card });
@@ -407,7 +421,7 @@ export async function readPendingDocuments(opts: { limit?: number; concurrency?:
   const settings = await getDocumentReaderSettings();
   const snap = await db().collection('students').select('name', 'documents', 'isClosed').get();
 
-  const queue: Array<{ studentId: string; studentName: string; doc: StoredDoc }> = [];
+  const queue: Array<{ studentId: string; studentName: string; doc: StoredDoc; all: StoredDoc[] }> = [];
   let pending = 0;
   for (const d of snap.docs) {
     const s = d.data();
@@ -415,7 +429,7 @@ export async function readPendingDocuments(opts: { limit?: number; concurrency?:
     for (const doc of (s.documents as StoredDoc[]) ?? []) {
       if (!needsReading(doc)) continue;
       pending++;
-      queue.push({ studentId: d.id, studentName: s.name, doc });
+      queue.push({ studentId: d.id, studentName: s.name, doc, all: (s.documents as StoredDoc[]) ?? [] });
     }
   }
   queue.sort((a, b) => String(b.doc.uploadedAt ?? '').localeCompare(String(a.doc.uploadedAt ?? '')));
@@ -427,7 +441,7 @@ export async function readPendingDocuments(opts: { limit?: number; concurrency?:
   async function worker() {
     while (next < batch.length) {
       const item = batch[next++];
-      const card = await readDocument(item.doc, { name: item.studentName }, settings);
+      const card = reuseIdentical(item.doc, item.all) ?? (await readDocument(item.doc, { name: item.studentName }, settings));
       const saved = await saveCard(item.studentId, item.doc.id!, card).catch(() => false);
       if (saved && settings.autoFill) await applyDocumentFacts(item.studentId, { ...item.doc, ai: card });
       if (card.status === 'read') totals.read++;
