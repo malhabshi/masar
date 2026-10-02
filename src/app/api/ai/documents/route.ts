@@ -40,8 +40,12 @@ async function authorise(req: NextRequest, allowCron = false): Promise<User | 'c
 export async function GET(req: NextRequest) {
   const who = await authorise(req);
   if (who instanceof NextResponse) return who;
-  const [settings, progress] = await Promise.all([getDocumentReaderSettings(), documentReadingProgress()]);
-  return NextResponse.json({ settings, progress, aiConfigured: isAiConfigured() });
+  // The progress count reads every student's documents and takes many seconds; the
+  // settings are one small read. Asked for separately so the switches never wait on it.
+  if (req.nextUrl.searchParams.get('part') === 'progress') {
+    return NextResponse.json({ progress: await documentReadingProgress() });
+  }
+  return NextResponse.json({ settings: await getDocumentReaderSettings(), aiConfigured: isAiConfigured() });
 }
 
 export async function PATCH(req: NextRequest) {

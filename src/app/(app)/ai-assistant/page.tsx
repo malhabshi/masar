@@ -379,17 +379,24 @@ function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: Req
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const r = await authedFetch('/api/ai/documents');
+  const loadProgress = useCallback(async () => {
+    const r = await authedFetch('/api/ai/documents?part=progress');
     const data = await r.json();
-    if (!r.ok) throw new Error(data.error ?? 'Could not load document reading.');
-    setSettings(data.settings);
+    if (!r.ok) throw new Error(data.error ?? 'Could not count the documents.');
     setProgress(data.progress);
   }, [authedFetch]);
 
   useEffect(() => {
-    load().catch((e) => setMessage(e instanceof Error ? e.message : String(e)));
-  }, [load]);
+    const fail = (e: unknown) => setMessage(e instanceof Error ? e.message : String(e));
+    authedFetch('/api/ai/documents')
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? 'Could not load document reading.');
+        setSettings(data.settings);
+      })
+      .catch(fail);
+    loadProgress().catch(fail);
+  }, [authedFetch, loadProgress]);
 
   const save = async (patch: Partial<{ autoRead: boolean; readPassports: boolean }>) => {
     setBusy('settings');
@@ -402,6 +409,7 @@ function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: Req
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? 'Could not save.');
       setSettings(data.settings);
+      setMessage('Saved.');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
     } finally {
@@ -427,7 +435,7 @@ function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: Req
           (data.errors ? `, ${data.errors} failed` : '') +
           `. ${data.pendingAfter} still to read.`,
       );
-      await load();
+      await loadProgress();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
     } finally {
@@ -454,6 +462,18 @@ function DocumentReader({ authedFetch }: { authedFetch: (url: string, init?: Req
       </CardHeader>
       {open && (
         <CardContent className="space-y-3 pt-0">
+          {!progress && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Counting documents…
+            </p>
+          )}
+          {!settings && !message && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading settings…
+            </p>
+          )}
           {progress && (
             <div className="space-y-1.5">
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
