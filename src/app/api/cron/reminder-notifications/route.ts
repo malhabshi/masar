@@ -17,6 +17,7 @@ import { getIntakeSettings } from '@/lib/email/intake-settings';
 import { syncSentMail } from '@/lib/email/memory';
 import { followUpsIfDue } from '@/lib/email/followups';
 import { automateRecentTasks } from '@/lib/ai/task-automation';
+import { currentSlot, isSlotDone } from '@/lib/email/schedule';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -95,6 +96,27 @@ export async function GET(req: NextRequest) {
     followUps = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // The inbox check, Mon–Fri 10:00 / 13:00 / 15:00 Kuwait. Started as its own request so a
+  // busy inbox never holds up this job; each round takes up to 10 emails, and rounds
+  // repeat every five minutes until the slot is marked done.
+  let inbox: unknown = null;
+  try {
+    const slot = currentSlot();
+    if (slot && (await getIntakeSettings()).scheduledIntake && !(await isSlotDone(slot))) {
+      const started = fetch(new URL('/api/email/intake', req.nextUrl.origin), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ action: 'scheduled' }),
+      }).catch((e) => console.error('[cron/inbox] could not start:', e));
+      // Long enough for the request to be on its way; not waiting for the result.
+      await Promise.race([started, new Promise((r) => setTimeout(r, 3000))]);
+      inbox = { started: slot };
+    }
+  } catch (e) {
+    console.error('[cron/inbox] failed:', e);
+    inbox = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   // Requests no browser triggered (add schools / draft the update email).
   let taskAutomation: unknown = null;
   try {
@@ -111,6 +133,7 @@ export async function GET(req: NextRequest) {
     sentMail,
     followUps,
     taskAutomation,
+    inbox,
     success: true,
     messagesSent: result.sent,
     details: result.details,

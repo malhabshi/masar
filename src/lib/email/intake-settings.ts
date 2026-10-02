@@ -30,6 +30,8 @@ export type IntakeSettings = {
   taskAddSchools: boolean;
   /** "Request Update" requests get the email drafted in the company conversation. */
   taskUpdateDrafts: boolean;
+  /** Check the inbox by itself on the schedule (Mon–Fri 10:00, 13:00, 15:00 Kuwait). */
+  scheduledIntake: boolean;
 };
 
 export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
@@ -43,6 +45,7 @@ export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
   reactToNotices: true,
   taskAddSchools: true,
   taskUpdateDrafts: true,
+  scheduledIntake: true,
 };
 
 export async function getIntakeSettings(): Promise<IntakeSettings> {
@@ -64,6 +67,7 @@ export async function getIntakeSettings(): Promise<IntakeSettings> {
       reactToNotices: d.reactToNotices !== false,
       taskAddSchools: d.taskAddSchools !== false,
       taskUpdateDrafts: d.taskUpdateDrafts !== false,
+      scheduledIntake: d.scheduledIntake !== false,
     };
   } catch {
     return DEFAULT_INTAKE_SETTINGS;
@@ -90,6 +94,7 @@ export async function saveIntakeSettings(patch: Partial<IntakeSettings>): Promis
     reactToNotices: typeof patch.reactToNotices === 'boolean' ? patch.reactToNotices : current.reactToNotices,
     taskAddSchools: typeof patch.taskAddSchools === 'boolean' ? patch.taskAddSchools : current.taskAddSchools,
     taskUpdateDrafts: typeof patch.taskUpdateDrafts === 'boolean' ? patch.taskUpdateDrafts : current.taskUpdateDrafts,
+    scheduledIntake: typeof patch.scheduledIntake === 'boolean' ? patch.scheduledIntake : current.scheduledIntake,
   };
   await adminDb
     .collection(SETTINGS.collection)

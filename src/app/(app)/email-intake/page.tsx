@@ -52,6 +52,7 @@ type IntakeSettings = {
   reactToNotices: boolean;
   taskAddSchools: boolean;
   taskUpdateDrafts: boolean;
+  scheduledIntake: boolean;
 };
 
 type EmailRequestRow = {
@@ -84,6 +85,7 @@ type IntakeStatus = {
   queue: QueueItem[];
   requests?: EmailRequestRow[];
   companies?: CompanyProfile[];
+  schedule?: { label: string; next: string };
 };
 
 export default function EmailIntakePage() {
@@ -300,6 +302,26 @@ export default function EmailIntakePage() {
       {status && (
         <Card>
           <CardContent className="space-y-3 pt-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <strong>Automatic inbox check:</strong>{' '}
+                {status.settings.scheduledIntake
+                  ? `on — ${status.schedule?.label ?? 'on schedule'}. Next: ${status.schedule?.next ?? '—'}. "Check inbox now" works any time.`
+                  : 'off — the inbox is only checked when you press "Check inbox now".'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  act(
+                    { action: 'settings', scheduledIntake: !status.settings.scheduledIntake },
+                    status.settings.scheduledIntake ? 'Automatic checks turned off' : 'Automatic checks turned on',
+                  )
+                }
+              >
+                {status.settings.scheduledIntake ? 'Turn off' : 'Turn on'}
+              </Button>
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span>
                 <strong>Follow-ups:</strong>{' '}

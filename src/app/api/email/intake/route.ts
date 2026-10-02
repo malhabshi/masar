@@ -10,6 +10,7 @@ import { isInboxConfigured, verifyInboxConnection } from '@/lib/email/inbox';
 import { getIntakeSettings, saveIntakeSettings } from '@/lib/email/intake-settings';
 import { fulfilEmailRequests, listEmailRequests } from '@/lib/email/requests';
 import { followUpSubmittedApplications } from '@/lib/email/followups';
+import { currentSlot, isSlotDone, markSlotDone, nextCheckLabel, SCHEDULE_LABEL } from '@/lib/email/schedule';
 import {
   learnCompanyPlaybook,
   listCompanyProfiles,
@@ -77,6 +78,7 @@ export async function GET(req: NextRequest) {
     queue,
     requests: await listEmailRequests(40).catch(() => []),
     companies: await listCompanyProfiles().catch(() => []),
+    schedule: { label: SCHEDULE_LABEL, next: nextCheckLabel() },
   });
 }
 
@@ -105,6 +107,7 @@ export async function POST(req: NextRequest) {
     reactToNotices?: boolean;
     taskAddSchools?: boolean;
     taskUpdateDrafts?: boolean;
+    scheduledIntake?: boolean;
   };
   try {
     body = await req.json();
@@ -113,6 +116,18 @@ export async function POST(req: NextRequest) {
   }
 
   switch (body.action ?? 'run') {
+    case 'scheduled': {
+      // Started by the cron during a check window. Only the scheduler may call it.
+      if (auth.user.id !== 'cron') return NextResponse.json({ error: 'Scheduler only.' }, { status: 403 });
+      const slot = currentSlot();
+      if (!slot) return NextResponse.json({ skipped: 'outside the check times' });
+      if (!(await getIntakeSettings()).scheduledIntake) return NextResponse.json({ skipped: 'automatic checks are off' });
+      if (await isSlotDone(slot)) return NextResponse.json({ skipped: `check ${slot} already done` });
+      const result = await runEmailIntake({ limit: 10 });
+      // Nothing new left: this check is finished for the day.
+      if (result.processed === 0) await markSlotDone(slot, result.processed);
+      return NextResponse.json({ slot, ...result });
+    }
     case 'run': {
       const result = await runEmailIntake({ limit: body.limit });
       return NextResponse.json(result);
@@ -183,6 +198,7 @@ export async function POST(req: NextRequest) {
         reactToNotices: body.reactToNotices,
         taskAddSchools: body.taskAddSchools,
         taskUpdateDrafts: body.taskUpdateDrafts,
+        scheduledIntake: body.scheduledIntake,
       });
       return NextResponse.json({ success: true, settings: saved });
     }
