@@ -17,8 +17,20 @@ export type ReceiptOutcome =
       documents: string[];
       versionNotes: string[];
       requestNotes?: string[];
+      /** Application statuses changed (or held back) because of this email. */
+      statusNotes?: string[];
       chatPosted: boolean;
       chatRecipients: string[];
+    }
+  | {
+      /** A reply to this email was saved in Drafts, with what was asked for attached. */
+      kind: 'drafted';
+      studentId: string;
+      studentName: string;
+      to: string;
+      answered: string[];
+      attachments: string[];
+      stillWaiting: string[];
     }
   | { kind: 'queued'; reason: string; attachments: string[] }
   | { kind: 'skipped'; reason: string }
@@ -47,7 +59,10 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
 
   switch (outcome.kind) {
     case 'filed': {
-      subject = `✅ Filed to ${outcome.studentName}`;
+      const changed = (outcome.statusNotes ?? []).filter((l) => l.startsWith('🎓'));
+      subject =
+        `✅ Filed to ${outcome.studentName}` +
+        (changed.length ? ` · ${changed.map((l) => l.replace(/^🎓\s*/, '').replace(/\s*\(.*\)$/, '')).join(' · ')}` : '');
       lines.push(
         `RESULT: Filed to ${outcome.studentName}`,
         '',
@@ -55,6 +70,9 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
           ? `Documents added to the profile:\n${outcome.documents.map((d) => `  • ${d}`).join('\n')}`
           : 'No attachments — the update was recorded, nothing was added to the profile.',
       );
+      if (outcome.statusNotes?.length) {
+        lines.push('', 'APPLICATION STATUS:', ...outcome.statusNotes.map((l) => `  ${l}`));
+      }
       if (outcome.requestNotes?.length) {
         lines.push('', 'REQUESTS:', ...outcome.requestNotes.map((l) => `  ${l}`));
       }
@@ -70,6 +88,21 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
         outcome.chatPosted
           ? `Posted in the internal chat, notifying: ${outcome.chatRecipients.join(', ')}`
           : 'NOTE: could not post in the internal chat — nobody was notified there.',
+        '',
+        `Profile: ${profileUrl(outcome.studentId)}`,
+      );
+      break;
+    }
+    case 'drafted': {
+      subject = `✉️ Reply draft ready — ${outcome.studentName}`;
+      lines.push(
+        `RESULT: A reply to this email is waiting in Drafts, addressed to ${outcome.to}.`,
+        '',
+        `Answers: ${outcome.answered.join(' · ')}`,
+        outcome.attachments.length ? `Attached: ${outcome.attachments.join(' · ')}` : 'No attachments.',
+        outcome.stillWaiting.length ? `Still waiting for: ${outcome.stillWaiting.join(' · ')}` : '',
+        '',
+        'Check it in Drafts and press Send — nothing has been sent.',
         '',
         `Profile: ${profileUrl(outcome.studentId)}`,
       );

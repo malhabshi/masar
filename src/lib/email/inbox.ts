@@ -100,10 +100,13 @@ export async function verifyInboxConnection(): Promise<{ ok: boolean; error?: st
 }
 
 /** Gmail labels applied to handled mail. Folders are created on first use. */
+// One label for everything the system has handled, as the admin asked: "masar/filed".
+// What actually happened (filed, needs review, no action) is in the summary posted in
+// the email's own thread, so the label only has to say "the system has seen this".
 export const INTAKE_LABELS = {
   filed: 'masar/filed',
-  review: 'masar/review',
-  noAction: 'masar/no-action',
+  review: 'masar/filed',
+  noAction: 'masar/filed',
 } as const;
 
 export type MessageHeader = {

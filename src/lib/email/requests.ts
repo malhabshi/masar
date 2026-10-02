@@ -25,6 +25,7 @@ import { storagePathFromUrl } from '@/lib/mcp/document-tools';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured, type InboxMessage } from './inbox';
 import { recentEmailLines } from './memory';
+import { replyWithReceipt } from './reply-receipt';
 
 export const EMAIL_REQUESTS_COLLECTION = 'email_requests';
 const BUCKET = 'studio-9484431255-91d96.firebasestorage.app';
@@ -609,6 +610,29 @@ export async function fulfilEmailRequests(opts: { limit?: number } = {}) {
         });
         result.drafted++;
         result.itemsDrafted += ready.length;
+
+        // The summary in the original thread, like every other email the system handles.
+        await replyWithReceipt(
+          {
+            uid: 0,
+            messageId: request.messageId,
+            from: request.sender,
+            fromName: request.senderName ?? '',
+            subject: request.subject,
+            date: request.receivedAt,
+            text: '',
+            attachments: [],
+          },
+          {
+            kind: 'drafted',
+            studentId: request.studentId,
+            studentName: request.studentName,
+            to: request.replyTo,
+            answered: ready.map((it) => it.text),
+            attachments: attachments.map((a) => a.filename),
+            stillWaiting: items.filter((it) => it.status === 'waiting').map((it) => it.text),
+          },
+        ).catch(() => undefined);
 
         await ensureChatBotUser();
         await sendChatMessage(

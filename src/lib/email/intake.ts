@@ -540,7 +540,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         studentName: match.student.name,
         documents: filedNames,
         versionNotes,
-        requestNotes: [...statusLines, ...requestLines],
+        requestNotes: requestLines,
+        statusNotes: statusLines,
         chatPosted: announcement.posted,
         chatRecipients: announcement.recipients ?? [],
       });
