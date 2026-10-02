@@ -19,6 +19,8 @@ export type ReceiptOutcome =
       requestNotes?: string[];
       /** Application statuses changed (or held back) because of this email. */
       statusNotes?: string[];
+      /** Company-wide notices found in this email and who they affected. */
+      notices?: string[];
       chatPosted: boolean;
       chatRecipients: string[];
     }
@@ -32,8 +34,8 @@ export type ReceiptOutcome =
       attachments: string[];
       stillWaiting: string[];
     }
-  | { kind: 'queued'; reason: string; attachments: string[] }
-  | { kind: 'skipped'; reason: string }
+  | { kind: 'queued'; reason: string; attachments: string[]; notices?: string[] }
+  | { kind: 'skipped'; reason: string; notices?: string[] }
   | { kind: 'failed'; reason: string; studentName?: string };
 
 function profileUrl(studentId: string): string {
@@ -70,6 +72,9 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
           ? `Documents added to the profile:\n${outcome.documents.map((d) => `  • ${d}`).join('\n')}`
           : 'No attachments — the update was recorded, nothing was added to the profile.',
       );
+      if (outcome.notices?.length) {
+        lines.push('', 'COMPANY NOTICE (applied to all students):', ...outcome.notices.map((l) => `  ${l}`));
+      }
       if (outcome.statusNotes?.length) {
         lines.push('', 'APPLICATION STATUS:', ...outcome.statusNotes.map((l) => `  ${l}`));
       }
@@ -118,11 +123,17 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
         'The attachment is safe and can be filed from the Email Documents page.',
         outcome.attachments.length ? `Held: ${outcome.attachments.join(', ')}` : '',
       );
+      if (outcome.notices?.length) lines.push('', 'COMPANY NOTICE (applied to all students):', ...outcome.notices.map((l) => `  ${l}`));
       break;
     }
     case 'skipped': {
-      subject = 'ℹ️ No action taken';
-      lines.push('RESULT: Nothing was filed.', '', `Reason: ${outcome.reason}`);
+      subject = outcome.notices?.length ? '📢 Company notice applied' : 'ℹ️ No action taken';
+      lines.push(
+        outcome.notices?.length ? 'RESULT: No single student — but the email carries news for many.' : 'RESULT: Nothing was filed.',
+        '',
+        `Reason: ${outcome.reason}`,
+      );
+      if (outcome.notices?.length) lines.push('', 'COMPANY NOTICE (applied to all students):', ...outcome.notices.map((l) => `  ${l}`));
       break;
     }
     case 'failed': {

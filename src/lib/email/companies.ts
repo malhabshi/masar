@@ -149,10 +149,19 @@ export async function removeCompany(id: string) {
 export async function playbookFor(address: string): Promise<string> {
   try {
     const p = await companyForAddress(address);
-    if (!p || (!p.playbook && !p.teamNotes)) return '';
+    if (!p) return '';
+    // Recent company-wide notices (course closed, reopened…), recorded by notices.ts.
+    const since = new Date(Date.now() - 120 * 86_400_000).toISOString();
+    const notices = (await db().collection('company_notices').where('company', '==', p.name).get()).docs
+      .map((d) => d.data())
+      .filter((n) => String(n.date) >= since)
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, 12)
+      .map((n) => `- ${String(n.date).slice(0, 10)} ${n.kind}: ${n.summary}`);
+    if (!p.playbook && !p.teamNotes && !notices.length) return '';
     return [
-      `How ${p.name} works (from their past emails):`,
-      p.playbook,
+      p.playbook ? `How ${p.name} works (from their past emails):\n${p.playbook}` : '',
+      notices.length ? `\nRecent notices from ${p.name}:\n${notices.join('\n')}` : '',
       p.teamNotes ? `\nThe team's own notes on ${p.name} — these override the above:\n${p.teamNotes}` : '',
     ]
       .filter(Boolean)

@@ -22,6 +22,10 @@ export type IntakeSettings = {
   draftReplies: boolean;
   /** Set the student's application status from what the email says (offer → Accepted…). */
   autoApplicationStatus: boolean;
+  /** Draft an update request for applications Submitted 5+ days with no offer. */
+  followUps: boolean;
+  /** Apply company-wide notices (course closed, reopened…) to every affected student. */
+  reactToNotices: boolean;
 };
 
 export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
@@ -31,6 +35,8 @@ export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
   postToChat: true,
   draftReplies: true,
   autoApplicationStatus: true,
+  followUps: true,
+  reactToNotices: true,
 };
 
 export async function getIntakeSettings(): Promise<IntakeSettings> {
@@ -48,6 +54,8 @@ export async function getIntakeSettings(): Promise<IntakeSettings> {
       postToChat: d.postToChat !== false,
       draftReplies: d.draftReplies !== false,
       autoApplicationStatus: d.autoApplicationStatus !== false,
+      followUps: d.followUps !== false,
+      reactToNotices: d.reactToNotices !== false,
     };
   } catch {
     return DEFAULT_INTAKE_SETTINGS;
@@ -70,6 +78,8 @@ export async function saveIntakeSettings(patch: Partial<IntakeSettings>): Promis
     draftReplies: typeof patch.draftReplies === 'boolean' ? patch.draftReplies : current.draftReplies,
     autoApplicationStatus:
       typeof patch.autoApplicationStatus === 'boolean' ? patch.autoApplicationStatus : current.autoApplicationStatus,
+    followUps: typeof patch.followUps === 'boolean' ? patch.followUps : current.followUps,
+    reactToNotices: typeof patch.reactToNotices === 'boolean' ? patch.reactToNotices : current.reactToNotices,
   };
   await adminDb
     .collection(SETTINGS.collection)

@@ -33,6 +33,7 @@ import type { Document as StudentDocument } from '@/lib/types';
 import { replyWithReceipt } from './reply-receipt';
 import { statusChangeLines, updateApplicationsFromEmail } from './application-status';
 import { rememberEmail, syncSentMail } from './memory';
+import { handleCompanyNotices } from './notices';
 import {
   analyseEmail,
   emailDocumentNote,
@@ -350,6 +351,12 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       continue;
     }
 
+    // News for everyone ("applications for this course are closed") — read from every
+    // company email, identified or not, since a general notice often names no student.
+    // Skipped in test mode: it would act on students outside the test.
+    const noticeLines =
+      settings.reactToNotices && !settings.restrictToStudentId ? await handleCompanyNotices(message) : [];
+
     if (match.kind !== 'matched') {
       const reason =
         match.kind === 'ambiguous'
@@ -360,7 +367,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       // email with no attachment is usually a newsletter or spam, so it is logged and
       // marked read rather than filling the review queue.
       if (message.attachments.length === 0) {
-        await replyWithReceipt(message, { kind: 'skipped', reason });
+        await replyWithReceipt(message, { kind: 'skipped', reason, notices: noticeLines });
         await applyLabel(message.uid, INTAKE_LABELS.noAction);
         result.skipped++;
         await log({ status: 'skipped', reason, from: message.from, subject: message.subject });
@@ -378,7 +385,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         ? match.candidates.map((c) => ({ id: c.id, name: c.name }))
         : [];
       await queueForReview(message, reason, candidates);
-      await replyWithReceipt(message, { kind: 'queued', reason, attachments: attachmentNames });
+      await replyWithReceipt(message, { kind: 'queued', reason, attachments: attachmentNames, notices: noticeLines });
       await applyLabel(message.uid, INTAKE_LABELS.review);
       result.queued++;
       result.items.push({
@@ -531,7 +538,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         body: message.text,
         filedAttachments: filedNames,
         versionNotes,
-        requestNotes: [...statusLines, ...requestLines],
+        requestNotes: [...noticeLines, ...statusLines, ...requestLines],
       });
 
       await replyWithReceipt(message, {
@@ -542,6 +549,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         versionNotes,
         requestNotes: requestLines,
         statusNotes: statusLines,
+        notices: noticeLines,
         chatPosted: announcement.posted,
         chatRecipients: announcement.recipients ?? [],
       });

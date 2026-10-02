@@ -48,6 +48,8 @@ type IntakeSettings = {
   postToChat: boolean;
   draftReplies: boolean;
   autoApplicationStatus: boolean;
+  followUps: boolean;
+  reactToNotices: boolean;
 };
 
 type EmailRequestRow = {
@@ -291,6 +293,57 @@ export default function EmailIntakePage() {
             </Button>
           </AlertDescription>
         </Alert>
+      )}
+
+      {status && (
+        <Card>
+          <CardContent className="space-y-3 pt-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <strong>Follow-ups:</strong>{' '}
+                {status.settings.followUps
+                  ? 'on — once a day, applications Submitted 5–60 days ago with no offer get an update request drafted in the conversation with the company (up to 15 a day).'
+                  : 'off.'}
+              </span>
+              <span className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!status.settings.followUps}
+                  onClick={() => act({ action: 'followUps' }, 'Follow-ups checked — see Drafts')}
+                >
+                  Check now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    act({ action: 'settings', followUps: !status.settings.followUps }, status.settings.followUps ? 'Follow-ups turned off' : 'Follow-ups turned on')
+                  }
+                >
+                  {status.settings.followUps ? 'Turn off' : 'Turn on'}
+                </Button>
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <strong>Company notices:</strong>{' '}
+                {status.settings.reactToNotices
+                  ? 'on — news for everyone ("applications for this course are stopped", "we can submit again") is applied to every affected student: not-yet-submitted applications set to Rejected, the course closed in Approved Universities, each student told in the chat.'
+                  : 'off.'}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  act({ action: 'settings', reactToNotices: !status.settings.reactToNotices }, status.settings.reactToNotices ? 'Notices turned off' : 'Notices turned on')
+                }
+              >
+                {status.settings.reactToNotices ? 'Turn off' : 'Turn on'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <RequestsCard

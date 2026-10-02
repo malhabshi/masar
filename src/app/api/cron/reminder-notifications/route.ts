@@ -15,6 +15,7 @@ import { isAiConfigured } from '@/lib/ai/config';
 import { fulfilEmailRequests } from '@/lib/email/requests';
 import { getIntakeSettings } from '@/lib/email/intake-settings';
 import { syncSentMail } from '@/lib/email/memory';
+import { followUpsIfDue } from '@/lib/email/followups';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -84,11 +85,21 @@ export async function GET(req: NextRequest) {
     sentMail = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Once a day: draft update requests for applications submitted 5+ days with no offer.
+  let followUps: unknown = null;
+  try {
+    if ((await getIntakeSettings()).followUps) followUps = await followUpsIfDue();
+  } catch (e) {
+    console.error('[cron/follow-ups] failed:', e);
+    followUps = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
     siteWatch,
     documents,
     emailDrafts,
     sentMail,
+    followUps,
     success: true,
     messagesSent: result.sent,
     details: result.details,

@@ -9,6 +9,7 @@ import {
 import { isInboxConfigured, verifyInboxConnection } from '@/lib/email/inbox';
 import { getIntakeSettings, saveIntakeSettings } from '@/lib/email/intake-settings';
 import { fulfilEmailRequests, listEmailRequests } from '@/lib/email/requests';
+import { followUpSubmittedApplications } from '@/lib/email/followups';
 import {
   learnCompanyPlaybook,
   listCompanyProfiles,
@@ -100,6 +101,8 @@ export async function POST(req: NextRequest) {
     teamNotes?: string;
     companyName?: string;
     domains?: string;
+    followUps?: boolean;
+    reactToNotices?: boolean;
   };
   try {
     body = await req.json();
@@ -111,6 +114,10 @@ export async function POST(req: NextRequest) {
     case 'run': {
       const result = await runEmailIntake({ limit: body.limit });
       return NextResponse.json(result);
+    }
+    case 'followUps': {
+      const result = await followUpSubmittedApplications();
+      return NextResponse.json({ success: true, ...result });
     }
     case 'learnCompany': {
       if (!body.companyId) return NextResponse.json({ error: 'companyId is required.' }, { status: 400 });
@@ -170,6 +177,8 @@ export async function POST(req: NextRequest) {
         postToChat: body.postToChat,
         draftReplies: body.draftReplies,
         autoApplicationStatus: body.autoApplicationStatus,
+        followUps: body.followUps,
+        reactToNotices: body.reactToNotices,
       });
       return NextResponse.json({ success: true, settings: saved });
     }
