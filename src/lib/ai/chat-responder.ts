@@ -24,6 +24,8 @@ import {
   getResponderSettings,
 } from './chat-bot';
 import { isAiConfigured } from './config';
+import { countRecords } from './count';
+import { getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
 import { createStudentTask, sendChatMessage } from '@/lib/actions';
 import type { User } from '@/lib/types';
@@ -51,6 +53,7 @@ type ChatMessage = {
   content?: string;
   timestamp?: string;
   recipientLabel?: string;
+  targetUserIds?: string[];
   document?: { name: string; url: string };
 };
 
@@ -115,7 +118,10 @@ const SYSTEM = `You are ${CHAT_BOT_NAME}, an assistant that sits inside the inte
 
 Your job is to help when you genuinely can, and otherwise to stay quiet.
 
-## Staying quiet is the normal outcome
+## When you are addressed directly
+If the newest message was sent to ${CHAT_BOT_NAME} or mentions you ("@ai", "Masar AI"), someone is waiting on you: you MUST call \`post_reply\`, never \`stay_silent\`. If you cannot find the answer, say exactly what you could not find and who would know (usually the assigned employee or the department).
+
+## Otherwise, staying quiet is the normal outcome
 Most messages do not need you. Call \`stay_silent\` when:
 - Staff are talking to each other and no question is directed at the system.
 - The message is social, an acknowledgement ("ok", "done", "thanks"), or an update with no request.
@@ -126,6 +132,8 @@ Most messages do not need you. Call \`stay_silent\` when:
 ## Speak when you can actually help
 Call \`post_reply\` when:
 - Someone asks a factual question you can answer from the student's record (their applications, statuses, documents, assigned employee, IELTS score, deadlines).
+- Someone asks how the agency does something — read \`get_work_guide\` and answer from it. The team's notes in it override everything else.
+- Someone asks "how many" — use \`count_records\`, never guess, and say what you counted.
 - Someone asks for something that should become a task — create the task first, then say plainly what you created.
 - There is a clear, checkable error worth flagging.
 
@@ -194,6 +202,45 @@ function buildToolset(opts: {
       handler: async () => ({ ok: false, error: 'replaced below' }),
     },
   ];
+
+  tools.push(
+    {
+      write: false,
+      definition: {
+        name: 'get_work_guide',
+        description:
+          "How the agency works: roles, student lifecycle, pipeline colours, applications, " +
+          'checklists, chat and notes, tasks and request types, JotForm, universities — plus ' +
+          "live settings and the team's own notes, which override the rest.",
+        input_schema: {
+          type: 'object',
+          properties: { topic: { type: 'string', enum: WORK_GUIDE_TOPICS } },
+        },
+      },
+      handler: (input) => getWorkGuide(input.topic),
+    },
+    {
+      write: false,
+      definition: {
+        name: 'count_records',
+        description:
+          'Exact count of students, applications or tasks. Closed students are excluded by default. ' +
+          'filters: employeeId (civil ID), pipelineStatus, country, applicationStatus, university, ' +
+          'major, studyLevel, intakeYear, from/to (ISO dates), taskStatus, taskType. groupBy: ' +
+          'employee, country, applicationStatus, university, pipelineStatus, studyLevel, month, taskType, taskStatus.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            entity: { type: 'string', enum: ['students', 'applications', 'tasks'] },
+            filters: { type: 'object' },
+            groupBy: { type: 'string' },
+          },
+          required: ['entity'],
+        },
+      },
+      handler: (input) => countRecords({ entity: input.entity, filters: input.filters, groupBy: input.groupBy }),
+    },
+  );
 
   // post_reply needs the real implementation, wired here so it can capture state.
   tools[2].handler = async (input) => {
@@ -280,7 +327,14 @@ const ACKNOWLEDGEMENT =
  * other — a full agent run only to conclude stay_silent. Deliberately conservative: an
  * attachment, a question mark, or any message of real length always reaches the model.
  */
+/** Was this message sent to the bot, or does it call it by name? */
+function addressesBot(m: ChatMessage): boolean {
+  if ((m.targetUserIds ?? []).includes(CHAT_BOT_USER_ID)) return true;
+  return /@ai\b|masar\s*ai|مسار\s*(ai|الذكي)/i.test(m.content ?? '');
+}
+
 function needsModel(m: ChatMessage): boolean {
+  if (addressesBot(m)) return true;
   if (m.document) return true;
   const text = (m.content ?? '').trim();
   if (!text) return false;
@@ -340,7 +394,8 @@ export async function respondToStudentChat(studentId: string): Promise<Responder
         const who = m.authorId === CHAT_BOT_USER_ID ? `${CHAT_BOT_NAME} (you)` : authors.get(m.authorId)?.name ?? 'Unknown';
         const role = authors.get(m.authorId)?.role ?? '';
         const doc = m.document ? ` [attached file: ${m.document.name}]` : '';
-        return `[${m.timestamp ?? ''}] ${who}${role ? ` (${role})` : ''}: ${m.content ?? ''}${doc}`;
+        const to = m.recipientLabel ? ` → to ${m.recipientLabel}` : '';
+        return `[${m.timestamp ?? ''}] ${who}${role ? ` (${role})` : ''}${to}: ${m.content ?? ''}${doc}`;
       })
       .join('\n');
 
@@ -367,7 +422,9 @@ ${requestTypeList || '(none configured)'}
 ## Chat thread (oldest first, newest last)
 ${transcript}
 
-The newest message is the one to react to. Decide whether to help or stay quiet, then call exactly one of stay_silent or post_reply (creating a task first if one was asked for).`;
+${addressesBot(last)
+  ? `The newest message is addressed to you. Answer it with post_reply (creating a task first if one was asked for).`
+  : `The newest message is the one to react to. Decide whether to help or stay quiet, then call exactly one of stay_silent or post_reply (creating a task first if one was asked for).`}`;
 
     const state: ResponderState = { reply: undefined, silentReason: undefined, tasks: [] };
 
@@ -393,7 +450,7 @@ The newest message is the one to react to. Decide whether to help or stay quiet,
       allowWrites: true,
       toolset,
       system,
-      maxIterations: 6,
+      maxIterations: 8,
     });
 
     const outcome: ResponderOutcome = {

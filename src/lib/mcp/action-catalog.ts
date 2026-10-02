@@ -2681,6 +2681,185 @@ export const ACTION_CATALOG: CatalogAction[] = [
       { "name": "data", "type": "Record<string, unknown>", "optional": false },
       { "name": "userId", "type": "string", "optional": false }
     ]
+  },
+  {
+    "name": "updateApplicationSubmissionMethod",
+    "domain": "Applications",
+    "destructive": false,
+    "actorParam": "adminId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "studentId",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "university",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "major",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "submissionMethod",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "adminId",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "markChatMessagesRead",
+    "domain": "Chat",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "studentId",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "messageIds",
+        "type": "string[]",
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "markUpdatesRead",
+    "domain": "Tasks",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "taskIds",
+        "type": "string[]",
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "markRequestUpdatesRead",
+    "domain": "Tasks",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "taskIds",
+        "type": "string[]",
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "getSiteWatchAlerts",
+    "domain": "Official Updates",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "userId",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "markSiteWatchAlertsRead",
+    "domain": "Official Updates",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "alertIds",
+        "type": "string[]",
+        "optional": false
+      },
+      {
+        "name": "userId",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "getAdminDashboardStats",
+    "domain": "Reports",
+    "destructive": false,
+    "actorParam": "userId",
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "userId",
+        "type": "string",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "name": "processReminderStages",
+    "domain": "Reminders",
+    "destructive": true,
+    "actorParam": null,
+    "extraInject": null,
+    "excluded": false,
+    "params": []
+  },
+  {
+    "name": "findExistingStudentsByNumber",
+    "domain": "Students",
+    "destructive": false,
+    "actorParam": null,
+    "extraInject": null,
+    "excluded": false,
+    "params": [
+      {
+        "name": "raw",
+        "type": "string",
+        "optional": false
+      },
+      {
+        "name": "kind",
+        "type": "'phone' | 'civilId'",
+        "optional": false
+      }
+    ]
   }
 ];
 export const ACTION_MAP: Record<string, CatalogAction> = Object.fromEntries(ACTION_CATALOG.map(a => [a.name, a]));

@@ -64,6 +64,11 @@ export async function saveResponderSettings(
     .collection(SETTINGS.collection)
     .doc(SETTINGS.doc)
     .set({ ...next, updatedAt: new Date().toISOString() }, { merge: true });
+  // Mirror the switch onto the bot's user document. Every chat already loads the user
+  // list, so this is how the chat knows to offer "Masar AI" as a recipient without a
+  // settings read of its own — and stops offering it the moment the responder is off.
+  await ensureChatBotUser();
+  await adminDb.collection('users').doc(CHAT_BOT_USER_ID).set({ aiChatActive: next.enabled }, { merge: true });
   return next;
 }
 

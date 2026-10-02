@@ -261,6 +261,13 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
   const groupOptions = [];
   if (hasMultipleAdmins) groupOptions.push({ id: 'admins', label: 'Admins (Group)' });
   if (hasDepartments) groupOptions.push({ id: 'departments', label: 'Departments (Group)' });
+  // Masar AI is offered only while the chat responder is switched on (mirrored onto its
+  // user document), so nobody addresses a question to an assistant that will not answer.
+  const aiActive = useMemo(
+    () => (allUsers || []).some(u => u.id === 'masar-ai-assistant' && (u as any).aiChatActive === true),
+    [allUsers],
+  );
+  if (aiActive) groupOptions.push({ id: 'masar-ai-assistant', label: 'Masar AI' });
 
   const availableUsers = useMemo(() => {
     if (!allUsers) return [];

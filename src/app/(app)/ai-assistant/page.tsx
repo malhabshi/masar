@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  BookOpen,
   Bot,
   Check,
   ChevronDown,
+  ChevronRight,
   Loader2,
   MessageSquare,
+  Plus,
   Send,
   Sparkles,
   Trash2,
@@ -21,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUser } from '@/hooks/use-user';
 import { auth } from '@/firebase';
 import { cn } from '@/lib/utils';
@@ -58,11 +62,27 @@ type ResponderSettings = {
 };
 
 const SUGGESTIONS = [
+  'How many open students does each employee have, by pipeline colour?',
+  'Which internal chat messages are still waiting for a reply?',
   'Which applications are late right now, and who owns them?',
-  'Summarise the last 30 days: new students, applications, and where they stand.',
-  'Break down late applications by employee and tell me who needs help.',
-  'How many applications are sitting in Missing Items, and for how long?',
+  'How does a student move from JotForm to a final university choice here?',
 ];
+
+type TeamNote = { id: string; topic: string; text: string; addedBy: string; addedAt: string };
+
+const TOPIC_LABELS: Record<string, string> = {
+  general: 'General',
+  roles: 'Roles',
+  students: 'Students',
+  pipeline: 'Pipeline colours',
+  applications: 'Applications',
+  checklists: 'Checklists',
+  documents_chat_notes: 'Documents, chat & notes',
+  tasks: 'Tasks & requests',
+  jotform: 'JotForm',
+  universities: 'Universities',
+  invoices_reports: 'Invoices & reports',
+};
 
 export default function AiAssistantPage() {
   const { user, isUserLoading } = useUser();
@@ -268,8 +288,8 @@ export default function AiAssistantPage() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Changes are enabled</AlertTitle>
           <AlertDescription>
-            The assistant can send email, upload documents and run actions in this chat. It will ask
-            before each one.
+            The assistant can send email, upload documents, reply in the internal chat, save notes
+            and run actions in this chat. It will ask before each one.
             {status?.email?.dryRun && ' Email is in dry-run mode, so messages are logged but not delivered.'}
             {status && !status.email.configured && ' Email is not configured yet, so sends will fail.'}
           </AlertDescription>
@@ -279,6 +299,8 @@ export default function AiAssistantPage() {
       {responder && (
         <ResponderControls settings={responder} saving={savingResponder} onChange={updateResponder} />
       )}
+
+      {user && <TeamNotes authedFetch={authedFetch} />}
 
       <Card className="flex min-h-0 flex-1 flex-col">
         <CardContent ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -326,6 +348,139 @@ export default function AiAssistantPage() {
 }
 
 /**
+ * The team's own rules for the AI, in their words. Collapsed by default so it does not
+ * push the conversation off the screen; the count in the header says whether anything
+ * is in there.
+ */
+function TeamNotes({ authedFetch }: { authedFetch: (url: string, init?: RequestInit) => Promise<Response> }) {
+  const [open, setOpen] = useState(false);
+  const [notes, setNotes] = useState<TeamNote[] | null>(null);
+  const [topic, setTopic] = useState('general');
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    authedFetch('/api/ai/knowledge')
+      .then(async (r) => {
+        const data = await r.json();
+        if (r.ok) setNotes(data.notes);
+        else setError(data.error ?? 'Could not load the notes.');
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [authedFetch]);
+
+  const add = async () => {
+    if (!text.trim()) return;
+    setBusy('add');
+    setError(null);
+    try {
+      const r = await authedFetch('/api/ai/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, text }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? 'Could not save the note.');
+      setNotes(data.notes);
+      setText('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async (id: string) => {
+    setBusy(id);
+    setError(null);
+    try {
+      const r = await authedFetch(`/api/ai/knowledge?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? 'Could not remove the note.');
+      setNotes(data.notes);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="cursor-pointer pb-3" onClick={() => setOpen((v) => !v)}>
+        <CardTitle className="flex items-center gap-2 text-base">
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <BookOpen className="h-4 w-4" />
+          How we work — notes for the AI
+          {notes && <Badge variant="outline">{notes.length}</Badge>}
+        </CardTitle>
+        <CardDescription>
+          The AI already knows how the system works. Add the rules only your team knows — what each
+          pipeline colour means, who handles Ireland. These override everything else it reads.
+        </CardDescription>
+      </CardHeader>
+      {open && (
+        <CardContent className="space-y-3 pt-0">
+          {notes && notes.length === 0 && (
+            <p className="text-sm text-muted-foreground">No notes yet.</p>
+          )}
+          {notes?.map((n) => (
+            <div key={n.id} className="flex items-start gap-3 rounded-md border p-2.5">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p dir="auto" className="whitespace-pre-wrap break-words text-sm">{n.text}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {TOPIC_LABELS[n.topic] ?? n.topic} · {n.addedBy} · {new Date(n.addedAt).toLocaleDateString()}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                disabled={busy !== null}
+                onClick={() => remove(n.id)}
+                aria-label="Remove note"
+              >
+                {busy === n.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          ))}
+          <div className="space-y-2 rounded-md border border-dashed p-2.5">
+            <Textarea
+              dir="auto"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="e.g. Orange means the student has an offer but has not paid the deposit yet."
+              rows={2}
+              className="resize-none"
+            />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Select value={topic} onValueChange={setTopic}>
+                <SelectTrigger className="h-8 w-[200px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TOPIC_LABELS).map(([k, label]) => (
+                    <SelectItem key={k} value={k} className="text-xs">
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="h-8 gap-1" disabled={!text.trim() || busy !== null} onClick={add}>
+                {busy === 'add' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Add note
+              </Button>
+            </div>
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+/**
  * Controls for the internal-chat responder. Separate from the chat above: this governs
  * whether the AI reads and speaks in staff chat on its own.
  */
@@ -357,7 +512,8 @@ function ResponderControls({
               )}
             </CardTitle>
             <CardDescription>
-              Reads every new internal chat message and replies when it can help.
+              Reads every new internal chat message and replies when it can help. While it is on,
+              staff can also pick &quot;Masar AI&quot; as a recipient to ask it directly.
             </CardDescription>
           </div>
         </div>

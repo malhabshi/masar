@@ -1,4 +1,4 @@
-// Universal action dispatcher for the MCP. Reuses ALL of src/lib/actions.ts (112 server
+// Universal action dispatcher for the MCP. Reuses ALL of src/lib/actions.ts (all server
 // actions) instead of re-implementing each as an MCP tool. The catalog (auto-generated
 // from the real signatures) provides arg order + which param receives the caller's
 // identity + whether the action is destructive. This is what lets the MCP "control

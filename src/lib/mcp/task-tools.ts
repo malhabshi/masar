@@ -155,6 +155,16 @@ export async function listTasks(opts: ListTasksOpts) {
   };
 }
 
+/**
+ * Every matching request task in one read, for callers that aggregate rather than page.
+ * Paging through listTasks would repeat the full fetch for each page of 100.
+ */
+export async function fetchAllRequestTasks(opts: ListTasksOpts) {
+  const { rows, capped } = await fetchFiltered(opts);
+  const nameMap = await resolveNames(rows.flatMap((t) => targetsOf(t)));
+  return { tasks: rows.map((t) => summarize(t, nameMap)), capped };
+}
+
 export async function countTasks(opts: ListTasksOpts) {
   const { rows, capped } = await fetchFiltered(opts);
   return { count: rows.length, ...(capped ? { capped: true } : {}) };

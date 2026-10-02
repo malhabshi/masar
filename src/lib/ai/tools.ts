@@ -5,7 +5,7 @@
 //    re-querying Firestore, so the assistant sees exactly what the MCP integration sees.
 //  - The four capabilities asked for map to: generate_report, find_late_applications,
 //    send_email, upload_student_document.
-//  - run_action exposes all 112 server actions through the existing MCP dispatcher, but
+//  - run_action exposes every server action through the existing MCP dispatcher, but
 //    is gated behind an explicit per-request `allowWrites` flag which defaults to OFF.
 //    Destructive actions additionally require confirm:true, enforced inside dispatch.ts.
 
@@ -19,6 +19,9 @@ import { findLateApplications, getLateRules, TRACKED_STATUSES } from '@/lib/late
 import { sendEmail, getEmailConfigStatus } from '@/lib/email';
 import { uploadStudentDocument } from '@/lib/documents/upload';
 import type { Country, TaskStatus } from '@/lib/types';
+import { countRecords } from './count';
+import { findChatsAwaitingReply, readStudentChat, replyInStudentChat } from './chat-tools';
+import { addTeamNote, getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
 
 export type ToolContext = {
   actor: Actor;
@@ -333,6 +336,206 @@ const uploadDocumentTool: AiTool = {
 };
 
 // --------------------------------------------------------------------------
+// How the agency works
+// --------------------------------------------------------------------------
+
+const getWorkGuideTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'get_work_guide',
+    description:
+      "Read how masar and the agency work: roles and who sees what, the student lifecycle, " +
+      'pipeline colours, applications, checklists, documents/chat/notes, tasks and requests, ' +
+      'JotForm, universities, invoices and reports — plus the live settings (request types, ' +
+      'checklists, lateness thresholds, terms) and the team\'s own notes. Read it before ' +
+      'answering any question about process, rules or "how do we…", and before acting on ' +
+      'something you are unsure how the agency handles. Team notes override the guide.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', enum: WORK_GUIDE_TOPICS, description: 'Omit to read everything.' },
+      },
+    },
+  },
+  handler: (input) => getWorkGuide(input.topic),
+};
+
+const saveTeamNoteTool: AiTool = {
+  write: true,
+  definition: {
+    name: 'save_team_note',
+    description:
+      "Save a rule or fact about how the agency works, so you know it in every future " +
+      'conversation and in the internal chat. Use it when the user tells you something to ' +
+      'remember ("orange means…", "Ireland goes to the UK team"). Write it as one clear ' +
+      'sentence in the user\'s own terms, show it to them, and save only after they approve.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', enum: [...WORK_GUIDE_TOPICS, 'general'] },
+        text: { type: 'string' },
+      },
+      required: ['topic', 'text'],
+    },
+  },
+  handler: async (input, ctx) => {
+    guardWrite(ctx);
+    const note = await addTeamNote({ topic: input.topic, text: input.text, addedBy: ctx.actor.name });
+    return { ok: true, saved: note };
+  },
+};
+
+// --------------------------------------------------------------------------
+// Counting
+// --------------------------------------------------------------------------
+
+const COUNTRIES = ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'];
+
+const countRecordsTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'count_records',
+    description:
+      'Get an EXACT count of students, applications or tasks, with any combination of filters, ' +
+      'optionally broken down by a field. Use this for every "how many" question instead of ' +
+      'listing rows and counting them yourself — list tools stop at 100 rows, this reads ' +
+      'everything. Closed students are excluded unless filters.closed says otherwise. Always ' +
+      'repeat the filters you used when you give the number.\n' +
+      'entity=students counts people; entity=applications counts each application separately ' +
+      '(one student with three UK applications is 3). For students, country matches a target ' +
+      'country or any application in that country. Date range: students by createdAt, ' +
+      'applications by updatedAt (last status change), tasks by createdAt. Task counts cover real ' +
+      'requests only, the same set the /tasks page shows.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entity: { type: 'string', enum: ['students', 'applications', 'tasks'] },
+        filters: {
+          type: 'object',
+          properties: {
+            employeeId: { type: 'string', description: "Assigned employee's civil ID (students/applications)." },
+            pipelineStatus: { type: 'string', enum: ['green', 'yellow', 'orange', 'red', 'black', 'none'] },
+            country: { type: 'string', enum: COUNTRIES },
+            applicationStatus: { type: 'string', enum: ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'] },
+            university: { type: 'string', description: 'Part of the university name, case-insensitive.' },
+            major: { type: 'string', description: 'Part of the major, case-insensitive.' },
+            studyLevel: { type: 'string', enum: ['Foundation', 'First Year', 'Transfer Student'] },
+            term: { type: 'string' },
+            intakeYear: { type: 'integer' },
+            intakeSemester: { type: 'string' },
+            gender: { type: 'string', enum: ['M', 'F'] },
+            schoolType: { type: 'string', enum: ['Private', 'Public'] },
+            jotform: { type: 'boolean', description: 'Created through the JotForm flow.' },
+            finalized: { type: 'boolean', description: 'Has a final university choice.' },
+            changeAgentRequired: { type: 'boolean' },
+            hasMissingItems: { type: 'boolean' },
+            ieltsMin: { type: 'number' },
+            ieltsMax: { type: 'number' },
+            closed: { type: 'string', enum: ['exclude', 'only', 'include'], description: 'Default exclude.' },
+            from: { type: 'string', description: 'ISO date, inclusive.' },
+            to: { type: 'string', description: 'ISO date, inclusive.' },
+            taskStatus: { type: 'string', enum: ['new', 'in-progress', 'completed', 'denied'] },
+            taskType: { type: 'string' },
+            recipientId: { type: 'string', description: 'Task recipient user id.' },
+          },
+        },
+        groupBy: {
+          type: 'string',
+          enum: [
+            'none', 'employee', 'country', 'applicationStatus', 'university', 'pipelineStatus',
+            'studyLevel', 'term', 'intake', 'month', 'gender', 'taskType', 'taskStatus',
+          ],
+          description: 'Break the total down by this field. employee gives names, not civil IDs.',
+        },
+        listNames: {
+          type: 'boolean',
+          description: 'Also return up to 50 matching student names (students/applications only).',
+        },
+      },
+      required: ['entity'],
+    },
+  },
+  handler: (input) =>
+    countRecords({
+      entity: input.entity,
+      filters: input.filters,
+      groupBy: input.groupBy,
+      listNames: input.listNames,
+    }),
+};
+
+// --------------------------------------------------------------------------
+// Internal chat
+// --------------------------------------------------------------------------
+
+const findChatsAwaitingReplyTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'find_chats_awaiting_reply',
+    description:
+      "Find students' internal staff chats where the newest message is still waiting on " +
+      'someone: it was addressed to a person or group, or asked a question, and nobody has ' +
+      'written since. Longest-waiting first. Pass userId to see only what is waiting on one person.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', description: 'How far back to look, 1-60. Default 7.' },
+        userId: { type: 'string', description: 'Only messages addressed to this user (users.id, not civil ID).' },
+        limit: { type: 'integer', description: 'Max threads, 1-100. Default 30.' },
+      },
+    },
+  },
+  handler: (input) => findChatsAwaitingReply({ days: input.days, userId: input.userId, limit: input.limit }),
+};
+
+const readStudentChatTool: AiTool = {
+  write: false,
+  definition: {
+    name: 'read_student_chat',
+    description:
+      "Read a student's internal staff chat, oldest first, with who wrote each message and who it was addressed to.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentId: { type: 'string' },
+        limit: { type: 'integer', description: 'Most recent N messages, 1-100. Default 30.' },
+      },
+      required: ['studentId'],
+    },
+  },
+  handler: (input) => readStudentChat(input.studentId, input.limit),
+};
+
+const replyInStudentChatTool: AiTool = {
+  write: true,
+  definition: {
+    name: 'reply_in_student_chat',
+    description:
+      "Post a reply in a student's internal staff chat. It is posted as Masar AI, not as the " +
+      'user. By default it notifies the person who wrote the newest staff message; pass ' +
+      'notifyUserIds to choose. Read the chat first, show the user the exact reply and wait for ' +
+      'approval before calling this. Never state a fact in the reply that you did not read from the record.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentId: { type: 'string' },
+        content: { type: 'string', description: 'The message, in the language the thread uses.' },
+        notifyUserIds: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['studentId', 'content'],
+    },
+  },
+  handler: async (input, ctx) => {
+    guardWrite(ctx);
+    return replyInStudentChat({
+      studentId: input.studentId,
+      content: input.content,
+      notifyUserIds: input.notifyUserIds,
+    });
+  },
+};
+
+// --------------------------------------------------------------------------
 // General action dispatch (everything else masar can do)
 // --------------------------------------------------------------------------
 
@@ -388,12 +591,18 @@ export const AI_TOOLS: AiTool[] = [
   listTasksTool,
   listEmployeesTool,
   listUniversitiesTool,
+  getWorkGuideTool,
+  saveTeamNoteTool,
+  countRecordsTool,
   generateReportTool,
   findLateApplicationsTool,
   getLateRulesTool,
   emailStatusTool,
   sendEmailTool,
   uploadDocumentTool,
+  findChatsAwaitingReplyTool,
+  readStudentChatTool,
+  replyInStudentChatTool,
   listCapabilitiesTool,
   runActionTool,
 ];
