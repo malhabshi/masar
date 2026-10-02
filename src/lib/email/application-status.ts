@@ -25,6 +25,10 @@ import { getAnthropicClient } from '@/lib/ai/client';
 import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { updateApplicationStatus } from '@/lib/actions';
 import { extractPdfText } from './document-compare';
+import { newestMessage } from './text';
+import { playbookFor } from './companies';
+
+export { newestMessage };
 import type { InboxMessage } from './inbox';
 import type { Application, ApplicationStatus } from '@/lib/types';
 import { handleChangeAgentEvent, type ChangeAgentEvent } from './change-agent';
@@ -114,28 +118,6 @@ export type StatusChange = {
   note?: string;
 };
 
-/**
- * Just the newest message. Replies carry the whole earlier conversation underneath, and
- * an offer quoted from three weeks ago must not be read as news. Cuts at the usual
- * quote markers: "On … wrote:", Outlook's "From: … Sent:" block, "Original Message",
- * and runs of ">" lines.
- */
-export function newestMessage(text: string): string {
-  const markers = [
-    /^\s*On\s.{3,200}?wrote:\s*$/im,
-    /^\s*في\s.{3,200}?كتب.{0,40}:\s*$/im,
-    /^\s*-{2,}\s*(Original Message|Forwarded message)\s*-{2,}/im,
-    /^\s*From:\s.+\n(?:.*\n){0,3}?\s*(Sent|Date):\s/im,
-    /^\s*>.*\n\s*>/m,
-  ];
-  let cut = text.length;
-  for (const rx of markers) {
-    const m = rx.exec(text);
-    if (m && m.index > 0 && m.index < cut) cut = m.index;
-  }
-  return text.slice(0, cut).trim();
-}
-
 /** Text of attached PDFs (offer letters), trimmed, so the model sees what the letter says. */
 async function attachmentText(message: InboxMessage): Promise<string> {
   const parts: string[] = [];
@@ -190,6 +172,7 @@ export async function updateApplicationsFromEmail(input: {
             '',
             newestMessage(message.text).slice(0, 12_000),
             attachments ? `\n${attachments}` : '',
+            await playbookFor(message.from).then((pb) => (pb ? `\n\n${pb}` : '')),
           ].join('\n'),
         },
       ],

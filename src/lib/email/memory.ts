@@ -22,7 +22,8 @@ import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
 import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { loadStudentNames, matchStudentByName, type StudentNameRecord } from './matcher';
-import { newestMessage } from './application-status';
+import { newestMessage } from './text';
+import { playbookFor } from './companies';
 
 export const EMAIL_MEMORY_COLLECTION = 'email_memory';
 const STATE_DOC = { collection: 'app_settings', doc: 'email_memory_state' };
@@ -104,6 +105,13 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
+/** The company's playbook, when the address belongs to one we know. */
+async function companyContext(addresses: string): Promise<string> {
+  const first = addresses.match(/[\w.+-]+@[\w.-]+/)?.[0];
+  const pb = first ? await playbookFor(first) : '';
+  return pb ? `\n\n${pb}` : '';
+}
+
 async function summarise(input: {
   direction: 'in' | 'out';
   from: string;
@@ -130,6 +138,7 @@ async function summarise(input: {
           `Attachments: ${input.attachments.join(', ') || 'none'}`,
           '',
           newestMessage(input.body).slice(0, 5000) || '(no text)',
+          await companyContext(input.direction === 'in' ? input.from : input.to),
         ].join('\n'),
       },
     ],

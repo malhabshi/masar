@@ -25,6 +25,7 @@ import { storagePathFromUrl } from '@/lib/mcp/document-tools';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured, type InboxMessage } from './inbox';
 import { recentEmailLines } from './memory';
+import { playbookFor } from './companies';
 import { replyWithReceipt } from './reply-receipt';
 
 export const EMAIL_REQUESTS_COLLECTION = 'email_requests';
@@ -159,6 +160,7 @@ export async function analyseEmail(input: {
             `Attachments: ${input.attachmentNames.join(', ') || 'none'}`,
             '',
             input.body.slice(0, 15_000),
+            await playbookFor(input.from).then((pb) => (pb ? `\n\n${pb}` : '')),
           ].join('\n'),
         },
       ],
@@ -400,6 +402,7 @@ async function writeDraftBody(input: {
           '',
           'Student record (for information answers):',
           input.studentRecord,
+          await playbookFor(input.request.replyTo).then((pb) => (pb ? `\n${pb}` : '')),
         ].join('\n'),
       },
     ],

@@ -63,6 +63,15 @@ type EmailRequestRow = {
   drafts: Array<{ at: string; items: string[]; attachments: string[] }>;
 };
 
+type CompanyProfile = {
+  id: string;
+  name: string;
+  domains: string[];
+  playbook: string;
+  teamNotes: string;
+  learnedFrom: { received: number; sent: number; at: string } | null;
+};
+
 type IntakeStatus = {
   configured: boolean;
   connection: { ok: boolean; error?: string };
@@ -70,6 +79,7 @@ type IntakeStatus = {
   pendingCount: number;
   queue: QueueItem[];
   requests?: EmailRequestRow[];
+  companies?: CompanyProfile[];
 };
 
 export default function EmailIntakePage() {
@@ -289,6 +299,8 @@ export default function EmailIntakePage() {
         onAct={act}
       />
 
+      <CompaniesCard companies={status?.companies ?? []} onAct={act} />
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
@@ -312,6 +324,174 @@ export default function EmailIntakePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * How each company writes to us — learned from its emails and our replies, with the
+ * team's own notes on top. The AI reads these whenever it handles that company's mail.
+ */
+function CompaniesCard({
+  companies,
+  onAct,
+}: {
+  companies: CompanyProfile[];
+  onAct: (payload: Record<string, unknown>, successMessage: string) => Promise<void>;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [domainEdits, setDomainEdits] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newDomains, setNewDomains] = useState('');
+
+  const run = async (key: string, payload: Record<string, unknown>, message: string) => {
+    setBusy(key);
+    await onAct(payload, message);
+    setBusy(null);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Mail className="h-4 w-4" />
+          How each company works
+        </CardTitle>
+        <CardDescription>
+          INTO, Study Group, Merit and the others each write differently. The AI learns each one&apos;s
+          way from its emails and your replies, and follows it when it reads or answers their mail.
+          Your notes on a company override what it learned. Add a new company any time.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-2.5">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Company name, e.g. Kaplan"
+            className="h-8 w-48 text-sm"
+          />
+          <Input
+            value={newDomains}
+            onChange={(e) => setNewDomains(e.target.value)}
+            placeholder="Email domain(s), e.g. kaplan.com, kaplanpathways.com"
+            className="h-8 min-w-[220px] flex-1 text-sm"
+          />
+          <Button
+            size="sm"
+            className="h-8"
+            disabled={busy !== null || !newName.trim() || !newDomains.trim()}
+            onClick={async () => {
+              await run('add', { action: 'saveCompany', companyName: newName, domains: newDomains }, `${newName.trim()} added — now learn it from the mailbox`);
+              setNewName('');
+              setNewDomains('');
+            }}
+          >
+            {busy === 'add' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add company'}
+          </Button>
+        </div>
+        {companies.map((c) => {
+          const open = openId === c.id;
+          const draft = notes[c.id] ?? c.teamNotes ?? '';
+          return (
+            <div key={c.id} className="rounded-lg border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 p-3 text-left"
+                onClick={() => setOpenId(open ? null : c.id)}
+              >
+                <span className="text-sm font-semibold">
+                  {c.name} <span className="font-normal text-muted-foreground">· {c.domains[0]}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {c.teamNotes && <Badge variant="outline" className="text-[11px] font-normal">notes</Badge>}
+                  {c.learnedFrom ? (
+                    <Badge variant="secondary" className="text-[11px] font-normal">
+                      learned from {c.learnedFrom.received} emails
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">not learned yet</Badge>
+                  )}
+                </span>
+              </button>
+              {open && (
+                <div className="space-y-3 border-t p-3">
+                  {c.playbook ? (
+                    <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-sans text-xs leading-relaxed">
+                      {c.playbook}
+                    </pre>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No playbook yet — learn it from the mailbox.</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-semibold">Email domains</p>
+                    <Input
+                      value={domainEdits[c.id] ?? c.domains.join(', ')}
+                      onChange={(e) => setDomainEdits((d) => ({ ...d, [c.id]: e.target.value }))}
+                      className="h-8 min-w-[220px] flex-1 text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      disabled={busy !== null || (domainEdits[c.id] ?? c.domains.join(', ')) === c.domains.join(', ')}
+                      onClick={() =>
+                        run(`dom-${c.id}`, { action: 'saveCompany', companyId: c.id, companyName: c.name, domains: domainEdits[c.id] }, `${c.name}: domains saved`)
+                      }
+                    >
+                      Save domains
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold">Our notes on {c.name} (override the above)</p>
+                    <textarea
+                      dir="auto"
+                      value={draft}
+                      onChange={(e) => setNotes((n) => ({ ...n, [c.id]: e.target.value }))}
+                      rows={3}
+                      placeholder={`e.g. Always reply to ${c.name} in the same thread; they need the passport as PDF, not a photo.`}
+                      className="w-full resize-y rounded-md border bg-background p-2 text-sm"
+                    />
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="mr-auto text-destructive hover:text-destructive"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        if (window.confirm(`Remove ${c.name}? Its playbook and notes are kept if you add it back.`)) {
+                          void run(`rm-${c.id}`, { action: 'removeCompany', companyId: c.id }, `${c.name} removed`);
+                        }
+                      }}
+                    >
+                      Remove
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy !== null}
+                      onClick={() => run(`learn-${c.id}`, { action: 'learnCompany', companyId: c.id }, `${c.name}: playbook learned`)}
+                    >
+                      {busy === `learn-${c.id}` ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                      {c.learnedFrom ? 'Re-learn from mailbox' : 'Learn from mailbox'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={busy !== null || draft === (c.teamNotes ?? '')}
+                      onClick={() => run(`notes-${c.id}`, { action: 'companyNotes', companyId: c.id, teamNotes: draft }, `${c.name}: notes saved`)}
+                    >
+                      Save notes
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 

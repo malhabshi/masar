@@ -9,6 +9,13 @@ import {
 import { isInboxConfigured, verifyInboxConnection } from '@/lib/email/inbox';
 import { getIntakeSettings, saveIntakeSettings } from '@/lib/email/intake-settings';
 import { fulfilEmailRequests, listEmailRequests } from '@/lib/email/requests';
+import {
+  learnCompanyPlaybook,
+  listCompanyProfiles,
+  removeCompany,
+  saveCompany,
+  saveCompanyNotes,
+} from '@/lib/email/companies';
 import type { User } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -68,6 +75,7 @@ export async function GET(req: NextRequest) {
     pendingCount: queue.length,
     queue,
     requests: await listEmailRequests(40).catch(() => []),
+    companies: await listCompanyProfiles().catch(() => []),
   });
 }
 
@@ -88,6 +96,10 @@ export async function POST(req: NextRequest) {
     postToChat?: boolean;
     draftReplies?: boolean;
     autoApplicationStatus?: boolean;
+    companyId?: string;
+    teamNotes?: string;
+    companyName?: string;
+    domains?: string;
   };
   try {
     body = await req.json();
@@ -99,6 +111,37 @@ export async function POST(req: NextRequest) {
     case 'run': {
       const result = await runEmailIntake({ limit: body.limit });
       return NextResponse.json(result);
+    }
+    case 'learnCompany': {
+      if (!body.companyId) return NextResponse.json({ error: 'companyId is required.' }, { status: 400 });
+      try {
+        const learned = await learnCompanyPlaybook(body.companyId);
+        return NextResponse.json({ success: true, received: learned.received, sent: learned.sent });
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+      }
+    }
+    case 'saveCompany': {
+      try {
+        const saved = await saveCompany({ id: body.companyId, name: body.companyName ?? '', domains: body.domains ?? '' });
+        return NextResponse.json({ success: true, company: saved });
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+      }
+    }
+    case 'removeCompany': {
+      if (!body.companyId) return NextResponse.json({ error: 'companyId is required.' }, { status: 400 });
+      try {
+        await removeCompany(body.companyId);
+        return NextResponse.json({ success: true });
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+      }
+    }
+    case 'companyNotes': {
+      if (!body.companyId) return NextResponse.json({ error: 'companyId is required.' }, { status: 400 });
+      await saveCompanyNotes(body.companyId, body.teamNotes ?? '');
+      return NextResponse.json({ success: true });
     }
     case 'drafts': {
       // Check now for requests whose documents have arrived, instead of waiting for the next run.
