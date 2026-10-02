@@ -22,6 +22,7 @@ import {
 } from '@/lib/school-quota';
 import { submitJotformApplications, findExistingStudentsByNumber, type ExistingStudentMatch } from '@/lib/actions';
 import { useUser } from '@/hooks/use-user';
+import { PassportReader, type PassportFields } from '@/components/jotform/passport-reader';
 import { useCollection } from '@/firebase';
 import type { ApprovedUniversity, Application, Country } from '@/lib/types';
 
@@ -352,6 +353,25 @@ export default function JotformPage() {
     setFiles(prev => ({ ...prev, [key]: [...prev[key], ...picked] }));
     // Reset input so the same file can be re-added after removal if needed
     if (fileRefs.current[key]) fileRefs.current[key]!.value = '';
+  };
+
+  // Fill only what is still empty; report anything the passport disagrees with instead
+  // of overwriting what the employee typed.
+  const applyPassport = (p: PassportFields) => {
+    const filled: string[] = [];
+    const differences: string[] = [];
+    const norm = (v: string) => v.trim().toUpperCase().replace(/\s+/g, ' ');
+    const take = (label: string, current: string, value: string | null, set: (v: string) => void, same = (a: string, b: string) => norm(a) === norm(b)) => {
+      if (!value) return;
+      if (!current.trim()) { set(value); filled.push(`${label} ${value}`); return; }
+      if (!same(current, value)) differences.push(`${label}: you typed "${current}", the passport says "${value}".`);
+    };
+    take('First name', firstName, p.givenNames, setFirstName);
+    take('Last name', lastName, p.surname, setLastName);
+    take('Date of birth', dob, p.dateOfBirth, setDob, (a, b) => a === b);
+    take('Gender', gender, p.sex, setGender, (a, b) => a === b);
+    take('Civil ID', civilId, p.civilId, setCivilId, (a, b) => a.replace(/\D/g, '') === b);
+    return { filled, differences };
   };
 
   const removeFile = (key: string, index: number) => {
@@ -689,6 +709,11 @@ export default function JotformPage() {
               <CardDescription>All fields as per passport, in English</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <PassportReader
+                passportFiles={files['passport']}
+                onAddFile={file => setFiles(prev => ({ ...prev, passport: [...prev.passport, file] }))}
+                onRead={applyPassport}
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>First Name *</Label>
