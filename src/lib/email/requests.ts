@@ -348,15 +348,14 @@ async function matchDocuments(
   });
 }
 
-const DRAFT_SYSTEM = `You write short, professional email replies for a Kuwaiti study-abroad agency to universities and pathway providers. The reply goes back in the same thread, from the agency, about one student.
+const DRAFT_SYSTEM = `You write email replies for a Kuwaiti study-abroad agency to universities and pathway providers. The reply is posted INSIDE the existing email thread, so the reader already has the student's name, the reference number, the course and their own request right above it.
 
-Write only the body text. Plain text, no markdown.
+Write only the body text. Plain text, no markdown. Be as short as possible:
 - Greet with "Dear <organisation or Admissions> Team," (or the sender's name when it is a person).
-- Name the student and any reference number from the original email.
-- For each document item: say it is attached.
-- For each information item: give the answer from the student record provided. If the record does not contain the answer, write "[ADD: <what is needed>]" in its place — never invent one.
-- One short closing line. No sign-off and no name — the signature is added afterwards.
-- Keep it under 120 words.`;
+- For documents: one line saying what is attached, by its short name, e.g. "Please find the signed offer acceptance form attached." or "Please find attached the FGL and the passport copy."
+- For information: give the answer only, from the student record provided. If the record does not contain it, write "[ADD: <what is needed>]" in its place — never invent one.
+- Do NOT repeat the student's name, reference numbers, course, dates or anything else already in the thread. Do NOT explain what a document contains or why it is sent.
+- No closing line, no sign-off, no name — the signature is added afterwards.`;
 
 async function writeDraftBody(input: {
   request: EmailRequest;
