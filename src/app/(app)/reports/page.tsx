@@ -14,6 +14,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useUser } from '@/hooks/use-user';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EmployeeDailyReport } from '@/components/reports/employee-daily-report';
 import {
     ResponsiveContainer,
     BarChart as RechartsBarChart,
@@ -196,8 +198,17 @@ export default function ReportsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                 <h1 className="text-3xl font-bold">Reports</h1>
+            <h1 className="text-3xl font-bold">Reports</h1>
+            <Tabs defaultValue="daily" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="daily">Daily employee report</TabsTrigger>
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                </TabsList>
+                <TabsContent value="daily">
+                    <EmployeeDailyReport />
+                </TabsContent>
+                <TabsContent value="overview" className="space-y-6">
+            <div className="flex justify-end items-center">
                  <Popover>
                     <PopoverTrigger asChild>
                     <Button
@@ -234,6 +245,8 @@ export default function ReportsPage() {
             </div>
             
             {isLoading ? renderLoading() : error ? renderError() : stats ? renderContent() : null}
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

@@ -18,6 +18,7 @@ import { syncSentMail } from '@/lib/email/memory';
 import { followUpsIfDue } from '@/lib/email/followups';
 import { automateRecentTasks } from '@/lib/ai/task-automation';
 import { currentSlot, isSlotDone } from '@/lib/email/schedule';
+import { buildTodayIfDue } from '@/lib/reports/employee-daily';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -117,6 +118,15 @@ export async function GET(req: NextRequest) {
     inbox = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // The day's employee report, built by itself after 22:00 Kuwait time.
+  let dailyReport: unknown = null;
+  try {
+    dailyReport = await buildTodayIfDue();
+  } catch (e) {
+    console.error('[cron/daily-report] failed:', e);
+    dailyReport = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   // Requests no browser triggered (add schools / draft the update email).
   let taskAutomation: unknown = null;
   try {
@@ -134,6 +144,7 @@ export async function GET(req: NextRequest) {
     followUps,
     taskAutomation,
     inbox,
+    dailyReport,
     success: true,
     messagesSent: result.sent,
     details: result.details,
