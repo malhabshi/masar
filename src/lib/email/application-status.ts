@@ -27,6 +27,7 @@ import { updateApplicationStatus } from '@/lib/actions';
 import { extractPdfText } from './document-compare';
 import type { InboxMessage } from './inbox';
 import type { Application, ApplicationStatus } from '@/lib/types';
+import { handleChangeAgentEvent, type ChangeAgentEvent } from './change-agent';
 
 const SETTABLE: ApplicationStatus[] = ['Submitted', 'Missing Items', 'Accepted', 'Rejected'];
 const FINAL: ApplicationStatus[] = ['Accepted', 'Rejected'];
@@ -48,7 +49,13 @@ Rules:
 - One email can update several applications (e.g. an agent sending results for several schools).
 - A request for a document AFTER an offer (signed acceptance form, deposit, CAS documents) does not change an Accepted application.
 - Emails that are only marketing, receipts, reminders or general information change nothing.
-- If nothing changes, return an empty changes list.`;
+- If nothing changes, return an empty changes list.
+
+Change of agent — report these in changeAgent, not in changes:
+- "conflict": the university says another agent / counsellor has also applied for this student, a conflicting application, a transfer policy, or asks which agent the student wants. Give any deadline for the student's decision.
+- "transferred_away": the outcome — the student chose the other agent; the application moved away from us.
+- "stays_with_us": the outcome — the application remains under our representation.
+For change of agent, the application index may be null if the email names only the provider (e.g. INTO) and not a university on the list; then put the university or provider as named in university.`;
 
 const TOOL: Anthropic.Tool = {
   name: 'record_status_changes',
@@ -73,6 +80,23 @@ const TOOL: Anthropic.Tool = {
         type: 'array',
         items: { type: 'string' },
         description: 'Offers or decisions for universities not in the list, one line each.',
+      },
+      changeAgent: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: ['integer', 'null'] },
+            university: { type: 'string' },
+            event: { type: 'string', enum: ['conflict', 'transferred_away', 'stays_with_us'] },
+            deadline: {
+              type: ['string', 'null'],
+              description: 'The decision deadline as a date (YYYY-MM-DD). "5 days to respond" counts from the email date.',
+            },
+            evidence: { type: 'string' },
+          },
+          required: ['university', 'event', 'evidence'],
+        },
       },
     },
     required: ['changes'],
@@ -136,8 +160,8 @@ export async function updateApplicationsFromEmail(input: {
   studentId: string;
   /** Work out the changes but apply nothing — for previews and tests. */
   dryRun?: boolean;
-}): Promise<{ changes: StatusChange[]; unlisted: string[]; alreadyCorrect: string[] }> {
-  const none = { changes: [] as StatusChange[], unlisted: [] as string[], alreadyCorrect: [] as string[] };
+}): Promise<{ changes: StatusChange[]; unlisted: string[]; alreadyCorrect: string[]; changeAgent: string[] }> {
+  const none = { changes: [] as StatusChange[], unlisted: [] as string[], alreadyCorrect: [] as string[], changeAgent: [] as string[] };
   if (!isAiConfigured() || !adminDb) return none;
   try {
     const snap = await adminDb.collection('students').doc(input.studentId).get();
@@ -172,7 +196,7 @@ export async function updateApplicationsFromEmail(input: {
     });
     const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
     if (!use) return none;
-    const raw = use.input as { changes?: any[]; unlisted?: unknown[] };
+    const raw = use.input as { changes?: any[]; unlisted?: unknown[]; changeAgent?: any[] };
 
     const changes: StatusChange[] = [];
     /** Applications the email speaks to whose status already says the same — nothing to do. */
@@ -245,7 +269,36 @@ export async function updateApplicationsFromEmail(input: {
     }
 
     const unlisted = (raw.unlisted ?? []).filter((u): u is string => typeof u === 'string' && !!u.trim());
-    return { changes, unlisted, alreadyCorrect };
+
+    // Change of agent: switch it on for an alert, note an outcome.
+    const changeAgent: string[] = [];
+    const from = message.fromName || message.from;
+    for (const c of raw.changeAgent ?? []) {
+      if (!['conflict', 'transferred_away', 'stays_with_us'].includes(c?.event)) continue;
+      let app = Number.isInteger(c.index) ? apps[c.index] : undefined;
+      // INTO often names only itself. With exactly one application through that provider,
+      // that is the one; with several, it stays general rather than flag the wrong school.
+      if (!app && typeof c.university === 'string') {
+        const provider = c.university.trim().toLowerCase();
+        const viaProvider = apps.filter((a) => a.university.toLowerCase().includes(provider));
+        if (viaProvider.length === 1) app = viaProvider[0];
+      }
+      const event: ChangeAgentEvent = {
+        university: app?.university ?? String(c.university ?? 'General Request').slice(0, 120),
+        event: c.event,
+        deadline: typeof c.deadline === 'string' ? c.deadline : null,
+        evidence: String(c.evidence ?? '').slice(0, 300),
+        from,
+      };
+      if (input.dryRun) {
+        changeAgent.push(`[dry run] ${event.event} — ${event.university}${event.deadline ? ` (deadline ${event.deadline})` : ''}`);
+        continue;
+      }
+      const line = await handleChangeAgentEvent(input.studentId, event);
+      if (line) changeAgent.push(line);
+    }
+
+    return { changes, unlisted, alreadyCorrect, changeAgent };
   } catch (e) {
     console.error('[email-status] failed:', e);
     return none;
@@ -253,8 +306,8 @@ export async function updateApplicationsFromEmail(input: {
 }
 
 /** Chat / receipt lines for what happened. */
-export function statusChangeLines(result: { changes: StatusChange[]; unlisted: string[] }): string[] {
-  const lines: string[] = [];
+export function statusChangeLines(result: { changes: StatusChange[]; unlisted: string[]; changeAgent?: string[] }): string[] {
+  const lines: string[] = [...(result.changeAgent ?? [])];
   for (const c of result.changes) {
     lines.push(
       c.applied

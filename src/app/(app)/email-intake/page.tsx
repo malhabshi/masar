@@ -264,7 +264,7 @@ export default function EmailIntakePage() {
             <span>
               <strong>Application status from emails:</strong>{' '}
               {status.settings.autoApplicationStatus
-                ? 'on — an offer sets Accepted, "application received" sets Submitted, incomplete sets Missing Items, unsuccessful or not KCO-approved sets Rejected. Accepted and Rejected are never changed by an email.'
+                ? 'on — an offer sets Accepted, "application received" sets Submitted, incomplete sets Missing Items, unsuccessful or not KCO-approved sets Rejected. Accepted and Rejected are never changed by an email. A "conflicting application from another agent" email switches Change Agent on for that school, with the deadline noted.'
                 : 'off — emails do not change application statuses.'}
             </span>
             <Button

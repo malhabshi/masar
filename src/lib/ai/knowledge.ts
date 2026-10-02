@@ -34,6 +34,7 @@ export const WORK_GUIDE: Record<string, { title: string; text: string }> = {
 - Closing (admin/adminplus): adds "-Closed" to the name, pipeline → black, every application → Rejected, the student moves to the TEST account, change-agent flags are cleared. Non-passport documents are deleted 30 days after closing.
 - Reopening: removes "-Closed", applications → Pending, pipeline → none, student becomes unassigned.
 - Closed students are archived; leave them out of operational numbers unless asked.
+- Change agent: when another agent also applies for our student, the university (Study Group, INTO…) emails a "conflicting application" / "transfer policy" alert with a deadline for the student to choose. Change Agent is then switched on for that school (by staff, or by the email intake as "Masar AI (from email)"), which alerts the employee, admins and the department. Many closed profiles were closed for "change agent".
 - Inactivity: a student is "stagnant" after 20 days without activity (excluding change agent, ready to travel, and finalised students). The assigned employee files an inactivity report; automatic reminders go out at most every 48h per student.`,
   },
   pipeline: {
