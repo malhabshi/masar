@@ -31,6 +31,7 @@ import {
 } from './document-compare';
 import type { Document as StudentDocument } from '@/lib/types';
 import { replyWithReceipt } from './reply-receipt';
+import { statusChangeLines, updateApplicationsFromEmail } from './application-status';
 import {
   analyseEmail,
   emailDocumentNote,
@@ -492,6 +493,15 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         }
       }
 
+      // What does the email mean for the student's applications? An offer → Accepted,
+      // "application received" → Submitted, and so on, under the agency's rules.
+      let statusLines: string[] = [];
+      if (settings.autoApplicationStatus) {
+        statusLines = statusChangeLines(
+          await updateApplicationsFromEmail({ message, studentId: match.student.id }),
+        );
+      }
+
       // Announce it in the student's internal chat so the employee, the admins and the
       // relevant department are all notified — this is how staff find out at all.
       const employeeCivilId = await getStudentEmployeeCivilId(match.student.id);
@@ -504,7 +514,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         body: message.text,
         filedAttachments: filedNames,
         versionNotes,
-        requestNotes: requestLines,
+        requestNotes: [...statusLines, ...requestLines],
       });
 
       await replyWithReceipt(message, {
@@ -513,7 +523,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         studentName: match.student.name,
         documents: filedNames,
         versionNotes,
-        requestNotes: requestLines,
+        requestNotes: [...statusLines, ...requestLines],
         chatPosted: announcement.posted,
         chatRecipients: announcement.recipients ?? [],
       });

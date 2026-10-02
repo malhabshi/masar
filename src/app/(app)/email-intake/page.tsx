@@ -47,6 +47,7 @@ type IntakeSettings = {
   aiRenameDocuments: boolean;
   postToChat: boolean;
   draftReplies: boolean;
+  autoApplicationStatus: boolean;
 };
 
 type EmailRequestRow = {
@@ -251,6 +252,32 @@ export default function EmailIntakePage() {
               }
             >
               Turn off test mode
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {status && (
+        <Alert>
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span>
+              <strong>Application status from emails:</strong>{' '}
+              {status.settings.autoApplicationStatus
+                ? 'on — an offer sets Accepted, "application received" sets Submitted, incomplete sets Missing Items, unsuccessful or not KCO-approved sets Rejected. Accepted and Rejected are never changed by an email.'
+                : 'off — emails do not change application statuses.'}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                act(
+                  { action: 'settings', autoApplicationStatus: !status.settings.autoApplicationStatus },
+                  status.settings.autoApplicationStatus ? 'Status updates from email turned off' : 'Status updates from email turned on',
+                )
+              }
+            >
+              {status.settings.autoApplicationStatus ? 'Turn off' : 'Turn on'}
             </Button>
           </AlertDescription>
         </Alert>

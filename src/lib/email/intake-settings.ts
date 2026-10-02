@@ -20,6 +20,8 @@ export type IntakeSettings = {
   postToChat: boolean;
   /** Turn what an email asks for into Missing Items, and draft the reply in Gmail once it is on the profile. */
   draftReplies: boolean;
+  /** Set the student's application status from what the email says (offer → Accepted…). */
+  autoApplicationStatus: boolean;
 };
 
 export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
@@ -28,6 +30,7 @@ export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
   aiRenameDocuments: true,
   postToChat: true,
   draftReplies: true,
+  autoApplicationStatus: true,
 };
 
 export async function getIntakeSettings(): Promise<IntakeSettings> {
@@ -44,6 +47,7 @@ export async function getIntakeSettings(): Promise<IntakeSettings> {
       aiRenameDocuments: d.aiRenameDocuments !== false,
       postToChat: d.postToChat !== false,
       draftReplies: d.draftReplies !== false,
+      autoApplicationStatus: d.autoApplicationStatus !== false,
     };
   } catch {
     return DEFAULT_INTAKE_SETTINGS;
@@ -64,6 +68,8 @@ export async function saveIntakeSettings(patch: Partial<IntakeSettings>): Promis
       typeof patch.aiRenameDocuments === 'boolean' ? patch.aiRenameDocuments : current.aiRenameDocuments,
     postToChat: typeof patch.postToChat === 'boolean' ? patch.postToChat : current.postToChat,
     draftReplies: typeof patch.draftReplies === 'boolean' ? patch.draftReplies : current.draftReplies,
+    autoApplicationStatus:
+      typeof patch.autoApplicationStatus === 'boolean' ? patch.autoApplicationStatus : current.autoApplicationStatus,
   };
   await adminDb
     .collection(SETTINGS.collection)

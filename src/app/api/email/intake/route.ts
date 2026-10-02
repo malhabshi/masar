@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
     aiRenameDocuments?: boolean;
     postToChat?: boolean;
     draftReplies?: boolean;
+    autoApplicationStatus?: boolean;
   };
   try {
     body = await req.json();
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
         aiRenameDocuments: body.aiRenameDocuments,
         postToChat: body.postToChat,
         draftReplies: body.draftReplies,
+        autoApplicationStatus: body.autoApplicationStatus,
       });
       return NextResponse.json({ success: true, settings: saved });
     }
