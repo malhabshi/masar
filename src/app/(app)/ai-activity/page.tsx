@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/firebase';
 import { cn } from '@/lib/utils';
 import type { AiAction } from '@/lib/ai/action-log';
+import type { Deadline } from '@/lib/ai/deadlines';
 
 const SOURCES: Record<string, string> = {
   email: 'Email',
@@ -32,6 +33,7 @@ export default function AiActivityPage() {
   const [source, setSource] = useState<string>('all');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
 
   const call = useCallback(async (init?: RequestInit, query = '') => {
     const token = await auth.currentUser?.getIdToken();
@@ -49,6 +51,9 @@ export default function AiActivityPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Could not load.');
       setActions(data.actions);
+      const dl = await call(undefined, '?view=deadlines');
+      const dd = await dl.json();
+      if (dl.ok) setDeadlines(dd.deadlines);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -112,6 +117,34 @@ export default function AiActivityPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Upcoming deadlines</CardTitle>
+          <CardDescription>
+            From the documents: offer and deposit deadlines, CAS expiry, change-of-agent decisions in the next 60 days,
+            and passports or IELTS results that will not last. The employee is reminded in the student&apos;s chat 7 days
+            and 1 day before.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {!deadlines && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+          {deadlines && deadlines.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nothing coming up — or the documents have not been read yet.</p>
+          )}
+          {deadlines?.map((d) => (
+            <div key={d.key} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b py-1.5 text-sm last:border-0">
+              <span className="min-w-0">
+                <Link href={`/student/${d.studentId}`} className="font-semibold hover:underline">{d.studentName}</Link>
+                <span className="text-muted-foreground"> · {d.label}</span>
+              </span>
+              <span className={cn('shrink-0 text-xs tabular-nums', d.warning ? 'text-warning' : d.daysLeft <= 7 ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
+                {d.warning ? 'check' : d.daysLeft === 0 ? 'today' : `${d.daysLeft} days`} · {d.date}
+              </span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-1.5">
         {['all', ...Object.keys(SOURCES)].map((s) => (

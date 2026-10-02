@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { listAiActions, undoAiAction } from '@/lib/ai/action-log';
+import { collectDeadlines } from '@/lib/ai/deadlines';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,10 @@ export async function GET(req: NextRequest) {
   const who = await admin(req);
   if (who instanceof NextResponse) return who;
   const p = req.nextUrl.searchParams;
+  if (p.get('view') === 'deadlines') {
+    const all = await collectDeadlines();
+    return NextResponse.json({ deadlines: all.filter((d) => d.warning || d.daysLeft <= 60) });
+  }
   const actions = await listAiActions({
     limit: Number(p.get('limit') ?? 200),
     source: p.get('source') ?? undefined,

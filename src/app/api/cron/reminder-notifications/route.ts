@@ -20,6 +20,7 @@ import { automateRecentTasks } from '@/lib/ai/task-automation';
 import { currentSlot, isSlotDone } from '@/lib/email/schedule';
 import { buildTodayIfDue } from '@/lib/reports/employee-daily';
 import { automaticAiAllowed } from '@/lib/ai/usage';
+import { deadlineAlertsIfDue } from '@/lib/ai/deadlines';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -123,6 +124,15 @@ export async function GET(req: NextRequest) {
     inbox = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Deadline reminders from the documents (no AI calls — reads what was already read).
+  let deadlines: unknown = null;
+  try {
+    deadlines = await deadlineAlertsIfDue();
+  } catch (e) {
+    console.error('[cron/deadlines] failed:', e);
+    deadlines = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   // The day's employee report, built by itself after 22:00 Kuwait time.
   let dailyReport: unknown = null;
   try {
@@ -150,6 +160,7 @@ export async function GET(req: NextRequest) {
     taskAutomation,
     inbox,
     dailyReport,
+    deadlines,
     aiAllowed,
     success: true,
     messagesSent: result.sent,
