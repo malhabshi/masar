@@ -214,7 +214,7 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
             await fetch('/api/ai/chat-responder', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ studentId: student.id }),
+              body: JSON.stringify({ studentId: student.id, messageId: (result as { messageId?: string }).messageId }),
             });
           } catch {
             /* responder is best-effort */

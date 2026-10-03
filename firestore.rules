@@ -122,7 +122,12 @@ service cloud.firestore {
     match /chats/{studentId} {
       allow read, write: if isSignedIn();
       match /messages/{messageId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
+        // Messages are written by the server. One written directly must carry its writer as
+        // the author (the AI acts on who wrote a message), and only an admin may change or
+        // remove a message afterwards.
+        allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if isAdmin();
       }
     }
 

@@ -186,8 +186,14 @@ function buildToolset(opts: {
   requestedBy: string;
   /** The user id of whoever wrote the newest message — checked before anything is changed. */
   requesterId: string;
+  /**
+   * The newest message is the one the caller's browser just sent, and the caller (proven
+   * by their login) is its author. A message's author field alone can be forged, so
+   * nothing is changed without this.
+   */
+  requesterVerified: boolean;
 }): AiTool[] {
-  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected, addressed, preview, requestedBy, requesterId } = opts;
+  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected, addressed, preview, requestedBy, requesterId, requesterVerified } = opts;
 
   const tools: AiTool[] = [
     {
@@ -358,6 +364,9 @@ function buildToolset(opts: {
     },
     handler: async (input) => {
       if (!addressed) return { ok: false, error: 'Only when staff ask you directly (@ai, or sent to Masar AI).' };
+      if (!requesterVerified) {
+        return { ok: false, error: 'Not changed: I can only act on a request sent from masar by the person who wrote it. Ask them to send it again.' };
+      }
       if (!db) return { ok: false, error: 'Database not available.' };
       const s = (await db.collection('students').doc(studentId).get()).data();
       if (!s) return { ok: false, error: 'Student not found.' };
@@ -566,6 +575,8 @@ export async function respondToStudentChat(
   studentId: string,
   /** Preview: treat this as the newest message, post nothing, claim and log nothing. */
   preview?: { content: string; authorId: string },
+  /** From the endpoint: who called (verified login) and which message their browser just sent. */
+  caller?: { verifiedCallerId?: string; verifiedMessageId?: string },
 ): Promise<ResponderOutcome> {
   try {
     const settings = preview
@@ -670,6 +681,9 @@ ${addressesBot(last) || asksForStatus(last)
       preview: !!preview,
       requestedBy: authors.get(last.authorId)?.name ?? last.authorId,
       requesterId: last.authorId,
+      requesterVerified:
+        !!preview ||
+        (!!caller?.verifiedCallerId && caller.verifiedCallerId === last.authorId && caller.verifiedMessageId === last.id),
     });
 
     const actor = { id: CHAT_BOT_USER_ID, name: CHAT_BOT_NAME, role: 'employee' };

@@ -2413,7 +2413,7 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     const recipientLabel = labels.length > 0 ? labels.join(', ') : 'No one specified';
 
     // 1. Add the message to the subcollection
-    await adminDb!.collection('chats').doc(studentId).collection('messages').add({
+    const messageRef = await adminDb!.collection('chats').doc(studentId).collection('messages').add({
       authorId,
       content,
       timestamp: now,
@@ -2465,7 +2465,7 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
     await studentRef.update(updates);
 
     // 3. Trigger Targeted WhatsApp Notifications
-    if (studentData.isClosed) return { success: true };
+    if (studentData.isClosed) return { success: true, messageId: messageRef.id };
     for (const staff of allUsers) {
       if (!mentionedUserIds.includes(staff.id)) continue;
       if (!staff.phone) continue;
@@ -2478,7 +2478,7 @@ export async function sendChatMessage(studentId: string, authorId: string, conte
         studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${studentId}`
       }, staff.phone);
     }
-    return { success: true };
+    return { success: true, messageId: messageRef.id };
   } catch (error: any) { return { success: false, message: error.message }; }
 }
 

@@ -83,7 +83,7 @@ export async function setOpenApplicationStatus(input: {
             employeeName: (employee.data() as User).name,
             studentName: outcome.studentName,
             messageContent: content,
-            dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${input.studentId}`,
+            studentUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${input.studentId}`,
           },
           (employee.data() as User).phone,
         );

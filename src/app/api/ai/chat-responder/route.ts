@@ -29,15 +29,16 @@ export async function POST(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const isCron = Boolean(cronSecret && token === cronSecret);
 
+  let callerId: string | undefined;
   if (!isCron) {
     try {
-      await adminAuth.verifyIdToken(token);
+      callerId = (await adminAuth.verifyIdToken(token)).uid;
     } catch {
       return NextResponse.json({ error: 'Unauthorized: invalid or expired token.' }, { status: 401 });
     }
   }
 
-  let body: { studentId?: unknown };
+  let body: { studentId?: unknown; messageId?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -53,7 +54,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: 'disabled' });
   }
 
-  const outcome = await respondToStudentChat(studentId);
+  // Who is calling, proven by their login, and the message their browser just sent — the
+  // AI only changes data for a message whose author is that caller.
+  const outcome = await respondToStudentChat(studentId, undefined, {
+    verifiedCallerId: callerId,
+    verifiedMessageId: typeof body.messageId === 'string' ? body.messageId : undefined,
+  });
   return NextResponse.json(outcome);
 }
 
