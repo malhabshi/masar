@@ -14,7 +14,7 @@ import {
   applyLabel,
   fetchHeadersForUids,
   fetchMessageByUid,
-  listUnhandledUnreadUids,
+  listUnhandledUids,
   INTAKE_LABELS,
   isInboxConfigured,
   markMessageSeen,
@@ -97,6 +97,21 @@ function claimKey(messageId: string | null, uid: number): string {
  * existed have no state and count as done.
  */
 const CLAIM_LEASE_MS = 30 * 60_000;
+
+/**
+ * Mail received before this moment is never processed. It is set on the first run, so
+ * going live works on the mail that arrives from then on instead of the whole old inbox
+ * (whose history the email memory already holds).
+ */
+async function processFrom(): Promise<Date> {
+  if (!adminDb) return new Date();
+  const ref = adminDb.collection('app_settings').doc('email_intake_state');
+  const at = (await ref.get()).data()?.processFrom;
+  if (typeof at === 'string' && !Number.isNaN(Date.parse(at))) return new Date(at);
+  const now = new Date().toISOString();
+  await ref.set({ processFrom: now }, { merge: true });
+  return new Date(now);
+}
 
 function claimIsLive(data: FirebaseFirestore.DocumentData | undefined): boolean {
   if (!data) return false;
@@ -295,14 +310,14 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     return result;
   }
 
-  // Phase 1 — which messages to look at. Unread mail the system has not labelled yet,
-  // newest first. Handled mail stays unread for staff, so a plain "unread" list would
-  // keep putting handled mail in front of older unhandled mail and the older mail would
-  // never be reached; the label search leaves it out, and the claims below catch anything
-  // whose label failed to apply.
+  // Phase 1 — which messages to look at: mail the system has not labelled yet, read or
+  // unread, newest first. The label search leaves handled mail out, and the claims below
+  // catch anything whose label failed to apply.
   let uids: number[];
+  let since: Date;
   try {
-    uids = await listUnhandledUnreadUids();
+    since = await processFrom();
+    uids = await listUnhandledUids(since);
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     await log({ status: 'error', reason });
@@ -336,6 +351,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         continue;
       }
       if (messages.length >= limit) break;
+      // Gmail's search works by whole days; this is the exact cut.
+      if (new Date(head.date) < since) continue;
 
       // Already dealt with in an earlier run — skip without downloading attachments.
       if (await isAlreadyHandled(head.messageId, head.uid)) continue;

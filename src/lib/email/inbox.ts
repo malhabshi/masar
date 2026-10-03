@@ -12,11 +12,13 @@
 // it), so copy is used deliberately and must not be swapped for move.
 // ────────────────────────────────────────────────────────────────────────────
 //
-// Read/unread is left alone for staff to use as their own to-do signal. Duplicate
-// processing is prevented by a Message-ID claim in Firestore, not by the read flag.
+// Read/unread is left alone for staff to use as their own to-do signal, and plays no part
+// in what is processed: staff often open an email before the scheduled check, and it must
+// still be read. What has been handled is known from the masar/filed label and a
+// Message-ID claim in Firestore.
 //
-// Reading is two-phase so that leaving mail unread stays cheap: envelopes first
-// (a few hundred bytes each), then the full message only for those not yet handled.
+// Reading is two-phase so that the repeated listing stays cheap: envelopes first (a few
+// hundred bytes each), then the full message only for those not yet handled.
 
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
@@ -126,15 +128,15 @@ export type MessageHeader = {
  * repeats each run — which is exactly why the expensive fetch is deferred.
  */
 /**
- * Every unread message in the inbox that the system has not labelled yet, newest first.
+ * Every message in the inbox since `since` that the system has not labelled yet — read or
+ * unread — newest first. The agency's own messages (the filing receipts) are left out.
  *
- * Handled mail stays unread on purpose (unread is staff's to-do signal), so searching
- * for unread alone would put already-handled mail in front of older unhandled mail, and
- * the older mail would never be reached. Gmail's own search excludes what carries the
- * masar/filed label; if that search is unavailable, all unread is returned and the
- * Firestore claims (isAlreadyHandled) remain the filter.
+ * Gmail's own search does the filtering; its after: works by whole days, so the caller
+ * makes the exact cut on each message's date. If that search is unavailable, everything
+ * since the day before is returned and the Firestore claims (isAlreadyHandled) remain the
+ * filter.
  */
-export async function listUnhandledUnreadUids(): Promise<number[]> {
+export async function listUnhandledUids(since: Date): Promise<number[]> {
   const config = imapConfig();
   if (!config) throw new Error('Inbox is not configured (SMTP_USER / SMTP_PASSWORD).');
   const client = new ImapFlow(config);
@@ -143,13 +145,15 @@ export async function listUnhandledUnreadUids(): Promise<number[]> {
     const lock = await client.getMailboxLock('INBOX');
     try {
       const label = INTAKE_LABELS.filed.replace(/\//g, '-');
+      const day = new Date(since.getTime() - 86_400_000);
+      const after = `${day.getUTCFullYear()}/${day.getUTCMonth() + 1}/${day.getUTCDate()}`;
       let uids: number[] | false = false;
       try {
-        uids = (await client.search({ gmraw: `is:unread -label:${label}` } as any, { uid: true })) || false;
+        uids = (await client.search({ gmraw: `-label:${label} -from:me after:${after}` } as any, { uid: true })) || false;
       } catch {
         uids = false;
       }
-      if (!uids) uids = (await client.search({ seen: false }, { uid: true })) || [];
+      if (!uids) uids = (await client.search({ since: day }, { uid: true })) || [];
       return [...uids].sort((a, b) => b - a);
     } finally {
       lock.release();
