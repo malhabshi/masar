@@ -59,7 +59,10 @@ type Waiting = { app: Application; days: number; key: string };
  */
 function finalChoiceFilter(final: unknown, apps: Application[]): ((a: Application) => boolean) | null {
   if (typeof final !== 'string' || !final.trim()) return null;
-  const strict = apps.filter((a) => sameUniversity(final, a.university));
+  const plain = (x: string) => x.trim().toLowerCase().replace(/\s+/g, ' ');
+  // Exact name first: a general name ("University of London") has no distinctive words left.
+  const exact = apps.filter((a) => plain(a.university) === plain(final));
+  const strict = exact.length ? exact : apps.filter((a) => sameUniversity(final, a.university));
   const chosen = strict.length ? strict : apps.filter((a) => overlapsUniversity(final, a.university));
   return chosen.length ? (a) => chosen.includes(a) : null;
 }
@@ -73,16 +76,23 @@ export async function stopFollowUp(
   studentId: string,
   app: Application,
   stop: { reason: string; by: string },
-): Promise<{ key: string; to: string | null; lastDraftedAt: string | null }> {
+): Promise<{ key: string; stopId: string; previousStop: FollowUpStop | null; to: string | null; lastDraftedAt: string | null }> {
   const key = appKey(studentId, app);
   const ref = db().collection(FOLLOWUP_COLLECTION).doc(key);
   const before = (await ref.get()).data() ?? {};
+  const stopId = `stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const previousStop: FollowUpStop | null = before.stoppedAt
+    ? { stoppedAt: before.stoppedAt, stoppedBy: before.stoppedBy ?? null, stopReason: before.stopReason ?? null, stopId: before.stopId ?? null }
+    : null;
   await ref.set(
-    { studentId, university: app.university, major: app.major, stoppedAt: new Date().toISOString(), stoppedBy: stop.by, stopReason: stop.reason },
+    { studentId, university: app.university, major: app.major, stoppedAt: new Date().toISOString(), stoppedBy: stop.by, stopReason: stop.reason, stopId },
     { merge: true },
   );
-  return { key, to: before.to ?? null, lastDraftedAt: before.lastDraftedAt ?? null };
+  return { key, stopId, previousStop, to: before.to ?? null, lastDraftedAt: before.lastDraftedAt ?? null };
 }
+
+/** A "stop chasing" on an email_followups record, as kept for Undo. */
+export type FollowUpStop = { stoppedAt: string; stoppedBy: string | null; stopReason: string | null; stopId: string | null };
 
 const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Never guess.`;
 

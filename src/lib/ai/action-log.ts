@@ -26,10 +26,10 @@ export type UndoSpec =
       from: ApplicationStatus;
       to: ApplicationStatus;
       rejectionReason?: string | null;
-      /** The change also stopped follow-ups for this application (email_followups id): Undo resumes them. */
-      resumeFollowUpKey?: string;
+      /** The change also stopped follow-ups for this application: Undo puts back what was there before. */
+      followUpStop?: FollowUpStopUndo;
     }
-  | { type: 'resume_follow_up'; key: string }
+  | ({ type: 'resume_follow_up' } & FollowUpStopUndo)
   | { type: 'remove_application'; university: string; major: string }
   | { type: 'remove_missing_items'; ids: string[] }
   | { type: 'restore_missing_items'; items: unknown[] }
@@ -44,6 +44,13 @@ export type UndoSpec =
       setTo?: { isAvailable: boolean; importantNote: string };
     }
   | { type: 'none' };
+
+/** Which stop this action made (email_followups id + stopId), and the stop it replaced, if any. */
+type FollowUpStopUndo = {
+  key: string;
+  stopId: string;
+  previous: { stoppedAt: string; stoppedBy: string | null; stopReason: string | null; stopId: string | null } | null;
+};
 
 export type AiAction = {
   id: string;
@@ -87,7 +94,7 @@ export async function listAiActions(opts: { limit?: number; source?: string; stu
 }
 
 /** Clears a "stop chasing" from an email_followups record. */
-const RESUME = { stoppedAt: FieldValue.delete(), stoppedBy: FieldValue.delete(), stopReason: FieldValue.delete() };
+const RESUME = { stoppedAt: FieldValue.delete(), stoppedBy: FieldValue.delete(), stopReason: FieldValue.delete(), stopId: FieldValue.delete() };
 
 const note = (content: string, by: string) => ({
   id: `note-ai-undo-${Date.now()}`,
@@ -126,6 +133,16 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
           : null;
       const uniRef = u.type === 'approved_university' ? db().collection('approved_universities').doc(u.universityId) : null;
       const uniSnap = uniRef ? await tx.get(uniRef) : null;
+      const stop = u.type === 'resume_follow_up' ? u : u.type === 'app_status' ? u.followUpStop : undefined;
+      const stopRef = stop ? db().collection('email_followups').doc(stop.key) : null;
+      const stopSnap = stopRef ? await tx.get(stopRef) : null;
+      /** Undo this action's own stop only — a newer stop request stays. Returns false if a newer one owns it. */
+      const undoStop = (): boolean => {
+        if (!stop || !stopRef) return true;
+        if (stopSnap?.data()?.stopId !== stop.stopId) return false;
+        tx.set(stopRef, stop.previous ?? RESUME, { merge: true });
+        return true;
+      };
 
       const finish = (message: string) => {
         tx.update(actionRef, undoneMark);
@@ -146,8 +163,8 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
             applications: next,
             adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.university} back to ${u.from} (was set to ${u.to}). By ${user.name}.`, user.id)),
           });
-          if (u.resumeFollowUpKey) tx.set(db().collection('email_followups').doc(u.resumeFollowUpKey), RESUME, { merge: true });
-          return finish(`${u.university} is back to ${u.from}${u.resumeFollowUpKey ? ' and follow-ups are back on' : ''}.`);
+          const followUps = !u.followUpStop ? '' : undoStop() ? ' and its follow-ups are as before' : ' (follow-ups stay stopped — a newer stop request was made)';
+          return finish(`${u.university} is back to ${u.from}${followUps}.`);
         }
         case 'remove_application': {
           const apps = (s.applications ?? []) as Application[];
@@ -176,8 +193,8 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
           return finish(items.length ? `${items.length} Missing Item(s) removed.` : 'They were already gone.');
         }
         case 'resume_follow_up': {
-          tx.set(db().collection('email_followups').doc(u.key), RESUME, { merge: true });
-          return finish('Follow-ups are back on for this application.');
+          if (!undoStop()) return { ok: false, message: 'Not undone — a newer stop request was made for this application since.' };
+          return finish(u.previous ? 'Put back to the earlier stop request.' : 'Follow-ups are back on for this application.');
         }
         case 'restore_missing_items': {
           if (u.items.length) tx.update(studentRef!, { missingItems: FieldValue.arrayUnion(...u.items) });

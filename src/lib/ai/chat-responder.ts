@@ -423,8 +423,16 @@ function buildToolset(opts: {
         studentId,
         studentName: s.name ?? null,
         undo: changedFrom
-          ? { type: 'app_status', university: app.university, major: app.major, from: changedFrom, to: 'Rejected', rejectionReason: previousReason, resumeFollowUpKey: draft.key }
-          : { type: 'resume_follow_up', key: draft.key },
+          ? {
+              type: 'app_status',
+              university: app.university,
+              major: app.major,
+              from: changedFrom,
+              to: 'Rejected',
+              rejectionReason: previousReason,
+              followUpStop: { key: draft.key, stopId: draft.stopId, previous: draft.previousStop },
+            }
+          : { type: 'resume_follow_up', key: draft.key, stopId: draft.stopId, previous: draft.previousStop },
       });
       collected.acted = true;
       return {
