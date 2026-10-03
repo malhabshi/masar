@@ -21,6 +21,10 @@
 //
 // Accepted and Rejected applications are never touched. Every affected student gets an
 // admin note and a chat message, and the full list goes into the email's summary.
+//
+// "Not approved by the KCO" is checked against the Approved Universities list first: when
+// the list shows the course as approved, nothing is rejected or closed — the students are
+// flagged and a person is asked to confirm with the KCO (kco.ts).
 
 import Anthropic from '@anthropic-ai/sdk';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -34,6 +38,7 @@ import { newestMessage } from './text';
 import type { InboxMessage } from './inbox';
 import type { Application, ApplicationStatus } from '@/lib/types';
 import { logAiAction } from '@/lib/ai/action-log';
+import { aboutKcoApproval, approvedRowsFor } from './kco';
 
 export const NOTICE_COLLECTION = 'company_notices';
 
@@ -47,6 +52,8 @@ type Notice = {
   intake: string | null;
   summary: string;
   evidence: string;
+  /** The notice says the KCO / MOHE does not approve it. */
+  kcoApproval: boolean;
 };
 
 function db() {
@@ -85,6 +92,7 @@ const DETECT_TOOL: Anthropic.Tool = {
             intake: { type: ['string', 'null'] },
             summary: { type: 'string', description: 'One line for staff.' },
             evidence: { type: 'string', description: 'The exact words.' },
+            kcoApproval: { type: 'boolean', description: 'true when the notice is that the KCO / MOHE does not approve it.' },
           },
           required: ['kind', 'scope', 'university', 'summary', 'evidence'],
         },
@@ -136,6 +144,7 @@ async function detect(message: InboxMessage): Promise<Notice[]> {
       intake: typeof n.intake === 'string' ? n.intake : null,
       summary: String(n.summary ?? '').slice(0, 300),
       evidence: String(n.evidence ?? '').slice(0, 400),
+      kcoApproval: aboutKcoApproval(n.kcoApproval, String(n.summary ?? ''), String(n.evidence ?? '')),
     }));
 }
 
@@ -276,6 +285,11 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
       const target = n.course ? `${n.university} — ${n.course}` : n.university;
       lines.push(`📢 Notice from ${company}: ${n.summary}`);
 
+      // "Not KCO-approved" against the agency's own list: hold, change nothing.
+      const listed = n.kcoApproval && (n.kind === 'closed' || n.kind === 'paused') ? await approvedRowsFor(n.university, n.course) : [];
+      const held = listed.length > 0;
+      const heldText = `${company} says ${target} is not KCO-approved, but your Approved Universities list shows it as approved (${listed[0] ?? ''}). Nothing was changed — please confirm with the KCO.`;
+
       const toReject: ApplicationStatus[] =
         n.kind === 'closed' || n.kind === 'paused'
           ? n.scope === 'all'
@@ -288,10 +302,12 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
         if (c.app.status === 'Rejected') continue;
         // Accepted is never changed by an email — but an offer for a course that has just
         // been closed or found not KCO-approved is exactly what someone needs to look at.
-        const reject = c.app.status !== 'Accepted' && toReject.includes(c.app.status);
-        const what = reject
-          ? `${c.app.university} → Rejected`
-          : `${c.app.university} (${c.app.status}) — noted${c.app.status === 'Accepted' ? ', please check' : ''}`;
+        const reject = !held && c.app.status !== 'Accepted' && toReject.includes(c.app.status);
+        const what = held
+          ? `${c.app.university} (${c.app.status}) — held, the list says approved`
+          : reject
+            ? `${c.app.university} → Rejected`
+            : `${c.app.university} (${c.app.status}) — noted${c.app.status === 'Accepted' ? ', please check' : ''}`;
         touched.push(`${c.studentName}: ${what}`);
         if (opts.dryRun) continue;
 
@@ -323,7 +339,9 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
             adminNotes: FieldValue.arrayUnion({
               id: `note-notice-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               authorId: 'email-intake',
-              content: `Notice from ${company} (${message.date.slice(0, 10)}): ${n.summary}${reject ? ' — this application set to Rejected.' : ''} "${n.evidence}"`,
+              content: held
+                ? `Notice from ${company} (${message.date.slice(0, 10)}): ${heldText} "${n.evidence}"`
+                : `Notice from ${company} (${message.date.slice(0, 10)}): ${n.summary}${reject ? ' — this application set to Rejected.' : ''} "${n.evidence}"`,
               createdAt: new Date().toISOString(),
             }),
           });
@@ -331,13 +349,16 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
         await sendChatMessage(
           c.studentId,
           CHAT_BOT_USER_ID,
-          `📢 ${company}: ${n.summary}\n${reject ? `${c.app.university} has been set to Rejected — it can no longer be submitted.` : `This may affect ${c.app.university} (${c.app.status}); please check.`}`,
+          held
+            ? `⚠️ ${heldText}\nThis concerns ${c.app.university} (${c.app.status}).`
+            : `📢 ${company}: ${n.summary}\n${reject ? `${c.app.university} has been set to Rejected — it can no longer be submitted.` : `This may affect ${c.app.university} (${c.app.status}); please check.`}`,
           ['admins', 'departments'],
         ).catch(() => undefined);
       }
 
       let catalogue: string[] = [];
-      if (!opts.dryRun && (n.kind === 'closed' || n.kind === 'paused' || n.kind === 'reopened')) {
+      if (held) lines.push(`   ⚠️ Not applied: ${heldText}`);
+      if (!held && !opts.dryRun && (n.kind === 'closed' || n.kind === 'paused' || n.kind === 'reopened')) {
         catalogue = await updateApprovedUniversities(n, n.kind === 'reopened');
       }
 
@@ -360,6 +381,7 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
           ...n,
           affected: touched,
           approvedUniversitiesChanged: catalogue,
+          heldForKcoCheck: held,
           recordedAt: new Date().toISOString(),
         });
       }

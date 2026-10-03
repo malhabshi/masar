@@ -15,6 +15,9 @@
 //     unless the email says the application cannot proceed without documents.
 //   - Only applications already on the student are changed; an offer for a university
 //     that is not listed is reported, not added.
+//   - "Not approved by the KCO" is checked against the Approved Universities list first:
+//     if the list shows the course as approved, nothing is rejected and a person is asked
+//     to confirm with the KCO (kco.ts).
 //   - The change goes through updateApplicationStatus, so the employee is notified
 //     exactly as when staff change it by hand, and an admin note records the email.
 
@@ -33,6 +36,7 @@ import type { InboxMessage } from './inbox';
 import type { Application, ApplicationStatus } from '@/lib/types';
 import { handleChangeAgentEvent, type ChangeAgentEvent } from './change-agent';
 import { logAiAction } from '@/lib/ai/action-log';
+import { aboutKcoApproval, approvedRowsFor } from './kco';
 
 const SETTABLE: ApplicationStatus[] = ['Submitted', 'Missing Items', 'Accepted', 'Rejected'];
 const FINAL: ApplicationStatus[] = ['Accepted', 'Rejected'];
@@ -77,6 +81,10 @@ const TOOL: Anthropic.Tool = {
             newStatus: { type: 'string', enum: SETTABLE },
             reason: { type: 'string', description: 'Short, for staff, e.g. "Unconditional offer received".' },
             evidence: { type: 'string', description: 'The exact words in the email or letter.' },
+            kcoApproval: {
+              type: 'boolean',
+              description: 'true only when the reason for Rejected is that the KCO / MOHE does not approve the course or university.',
+            },
           },
           required: ['index', 'newStatus', 'reason', 'evidence'],
         },
@@ -213,6 +221,14 @@ export async function updateApplicationsFromEmail(input: {
         change.note = 'Not changed — the email asks for something but does not say the application is held up by it.';
         changes.push(change);
         continue;
+      }
+      if (to === 'Rejected' && aboutKcoApproval(c.kcoApproval, change.reason, change.evidence)) {
+        const listed = await approvedRowsFor(app.university, app.major);
+        if (listed.length) {
+          change.note = `Not changed — the email says it is not KCO-approved, but your Approved Universities list shows ${listed[0]} as approved. Please confirm with the KCO.`;
+          changes.push(change);
+          continue;
+        }
       }
 
       if (input.dryRun) {
