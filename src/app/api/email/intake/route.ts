@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import {
   dismissQueuedItem,
@@ -48,7 +49,7 @@ async function authenticate(req: NextRequest): Promise<Auth> {
 
   const snap = await adminDb.collection('users').doc(uid).get();
   const user = snap.exists ? ({ id: snap.id, ...snap.data() } as User) : null;
-  if (!user || user.role !== 'admin') {
+  if (!user || (await trustedRole(user.id)) !== 'admin') {
     return { ok: false, status: 403, error: 'Email intake is limited to admins.' };
   }
   return { ok: true, user };

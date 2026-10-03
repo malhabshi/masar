@@ -89,14 +89,29 @@ function claimKey(messageId: string | null, uid: number): string {
   return (messageId ?? `uid-${uid}`).replace(/[^\w.@-]/g, '_').slice(0, 400);
 }
 
+/**
+ * A claim is a lease while the message is being processed and a permanent record once it
+ * is done. If a run dies after claiming (time limit, crash) the catch-based release never
+ * runs; a 'processing' claim older than this is taken to be abandoned and the email is
+ * picked up again instead of being skipped forever. Claims written before this field
+ * existed have no state and count as done.
+ */
+const CLAIM_LEASE_MS = 30 * 60_000;
+
+function claimIsLive(data: FirebaseFirestore.DocumentData | undefined): boolean {
+  if (!data) return false;
+  if (data.state !== 'processing') return true;
+  return Date.now() - new Date(data.claimedAt ?? 0).getTime() < CLAIM_LEASE_MS;
+}
+
 async function claimMessage(messageId: string | null, uid: number): Promise<boolean> {
   if (!adminDb) return true; // No DB means no dedupe; better to process than to stall.
   const ref = adminDb.collection('email_intake_seen').doc(claimKey(messageId, uid));
   try {
     return await adminDb.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      if (snap.exists) return false;
-      tx.set(ref, { messageId, uid, claimedAt: new Date().toISOString() });
+      if (snap.exists && claimIsLive(snap.data())) return false;
+      tx.set(ref, { messageId, uid, state: 'processing', claimedAt: new Date().toISOString() });
       return true;
     });
   } catch (e) {
@@ -110,9 +125,22 @@ async function isAlreadyHandled(messageId: string | null, uid: number): Promise<
   if (!adminDb) return false;
   try {
     const snap = await adminDb.collection('email_intake_seen').doc(claimKey(messageId, uid)).get();
-    return snap.exists;
+    return snap.exists && claimIsLive(snap.data());
   } catch {
     return false;
+  }
+}
+
+/** The message is fully handled: the claim becomes a permanent record. */
+async function completeClaim(messageId: string | null, uid: number): Promise<void> {
+  if (!adminDb) return;
+  try {
+    await adminDb
+      .collection('email_intake_seen')
+      .doc(claimKey(messageId, uid))
+      .set({ state: 'done', doneAt: new Date().toISOString() }, { merge: true });
+  } catch (e) {
+    console.error('[email-intake] Could not complete claim:', e);
   }
 }
 
@@ -291,8 +319,13 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
   const mailbox = (process.env.SMTP_USER ?? '').toLowerCase();
   const limit = options.limit ?? 20;
 
+  const settings = await getIntakeSettings();
+  const students = await loadStudentNames();
+
   // Phase 2 — walk the list a page of envelopes at a time until `limit` unhandled
-  // messages are found or the list ends; download in full only those.
+  // messages are found or the list ends; download in full only those. In test mode only
+  // the chosen student's mail counts toward the limit — otherwise the newest mail of
+  // other students fills every batch and an older email for that student is never reached.
   const messages: InboxMessage[] = [];
   for (let i = 0; i < uids.length && messages.length < limit; i += 50) {
     const page = await fetchHeadersForUids(uids.slice(i, i + 50));
@@ -309,6 +342,13 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
       try {
         const full = await fetchMessageByUid(head.uid);
+        if (full && settings.restrictToStudentId) {
+          const m = matchStudentByName([full.fromName, full.subject, full.text].filter(Boolean).join(' \n '), students);
+          if (m.kind !== 'matched' || m.student.id !== settings.restrictToStudentId) {
+            result.skipped++;
+            continue;
+          }
+        }
         if (full) messages.push(full);
       } catch (e) {
         console.error('[email-intake] Could not download message', head.uid, e);
@@ -321,13 +361,16 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
     return result;
   }
 
-  const settings = await getIntakeSettings();
-  const students = await loadStudentNames();
-
   for (const message of messages) {
     // Once a message is claimed it counts as handled forever, so anything that fails
     // after the claim must give it back — otherwise it is never retried.
     let claimed = false;
+    let released = false;
+    let failed = false;
+    const release = async () => {
+      released = true;
+      await releaseClaim(message.messageId, message.uid);
+    };
     try {
       result.processed++;
       const attachmentNames = message.attachments.map((a) => a.filename);
@@ -620,7 +663,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         });
       } else {
         // Upload failed: release the claim and apply no label, so the next run retries it.
-        await releaseClaim(message.messageId, message.uid);
+        await release();
         await replyWithReceipt(message, {
           kind: 'failed',
           reason: lastError ?? 'unknown error',
@@ -645,11 +688,15 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         });
       }
     } catch (e) {
+      failed = true;
       const reason = e instanceof Error ? e.message : String(e);
-      if (claimed) await releaseClaim(message.messageId, message.uid).catch(() => undefined);
+      if (claimed && !released) await release().catch(() => undefined);
       result.failed++;
       result.items.push({ subject: message.subject, from: message.from, status: 'failed', reason, attachments: message.attachments.map((a) => a.filename) });
       await log({ status: 'failed', from: message.from, subject: message.subject, reason: `${reason} — will retry` });
+    } finally {
+      // Every path that kept its claim (filed, queued, skipped as no-action) is now done.
+      if (claimed && !released && !failed) await completeClaim(message.messageId, message.uid);
     }
   }
 

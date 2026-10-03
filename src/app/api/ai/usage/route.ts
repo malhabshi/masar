@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { getBudgetSettings, getBudgetStatus, saveBudgetSettings } from '@/lib/ai/usage';
 
@@ -11,8 +12,7 @@ async function isAdmin(req: NextRequest): Promise<NextResponse | null> {
   if (!header.startsWith('Bearer ')) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   try {
     const uid = (await adminAuth.verifyIdToken(header.slice('Bearer '.length))).uid;
-    const role = (await adminDb.collection('users').doc(uid).get()).data()?.role;
-    return role === 'admin' ? null : NextResponse.json({ error: 'Admins only.' }, { status: 403 });
+    return (await trustedRole(uid)) === 'admin' ? null : NextResponse.json({ error: 'Admins only.' }, { status: 403 });
   } catch {
     return NextResponse.json({ error: 'Unauthorized: invalid or expired token.' }, { status: 401 });
   }

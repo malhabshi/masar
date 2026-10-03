@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { respondToStudentChat } from '@/lib/ai/chat-responder';
 import { getResponderSettings, saveResponderSettings } from '@/lib/ai/chat-bot';
@@ -90,7 +91,7 @@ export async function PATCH(req: NextRequest) {
 
   const userSnap = await adminDb.collection('users').doc(uid).get();
   const user = userSnap.exists ? ({ id: userSnap.id, ...userSnap.data() } as User) : null;
-  if (!user || user.role !== 'admin') {
+  if (!user || (await trustedRole(user.id)) !== 'admin') {
     return NextResponse.json({ error: 'Only admins can change responder settings.' }, { status: 403 });
   }
 

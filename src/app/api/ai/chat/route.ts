@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import type Anthropic from '@anthropic-ai/sdk';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { runAgent } from '@/lib/ai/agent';
@@ -38,7 +39,9 @@ async function authenticate(req: NextRequest): Promise<AuthResult> {
   if (!snap.exists) return { ok: false, status: 403, error: 'No masar user record for this account.' };
 
   const user = { id: snap.id, ...snap.data() } as User;
-  if (!AI_ALLOWED_ROLES.includes(user.role as (typeof AI_ALLOWED_ROLES)[number])) {
+  // The role comes from the protected admins list, not the user's own (editable) document.
+  const role = await trustedRole(uid);
+  if (!AI_ALLOWED_ROLES.includes(role as (typeof AI_ALLOWED_ROLES)[number])) {
     return {
       ok: false,
       status: 403,
@@ -48,7 +51,7 @@ async function authenticate(req: NextRequest): Promise<AuthResult> {
 
   return {
     ok: true,
-    actor: { id: user.id, name: user.name, civilId: user.civilId, role: user.role },
+    actor: { id: user.id, name: user.name, civilId: user.civilId, role: role ?? undefined },
   };
 }
 

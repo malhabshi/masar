@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import {
   documentReadingProgress,
@@ -31,7 +32,7 @@ async function authorise(req: NextRequest, allowCron = false): Promise<User | 'c
   }
   const snap = await adminDb.collection('users').doc(uid).get();
   const user = snap.exists ? ({ id: snap.id, ...snap.data() } as User) : null;
-  if (!user || user.role !== 'admin') {
+  if (!user || (await trustedRole(user.id)) !== 'admin') {
     return NextResponse.json({ error: 'Only admins can manage document reading.' }, { status: 403 });
   }
   return user;

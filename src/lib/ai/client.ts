@@ -32,7 +32,10 @@ export function getAnthropicClient(feature = 'other'): Anthropic {
           return async (...args: Parameters<typeof messages.create>) => {
             const res = await (messages.create as (...a: unknown[]) => Promise<unknown>).apply(messages, args);
             const usage = (res as { usage?: Parameters<typeof recordUsage>[2] })?.usage;
-            void recordUsage(feature, String((args[0] as { model?: string })?.model ?? ''), usage);
+            // Awaited: on serverless hosting the request can end as soon as the response is
+            // returned, and an unawaited write would be lost — uncounted spend, budget overrun.
+            // recordUsage never throws, so this cannot fail a successful model call.
+            await recordUsage(feature, String((args[0] as { model?: string })?.model ?? ''), usage);
             return res;
           };
         },

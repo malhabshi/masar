@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { listAiActions, undoAiAction } from '@/lib/ai/action-log';
 import { collectDeadlines } from '@/lib/ai/deadlines';
@@ -17,8 +18,8 @@ async function admin(req: NextRequest): Promise<{ id: string; name: string } | N
     return NextResponse.json({ error: 'Unauthorized: invalid or expired token.' }, { status: 401 });
   }
   const u = (await adminDb.collection('users').doc(uid).get()).data();
-  if (u?.role !== 'admin') return NextResponse.json({ error: 'Admins only.' }, { status: 403 });
-  return { id: uid, name: u.name ?? 'Admin' };
+  if ((await trustedRole(uid)) !== 'admin') return NextResponse.json({ error: 'Admins only.' }, { status: 403 });
+  return { id: uid, name: u?.name ?? 'Admin' };
 }
 
 export async function GET(req: NextRequest) {

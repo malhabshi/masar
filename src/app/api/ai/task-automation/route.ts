@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { automateTask } from '@/lib/ai/task-automation';
 
@@ -34,8 +35,8 @@ export async function POST(req: NextRequest) {
     adminDb.collection('users').doc(uid).get(),
     adminDb.collection('tasks').doc(taskId).get(),
   ]);
-  const role = userSnap.data()?.role;
-  if (!userSnap.exists || !['admin', 'adminplus', 'department', 'employee'].includes(role)) {
+  const role = await trustedRole(uid);
+  if (!userSnap.exists || !role || !['admin', 'adminplus', 'department', 'employee'].includes(role)) {
     return NextResponse.json({ error: 'Staff only.' }, { status: 403 });
   }
   if (!taskSnap.exists) return NextResponse.json({ error: 'Task not found.' }, { status: 404 });

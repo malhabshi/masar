@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { addTeamNote, getTeamNotes, removeTeamNote, WORK_GUIDE_TOPICS } from '@/lib/ai/knowledge';
 import type { User } from '@/lib/types';
@@ -24,7 +25,7 @@ async function requireAdmin(req: NextRequest): Promise<User | NextResponse> {
   }
   const snap = await adminDb.collection('users').doc(uid).get();
   const user = snap.exists ? ({ id: snap.id, ...snap.data() } as User) : null;
-  if (!user || user.role !== 'admin') {
+  if (!user || (await trustedRole(user.id)) !== 'admin') {
     return NextResponse.json({ error: 'Only admins can manage the AI notes.' }, { status: 403 });
   }
   return user;

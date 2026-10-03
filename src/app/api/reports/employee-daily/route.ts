@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { buildDailyReport, getDailyReport, kuwaitToday } from '@/lib/reports/employee-daily';
 
@@ -20,8 +21,7 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Unauthorized: invalid or expired token.' }, { status: 401 });
   }
-  const role = (await adminDb.collection('users').doc(uid).get()).data()?.role;
-  if (role !== 'admin') return NextResponse.json({ error: 'Only admins can see staff reports.' }, { status: 403 });
+  if ((await trustedRole(uid)) !== 'admin') return NextResponse.json({ error: 'Only admins can see staff reports.' }, { status: 403 });
 
   const date = req.nextUrl.searchParams.get('date') ?? kuwaitToday();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ error: 'date must be YYYY-MM-DD.' }, { status: 400 });

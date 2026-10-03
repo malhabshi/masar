@@ -83,117 +83,122 @@ const note = (content: string, by: string) => ({
   createdAt: new Date().toISOString(),
 });
 
-/** Reverse one AI change. Returns a message for the person who pressed Undo. */
+/**
+ * Reverse one AI change. Returns a message for the person who pressed Undo.
+ *
+ * Each undo reads, checks and writes inside ONE transaction, together with marking the
+ * entry undone: if a person edits the same student (or adds an application) in between,
+ * Firestore retries with their version instead of the undo writing back a stale copy.
+ */
 export async function undoAiAction(id: string, user: { id: string; name: string }): Promise<{ ok: boolean; message: string }> {
-  const ref = db().collection(AI_ACTIONS_COLLECTION).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, message: 'That entry no longer exists.' };
-  const a = snap.data() as AiAction;
-  if (a.undone) return { ok: false, message: `Already undone by ${a.undone.byName}.` };
-  const u = a.undo;
-  if (u.type === 'none') return { ok: false, message: 'This one cannot be undone from here.' };
-
-  const studentRef = a.studentId ? db().collection('students').doc(a.studentId) : null;
-  const done = async (message: string) => {
-    await ref.update({ undone: { by: user.id, byName: user.name, at: new Date().toISOString() } });
-    return { ok: true, message };
-  };
+  const actionRef = db().collection(AI_ACTIONS_COLLECTION).doc(id);
+  const undoneMark = { undone: { by: user.id, byName: user.name, at: new Date().toISOString() } };
 
   try {
-    switch (u.type) {
-      case 'app_status': {
-        const s = (await studentRef!.get()).data();
-        const apps = (s?.applications ?? []) as Application[];
-        const i = apps.findIndex((x) => x.university === u.university && x.major === u.major);
-        if (i < 0) return { ok: false, message: 'That application is no longer on the profile.' };
-        if (apps[i].status !== u.to) {
-          return { ok: false, message: `Not undone — someone has since set it to ${apps[i].status}.` };
+    return await db().runTransaction(async (tx) => {
+      const actionSnap = await tx.get(actionRef);
+      if (!actionSnap.exists) return { ok: false, message: 'That entry no longer exists.' };
+      const a = actionSnap.data() as AiAction;
+      if (a.undone) return { ok: false, message: `Already undone by ${a.undone.byName}.` };
+      const u = a.undo;
+      if (u.type === 'none') return { ok: false, message: 'This one cannot be undone from here.' };
+
+      const studentRef = a.studentId ? db().collection('students').doc(a.studentId) : null;
+      // All reads first (a transaction requires reads before writes).
+      const studentSnap = studentRef ? await tx.get(studentRef) : null;
+      const s = studentSnap?.data() ?? {};
+      const requestsSnap =
+        u.type === 'remove_missing_items' && a.studentId
+          ? await tx.get(db().collection('email_requests').where('studentId', '==', a.studentId))
+          : null;
+      const uniRef = u.type === 'approved_university' ? db().collection('approved_universities').doc(u.universityId) : null;
+      const uniSnap = uniRef ? await tx.get(uniRef) : null;
+
+      const finish = (message: string) => {
+        tx.update(actionRef, undoneMark);
+        return { ok: true, message };
+      };
+
+      switch (u.type) {
+        case 'app_status': {
+          const apps = (s.applications ?? []) as Application[];
+          const i = apps.findIndex((x) => x.university === u.university && x.major === u.major);
+          if (i < 0) return { ok: false, message: 'That application is no longer on the profile.' };
+          if (apps[i].status !== u.to) return { ok: false, message: `Not undone — someone has since set it to ${apps[i].status}.` };
+          const next = [...apps];
+          next[i] = { ...next[i], status: u.from, updatedAt: new Date().toISOString() };
+          if (u.from === 'Rejected' && u.rejectionReason) next[i].rejectionReason = u.rejectionReason;
+          else delete next[i].rejectionReason;
+          tx.update(studentRef!, {
+            applications: next,
+            adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.university} back to ${u.from} (was set to ${u.to}). By ${user.name}.`, user.id)),
+          });
+          return finish(`${u.university} is back to ${u.from}.`);
         }
-        const next = [...apps];
-        next[i] = { ...next[i], status: u.from, updatedAt: new Date().toISOString() };
-        if (u.from === 'Rejected' && u.rejectionReason) next[i].rejectionReason = u.rejectionReason;
-        else delete next[i].rejectionReason;
-        await studentRef!.update({
-          applications: next,
-          adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.university} back to ${u.from} (was set to ${u.to}). By ${user.name}.`, user.id)),
-        });
-        return done(`${u.university} is back to ${u.from}.`);
-      }
-      case 'remove_application': {
-        const s = (await studentRef!.get()).data();
-        const apps = (s?.applications ?? []) as Application[];
-        const app = apps.find((x) => x.university === u.university && x.major === u.major);
-        if (!app) return done('Already removed.');
-        if (app.status !== 'Pending') {
-          return { ok: false, message: `Not removed — it has moved on to ${app.status} since it was added.` };
+        case 'remove_application': {
+          const apps = (s.applications ?? []) as Application[];
+          const app = apps.find((x) => x.university === u.university && x.major === u.major);
+          if (!app) return finish('Already removed.');
+          if (app.status !== 'Pending') return { ok: false, message: `Not removed — it has moved on to ${app.status} since it was added.` };
+          tx.update(studentRef!, {
+            applications: apps.filter((x) => x !== app),
+            adminNotes: FieldValue.arrayUnion(note(`Undid AI change: removed ${u.university} (${u.major}), added from a request. By ${user.name}.`, user.id)),
+          });
+          return finish(`${u.university} removed from the applications.`);
         }
-        await studentRef!.update({
-          applications: apps.filter((x) => x !== app),
-          adminNotes: FieldValue.arrayUnion(note(`Undid AI change: removed ${u.university} (${u.major}), added from a request. By ${user.name}.`, user.id)),
-        });
-        return done(`${u.university} removed from the applications.`);
-      }
-      case 'remove_missing_items': {
-        const s = (await studentRef!.get()).data();
-        const items = ((s?.missingItems ?? []) as Array<string | { id?: string }>).filter(
-          (m) => typeof m !== 'string' && u.ids.includes(m.id ?? ''),
-        );
-        if (items.length) await studentRef!.update({ missingItems: FieldValue.arrayRemove(...items) });
-        // The email request behind these items must stop waiting too — otherwise their
-        // disappearance reads as "received" and a reply would be drafted.
-        const reqs = await db().collection('email_requests').where('studentId', '==', a.studentId).get();
-        for (const r of reqs.docs) {
-          const its = (r.data().items ?? []) as Array<{ missingItemId: string; status: string }>;
-          if (!its.some((it) => u.ids.includes(it.missingItemId))) continue;
-          const next = its.map((it) => (u.ids.includes(it.missingItemId) ? { ...it, status: 'closed' } : it));
-          await r.ref.update({ items: next, status: next.some((it) => it.status === 'waiting') ? 'waiting' : 'closed' });
+        case 'remove_missing_items': {
+          const items = ((s.missingItems ?? []) as Array<string | { id?: string }>).filter(
+            (m) => typeof m !== 'string' && u.ids.includes(m.id ?? ''),
+          );
+          if (items.length) tx.update(studentRef!, { missingItems: FieldValue.arrayRemove(...items) });
+          // The email request behind these items must stop waiting too — otherwise their
+          // disappearance reads as "received" and a reply would be drafted.
+          for (const r of requestsSnap?.docs ?? []) {
+            const its = (r.data().items ?? []) as Array<{ missingItemId: string; status: string }>;
+            if (!its.some((it) => u.ids.includes(it.missingItemId))) continue;
+            const next = its.map((it) => (u.ids.includes(it.missingItemId) ? { ...it, status: 'closed' } : it));
+            tx.update(r.ref, { items: next, status: next.some((it) => it.status === 'waiting') ? 'waiting' : 'closed' });
+          }
+          return finish(items.length ? `${items.length} Missing Item(s) removed.` : 'They were already gone.');
         }
-        return done(items.length ? `${items.length} Missing Item(s) removed.` : 'They were already gone.');
-      }
-      case 'restore_missing_items': {
-        if (u.items.length) await studentRef!.update({ missingItems: FieldValue.arrayUnion(...u.items) });
-        return done('Missing Item put back.');
-      }
-      case 'change_agent': {
-        const s = (await studentRef!.get()).data() ?? {};
-        const log = ((s.changeAgentLog ?? []) as Array<{ id: string }>).filter((e) => e.id !== u.logEntryId);
-        const unis = ((s.changeAgentUniversities ?? []) as string[]).filter((x) => x !== u.university);
-        // Never switch Change Agent back on from an undo: if staff turned it off since, it stays off.
-        const stillOn = s.changeAgentRequired === true && unis.length > 0;
-        await studentRef!.update({
-          changeAgentLog: log,
-          changeAgentUniversities: unis,
-          changeAgentRequired: stillOn,
-          adminNotes: FieldValue.arrayUnion(note(`Undid AI change: Change Agent for ${u.university} switched off. By ${user.name}.`, user.id)),
-        });
-        return done(`Change Agent for ${u.university} removed${stillOn ? ' (still on for other schools)' : ''}.`);
-      }
-      case 'set_field': {
-        const s = (await studentRef!.get()).data() ?? {};
-        const current = u.field.split('.').reduce<any>((o, k) => (o == null ? o : o[k]), s);
-        if (JSON.stringify(current) !== JSON.stringify(u.to)) {
-          return { ok: false, message: 'Not undone — the value has been changed since.' };
+        case 'restore_missing_items': {
+          if (u.items.length) tx.update(studentRef!, { missingItems: FieldValue.arrayUnion(...u.items) });
+          return finish('Missing Item put back.');
         }
-        await studentRef!.update({
-          [u.field]: u.from === undefined || u.from === null ? FieldValue.delete() : u.from,
-          adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.field} restored. By ${user.name}.`, user.id)),
-        });
-        return done('Restored.');
-      }
-      case 'approved_university': {
-        const cur = (await db().collection('approved_universities').doc(u.universityId).get()).data() ?? {};
-        if (u.setTo && (cur.isAvailable !== u.setTo.isAvailable || String(cur.importantNote ?? '') !== u.setTo.importantNote)) {
-          return { ok: false, message: 'Not undone — the row has been changed since.' };
+        case 'change_agent': {
+          const log = ((s.changeAgentLog ?? []) as Array<{ id: string }>).filter((e) => e.id !== u.logEntryId);
+          const unis = ((s.changeAgentUniversities ?? []) as string[]).filter((x) => x !== u.university);
+          // Never switch Change Agent back on from an undo: if staff turned it off since, it stays off.
+          const stillOn = s.changeAgentRequired === true && unis.length > 0;
+          tx.update(studentRef!, {
+            changeAgentLog: log,
+            changeAgentUniversities: unis,
+            changeAgentRequired: stillOn,
+            adminNotes: FieldValue.arrayUnion(note(`Undid AI change: Change Agent for ${u.university} switched off. By ${user.name}.`, user.id)),
+          });
+          return finish(`Change Agent for ${u.university} removed${stillOn ? ' (still on for other schools)' : ''}.`);
         }
-        await db().collection('approved_universities').doc(u.universityId).update({
-          isAvailable: u.isAvailable,
-          importantNote: u.importantNote ?? FieldValue.delete(),
-        });
-        return done(`Approved University put back to ${u.isAvailable ? 'open' : 'closed'}.`);
+        case 'set_field': {
+          const current = u.field.split('.').reduce<any>((o, k) => (o == null ? o : o[k]), s);
+          if (JSON.stringify(current) !== JSON.stringify(u.to)) return { ok: false, message: 'Not undone — the value has been changed since.' };
+          tx.update(studentRef!, {
+            [u.field]: u.from === undefined || u.from === null ? FieldValue.delete() : u.from,
+            adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.field} restored. By ${user.name}.`, user.id)),
+          });
+          return finish('Restored.');
+        }
+        case 'approved_university': {
+          const cur = uniSnap?.data() ?? {};
+          if (u.setTo && (cur.isAvailable !== u.setTo.isAvailable || String(cur.importantNote ?? '') !== u.setTo.importantNote)) {
+            return { ok: false, message: 'Not undone — the row has been changed since.' };
+          }
+          tx.update(uniRef!, { isAvailable: u.isAvailable, importantNote: u.importantNote ?? FieldValue.delete() });
+          return finish(`Approved University put back to ${u.isAvailable ? 'open' : 'closed'}.`);
+        }
       }
-    }
+      return { ok: false, message: 'Unknown change type.' };
+    });
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
-  return { ok: false, message: 'Unknown change type.' };
 }

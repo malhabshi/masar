@@ -55,8 +55,14 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get, list: if isSignedIn();
-      allow create: if isOwner(userId) || isAdmin();
-      allow update: if isOwner(userId) || isAdmin();
+      // A person may create or edit their own user record, but never give themselves a
+      // role or change the fields access is based on — only an admin can. (Before this,
+      // anyone signed in could set their own role to "admin".)
+      allow create: if isAdmin() || (isOwner(userId) && request.resource.data.get('role', '') in ['', 'student']);
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'civilId', 'employeeId', 'department'])
+      );
 
       match /personal_todos/{todoId} {
         allow read, write: if isOwner(userId);

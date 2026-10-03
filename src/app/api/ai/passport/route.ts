@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { readPassport } from '@/lib/ai/passport';
 import { getDocumentReaderSettings } from '@/lib/ai/documents';
@@ -29,8 +30,8 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Your session expired. Reload the page and sign in again.' }, { status: 401 });
   }
-  const role = (await adminDb.collection('users').doc(uid).get()).data()?.role;
-  if (!STAFF_ROLES.includes(role)) return NextResponse.json({ error: 'Staff only.' }, { status: 403 });
+  const role = await trustedRole(uid);
+  if (!role || !STAFF_ROLES.includes(role)) return NextResponse.json({ error: 'Staff only.' }, { status: 403 });
 
   if (!isAiConfigured()) return NextResponse.json({ error: 'The AI is not set up yet.' }, { status: 400 });
   if (!(await getDocumentReaderSettings()).readPassports) {

@@ -119,7 +119,7 @@ export async function recordUsage(feature: string, model: string, usage: Usage |
         { merge: true },
       );
     statusCache = null;
-    void alertIfNeeded();
+    await alertIfNeeded().catch(() => undefined);
   } catch (e) {
     console.error('[ai-usage] could not record:', e);
   }
