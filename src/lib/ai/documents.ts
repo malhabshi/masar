@@ -8,6 +8,9 @@
 //
 // How a file reaches the model:
 //   - PDFs with a text layer (most offer letters) are sent as text, which is cheap.
+//   - Short forms — score reports, certificates, transcripts, ID pages — are sent as the
+//     page even when they have text: their numbers sit in boxes, and the extracted text
+//     loses which number belongs to which label.
 //   - Scanned PDFs and photos are sent as the file itself, so the model reads the page.
 //   - Word files and anything oversized are recorded as unreadable, with the reason.
 //
@@ -24,8 +27,10 @@ import { applyDocumentFacts } from './autofill';
 
 const BUCKET = 'studio-9484431255-91d96.firebasestorage.app';
 
-/** Bump when the card's shape or the instructions change enough to warrant a re-read. */
-export const CARD_VERSION = 1;
+/** Bump when the card's shape or the instructions change enough to warrant a re-read.
+ *  2: short forms are read from the page, not their text (an IELTS overall of 5.5 had been
+ *  read as 5.0 from the text). */
+export const CARD_VERSION = 2;
 
 /** The API's per-image limit is 5 MB of base64; leave room for the encoding overhead. */
 const MAX_IMAGE_BYTES = 3_700_000;
@@ -35,6 +40,13 @@ const MIN_TEXT_CHARS = 200;
 /** Offer letters can run long; the facts are on the first pages. Sending all 40 pages of
  *  terms and conditions only paid for text nobody reads. */
 const MAX_TEXT_CHARS = 18_000;
+/** A form's text lists every label and then every value — "Listening Reading Writing
+ *  Speaking Overall … 5.5 6.0 6.0 5.5 5.0" — so these are read from the page instead. */
+const FORM_TYPES: readonly string[] = ['ielts', 'toefl', 'passport', 'civil_id', 'transcript', 'school_certificate'];
+// Phrases printed on the forms themselves — not "overall band", which offer letters quote
+// in their conditions and are fine as text.
+const FORM_TEXT = /test report form|score report|duolingo english test|P<[A-Z]{3}|cumulative average|المعدل/i;
+const MAX_FORM_PAGES = 4;
 
 /** Files not worth paying to read: payment receipts and the agency's own summary PDFs. */
 const NOT_WORTH_READING = /invoice|receipt|فاتور|ايصال|jotform summary|application summary/i;
@@ -295,7 +307,9 @@ export async function readDocument(
       if (size > MAX_PDF_BYTES) return quickCard(nameType, name, 'unreadable', `PDF is ${(size / 1e6).toFixed(1)} MB, too large to send.`);
       const [bytes] = await file.download();
       const text = await extractPdfText(bytes, 'application/pdf');
-      if (text && text.length >= MIN_TEXT_CHARS) {
+      const pages = Number(text?.match(/-- \d+ of (\d+) --/)?.[1] ?? 0);
+      const isForm = (FORM_TYPES.includes(nameType) || FORM_TEXT.test(text ?? '')) && pages <= MAX_FORM_PAGES;
+      if (text && text.length >= MIN_TEXT_CHARS && !isForm) {
         content = { type: 'text', text: `Document text:\n\n${text.slice(0, MAX_TEXT_CHARS)}` };
         via = 'text';
       } else {
@@ -402,7 +416,9 @@ function reuseIdentical(d: StoredDoc & { sha256?: string }, all: Array<StoredDoc
 function needsReading(d: StoredDoc): boolean {
   if (!d.id) return false;
   if (!d.ai) return true;
-  if (d.ai.version < CARD_VERSION) return true;
+  // Version 2 only changed how short forms are read: re-read the forms read from their
+  // text, not every card.
+  if (d.ai.version < CARD_VERSION && d.ai.via === 'text' && FORM_TYPES.includes(d.ai.type)) return true;
   return d.ai.status === 'error' && (d.ai.attempts ?? 1) < 3;
 }
 

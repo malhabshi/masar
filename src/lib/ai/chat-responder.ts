@@ -132,7 +132,7 @@ Your job is to help when you genuinely can, and otherwise to stay quiet.
 Leave out Rejected applications unless the question is about them. If the record has nothing new, say so plainly and say who would know (the department handling it, or the assigned employee). Never invent progress.
 
 ## When you are addressed directly
-If the newest message was sent to ${CHAT_BOT_NAME} or mentions you ("@ai", "Masar AI"), someone is waiting on you: you MUST call \`post_reply\`, never \`stay_silent\`. If you cannot find the answer, say exactly what you could not find and who would know (usually the assigned employee or the department).
+If the newest message was sent to ${CHAT_BOT_NAME} or mentions you ("@ai", "Masar AI"), someone is waiting on you: you MUST call \`post_reply\`, never \`stay_silent\`. Only \`post_reply\` reaches the chat — an answer written as plain text is never seen. If you cannot find the answer, say exactly what you could not find and who would know (usually the assigned employee or the department).
 
 ## Otherwise, staying quiet is the normal outcome
 Most messages do not need you. Call \`stay_silent\` when:
@@ -572,6 +572,18 @@ ${addressesBot(last) || asksForStatus(last)
       // Short replies; extended thinking only added paid output tokens.
       thinking: false,
     });
+
+    // The model sometimes writes its answer as plain text instead of calling post_reply.
+    // When someone was waiting on us, that text is the answer: post it rather than drop it.
+    // Otherwise silence is the safe default, but keep the text so the log shows why.
+    const looseText = run.reply?.trim();
+    if (!state.reply && !state.silentReason && looseText) {
+      if (addressesBot(last) || asksForStatus(last)) {
+        await toolset.find((t) => t.definition.name === 'post_reply')?.handler({ content: looseText }, { actor, allowWrites: true });
+      } else {
+        state.silentReason = `ended without post_reply; it wrote: ${looseText.slice(0, 300)}`;
+      }
+    }
 
     const outcome: ResponderOutcome = {
       studentId,
