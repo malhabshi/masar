@@ -33,8 +33,11 @@ import { deadlinesFor } from './deadlines';
 import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
 import { adminDb as db } from '@/lib/firebase/admin';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
-import { createStudentTask, sendChatMessage } from '@/lib/actions';
-import type { User } from '@/lib/types';
+import { createStudentTask, sendChatMessage, updateApplicationStatus } from '@/lib/actions';
+import { stopFollowUp } from '@/lib/email/followups';
+import { sameUniversity } from '@/lib/email/universities';
+import { logAiAction } from './action-log';
+import type { Application, User } from '@/lib/types';
 
 export const AI_CHAT_LOG_COLLECTION = 'ai_chat_log';
 
@@ -70,6 +73,8 @@ type ResponderState = {
   reply?: string;
   silentReason?: string;
   tasks: CreatedTask[];
+  /** Staff asked for something and it was done (stop_follow_up): the reply is posted even in observe-only mode. */
+  acted?: boolean;
 };
 
 async function log(entry: Record<string, unknown>): Promise<void> {
@@ -152,6 +157,9 @@ Call \`post_reply\` when:
 - Someone asks for something that should become a task — create the task first, then say plainly what you created.
 - There is a clear, checkable error worth flagging.
 
+## Stopping a follow-up
+Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
+
 ## Creating tasks
 When an employee asks for something that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
 
@@ -168,8 +176,14 @@ function buildToolset(opts: {
   observeOnly: boolean;
   notifyUserIds: string[];
   collected: ResponderState;
+  /** The newest message was sent to the bot or mentions it — only then may it act. */
+  addressed: boolean;
+  /** Preview: work out what would happen, change nothing. */
+  preview: boolean;
+  /** Who asked, for the records. */
+  requestedBy: string;
 }): AiTool[] {
-  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected } = opts;
+  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected, addressed, preview, requestedBy } = opts;
 
   const tools: AiTool[] = [
     {
@@ -302,7 +316,9 @@ function buildToolset(opts: {
     }
     collected.reply = content;
 
-    if (observeOnly) {
+    // Observe-only holds back the AI's own answers. A confirmation of something staff asked
+    // for and the AI did (stop_follow_up) is posted regardless — they are waiting for it.
+    if (observeOnly && !collected.acted) {
       return {
         ok: true,
         posted: false,
@@ -315,6 +331,82 @@ function buildToolset(opts: {
       ? { ok: true, posted: true }
       : { ok: false, error: result.message ?? 'Failed to post the message.' };
   };
+
+  tools.push({
+    write: false,
+    definition: {
+      name: 'stop_follow_up',
+      description:
+        "Stop chasing one of this student's applications for an offer, when staff tell you to — usually in reply to your " +
+        '⏳ follow-up message: the student is going with another school, has withdrawn, or it should not be chased. With ' +
+        'reason chose_other_school or withdrawn the application is also set to Rejected with that reason (unless it is ' +
+        'already Accepted or Rejected). Give the university exactly as it appears in the applications list.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          university: { type: 'string' },
+          major: { type: 'string', description: 'Only needed when the student has two applications at that university.' },
+          reason: { type: 'string', enum: ['chose_other_school', 'withdrawn', 'just_stop'] },
+          note: { type: 'string', description: 'What staff said, in a few words.' },
+        },
+        required: ['university', 'reason'],
+      },
+    },
+    handler: async (input) => {
+      if (!addressed) return { ok: false, error: 'Only when staff ask you directly (@ai, or sent to Masar AI).' };
+      if (!db) return { ok: false, error: 'Database not available.' };
+      const s = (await db.collection('students').doc(studentId).get()).data();
+      if (!s) return { ok: false, error: 'Student not found.' };
+      const apps = (s.applications ?? []) as Application[];
+      const name = String(input.university ?? '').trim();
+      const major = typeof input.major === 'string' ? input.major.trim().toLowerCase() : '';
+      let hits = apps.filter((a) => a.university.trim().toLowerCase() === name.toLowerCase());
+      if (!hits.length) hits = apps.filter((a) => sameUniversity(a.university, name));
+      if (hits.length > 1 && major) hits = hits.filter((a) => a.major.toLowerCase().includes(major) || major.includes(a.major.toLowerCase()));
+      if (hits.length !== 1) {
+        return {
+          ok: false,
+          error: hits.length
+            ? `Several applications match: ${hits.map((a) => `${a.university} (${a.major})`).join('; ')}. Ask which one.`
+            : `No application "${name}" on this student. Their applications: ${apps.map((a) => a.university).join('; ')}.`,
+        };
+      }
+      const app = hits[0];
+      const reason = ['chose_other_school', 'withdrawn', 'just_stop'].includes(input.reason) ? String(input.reason) : 'just_stop';
+      const rejectionReason =
+        reason === 'chose_other_school' ? 'Student chose another university' : reason === 'withdrawn' ? 'Withdrawn by the student' : null;
+      const reject = !!rejectionReason && app.status !== 'Accepted' && app.status !== 'Rejected';
+      if (preview) return { ok: true, preview: true, wouldStop: `${app.university} (${app.major})`, wouldSetRejected: reject };
+
+      const said = String(input.note ?? '').slice(0, 200);
+      const draft = await stopFollowUp(studentId, app, { reason: said || reason, by: requestedBy });
+      let status = `unchanged (${app.status})`;
+      if (reject) {
+        const r = await updateApplicationStatus(studentId, app.university, app.major, 'Rejected', s.name, s.employeeId ?? null, rejectionReason!);
+        status = r.success ? `${app.status} → Rejected (${rejectionReason})` : `not changed: ${r.message}`;
+      }
+      await logAiAction({
+        source: 'chat',
+        summary: `${app.university}: follow-ups stopped${reject && status.includes('→') ? `; ${status}` : ''}`,
+        reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
+        studentId,
+        studentName: s.name ?? null,
+        undo:
+          reject && status.includes('→')
+            ? { type: 'app_status', university: app.university, major: app.major, from: app.status, to: 'Rejected', rejectionReason: app.rejectionReason ?? null }
+            : { type: 'none' },
+      });
+      collected.acted = true;
+      return {
+        ok: true,
+        followUpsStopped: `${app.university} (${app.major})`,
+        status,
+        draftToDelete: draft.lastDraftedAt
+          ? `The update request to ${draft.to} drafted on ${draft.lastDraftedAt.slice(0, 10)} is still in Gmail Drafts — tell staff to delete it (you never delete email).`
+          : 'No follow-up draft on record.',
+      };
+    },
+  });
 
   if (allowTaskCreation) {
     tools.push({
@@ -553,6 +645,9 @@ ${addressesBot(last) || asksForStatus(last)
       observeOnly: settings.observeOnly,
       notifyUserIds,
       collected: state,
+      addressed: addressesBot(last),
+      preview: !!preview,
+      requestedBy: authors.get(last.authorId)?.name ?? last.authorId,
     });
 
     const actor = { id: CHAT_BOT_USER_ID, name: CHAT_BOT_NAME, role: 'employee' };
@@ -590,7 +685,7 @@ ${addressesBot(last) || asksForStatus(last)
       status: state.reply ? 'replied' : 'silent',
       reason: state.silentReason ?? run.error,
       reply: state.reply,
-      drafted: state.reply ? settings.observeOnly : undefined,
+      drafted: state.reply ? settings.observeOnly && !state.acted : undefined,
       tasksCreated: state.tasks.length ? state.tasks : undefined,
       usage: { inputTokens: run.usage.inputTokens, outputTokens: run.usage.outputTokens },
     };
@@ -604,7 +699,7 @@ ${addressesBot(last) || asksForStatus(last)
       reason: outcome.reason ?? null,
       reply: outcome.reply ?? null,
       observeOnly: settings.observeOnly,
-      posted: outcome.status === 'replied' && !settings.observeOnly,
+      posted: outcome.status === 'replied' && (!settings.observeOnly || !!state.acted),
       tasks: state.tasks,
       usage: outcome.usage,
       agentError: run.error ?? null,

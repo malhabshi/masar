@@ -8,6 +8,7 @@
 // with the KCO.
 
 import { adminDb } from '@/lib/firebase/admin';
+import { sameUniversity } from './universities';
 
 /** Words that point at KCO / MOHE approval, for when the model does not say so itself. */
 const KCO_WORDS = /\bKCO\b|cultural office|\bMOHE\b|not (be )?(KCO[- ])?approved|unapproved|غير معتمد|الملحقي|المكتب الثقافي/i;
@@ -16,24 +17,12 @@ export function aboutKcoApproval(flag: unknown, ...texts: string[]): boolean {
   return flag === true || KCO_WORDS.test(texts.join(' '));
 }
 
-const UNI_STOP = new Set([
-  'university', 'of', 'the', 'college', 'international', 'study', 'centre', 'center', 'school', 'and', 'into',
-  'kaplan', 'navitas', 'oncampus', 'on', 'compus', 'campus', 'group', 'in', 'house', 'isc', 'pathway',
-  'pathways', 'london', 'ic', 'uc', 'via',
-]);
 const COURSE_STOP = new Set([
   'foundation', 'first', 'year', 'bsc', 'msc', 'hons', 'with', 'and', 'the', 'of', 'in', 'degree', 'bachelor',
   'certificate', 'international', 'programme', 'program', 'year1', 'one', 'sciences',
 ]);
 const words = (s: string, stop: Set<string>) =>
   new Set(s.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2 && !stop.has(w)));
-
-/** Same university: the same distinctive words once providers and filler are dropped. */
-function sameUniversity(a: string, b: string): boolean {
-  const wa = words(a, UNI_STOP);
-  const wb = words(b, UNI_STOP);
-  return wa.size > 0 && wa.size === wb.size && [...wa].every((w) => wb.has(w));
-}
 
 function sameCourse(a: string, b: string): boolean {
   const wa = words(a, COURSE_STOP);

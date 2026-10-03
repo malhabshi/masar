@@ -10,7 +10,10 @@
 //     listed for a person to check, since they are usually a status nobody updated;
 //   - at most DAILY_CAP drafts per run;
 //   - not when the company wrote about the student in the last 5 days;
-//   - the same application is chased again only after another 5 days without news.
+//   - the same application is chased again only after another 5 days without news;
+//   - when the student has a final choice, only that school is chased — the others are not
+//     where the student is going;
+//   - never an application staff asked to stop chasing (stopFollowUp, from the chat).
 
 import Anthropic from '@anthropic-ai/sdk';
 import nodemailer from 'nodemailer';
@@ -24,6 +27,7 @@ import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, typ
 import { replyWithReceipt } from './reply-receipt';
 import type { Application } from '@/lib/types';
 import { logAiAction } from '@/lib/ai/action-log';
+import { overlapsUniversity, sameUniversity } from './universities';
 
 const FOLLOWUP_COLLECTION = 'email_followups';
 const WAIT_DAYS = 5;
@@ -47,6 +51,37 @@ const appKey = (studentId: string, a: Application) =>
 const firstAddress = (s: string) => s.match(/[\w.+-]+@[\w.-]+/)?.[0]?.toLowerCase() ?? '';
 
 type Waiting = { app: Application; days: number; key: string };
+
+/**
+ * With a final choice set, only that school's applications are chased. Matched strictly
+ * first, then loosely (the final choice is typed by hand); if it matches none of the
+ * applications, nothing is filtered out.
+ */
+function finalChoiceFilter(final: unknown, apps: Application[]): ((a: Application) => boolean) | null {
+  if (typeof final !== 'string' || !final.trim()) return null;
+  const strict = apps.filter((a) => sameUniversity(final, a.university));
+  const chosen = strict.length ? strict : apps.filter((a) => overlapsUniversity(final, a.university));
+  return chosen.length ? (a) => chosen.includes(a) : null;
+}
+
+/**
+ * Stop chasing one application — staff said so in the chat (the student chose another
+ * school, withdrew, or it should simply not be chased). Returns the last draft on record,
+ * so staff can be told which one to delete.
+ */
+export async function stopFollowUp(
+  studentId: string,
+  app: Application,
+  stop: { reason: string; by: string },
+): Promise<{ to: string | null; lastDraftedAt: string | null }> {
+  const ref = db().collection(FOLLOWUP_COLLECTION).doc(appKey(studentId, app));
+  const before = (await ref.get()).data() ?? {};
+  await ref.set(
+    { studentId, university: app.university, major: app.major, stoppedAt: new Date().toISOString(), stoppedBy: stop.by, stopReason: stop.reason },
+    { merge: true },
+  );
+  return { to: before.to ?? null, lastDraftedAt: before.lastDraftedAt ?? null };
+}
 
 const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Never guess.`;
 
@@ -103,12 +138,16 @@ export type FollowUpResult = {
   drafted: Array<{ student: string; to: string; applications: string[] }>;
   noConversation: Array<{ student: string; application: string }>;
   tooOld: number;
+  /** Not chased: the student's final choice is another school. */
+  notFinalChoice: number;
+  /** Not chased: staff asked to stop. */
+  stopped: number;
   capped: boolean;
   errors: string[];
 };
 
 export async function followUpSubmittedApplications(opts: { cap?: number; dryRun?: boolean } = {}): Promise<FollowUpResult> {
-  const result: FollowUpResult = { drafted: [], noConversation: [], tooOld: 0, capped: false, errors: [] };
+  const result: FollowUpResult = { drafted: [], noConversation: [], tooOld: 0, notFinalChoice: 0, stopped: 0, capped: false, errors: [] };
   const started = Date.now();
   let historyLoads = 0;
   if (!isAiConfigured() || !isInboxConfigured()) return result;
@@ -117,14 +156,19 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
   const mailbox = (process.env.SMTP_USER ?? '').trim().toLowerCase();
 
   // Every open student's applications that have waited long enough.
-  const snap = await db().collection('students').select('name', 'applications', 'isClosed', 'employeeId').get();
+  const snap = await db().collection('students').select('name', 'applications', 'isClosed', 'employeeId', 'finalChoiceUniversity').get();
   const candidates: Array<{ id: string; name: string; employeeId: string | null; waiting: Waiting[] }> = [];
   for (const d of snap.docs) {
     const s = d.data();
     if (s.isClosed === true) continue;
     const waiting: Waiting[] = [];
+    const isFinalChoice = finalChoiceFilter(s.finalChoiceUniversity, (s.applications ?? []) as Application[]);
     for (const a of (s.applications ?? []) as Application[]) {
       if (a.status !== 'Submitted' || !a.updatedAt) continue;
+      if (isFinalChoice && !isFinalChoice(a)) {
+        result.notFinalChoice++;
+        continue;
+      }
       const days = Math.floor((now - new Date(a.updatedAt).getTime()) / DAY);
       if (days < WAIT_DAYS) continue;
       if (days > MAX_AGE_DAYS) {
@@ -147,6 +191,10 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
       // Skip applications chased in the last WAIT_DAYS.
       const states = await Promise.all(student.waiting.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()));
       const due = student.waiting.filter((w, i) => {
+        if (states[i].data()?.stoppedAt) {
+          result.stopped++;
+          return false;
+        }
         const last = states[i].data()?.lastDraftedAt;
         return !last || now - new Date(last).getTime() >= WAIT_DAYS * DAY;
       });
