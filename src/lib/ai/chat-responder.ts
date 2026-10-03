@@ -588,6 +588,12 @@ export async function respondToStudentChat(
     }
     if (!messages.length) return { studentId, status: 'no_new_message' };
 
+    // The sender's browser names the message it just sent. If a colleague posted right
+    // after it, that message is still the one to answer — the thread is read up to it.
+    if (!preview && caller?.verifiedMessageId && messages[messages.length - 1]?.id !== caller.verifiedMessageId) {
+      const at = messages.findIndex((m) => m.id === caller.verifiedMessageId);
+      if (at >= 0 && addressesBot(messages[at])) messages.splice(at + 1);
+    }
     const last = messages[messages.length - 1];
     // Loop guard: our own message is never a trigger.
     if (last.authorId === CHAT_BOT_USER_ID) {

@@ -402,11 +402,17 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
             stillWaiting: [],
           },
         ).catch(() => undefined);
+        // Stopped in the chat while this draft was being written? Say so, so it is not sent.
+        const stoppedMeanwhile = (
+          await Promise.all(g.items.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()))
+        ).some((d) => followUpStopped(d.data()));
         await ensureChatBotUser();
         await sendChatMessage(
           student.id,
           CHAT_BOT_USER_ID,
-          `⏳ No offer yet after ${Math.max(...g.items.map((w) => w.days))} days — an email asking ${org} for an update is waiting in Gmail Drafts: ${list.join(' · ')}`,
+          stoppedMeanwhile
+            ? `⚠️ An email asking ${org} for an update was saved in Gmail Drafts just as chasing was stopped (${list.join(' · ')}). Please delete that draft — do not send it.`
+            : `⏳ No offer yet after ${Math.max(...g.items.map((w) => w.days))} days — an email asking ${org} for an update is waiting in Gmail Drafts: ${list.join(' · ')}`,
           ['admins'],
         ).catch(() => undefined);
       }
