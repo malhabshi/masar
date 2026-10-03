@@ -19,9 +19,3 @@ export function sameUniversity(a: string, b: string): boolean {
   const wb = universityWords(b);
   return wa.size > 0 && wa.size === wb.size && [...wa].every((w) => wb.has(w));
 }
-
-/** Looser: at least one distinctive word in common — for names typed by hand. */
-export function overlapsUniversity(a: string, b: string): boolean {
-  const wb = universityWords(b);
-  return [...universityWords(a)].some((w) => wb.has(w));
-}

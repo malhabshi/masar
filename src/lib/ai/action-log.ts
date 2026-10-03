@@ -45,12 +45,8 @@ export type UndoSpec =
     }
   | { type: 'none' };
 
-/** Which stop this action made (email_followups id + stopId), and the stop it replaced, if any. */
-type FollowUpStopUndo = {
-  key: string;
-  stopId: string;
-  previous: { stoppedAt: string; stoppedBy: string | null; stopReason: string | null; stopId: string | null } | null;
-};
+/** Which stop request this action added (email_followups id + its stop id). */
+type FollowUpStopUndo = { key: string; stopId: string };
 
 export type AiAction = {
   id: string;
@@ -94,7 +90,7 @@ export async function listAiActions(opts: { limit?: number; source?: string; stu
 }
 
 /** Clears a "stop chasing" from an email_followups record. */
-const RESUME = { stoppedAt: FieldValue.delete(), stoppedBy: FieldValue.delete(), stopReason: FieldValue.delete(), stopId: FieldValue.delete() };
+const RESUME = { stoppedAt: FieldValue.delete(), stoppedBy: FieldValue.delete(), stopReason: FieldValue.delete() };
 
 const note = (content: string, by: string) => ({
   id: `note-ai-undo-${Date.now()}`,
@@ -136,12 +132,14 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
       const stop = u.type === 'resume_follow_up' ? u : u.type === 'app_status' ? u.followUpStop : undefined;
       const stopRef = stop ? db().collection('email_followups').doc(stop.key) : null;
       const stopSnap = stopRef ? await tx.get(stopRef) : null;
-      /** Undo this action's own stop only — a newer stop request stays. Returns false if a newer one owns it. */
+      /** Remove this action's own stop request. Returns true when no other stop remains (chasing resumes). */
       const undoStop = (): boolean => {
         if (!stop || !stopRef) return true;
-        if (stopSnap?.data()?.stopId !== stop.stopId) return false;
-        tx.set(stopRef, stop.previous ?? RESUME, { merge: true });
-        return true;
+        const ids = (stopSnap?.data()?.stopIds ?? []) as string[];
+        const remaining = ids.filter((x) => x !== stop.stopId);
+        if (remaining.length) tx.set(stopRef, { stopIds: remaining }, { merge: true });
+        else tx.set(stopRef, { stopIds: [], ...RESUME }, { merge: true });
+        return remaining.length === 0;
       };
 
       const finish = (message: string) => {
@@ -153,6 +151,14 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
         case 'app_status': {
           const apps = (s.applications ?? []) as Application[];
           const i = apps.findIndex((x) => x.university === u.university && x.major === u.major);
+          // Staff changed it since (or removed it): their status stays, but this request's stop is lifted.
+          if (u.followUpStop && (i < 0 || apps[i].status !== u.to)) {
+            const resumed = undoStop();
+            return finish(
+              `${u.university} was changed since${i >= 0 ? ` to ${apps[i].status}` : ''}, so that stays; ` +
+                (resumed ? 'follow-ups are back on.' : 'another stop request still applies.'),
+            );
+          }
           if (i < 0) return { ok: false, message: 'That application is no longer on the profile.' };
           if (apps[i].status !== u.to) return { ok: false, message: `Not undone — someone has since set it to ${apps[i].status}.` };
           const next = [...apps];
@@ -163,7 +169,7 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
             applications: next,
             adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.university} back to ${u.from} (was set to ${u.to}). By ${user.name}.`, user.id)),
           });
-          const followUps = !u.followUpStop ? '' : undoStop() ? ' and its follow-ups are as before' : ' (follow-ups stay stopped — a newer stop request was made)';
+          const followUps = !u.followUpStop ? '' : undoStop() ? ' and follow-ups are back on' : ' (another stop request still applies)';
           return finish(`${u.university} is back to ${u.from}${followUps}.`);
         }
         case 'remove_application': {
@@ -193,8 +199,7 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
           return finish(items.length ? `${items.length} Missing Item(s) removed.` : 'They were already gone.');
         }
         case 'resume_follow_up': {
-          if (!undoStop()) return { ok: false, message: 'Not undone — a newer stop request was made for this application since.' };
-          return finish(u.previous ? 'Put back to the earlier stop request.' : 'Follow-ups are back on for this application.');
+          return finish(undoStop() ? 'Follow-ups are back on for this application.' : 'This stop request is removed; another one still applies.');
         }
         case 'restore_missing_items': {
           if (u.items.length) tx.update(studentRef!, { missingItems: FieldValue.arrayUnion(...u.items) });

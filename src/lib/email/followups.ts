@@ -28,7 +28,8 @@ import { replyWithReceipt } from './reply-receipt';
 import type { Application } from '@/lib/types';
 import { AI_ACTIONS_COLLECTION, logAiAction, type AiAction } from '@/lib/ai/action-log';
 import { notifyEmployeeOfStatus } from '@/lib/applications/set-status';
-import { overlapsUniversity, sameUniversity } from './universities';
+import { FieldValue } from 'firebase-admin/firestore';
+import { sameUniversity } from './universities';
 
 const FOLLOWUP_COLLECTION = 'email_followups';
 const WAIT_DAYS = 5;
@@ -55,8 +56,9 @@ type Waiting = { app: Application; days: number; key: string };
 
 /**
  * With a final choice set, only that school's applications are chased. Matched by exact
- * name, then strictly, then loosely (the final choice is typed by hand). A final choice that
- * matches none of the applications means the student is going elsewhere: nothing is chased.
+ * name, then by the same distinctive words ("University of Liverpool - kaplan" = "University
+ * of Liverpool") — never by one shared word, which would make East London East Anglia. A
+ * final choice that matches none of the applications means nothing is chased.
  */
 function finalChoiceFilter(final: unknown, apps: Application[]): ((a: Application) => boolean) | null {
   if (typeof final !== 'string' || !final.trim()) return null;
@@ -64,8 +66,16 @@ function finalChoiceFilter(final: unknown, apps: Application[]): ((a: Applicatio
   // Exact name first: a general name ("University of London") has no distinctive words left.
   const exact = apps.filter((a) => plain(a.university) === plain(final));
   const strict = exact.length ? exact : apps.filter((a) => sameUniversity(final, a.university));
-  const chosen = strict.length ? strict : apps.filter((a) => overlapsUniversity(final, a.university));
-  return (a) => chosen.includes(a);
+  return (a) => strict.includes(a);
+}
+
+/**
+ * Is chasing stopped? Each stop request adds its id to stopIds and its Undo removes only
+ * that id, so requests and Undos can come in any order. A stop saved before ids existed has
+ * only stoppedAt.
+ */
+export function followUpStopped(data: FirebaseFirestore.DocumentData | undefined): boolean {
+  return Array.isArray(data?.stopIds) ? data!.stopIds.length > 0 : !!data?.stoppedAt;
 }
 
 /**
@@ -102,9 +112,6 @@ export async function stopFollowUpWithUndo(input: {
     const ref = db().collection(FOLLOWUP_COLLECTION).doc(key);
     const before = (await tx.get(ref)).data() ?? {};
 
-    const previous: FollowUpStop | null = before.stoppedAt
-      ? { stoppedAt: before.stoppedAt, stoppedBy: before.stoppedBy ?? null, stopReason: before.stopReason ?? null, stopId: before.stopId ?? null }
-      : null;
     const reject = !!input.rejectionReason && app.status !== 'Accepted' && app.status !== 'Rejected';
     const nextApps = reject
       ? apps.map((a, k) => (k === i ? { ...a, status: 'Rejected' as const, rejectionReason: input.rejectionReason!, updatedAt: now } : a))
@@ -112,11 +119,20 @@ export async function stopFollowUpWithUndo(input: {
 
     tx.set(
       ref,
-      { studentId: input.studentId, university: app.university, major: app.major, stoppedAt: now, stoppedBy: input.by, stopReason: input.stopReason, stopId },
+      {
+        studentId: input.studentId,
+        university: app.university,
+        major: app.major,
+        stoppedAt: now,
+        stoppedBy: input.by,
+        stopReason: input.stopReason,
+        // An older stop saved without ids keeps a place of its own, so this Undo cannot lift it.
+        stopIds: before.stoppedAt && !Array.isArray(before.stopIds) ? FieldValue.arrayUnion('earlier', stopId) : FieldValue.arrayUnion(stopId),
+      },
       { merge: true },
     );
     if (reject) tx.update(studentRef, { applications: nextApps, lastActivityAt: now });
-    const stopUndo = { key, stopId, previous };
+    const stopUndo = { key, stopId };
     const entry: AiAction = {
       id: actionRef.id,
       at: now,
@@ -144,8 +160,6 @@ export async function stopFollowUpWithUndo(input: {
   return { ok: true, status: r.status, draft: r.draft };
 }
 
-/** A "stop chasing" on an email_followups record, as kept for Undo. */
-export type FollowUpStop = { stoppedAt: string; stoppedBy: string | null; stopReason: string | null; stopId: string | null };
 
 const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Never guess.`;
 
@@ -255,7 +269,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
       // Skip applications chased in the last WAIT_DAYS.
       const states = await Promise.all(student.waiting.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()));
       const due = student.waiting.filter((w, i) => {
-        if (states[i].data()?.stoppedAt) {
+        if (followUpStopped(states[i].data())) {
           result.stopped++;
           return false;
         }
@@ -324,7 +338,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
           const stillFinal = finalChoiceFilter(fresh.data()?.finalChoiceUniversity, apps);
           g.items = g.items.filter((w, k) => {
             const current = apps.find((a) => a.university === w.app.university && a.major === w.app.major);
-            return !stops[k].data()?.stoppedAt && current?.status === 'Submitted' && (!stillFinal || stillFinal(current));
+            return !followUpStopped(stops[k].data()) && current?.status === 'Submitted' && (!stillFinal || stillFinal(current));
           });
           if (!g.items.length) continue;
         }
