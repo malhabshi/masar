@@ -99,6 +99,16 @@ function claimKey(messageId: string | null, uid: number): string {
 const CLAIM_LEASE_MS = 30 * 60_000;
 
 /**
+ * Test mode leaves other students' mail for later. Each such email is still remembered (so
+ * the email memory stays current) and noted here, so later runs do not download it again.
+ * The note names the test student: when test mode changes or ends, the mail is processed
+ * in full as normal.
+ */
+const TEST_SKIPS = 'email_intake_test_skips';
+const testSkipKey = (messageId: string | null, uid: number, testStudentId: string) =>
+  `${claimKey(messageId, uid)}__${testStudentId}`;
+
+/**
  * Mail received before this moment is never processed. It is set on the first run, so
  * going live works on the mail that arrives from then on instead of the whole old inbox
  * (whose history the email memory already holds).
@@ -356,12 +366,35 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
       // Already dealt with in an earlier run — skip without downloading attachments.
       if (await isAlreadyHandled(head.messageId, head.uid)) continue;
+      const testSkip =
+        settings.restrictToStudentId && adminDb
+          ? adminDb.collection(TEST_SKIPS).doc(testSkipKey(head.messageId, head.uid, settings.restrictToStudentId))
+          : null;
+      if (testSkip && (await testSkip.get()).exists) {
+        result.skipped++;
+        continue;
+      }
 
       try {
         const full = await fetchMessageByUid(head.uid);
-        if (full && settings.restrictToStudentId) {
+        if (full && testSkip) {
           const m = matchStudentByName([full.fromName, full.subject, full.text].filter(Boolean).join(' \n '), students);
           if (m.kind !== 'matched' || m.student.id !== settings.restrictToStudentId) {
+            if (m.kind === 'matched') {
+              await rememberEmail({
+                studentId: m.student.id,
+                studentName: m.student.name,
+                direction: 'in',
+                date: full.date,
+                from: full.fromName ? `${full.fromName} <${full.from}>` : full.from,
+                to: process.env.SMTP_USER ?? '',
+                subject: full.subject,
+                messageId: full.messageId,
+                body: full.text,
+                attachments: full.attachments.map((a) => a.filename),
+              }).catch(() => undefined);
+            }
+            await testSkip.set({ at: new Date().toISOString(), studentId: m.kind === 'matched' ? m.student.id : null }).catch(() => undefined);
             result.skipped++;
             continue;
           }
