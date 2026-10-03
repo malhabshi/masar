@@ -42,3 +42,28 @@ env:
     value: admin
     availability:
       - RUNTIME
+  # The AI (assistant, document reading, email intake, chat replies). The key lives in
+  # Cloud Secret Manager, never in this file.
+  - variable: ANTHROPIC_API_KEY
+    secret: ANTHROPIC_API_KEY
+    availability:
+      - RUNTIME
+  # The agency mailbox the email intake reads (IMAP) and saves reply drafts to.
+  - variable: SMTP_USER
+    value: ukstudentm@gmail.com
+    availability:
+      - RUNTIME
+  - variable: SMTP_PASSWORD
+    secret: SMTP_PASSWORD
+    availability:
+      - RUNTIME
+  - variable: EMAIL_PROVIDER
+    value: gmail
+    availability:
+      - RUNTIME
+  # Drafts only: the site never sends to students or companies. Staff send the drafts from
+  # Gmail. Notes to the agency's own mailbox (the filing receipts) still go through.
+  - variable: EMAIL_DRY_RUN
+    value: "true"
+    availability:
+      - RUNTIME
