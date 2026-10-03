@@ -34,11 +34,9 @@ import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
 import { adminDb as db } from '@/lib/firebase/admin';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
 import { createStudentTask, sendChatMessage } from '@/lib/actions';
-import { setOpenApplicationStatus } from '@/lib/applications/set-status';
 import { trustedRole } from '@/lib/auth/trusted-role';
-import { stopFollowUp } from '@/lib/email/followups';
+import { stopFollowUpWithUndo } from '@/lib/email/followups';
 import { sameUniversity } from '@/lib/email/universities';
-import { logAiAction } from './action-log';
 import type { Application, User } from '@/lib/types';
 
 export const AI_CHAT_LOG_COLLECTION = 'ai_chat_log';
@@ -403,37 +401,19 @@ function buildToolset(opts: {
       if (preview) return { ok: true, preview: true, wouldStop: `${app.university} (${app.major})`, wouldSetRejected: reject };
 
       const said = String(input.note ?? '').slice(0, 200);
-      const draft = await stopFollowUp(studentId, app, { reason: said || reason, by: requestedBy });
-      let status = `unchanged (${app.status})`;
-      let changedFrom: Application['status'] | null = null;
-      let previousReason: string | null = null;
-      if (reject) {
-        // Checked and written in one transaction: if staff marked it Accepted meanwhile, it stays Accepted.
-        const r = await setOpenApplicationStatus({ studentId, university: app.university, major: app.major, to: 'Rejected', rejectionReason: rejectionReason! });
-        if (r.ok) {
-          changedFrom = r.from;
-          previousReason = r.previousReason;
-          status = `${r.from} → Rejected (${rejectionReason})`;
-        } else status = `not changed: ${r.why}`;
-      }
-      await logAiAction({
-        source: 'chat',
-        summary: `${app.university}: follow-ups stopped${changedFrom ? `; ${status}` : ''}`,
-        reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
+      // The stop, the rejection and the AI Activity entry (with Undo) are saved together.
+      const r = await stopFollowUpWithUndo({
         studentId,
-        studentName: s.name ?? null,
-        undo: changedFrom
-          ? {
-              type: 'app_status',
-              university: app.university,
-              major: app.major,
-              from: changedFrom,
-              to: 'Rejected',
-              rejectionReason: previousReason,
-              followUpStop: { key: draft.key, stopId: draft.stopId, previous: draft.previousStop },
-            }
-          : { type: 'resume_follow_up', key: draft.key, stopId: draft.stopId, previous: draft.previousStop },
+        university: app.university,
+        major: app.major,
+        rejectionReason,
+        stopReason: said || reason,
+        by: requestedBy,
+        logReason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
       });
+      if (!r.ok) return { ok: false, error: `Not changed: ${r.error}` };
+      const status = r.status;
+      const draft = r.draft;
       collected.acted = true;
       return {
         ok: true,

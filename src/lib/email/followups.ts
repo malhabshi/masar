@@ -26,7 +26,8 @@ import { appendDraft, isInboxConfigured } from './inbox';
 import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, type EmailMemoryEntry } from './memory';
 import { replyWithReceipt } from './reply-receipt';
 import type { Application } from '@/lib/types';
-import { logAiAction } from '@/lib/ai/action-log';
+import { AI_ACTIONS_COLLECTION, logAiAction, type AiAction } from '@/lib/ai/action-log';
+import { notifyEmployeeOfStatus } from '@/lib/applications/set-status';
 import { overlapsUniversity, sameUniversity } from './universities';
 
 const FOLLOWUP_COLLECTION = 'email_followups';
@@ -53,9 +54,9 @@ const firstAddress = (s: string) => s.match(/[\w.+-]+@[\w.-]+/)?.[0]?.toLowerCas
 type Waiting = { app: Application; days: number; key: string };
 
 /**
- * With a final choice set, only that school's applications are chased. Matched strictly
- * first, then loosely (the final choice is typed by hand); if it matches none of the
- * applications, nothing is filtered out.
+ * With a final choice set, only that school's applications are chased. Matched by exact
+ * name, then strictly, then loosely (the final choice is typed by hand). A final choice that
+ * matches none of the applications means the student is going elsewhere: nothing is chased.
  */
 function finalChoiceFilter(final: unknown, apps: Application[]): ((a: Application) => boolean) | null {
   if (typeof final !== 'string' || !final.trim()) return null;
@@ -64,36 +65,83 @@ function finalChoiceFilter(final: unknown, apps: Application[]): ((a: Applicatio
   const exact = apps.filter((a) => plain(a.university) === plain(final));
   const strict = exact.length ? exact : apps.filter((a) => sameUniversity(final, a.university));
   const chosen = strict.length ? strict : apps.filter((a) => overlapsUniversity(final, a.university));
-  return chosen.length ? (a) => chosen.includes(a) : null;
+  return (a) => chosen.includes(a);
 }
 
 /**
- * Stop chasing one application — staff said so in the chat (the student chose another
- * school, withdrew, or it should simply not be chased). Returns the last draft on record,
- * so staff can be told which one to delete.
+ * Stop chasing one application — and, when the student chose another school or withdrew,
+ * set it to Rejected — together with its AI Activity entry, in ONE transaction: there is
+ * never a stop without its Undo, or a rejection of an application staff have meanwhile
+ * marked Accepted (Accepted and Rejected are never replaced). The employee is notified
+ * after the commit.
  */
-export async function stopFollowUp(
-  studentId: string,
-  app: Application,
-  stop: { reason: string; by: string },
-): Promise<{ key: string; stopId: string; previousStop: FollowUpStop | null; to: string | null; lastDraftedAt: string | null }> {
-  const key = appKey(studentId, app);
-  const ref = db().collection(FOLLOWUP_COLLECTION).doc(key);
+export async function stopFollowUpWithUndo(input: {
+  studentId: string;
+  university: string;
+  major: string;
+  /** Set when the application should also become Rejected, with this reason. */
+  rejectionReason: string | null;
+  stopReason: string;
+  by: string;
+  /** For the AI Activity entry. */
+  logReason: string;
+}): Promise<{ ok: true; status: string; draft: { to: string | null; lastDraftedAt: string | null } } | { ok: false; error: string }> {
+  const studentRef = db().collection('students').doc(input.studentId);
+  const actionRef = db().collection(AI_ACTIONS_COLLECTION).doc();
   const stopId = `stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  // Read the stop being replaced and write the new one in one transaction, so two requests
-  // at the same moment each record the stop they really replaced (Undo relies on it).
-  return db().runTransaction(async (tx) => {
+  const now = new Date().toISOString();
+
+  const r = await db().runTransaction(async (tx) => {
+    const s = (await tx.get(studentRef)).data();
+    if (!s) return { ok: false as const, error: 'Student not found.' };
+    const apps = (s.applications ?? []) as Application[];
+    const i = apps.findIndex((a) => a.university === input.university && a.major === input.major);
+    if (i < 0) return { ok: false as const, error: 'That application is no longer on the profile.' };
+    const app = apps[i];
+    const key = appKey(input.studentId, app);
+    const ref = db().collection(FOLLOWUP_COLLECTION).doc(key);
     const before = (await tx.get(ref)).data() ?? {};
-    const previousStop: FollowUpStop | null = before.stoppedAt
+
+    const previous: FollowUpStop | null = before.stoppedAt
       ? { stoppedAt: before.stoppedAt, stoppedBy: before.stoppedBy ?? null, stopReason: before.stopReason ?? null, stopId: before.stopId ?? null }
       : null;
+    const reject = !!input.rejectionReason && app.status !== 'Accepted' && app.status !== 'Rejected';
+    const nextApps = reject
+      ? apps.map((a, k) => (k === i ? { ...a, status: 'Rejected' as const, rejectionReason: input.rejectionReason!, updatedAt: now } : a))
+      : apps;
+
     tx.set(
       ref,
-      { studentId, university: app.university, major: app.major, stoppedAt: new Date().toISOString(), stoppedBy: stop.by, stopReason: stop.reason, stopId },
+      { studentId: input.studentId, university: app.university, major: app.major, stoppedAt: now, stoppedBy: input.by, stopReason: input.stopReason, stopId },
       { merge: true },
     );
-    return { key, stopId, previousStop, to: (before.to as string | undefined) ?? null, lastDraftedAt: (before.lastDraftedAt as string | undefined) ?? null };
+    if (reject) tx.update(studentRef, { applications: nextApps, lastActivityAt: now });
+    const stopUndo = { key, stopId, previous };
+    const entry: AiAction = {
+      id: actionRef.id,
+      at: now,
+      source: 'chat',
+      summary: `${app.university}: follow-ups stopped${reject ? `; ${app.status} → Rejected (${input.rejectionReason})` : ''}`,
+      reason: input.logReason,
+      studentId: input.studentId,
+      studentName: (s.name as string) ?? null,
+      undo: reject
+        ? { type: 'app_status', university: app.university, major: app.major, from: app.status, to: 'Rejected', rejectionReason: app.rejectionReason ?? null, followUpStop: stopUndo }
+        : { type: 'resume_follow_up', ...stopUndo },
+    };
+    tx.set(actionRef, JSON.parse(JSON.stringify(entry)));
+    return {
+      ok: true as const,
+      status: reject ? `${app.status} → Rejected (${input.rejectionReason})` : `unchanged (${app.status})`,
+      draft: { to: (before.to as string | undefined) ?? null, lastDraftedAt: (before.lastDraftedAt as string | undefined) ?? null },
+      notify: reject ? { studentName: String(s.name ?? ''), employeeId: (s.employeeId as string | undefined) ?? null, applications: nextApps } : null,
+    };
   });
+  if (!r.ok) return r;
+  if (r.notify) {
+    await notifyEmployeeOfStatus({ studentId: input.studentId, university: input.university, to: 'Rejected', ...r.notify });
+  }
+  return { ok: true, status: r.status, draft: r.draft };
 }
 
 /** A "stop chasing" on an email_followups record, as kept for Undo. */
@@ -273,11 +321,11 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
             ...g.items.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()),
           ]);
           const apps = (fresh.data()?.applications ?? []) as Application[];
-          g.items = g.items.filter(
-            (w, k) =>
-              !stops[k].data()?.stoppedAt &&
-              apps.some((a) => a.university === w.app.university && a.major === w.app.major && a.status === 'Submitted'),
-          );
+          const stillFinal = finalChoiceFilter(fresh.data()?.finalChoiceUniversity, apps);
+          g.items = g.items.filter((w, k) => {
+            const current = apps.find((a) => a.university === w.app.university && a.major === w.app.major);
+            return !stops[k].data()?.stoppedAt && current?.status === 'Submitted' && (!stillFinal || stillFinal(current));
+          });
           if (!g.items.length) continue;
         }
 
