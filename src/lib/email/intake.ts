@@ -8,6 +8,7 @@
 // one student's complete registered name appears in the email. Nothing is ever guessed
 // between two people — a passport on the wrong profile is a quiet, expensive error.
 
+import { createHash } from 'crypto';
 import { adminDb, storage } from '@/lib/firebase/admin';
 import { findIdenticalDocument, uploadStudentDocument } from '@/lib/documents/upload';
 import {
@@ -105,8 +106,9 @@ const CLAIM_LEASE_MS = 30 * 60_000;
  * in full as normal.
  */
 const TEST_SKIPS = 'email_intake_test_skips';
-const testSkipKey = (messageId: string | null, uid: number, testStudentId: string) =>
-  `${claimKey(messageId, uid)}__${testStudentId}`;
+/** Keyed on the test student and their current name: renaming them reconsiders every email. */
+const testSkipKey = (messageId: string | null, uid: number, testStudentId: string, testStudentName: string) =>
+  `${claimKey(messageId, uid)}__${testStudentId}__${createHash('sha1').update(testStudentName).digest('hex').slice(0, 10)}`;
 
 /**
  * Mail received before this moment is never processed. It is set on the first run, so
@@ -368,7 +370,16 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       if (await isAlreadyHandled(head.messageId, head.uid)) continue;
       const testSkip =
         settings.restrictToStudentId && adminDb
-          ? adminDb.collection(TEST_SKIPS).doc(testSkipKey(head.messageId, head.uid, settings.restrictToStudentId))
+          ? adminDb
+              .collection(TEST_SKIPS)
+              .doc(
+                testSkipKey(
+                  head.messageId,
+                  head.uid,
+                  settings.restrictToStudentId,
+                  students.find((s) => s.id === settings.restrictToStudentId)?.normalized ?? '',
+                ),
+              )
           : null;
       if (testSkip && (await testSkip.get()).exists) {
         result.skipped++;
@@ -394,7 +405,10 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
                 attachments: full.attachments.map((a) => a.filename),
               }).catch(() => undefined);
             }
-            await testSkip.set({ at: new Date().toISOString(), studentId: m.kind === 'matched' ? m.student.id : null }).catch(() => undefined);
+            // An email naming two students is not noted: who it belongs to may still be settled.
+            if (m.kind !== 'ambiguous') {
+              await testSkip.set({ at: new Date().toISOString(), studentId: m.kind === 'matched' ? m.student.id : null }).catch(() => undefined);
+            }
             result.skipped++;
             continue;
           }

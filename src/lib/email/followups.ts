@@ -79,16 +79,21 @@ export async function stopFollowUp(
 ): Promise<{ key: string; stopId: string; previousStop: FollowUpStop | null; to: string | null; lastDraftedAt: string | null }> {
   const key = appKey(studentId, app);
   const ref = db().collection(FOLLOWUP_COLLECTION).doc(key);
-  const before = (await ref.get()).data() ?? {};
   const stopId = `stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const previousStop: FollowUpStop | null = before.stoppedAt
-    ? { stoppedAt: before.stoppedAt, stoppedBy: before.stoppedBy ?? null, stopReason: before.stopReason ?? null, stopId: before.stopId ?? null }
-    : null;
-  await ref.set(
-    { studentId, university: app.university, major: app.major, stoppedAt: new Date().toISOString(), stoppedBy: stop.by, stopReason: stop.reason, stopId },
-    { merge: true },
-  );
-  return { key, stopId, previousStop, to: before.to ?? null, lastDraftedAt: before.lastDraftedAt ?? null };
+  // Read the stop being replaced and write the new one in one transaction, so two requests
+  // at the same moment each record the stop they really replaced (Undo relies on it).
+  return db().runTransaction(async (tx) => {
+    const before = (await tx.get(ref)).data() ?? {};
+    const previousStop: FollowUpStop | null = before.stoppedAt
+      ? { stoppedAt: before.stoppedAt, stoppedBy: before.stoppedBy ?? null, stopReason: before.stopReason ?? null, stopId: before.stopId ?? null }
+      : null;
+    tx.set(
+      ref,
+      { studentId, university: app.university, major: app.major, stoppedAt: new Date().toISOString(), stoppedBy: stop.by, stopReason: stop.reason, stopId },
+      { merge: true },
+    );
+    return { key, stopId, previousStop, to: (before.to as string | undefined) ?? null, lastDraftedAt: (before.lastDraftedAt as string | undefined) ?? null };
+  });
 }
 
 /** A "stop chasing" on an email_followups record, as kept for Undo. */
