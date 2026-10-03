@@ -261,7 +261,7 @@ export function AppSidebar() {
     ];
 
     const adminNav = [
-        { href: '/ai-assistant', label: 'AI Assistant', icon: Sparkles, roles: ['admin'] },
+        { href: '/ai-assistant', label: 'AI Assistant', icon: Sparkles, roles: ['admin', 'department'] },
         { href: '/email-intake', label: 'Email Documents', icon: Inbox, roles: ['admin'] },
         { href: '/ai-activity', label: 'AI Activity', icon: History, roles: ['admin'] },
         { href: '/reports', label: 'Reports', icon: BarChart, roles: ['admin'] },

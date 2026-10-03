@@ -233,15 +233,17 @@ export default function AiAssistantPage() {
     );
   }
 
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'department')) {
     return (
       <Alert variant="destructive" className="max-w-2xl">
         <AlertTriangle className="h-4 w-4" />
         <AlertTitle>Not available</AlertTitle>
-        <AlertDescription>The AI assistant is currently limited to admin accounts.</AlertDescription>
+        <AlertDescription>The AI assistant is available to admins and departments.</AlertDescription>
       </Alert>
     );
   }
+  // Departments ask questions only: no "Allow changes", no settings panels.
+  const isAdmin = user.role === 'admin';
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
@@ -252,16 +254,20 @@ export default function AiAssistantPage() {
             AI Assistant
           </h1>
           <p className="text-sm text-muted-foreground">
-            Ask about your students, applications and reports. It reads live data from masar.
+            {isAdmin
+              ? 'Ask about your students, applications and reports. It reads live data from masar.'
+              : 'Ask about your students and applications. It reads live data from masar and changes nothing.'}
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Switch id="allow-writes" checked={allowWrites} onCheckedChange={setAllowWrites} />
-            <Label htmlFor="allow-writes" className="cursor-pointer text-sm">
-              Allow changes
-            </Label>
-          </div>
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <Switch id="allow-writes" checked={allowWrites} onCheckedChange={setAllowWrites} />
+              <Label htmlFor="allow-writes" className="cursor-pointer text-sm">
+                Allow changes
+              </Label>
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={reset} disabled={turns.length === 0 || isSending}>
             <Trash2 className="mr-2 h-4 w-4" />
             New chat
@@ -298,15 +304,15 @@ export default function AiAssistantPage() {
         </Alert>
       )}
 
-      {responder && (
+      {isAdmin && responder && (
         <ResponderControls settings={responder} saving={savingResponder} onChange={updateResponder} />
       )}
 
-      {user && <SpendingPanel authedFetch={authedFetch} />}
+      {isAdmin && <SpendingPanel authedFetch={authedFetch} />}
 
-      {user && <DocumentReader authedFetch={authedFetch} />}
+      {isAdmin && <DocumentReader authedFetch={authedFetch} />}
 
-      {user && <TeamNotes authedFetch={authedFetch} />}
+      {isAdmin && <TeamNotes authedFetch={authedFetch} />}
 
       <Card className="flex min-h-0 flex-1 flex-col">
         <CardContent ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">

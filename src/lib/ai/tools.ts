@@ -776,8 +776,17 @@ export function buildToolRegistry(tools: AiTool[]): Map<string, AiTool> {
  *
  * Order is stable so the prompt cache prefix stays intact across turns.
  */
-export function getToolDefinitions(allowWrites: boolean): Anthropic.Tool[] {
-  return AI_TOOLS.filter((t) => allowWrites || !t.write).map((t) => t.definition);
+/**
+ * Tools only admins get, even read-only: generate_report includes employees' logged hours
+ * (admin-only pages in the site), bulk document reading and mail loading cost money, and
+ * the action list only serves changes.
+ */
+export const ADMIN_ONLY_TOOLS = new Set(['generate_report', 'read_student_documents', 'load_student_emails', 'list_capabilities']);
+
+export function getToolDefinitions(allowWrites: boolean, role?: string): Anthropic.Tool[] {
+  return AI_TOOLS.filter((t) => (allowWrites || !t.write) && (role === 'admin' || !ADMIN_ONLY_TOOLS.has(t.definition.name))).map(
+    (t) => t.definition,
+  );
 }
 
 export type ToolExecution = {
@@ -806,6 +815,10 @@ export async function executeTool(
       isError: true,
       durationMs: Date.now() - started,
     };
+  }
+
+  if (registry === TOOL_MAP && ADMIN_ONLY_TOOLS.has(name) && ctx.actor.role !== 'admin') {
+    return { name, input, result: { error: 'Only admins can use this.' }, isError: true, durationMs: Date.now() - started };
   }
 
   if (tool.write && !ctx.allowWrites) {

@@ -21,9 +21,10 @@ export const AI_MAX_TOKENS = 16000;
 // from burning tokens if the model keeps calling tools without concluding.
 export const AI_MAX_TOOL_ITERATIONS = 12;
 
-// Roles allowed to use the assistant at all. Kept narrow on purpose for the first
-// rollout — widen once behaviour has been observed in production.
-export const AI_ALLOWED_ROLES = ['admin'] as const;
+// Roles allowed to use the assistant at all. Departments use it read-only: only the roles
+// in AI_WRITE_ROLES may switch on "Allow changes".
+export const AI_ALLOWED_ROLES = ['admin', 'department'] as const;
+export const AI_WRITE_ROLES: readonly string[] = ['admin'];
 
 export function getAnthropicApiKey(): string | null {
   const key = process.env.ANTHROPIC_API_KEY;

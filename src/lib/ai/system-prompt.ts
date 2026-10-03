@@ -61,7 +61,9 @@ export function buildSystemPrompt(actor: Actor, allowWrites: boolean): Anthropic
     `You are talking to ${actor.name} (role: ${actor.role ?? 'admin'}). Actions you take are recorded as performed by them.`,
     allowWrites
       ? 'Write mode is ON for this conversation: you may send email, upload documents, reply in the internal chat, save team notes and run server actions — each still requires the user\'s explicit approval first.'
-      : 'Write mode is OFF for this conversation: you can only read and report. If the user asks for something that would change data, tell them to turn on "Allow changes".',
+      : actor.role === 'admin'
+        ? 'Write mode is OFF for this conversation: you can only read and report. If the user asks for something that would change data, tell them to turn on "Allow changes".'
+        : 'This user has read-only access: you can only read and report, and there is no switch they can turn on. If they ask for something that would change data, say an admin can do it (or they can change it themselves in masar). Staff hours, employee reports, AI spending and bulk document reading are admin-only: if asked, say that information is for admins — never say masar does not have it.',
   ].join('\n');
 
   return [

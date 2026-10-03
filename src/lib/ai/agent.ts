@@ -116,7 +116,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
   const registry = input.toolset ? buildToolRegistry(input.toolset) : undefined;
   const tools = input.toolset
     ? input.toolset.filter((t) => allowWrites || !t.write).map((t) => t.definition)
-    : getToolDefinitions(allowWrites);
+    : getToolDefinitions(allowWrites, actor.role);
   const maxIterations = input.maxIterations ?? AI_MAX_TOOL_ITERATIONS;
   const working: Anthropic.MessageParam[] = [...input.messages];
 

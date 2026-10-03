@@ -3,7 +3,7 @@ import { trustedRole } from '@/lib/auth/trusted-role';
 import type Anthropic from '@anthropic-ai/sdk';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { runAgent } from '@/lib/ai/agent';
-import { AI_ALLOWED_ROLES, AI_MODEL, isAiConfigured, AI_NOT_CONFIGURED_MESSAGE } from '@/lib/ai/config';
+import { AI_ALLOWED_ROLES, AI_MODEL, AI_WRITE_ROLES, isAiConfigured, AI_NOT_CONFIGURED_MESSAGE } from '@/lib/ai/config';
 import { getEmailConfigStatus } from '@/lib/email';
 import type { Actor } from '@/lib/mcp/dispatch';
 import type { User } from '@/lib/types';
@@ -98,8 +98,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'The first message must be from the user.' }, { status: 400 });
   }
 
-  // allowWrites is opt-in per request: absent or non-true means read-only.
-  const allowWrites = body.allowWrites === true;
+  // allowWrites is opt-in per request: absent or non-true means read-only. Departments are
+  // always read-only, whatever the request says.
+  const allowWrites = body.allowWrites === true && AI_WRITE_ROLES.includes(auth.actor.role ?? '');
 
   try {
     const result = await runAgent({
