@@ -96,8 +96,16 @@ async function claimMessage(studentId: string, messageId: string): Promise<boole
   try {
     return await adminDb.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      if (snap.exists && snap.data()?.lastProcessedMessageId === messageId) return false;
-      tx.set(ref, { lastProcessedMessageId: messageId, claimedAt: new Date().toISOString() }, { merge: true });
+      // Every processed message is remembered (the last 50), not only the newest: a request
+      // can be answered after a later message (the sender's browser names it), and a repeated
+      // call for it must not run it twice.
+      const done = (snap.data()?.processedIds ?? []) as string[];
+      if (snap.exists && (snap.data()?.lastProcessedMessageId === messageId || done.includes(messageId))) return false;
+      tx.set(
+        ref,
+        { lastProcessedMessageId: messageId, processedIds: [...done, messageId].slice(-50), claimedAt: new Date().toISOString() },
+        { merge: true },
+      );
       return true;
     });
   } catch (e) {

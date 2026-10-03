@@ -26,7 +26,9 @@ export type UndoSpec =
       from: ApplicationStatus;
       to: ApplicationStatus;
       rejectionReason?: string | null;
-      /** The change also stopped follow-ups for this application: Undo puts back what was there before. */
+      /** The application's updatedAt as the AI left it: a later change by staff (even back to the same status) is theirs, and Undo leaves it. */
+      setAt?: string;
+      /** The change also stopped follow-ups for this application: Undo lifts that stop. */
       followUpStop?: FollowUpStopUndo;
     }
   | ({ type: 'resume_follow_up' } & FollowUpStopUndo)
@@ -151,8 +153,9 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
         case 'app_status': {
           const apps = (s.applications ?? []) as Application[];
           const i = apps.findIndex((x) => x.university === u.university && x.major === u.major);
-          // Staff changed it since (or removed it): their status stays, but this request's stop is lifted.
-          if (u.followUpStop && (i < 0 || apps[i].status !== u.to)) {
+          // Staff changed it since (or removed it): their decision stays, but this request's stop is lifted.
+          const changedSince = i < 0 || apps[i].status !== u.to || (!!u.setAt && apps[i].updatedAt !== u.setAt);
+          if (u.followUpStop && changedSince) {
             const resumed = undoStop();
             return finish(
               `${u.university} was changed since${i >= 0 ? ` to ${apps[i].status}` : ''}, so that stays; ` +
@@ -160,7 +163,7 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
             );
           }
           if (i < 0) return { ok: false, message: 'That application is no longer on the profile.' };
-          if (apps[i].status !== u.to) return { ok: false, message: `Not undone — someone has since set it to ${apps[i].status}.` };
+          if (changedSince) return { ok: false, message: `Not undone — it has been changed since (now ${apps[i].status}).` };
           const next = [...apps];
           next[i] = { ...next[i], status: u.from, updatedAt: new Date().toISOString() };
           if (u.from === 'Rejected' && u.rejectionReason) next[i].rejectionReason = u.rejectionReason;

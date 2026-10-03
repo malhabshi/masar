@@ -142,7 +142,16 @@ export async function stopFollowUpWithUndo(input: {
       studentId: input.studentId,
       studentName: (s.name as string) ?? null,
       undo: reject
-        ? { type: 'app_status', university: app.university, major: app.major, from: app.status, to: 'Rejected', rejectionReason: app.rejectionReason ?? null, followUpStop: stopUndo }
+        ? {
+            type: 'app_status',
+            university: app.university,
+            major: app.major,
+            from: app.status,
+            to: 'Rejected',
+            rejectionReason: app.rejectionReason ?? null,
+            setAt: now,
+            followUpStop: stopUndo,
+          }
         : { type: 'resume_follow_up', ...stopUndo },
     };
     tx.set(actionRef, JSON.parse(JSON.stringify(entry)));
