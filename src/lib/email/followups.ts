@@ -73,14 +73,15 @@ export async function stopFollowUp(
   studentId: string,
   app: Application,
   stop: { reason: string; by: string },
-): Promise<{ to: string | null; lastDraftedAt: string | null }> {
-  const ref = db().collection(FOLLOWUP_COLLECTION).doc(appKey(studentId, app));
+): Promise<{ key: string; to: string | null; lastDraftedAt: string | null }> {
+  const key = appKey(studentId, app);
+  const ref = db().collection(FOLLOWUP_COLLECTION).doc(key);
   const before = (await ref.get()).data() ?? {};
   await ref.set(
     { studentId, university: app.university, major: app.major, stoppedAt: new Date().toISOString(), stoppedBy: stop.by, stopReason: stop.reason },
     { merge: true },
   );
-  return { to: before.to ?? null, lastDraftedAt: before.lastDraftedAt ?? null };
+  return { key, to: before.to ?? null, lastDraftedAt: before.lastDraftedAt ?? null };
 }
 
 const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Never guess.`;
@@ -248,6 +249,22 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
           (e) => e.direction === 'in' && firstAddress(e.from) === partner && now - new Date(e.date).getTime() < WAIT_DAYS * DAY,
         );
         if (heardRecently) continue;
+
+        // Re-check just before drafting: staff may have stopped one in the chat, or its status
+        // moved on, while this run was loading mail and asking the model.
+        if (!opts.dryRun) {
+          const [fresh, ...stops] = await Promise.all([
+            db().collection('students').doc(student.id).get(),
+            ...g.items.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()),
+          ]);
+          const apps = (fresh.data()?.applications ?? []) as Application[];
+          g.items = g.items.filter(
+            (w, k) =>
+              !stops[k].data()?.stoppedAt &&
+              apps.some((a) => a.university === w.app.university && a.major === w.app.major && a.status === 'Submitted'),
+          );
+          if (!g.items.length) continue;
+        }
 
         const org = g.email.organisation ?? partner.split('@')[1];
         const list = g.items.map((w) => `${w.app.university} (${w.app.major})`);

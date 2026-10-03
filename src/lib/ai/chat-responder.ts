@@ -423,8 +423,8 @@ function buildToolset(opts: {
         studentId,
         studentName: s.name ?? null,
         undo: changedFrom
-          ? { type: 'app_status', university: app.university, major: app.major, from: changedFrom, to: 'Rejected', rejectionReason: previousReason }
-          : { type: 'none' },
+          ? { type: 'app_status', university: app.university, major: app.major, from: changedFrom, to: 'Rejected', rejectionReason: previousReason, resumeFollowUpKey: draft.key }
+          : { type: 'resume_follow_up', key: draft.key },
       });
       collected.acted = true;
       return {
@@ -612,6 +612,17 @@ export async function respondToStudentChat(
       return { studentId, status: 'silent', reason: 'no answer needed (pre-model triage)' };
     }
 
+    // A request to the AI can lead it to change data, which needs the sender's own wake-up
+    // call (their login, for this message). Any other trigger must not use the message up
+    // first: it waits. After a few minutes without one the message is answered — but then
+    // unverified, so nothing is changed.
+    const verified =
+      !!preview ||
+      (!!caller?.verifiedCallerId && caller.verifiedCallerId === last.authorId && caller.verifiedMessageId === last.id);
+    if (!verified && addressesBot(last) && Date.now() - new Date(last.timestamp ?? 0).getTime() < 3 * 60_000) {
+      return { studentId, status: 'no_new_message', reason: "waiting for the sender's own request" };
+    }
+
     // Duplicate guard. Two triggers can fire for the same message (the sender's browser
     // plus a queue drain), so claim the message id transactionally — only the first
     // caller through proceeds.
@@ -681,9 +692,7 @@ ${addressesBot(last) || asksForStatus(last)
       preview: !!preview,
       requestedBy: authors.get(last.authorId)?.name ?? last.authorId,
       requesterId: last.authorId,
-      requesterVerified:
-        !!preview ||
-        (!!caller?.verifiedCallerId && caller.verifiedCallerId === last.authorId && caller.verifiedMessageId === last.id),
+      requesterVerified: verified,
     });
 
     const actor = { id: CHAT_BOT_USER_ID, name: CHAT_BOT_NAME, role: 'employee' };

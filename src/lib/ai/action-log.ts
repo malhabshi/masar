@@ -19,7 +19,17 @@ export const AI_ACTIONS_COLLECTION = 'ai_actions';
 export type AiActionSource = 'email' | 'notice' | 'task' | 'document' | 'chat' | 'followup' | 'change_agent';
 
 export type UndoSpec =
-  | { type: 'app_status'; university: string; major: string; from: ApplicationStatus; to: ApplicationStatus; rejectionReason?: string | null }
+  | {
+      type: 'app_status';
+      university: string;
+      major: string;
+      from: ApplicationStatus;
+      to: ApplicationStatus;
+      rejectionReason?: string | null;
+      /** The change also stopped follow-ups for this application (email_followups id): Undo resumes them. */
+      resumeFollowUpKey?: string;
+    }
+  | { type: 'resume_follow_up'; key: string }
   | { type: 'remove_application'; university: string; major: string }
   | { type: 'remove_missing_items'; ids: string[] }
   | { type: 'restore_missing_items'; items: unknown[] }
@@ -75,6 +85,9 @@ export async function listAiActions(opts: { limit?: number; source?: string; stu
   if (opts.source) rows = rows.filter((r) => r.source === opts.source);
   return rows;
 }
+
+/** Clears a "stop chasing" from an email_followups record. */
+const RESUME = { stoppedAt: FieldValue.delete(), stoppedBy: FieldValue.delete(), stopReason: FieldValue.delete() };
 
 const note = (content: string, by: string) => ({
   id: `note-ai-undo-${Date.now()}`,
@@ -133,7 +146,8 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
             applications: next,
             adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.university} back to ${u.from} (was set to ${u.to}). By ${user.name}.`, user.id)),
           });
-          return finish(`${u.university} is back to ${u.from}.`);
+          if (u.resumeFollowUpKey) tx.set(db().collection('email_followups').doc(u.resumeFollowUpKey), RESUME, { merge: true });
+          return finish(`${u.university} is back to ${u.from}${u.resumeFollowUpKey ? ' and follow-ups are back on' : ''}.`);
         }
         case 'remove_application': {
           const apps = (s.applications ?? []) as Application[];
@@ -160,6 +174,10 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
             tx.update(r.ref, { items: next, status: next.some((it) => it.status === 'waiting') ? 'waiting' : 'closed' });
           }
           return finish(items.length ? `${items.length} Missing Item(s) removed.` : 'They were already gone.');
+        }
+        case 'resume_follow_up': {
+          tx.set(db().collection('email_followups').doc(u.key), RESUME, { merge: true });
+          return finish('Follow-ups are back on for this application.');
         }
         case 'restore_missing_items': {
           if (u.items.length) tx.update(studentRef!, { missingItems: FieldValue.arrayUnion(...u.items) });
