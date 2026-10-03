@@ -88,5 +88,9 @@ export async function ensureChatBotUser(): Promise<void> {
       createdAt: new Date().toISOString(),
     });
   }
+  // Keep the "Masar AI" recipient in step with the switch. A responder switched on before
+  // this mirror existed left it unset, and the chat never offered Masar AI.
+  const enabled = (await getResponderSettings()).enabled;
+  if (snap.data()?.aiChatActive !== enabled) await ref.set({ aiChatActive: enabled }, { merge: true });
   botEnsured = true;
 }
