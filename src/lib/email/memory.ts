@@ -22,10 +22,13 @@ import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
 import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { loadStudentNames, matchStudentByName, type StudentNameRecord } from './matcher';
-import { newestMessage } from './text';
+import { emailBodyText, newestMessage } from './text';
 import { playbookBlock } from './companies';
 
 export const EMAIL_MEMORY_COLLECTION = 'email_memory';
+/** One doc per student whose older mail has been loaded (by the backfill or the one-off
+ *  load), so it is never loaded — or paid for — twice. */
+const LOADED_COLLECTION = 'email_memory_loaded';
 const STATE_DOC = { collection: 'app_settings', doc: 'email_memory_state' };
 
 export type EmailMemoryEntry = {
@@ -228,6 +231,19 @@ export async function getStudentEmailTimeline(studentId: string, opts: { filter?
   };
 }
 
+/**
+ * Has this student's older mail been loaded? Asked instead of "is the memory empty": new
+ * mail lands in the memory as it arrives, so a student with one new email would otherwise
+ * never get the history from before it.
+ */
+export async function emailHistoryLoaded(studentId: string): Promise<boolean> {
+  try {
+    return (await db().collection(LOADED_COLLECTION).doc(studentId).get()).exists;
+  } catch {
+    return false;
+  }
+}
+
 /** Compact lines for prompts: the last few emails with one organisation or on one thread. */
 export async function recentEmailLines(studentId: string, filter?: string, limit = 8): Promise<string[]> {
   try {
@@ -255,7 +271,7 @@ async function rememberParsed(
   direction: 'in' | 'out',
   students: StudentNameRecord[],
 ): Promise<'stored' | 'exists' | 'skipped' | 'unmatched'> {
-  const body = parsed.text ?? (parsed.html ? String(parsed.html).replace(/<[^>]+>/g, ' ') : '');
+  const body = emailBodyText(parsed);
   const match = matchStudentByName([parsed.subject ?? '', addressList(parsed.to), body].join('\n'), students);
   if (match.kind !== 'matched') return 'unmatched';
   return rememberEmail({
@@ -336,11 +352,10 @@ export async function backfillStudentEmails(studentId: string, opts: { limit?: n
     await client.mailboxOpen('[Gmail]/All Mail', { readOnly: true });
     const uids = ((await client.search({ text: surname }, { uid: true })) || []).slice(-(opts.limit ?? 200));
     result.found = uids.length;
-    if (!uids.length) return result;
     // Download first, then summarise several at a time — one by one, a student with
     // fifty emails took minutes.
     const queue: Array<{ item: ParsedWithMeta; direction: 'in' | 'out' }> = [];
-    for await (const m of client.fetch(uids.join(','), { source: true, threadId: true, flags: true }, { uid: true })) {
+    for await (const m of uids.length ? client.fetch(uids.join(','), { source: true, threadId: true, flags: true }, { uid: true }) : []) {
       if (!m.source) continue;
       // Drafts live in All Mail too. An unsent draft is not something the agency said.
       if (m.flags?.has('\\Draft')) continue;
@@ -361,7 +376,12 @@ export async function backfillStudentEmails(studentId: string, opts: { limit?: n
         else result.skipped++;
       }
     };
-    await Promise.all(Array.from({ length: 6 }, worker));
+    if (queue.length) await Promise.all(Array.from({ length: 6 }, worker));
+    await db()
+      .collection(LOADED_COLLECTION)
+      .doc(studentId)
+      .set({ loadedAt: new Date().toISOString(), via: 'backfill', found: result.found }, { merge: true })
+      .catch(() => undefined);
   } finally {
     await client.logout().catch(() => {});
   }

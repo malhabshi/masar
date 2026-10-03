@@ -24,7 +24,7 @@ import { AI_DOC_MODEL, isAiConfigured } from './config';
 import { CHAT_BOT_NAME, CHAT_BOT_USER_ID, ensureChatBotUser } from './chat-bot';
 import { addApplication } from '@/lib/actions';
 import { appendDraft, isInboxConfigured } from '@/lib/email/inbox';
-import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, type EmailMemoryEntry } from '@/lib/email/memory';
+import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, type EmailMemoryEntry } from '@/lib/email/memory';
 import { downloadDoc } from '@/lib/email/requests';
 import { replyWithReceipt } from '@/lib/email/reply-receipt';
 import { logAiAction } from './action-log';
@@ -195,7 +195,7 @@ async function draftUpdate(task: Record<string, any>, dryRun = false): Promise<s
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 40);
   let emails = await load();
-  if (!emails.length) {
+  if (!(await emailHistoryLoaded(task.studentId))) {
     await backfillStudentEmails(task.studentId, { limit: 80 });
     emails = await load();
   }

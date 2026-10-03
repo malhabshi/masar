@@ -20,7 +20,7 @@ import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured } from './inbox';
-import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, type EmailMemoryEntry } from './memory';
+import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, type EmailMemoryEntry } from './memory';
 import { replyWithReceipt } from './reply-receipt';
 import type { Application } from '@/lib/types';
 import { logAiAction } from '@/lib/ai/action-log';
@@ -156,7 +156,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
       let emails = (await db().collection(EMAIL_MEMORY_COLLECTION).where('studentId', '==', student.id).get()).docs.map(
         (d) => d.data() as EmailMemoryEntry,
       );
-      if (!emails.length) {
+      if (!(await emailHistoryLoaded(student.id))) {
         // Left for a later run rather than blowing this one's time limit.
         if (historyLoads >= MAX_HISTORY_LOADS) continue;
         historyLoads++;

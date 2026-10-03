@@ -28,7 +28,7 @@ import { automaticAiAllowed } from './usage';
 import { countRecords } from './count';
 import { getWorkGuide, WORK_GUIDE_TOPICS } from './knowledge';
 import { getStudentDocumentCards } from './documents';
-import { backfillStudentEmails, getStudentEmailTimeline } from '@/lib/email/memory';
+import { backfillStudentEmails, emailHistoryLoaded, getStudentEmailTimeline } from '@/lib/email/memory';
 import { deadlinesFor } from './deadlines';
 import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
 import { adminDb as db } from '@/lib/firebase/admin';
@@ -385,8 +385,8 @@ async function studentStatus(studentId: string) {
   const s = snap.data();
   if (!s) return { error: 'Student not found.' };
   let emails = await getStudentEmailTimeline(studentId, { limit: 8 });
-  // Never loaded for this student: fill the memory from the mailbox once.
-  if (!emails.count) {
+  // Older mail never loaded for this student: fill the memory from the mailbox once.
+  if (!(await emailHistoryLoaded(studentId))) {
     await backfillStudentEmails(studentId, { limit: 60 }).catch(() => undefined);
     emails = await getStudentEmailTimeline(studentId, { limit: 8 });
   }

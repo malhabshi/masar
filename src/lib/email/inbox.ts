@@ -20,6 +20,7 @@
 
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { emailBodyText } from './text';
 
 /** Attachment types worth filing onto a student profile. */
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -268,7 +269,7 @@ export async function fetchMessageByUid(uid: number): Promise<InboxMessage | nul
         replyTo: replyAddr?.address ?? null,
         replyToName: replyAddr?.name ?? null,
         references: Array.isArray(refs) ? refs : refs ? [refs] : [],
-        text: parsed.text ?? (parsed.html ? String(parsed.html).replace(/<[^>]+>/g, ' ') : ''),
+        text: emailBodyText(parsed),
         attachments,
       };
     } finally {
@@ -430,7 +431,7 @@ export async function fetchUnreadMessages(
           fromName: fromAddr?.name ?? '',
           subject: parsed.subject ?? '',
           date: (parsed.date ?? new Date()).toISOString(),
-          text: parsed.text ?? (parsed.html ? String(parsed.html).replace(/<[^>]+>/g, ' ') : ''),
+          text: emailBodyText(parsed),
           attachments,
         });
       }
