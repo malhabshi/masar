@@ -33,7 +33,9 @@ import { deadlinesFor } from './deadlines';
 import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
 import { adminDb as db } from '@/lib/firebase/admin';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
-import { createStudentTask, sendChatMessage, updateApplicationStatus } from '@/lib/actions';
+import { createStudentTask, sendChatMessage } from '@/lib/actions';
+import { setOpenApplicationStatus } from '@/lib/applications/set-status';
+import { trustedRole } from '@/lib/auth/trusted-role';
 import { stopFollowUp } from '@/lib/email/followups';
 import { sameUniversity } from '@/lib/email/universities';
 import { logAiAction } from './action-log';
@@ -182,8 +184,10 @@ function buildToolset(opts: {
   preview: boolean;
   /** Who asked, for the records. */
   requestedBy: string;
+  /** The user id of whoever wrote the newest message — checked before anything is changed. */
+  requesterId: string;
 }): AiTool[] {
-  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected, addressed, preview, requestedBy } = opts;
+  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected, addressed, preview, requestedBy, requesterId } = opts;
 
   const tools: AiTool[] = [
     {
@@ -357,12 +361,23 @@ function buildToolset(opts: {
       if (!db) return { ok: false, error: 'Database not available.' };
       const s = (await db.collection('students').doc(studentId).get()).data();
       if (!s) return { ok: false, error: 'Student not found.' };
+      // Anyone signed in can write in a chat; only staff responsible for this student may
+      // have the AI change it: admins, admin plus and departments, or the assigned employee.
+      const role = await trustedRole(requesterId);
+      const assigned =
+        role === 'employee' &&
+        !!s.employeeId &&
+        (await db.collection('users').doc(requesterId).get()).data()?.civilId === s.employeeId;
+      if (!(role === 'admin' || role === 'adminplus' || role === 'department' || assigned)) {
+        return { ok: false, error: "Not changed: only admins, departments or this student's own employee can ask for this." };
+      }
       const apps = (s.applications ?? []) as Application[];
       const name = String(input.university ?? '').trim();
       const major = typeof input.major === 'string' ? input.major.trim().toLowerCase() : '';
       let hits = apps.filter((a) => a.university.trim().toLowerCase() === name.toLowerCase());
       if (!hits.length) hits = apps.filter((a) => sameUniversity(a.university, name));
-      if (hits.length > 1 && major) hits = hits.filter((a) => a.major.toLowerCase().includes(major) || major.includes(a.major.toLowerCase()));
+      // A course named by staff must match, even when only one application is at that university.
+      if (major) hits = hits.filter((a) => a.major.toLowerCase().includes(major) || major.includes(a.major.toLowerCase()));
       if (hits.length !== 1) {
         return {
           ok: false,
@@ -381,20 +396,26 @@ function buildToolset(opts: {
       const said = String(input.note ?? '').slice(0, 200);
       const draft = await stopFollowUp(studentId, app, { reason: said || reason, by: requestedBy });
       let status = `unchanged (${app.status})`;
+      let changedFrom: Application['status'] | null = null;
+      let previousReason: string | null = null;
       if (reject) {
-        const r = await updateApplicationStatus(studentId, app.university, app.major, 'Rejected', s.name, s.employeeId ?? null, rejectionReason!);
-        status = r.success ? `${app.status} → Rejected (${rejectionReason})` : `not changed: ${r.message}`;
+        // Checked and written in one transaction: if staff marked it Accepted meanwhile, it stays Accepted.
+        const r = await setOpenApplicationStatus({ studentId, university: app.university, major: app.major, to: 'Rejected', rejectionReason: rejectionReason! });
+        if (r.ok) {
+          changedFrom = r.from;
+          previousReason = r.previousReason;
+          status = `${r.from} → Rejected (${rejectionReason})`;
+        } else status = `not changed: ${r.why}`;
       }
       await logAiAction({
         source: 'chat',
-        summary: `${app.university}: follow-ups stopped${reject && status.includes('→') ? `; ${status}` : ''}`,
+        summary: `${app.university}: follow-ups stopped${changedFrom ? `; ${status}` : ''}`,
         reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
         studentId,
         studentName: s.name ?? null,
-        undo:
-          reject && status.includes('→')
-            ? { type: 'app_status', university: app.university, major: app.major, from: app.status, to: 'Rejected', rejectionReason: app.rejectionReason ?? null }
-            : { type: 'none' },
+        undo: changedFrom
+          ? { type: 'app_status', university: app.university, major: app.major, from: changedFrom, to: 'Rejected', rejectionReason: previousReason }
+          : { type: 'none' },
       });
       collected.acted = true;
       return {
@@ -648,6 +669,7 @@ ${addressesBot(last) || asksForStatus(last)
       addressed: addressesBot(last),
       preview: !!preview,
       requestedBy: authors.get(last.authorId)?.name ?? last.authorId,
+      requesterId: last.authorId,
     });
 
     const actor = { id: CHAT_BOT_USER_ID, name: CHAT_BOT_NAME, role: 'employee' };
