@@ -661,20 +661,30 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           attachments: attachmentNames,
         });
 
-        // Announce it in the student's internal chat so the employee, the admins and the
-        // relevant department are all notified — this is how staff find out at all.
-        const employeeCivilId = await getStudentEmployeeCivilId(match.student.id);
-        const announcement = await announceEmailInChat({
-          studentId: match.student.id,
-          employeeCivilId,
-          from: message.from,
-          fromName: message.fromName,
-          subject: message.subject,
-          body: message.text,
-          filedAttachments: filedNames,
-          versionNotes,
-          requestNotes: [...noticeLines, ...statusLines, ...requestLines],
-        });
+        // Announce it in the student's internal chat only when it needs someone: something
+        // the email asks for, a changed version of a document, a status the AI would not set
+        // by itself, a change of agent, or a company notice. Routine news ("application
+        // received", an offer filed and its status set) stays out of the chat — the document
+        // is on the profile, and a status change already notifies the employee.
+        const needsSomeone =
+          noticeLines.length > 0 ||
+          requestLines.length > 0 ||
+          statusLines.some((l) => !l.startsWith('🎓')) ||
+          versionNotes.some((l) => l.startsWith('⚠️'));
+        const employeeCivilId = needsSomeone ? await getStudentEmployeeCivilId(match.student.id) : null;
+        const announcement: Awaited<ReturnType<typeof announceEmailInChat>> & { skipped?: boolean } = needsSomeone
+          ? await announceEmailInChat({
+              studentId: match.student.id,
+              employeeCivilId,
+              from: message.from,
+              fromName: message.fromName,
+              subject: message.subject,
+              body: message.text,
+              filedAttachments: filedNames,
+              versionNotes,
+              requestNotes: [...noticeLines, ...statusLines, ...requestLines],
+            })
+          : { posted: false, skipped: true };
 
         await replyWithReceipt(message, {
           kind: 'filed',
@@ -686,6 +696,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           statusNotes: statusLines,
           notices: noticeLines,
           chatPosted: announcement.posted,
+          chatSkipped: announcement.skipped,
           chatRecipients: announcement.recipients ?? [],
         });
 
@@ -721,6 +732,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           subject: message.subject,
           attachments: attachmentNames,
           chatPosted: announcement.posted,
+          chatSkipped: announcement.skipped ?? false,
           chatRecipients: announcement.recipients ?? null,
           chatContent: announcement.content ?? null,
           chatError: announcement.error ?? null,

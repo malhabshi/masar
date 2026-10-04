@@ -22,6 +22,8 @@ export type ReceiptOutcome =
       /** Company-wide notices found in this email and who they affected. */
       notices?: string[];
       chatPosted: boolean;
+      /** Not posted on purpose: routine news that needs nobody. */
+      chatSkipped?: boolean;
       chatRecipients: string[];
     }
   | {
@@ -92,7 +94,9 @@ function buildBody(message: InboxMessage, outcome: ReceiptOutcome): { subject: s
         '',
         outcome.chatPosted
           ? `Posted in the internal chat, notifying: ${outcome.chatRecipients.join(', ')}`
-          : 'NOTE: could not post in the internal chat — nobody was notified there.',
+          : outcome.chatSkipped
+            ? 'Not posted in the internal chat — routine update, nothing for anyone to do.'
+            : 'NOTE: could not post in the internal chat — nobody was notified there.',
         '',
         `Profile: ${profileUrl(outcome.studentId)}`,
       );
