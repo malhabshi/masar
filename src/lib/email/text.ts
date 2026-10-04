@@ -7,10 +7,22 @@
  * and runs of ">" lines.
  */
 export function newestMessage(text: string): string {
+  // A forwarded email is the point of the message — Merit forwarding a university's
+  // decision, staff forwarding INTO's receipt — so it is kept, with the note above it;
+  // only the history quoted inside it is cut.
+  const fwd = /^\s*-{2,}\s*Forwarded message\s*-{2,}.*$/im.exec(text);
+  if (fwd) {
+    const note = newestMessage(text.slice(0, fwd.index));
+    const rest = text.slice(fwd.index + fwd[0].length);
+    const headerEnd = rest.search(/\n\s*\n/);
+    const header = headerEnd >= 0 ? rest.slice(0, headerEnd).trim() : '';
+    const body = headerEnd >= 0 ? rest.slice(headerEnd) : rest;
+    return [note, '---------- Forwarded message ---------', header, newestMessage(body)].filter(Boolean).join('\n').trim();
+  }
   const markers = [
     /^\s*On\s.{3,200}?wrote:\s*$/im,
     /^\s*في\s.{3,200}?كتب.{0,40}:\s*$/im,
-    /^\s*-{2,}\s*(Original Message|Forwarded message)\s*-{2,}/im,
+    /^\s*-{2,}\s*Original Message\s*-{2,}/im,
     /^\s*From:\s.+\n(?:.*\n){0,3}?\s*(Sent|Date):\s/im,
     /^\s*>.*\n\s*>/m,
   ];

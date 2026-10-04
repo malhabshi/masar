@@ -89,3 +89,58 @@ export function matchStudentByName(text: string, students: StudentNameRecord[]):
   }
   return { kind: 'no_match' };
 }
+
+/** Edit distance between two words, giving up once it passes `max`. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      best = Math.min(best, cur[j]);
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * The same name with one word spelt a letter or two differently — INTO wrote "Abdulrahman
+ * Y A S Alkhamis" for a student registered as "ABDILRAHMAN Y A S ALKHAMIS", and the email
+ * was dropped. Only when nothing matches exactly, the name has three or more words, the
+ * family name and every other word match exactly, the differing word is a long one with
+ * the same first letter, and exactly one student fits.
+ */
+export function nearMatchStudentByName(
+  text: string,
+  students: StudentNameRecord[],
+): { student: StudentNameRecord; found: string } | null {
+  const tokens = normalizeName(text).split(' ').filter(Boolean);
+  if (!tokens.length) return null;
+  const at = new Map<string, number[]>();
+  tokens.forEach((t, i) => at.set(t, [...(at.get(t) ?? []), i]));
+
+  const fits = new Map<string, { student: StudentNameRecord; found: string }>();
+  for (const s of students) {
+    const words = s.normalized.split(' ');
+    const n = words.length;
+    if (n < 3) continue;
+    for (const end of at.get(words[n - 1]) ?? []) {
+      const start = end - (n - 1);
+      if (start < 0) continue;
+      let differ = 0;
+      for (let k = 0; k < n - 1 && differ <= 1; k++) {
+        const a = tokens[start + k];
+        const b = words[k];
+        if (a === b) continue;
+        const close = a.length >= 5 && b.length >= 5 && a[0] === b[0] && editDistance(a, b, b.length >= 8 ? 2 : 1) <= (b.length >= 8 ? 2 : 1);
+        differ += close ? 1 : 2;
+      }
+      if (differ === 1) fits.set(s.id, { student: s, found: tokens.slice(start, end + 1).join(' ') });
+    }
+  }
+  return fits.size === 1 ? [...fits.values()][0] : null;
+}

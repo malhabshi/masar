@@ -14,6 +14,7 @@ import { findIdenticalDocument, uploadStudentDocument } from '@/lib/documents/up
 import {
   applyLabel,
   fetchHeadersForUids,
+  fetchMessageById,
   fetchMessageByUid,
   listUnhandledUids,
   INTAKE_LABELS,
@@ -22,7 +23,7 @@ import {
   type InboxAttachment,
   type InboxMessage,
 } from './inbox';
-import { loadStudentNames, matchStudentByName } from './matcher';
+import { loadStudentNames, matchStudentByName, nearMatchStudentByName, type MatchResult } from './matcher';
 import { announceEmailInChat } from './notify-chat';
 import { nameDocument } from './name-document';
 import { getIntakeSettings } from './intake-settings';
@@ -348,6 +349,12 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
   const settings = await getIntakeSettings();
   const students = await loadStudentNames();
+  // Staff addresses: an email from one that names no student was sent on purpose.
+  const staffAddresses = new Set(
+    ((await adminDb?.collection('users').select('email').get())?.docs ?? [])
+      .map((d) => String(d.data().email ?? '').trim().toLowerCase())
+      .filter(Boolean),
+  );
 
   // Phase 2 — walk the list a page of envelopes at a time until `limit` unhandled
   // messages are found or the list ends; download in full only those. In test mode only
@@ -441,7 +448,19 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
       // Search the sender's display name, the subject and the body together.
       const searchText = [message.fromName, message.subject, message.text].filter(Boolean).join(' \n ');
-      const match = matchStudentByName(searchText, students);
+      let match: MatchResult = matchStudentByName(searchText, students);
+      // No exact name: the same name spelt a letter differently still finds the student,
+      // and the chat note says so, so the profile name can be corrected.
+      let nameLines: string[] = [];
+      if (match.kind === 'no_match') {
+        const near = nearMatchStudentByName(searchText, students);
+        if (near) {
+          match = { kind: 'matched', student: near.student };
+          nameLines = [
+            `⚠️ Matched by a close spelling: the email says "${near.found}", the profile says "${near.student.name}". If the profile name is misspelt, correct it (Masar AI can, if you ask).`,
+          ];
+        }
+      }
 
       // Test restriction: anything that is not the chosen student is left completely
       // untouched — including its unread flag — so a trial run consumes nothing else.
@@ -502,8 +521,9 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
         // An unidentified email carrying a document must never be dropped. An unidentified
         // email with no attachment is usually a newsletter or spam, so it is logged and
-        // marked read rather than filling the review queue.
-        if (message.attachments.length === 0) {
+        // marked read rather than filling the review queue — unless a member of staff sent
+        // or forwarded it: that is someone asking for it to be dealt with.
+        if (message.attachments.length === 0 && !staffAddresses.has(message.from.toLowerCase())) {
           await replyWithReceipt(message, { kind: 'skipped', reason, notices: noticeLines });
           await applyLabel(message.uid, INTAKE_LABELS.noAction);
           result.skipped++;
@@ -669,7 +689,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         // copies are our own submissions, so they never need a note.
         const needsSomeone =
           !isFormCopy &&
-          (noticeLines.length > 0 ||
+          (nameLines.length > 0 ||
+            noticeLines.length > 0 ||
             requestLines.length > 0 ||
             statusLines.some((l) => !l.startsWith('🎓')) ||
             versionNotes.some((l) => l.startsWith('⚠️')));
@@ -684,7 +705,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
               body: message.text,
               filedAttachments: filedNames,
               versionNotes,
-              requestNotes: [...noticeLines, ...statusLines, ...requestLines],
+              requestNotes: [...nameLines, ...noticeLines, ...statusLines, ...requestLines],
             })
           : { posted: false, skipped: true };
 
@@ -694,7 +715,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           studentName: match.student.name,
           documents: filedNames,
           versionNotes,
-          requestNotes: requestLines,
+          requestNotes: [...nameLines, ...requestLines],
           statusNotes: statusLines,
           notices: noticeLines,
           chatPosted: announcement.posted,
@@ -798,6 +819,7 @@ export async function resolveQueuedItem(
     status?: string;
     subject?: string;
     from?: string;
+    messageId?: string | null;
     attachments?: Array<{ filename: string; contentType: string; url: string | null }>;
   };
   if (item.status === 'resolved') return { success: false, error: 'Already resolved.' };
@@ -841,6 +863,31 @@ export async function resolveQueuedItem(
     filedNames.push('skipped' in upload ? `${att.filename} (already on file)` : att.filename);
   }
 
+  // What the email says about the applications ("application received", an offer), as
+  // for an email matched automatically — read again in full from Gmail — and into the
+  // student's email memory.
+  let statusLines: string[] = [];
+  const full = item.messageId ? await fetchMessageById(item.messageId).catch(() => null) : null;
+  if (full) {
+    const settings = await getIntakeSettings();
+    if (settings.autoApplicationStatus) {
+      statusLines = statusChangeLines(await updateApplicationsFromEmail({ message: full, studentId }));
+    }
+    const student = (await adminDb.collection('students').doc(studentId).get()).data();
+    await rememberEmail({
+      studentId,
+      studentName: String(student?.name ?? ''),
+      direction: 'in',
+      date: full.date,
+      from: full.fromName ? `${full.fromName} <${full.from}>` : full.from,
+      to: process.env.SMTP_USER ?? '',
+      subject: full.subject,
+      messageId: full.messageId,
+      body: full.text,
+      attachments: full.attachments.map((a) => a.filename),
+    }).catch(() => undefined);
+  }
+
   // Same announcement as the automatic path, so a manually-filed document notifies the
   // employee and department too.
   const employeeCivilId = await getStudentEmployeeCivilId(studentId);
@@ -852,6 +899,7 @@ export async function resolveQueuedItem(
     subject: item.subject ?? '',
     body: (item as { bodyPreview?: string }).bodyPreview ?? '',
     filedAttachments: filedNames,
+    requestNotes: statusLines,
   });
 
   await ref.update({
