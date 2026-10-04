@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Document, Student, UserRole } from '@/lib/types';
+import { systemAuthorName } from '@/lib/system-authors';
 import type { AppUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,7 +63,7 @@ export function InternalDocuments({ student, currentUser, title, allowUpload, se
   const authorIds = useMemo(() => {
     return (student.documents || []).map(doc => doc.authorId);
   }, [student.documents]);
-  const { userMap } = useUserCacheById(authorIds);
+  const { userMap, isLoading: usersLoading } = useUserCacheById(authorIds);
   
   useEffect(() => {
     setIsClient(true);
@@ -154,7 +155,9 @@ export function InternalDocuments({ student, currentUser, title, allowUpload, se
                           <span className="text-sm">{author.name}</span>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">Student</span>
+                        // Student uploads are listed elsewhere: an author with no account here is
+                        // masar itself (a document filed from an email) or a user since removed.
+                        <span className="text-muted-foreground">{systemAuthorName(doc.authorId) ?? (usersLoading ? '...' : 'Removed user')}</span>
                       )}
                     </TableCell>
                     <TableCell>

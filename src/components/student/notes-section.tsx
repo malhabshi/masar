@@ -11,6 +11,7 @@ import { Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatRelativeTime, sortByDate } from '@/lib/timestamp-utils';
 import { useUserCacheById } from '@/hooks/use-user-cache';
+import { systemAuthorName } from '@/lib/system-authors';
 
 interface NotesSectionProps {
   notes: Note[];
@@ -82,7 +83,7 @@ export function NotesSection({ notes, canWrite, title, placeholder, onAddNote }:
                   </Avatar>
                   <div className="flex-1 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">{author?.name || '...'}</span>
+                      <span className="font-semibold">{author?.name || systemAuthorName(note.authorId) || '...'}</span>
                       <span className="text-xs text-muted-foreground">{isClient ? formatRelativeTime(note.createdAt) : '...'}</span>
                     </div>
                     <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{note.content}</p>
