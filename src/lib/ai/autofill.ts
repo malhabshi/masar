@@ -48,6 +48,46 @@ const MATCH_TOOL: Anthropic.Tool = {
   },
 };
 
+/**
+ * The Admin Checklist (Foundation profiles; items set in Settings, system_metadata/
+ * admin_checklist_config): tick the items whose label matches. Only items never set —
+ * an item staff have unticked (false) is theirs and stays unticked.
+ */
+async function adminChecklistTick(
+  studentId: string,
+  studentName: string,
+  current: Record<string, boolean> | undefined,
+  label: RegExp,
+  doc: StoredDoc,
+  dryRun = false,
+): Promise<string | null> {
+  const items = (((await db().collection('system_metadata').doc('admin_checklist_config').get()).data()?.items ?? []) as Array<{
+    id: string;
+    label: string;
+  }>).filter((i) => label.test(i.label) && current?.[i.id] === undefined);
+  if (!items.length) return null;
+  const names = items.map((i) => `"${i.label}"`).join(', ');
+  if (dryRun) return `[preview] would tick ${names} on the Admin Checklist`;
+  await db()
+    .collection('students')
+    .doc(studentId)
+    .update({
+      ...Object.fromEntries(items.map((i) => [`adminChecklistStatus.${i.id}`, true])),
+      adminNotes: FieldValue.arrayUnion(note(`Admin Checklist: ticked ${names} from the document "${doc.name}" (AI).`)),
+    });
+  for (const i of items) {
+    await logAiAction({
+      source: 'document',
+      summary: `Admin Checklist: ticked "${i.label}"`,
+      reason: `Document "${doc.name}": ${doc.ai?.summary ?? ''}`,
+      studentId,
+      studentName,
+      undo: { type: 'set_field', field: `adminChecklistStatus.${i.id}`, from: null, to: true },
+    });
+  }
+  return `Admin Checklist: ticked ${names}`;
+}
+
 async function checklistTick(
   studentId: string,
   studentName: string,
@@ -128,6 +168,11 @@ export async function applyDocumentFacts(studentId: string, doc: StoredDoc, opts
     // Readiness checklist.
     if (card.type === 'cas' || card.type === 'i20') {
       const r = await checklistTick(studentId, name, checklist, 'receivedCasOrI20', 'CAS / I-20 received', doc, opts.dryRun);
+      if (r) done.push(r);
+    }
+    // Admin Checklist "IELTS": a result with an overall score, in the student's own name.
+    if (card.type === 'ielts' && card.matchesStudent === true && typeof f.ieltsOverall === 'number' && s.studyLevel === 'Foundation') {
+      const r = await adminChecklistTick(studentId, name, s.adminChecklistStatus, /ielts|الايلز|الآيلز|ايلتس|آيلتس/i, doc, opts.dryRun);
       if (r) done.push(r);
     }
     if (card.type === 'visa' && /grant|approv|issued|valid from|vignette|evisa|e-visa/i.test(card.summary) && !/appointment|application form|biometric|receipt|refus/i.test(card.summary)) {
