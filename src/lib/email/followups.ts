@@ -35,7 +35,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { sameUniversity } from './universities';
 import type { PastEmailResult } from './past-email';
 
-const FOLLOWUP_COLLECTION = 'email_followups';
+export const FOLLOWUP_COLLECTION = 'email_followups';
 const WAIT_DAYS = 5;
 const MAX_AGE_DAYS = 60;
 const DAILY_CAP = 15;

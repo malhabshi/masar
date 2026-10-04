@@ -33,9 +33,9 @@ import { deadlinesFor } from './deadlines';
 import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
 import { adminDb as db } from '@/lib/firebase/admin';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
-import { createStudentTask, sendChatMessage, updateApplicationStatus } from '@/lib/actions';
+import { createStudentTask, sendChatMessage, setStudentFinalChoice, updateApplicationStatus } from '@/lib/actions';
 import { trustedRole } from '@/lib/auth/trusted-role';
-import { stopFollowUpWithUndo } from '@/lib/email/followups';
+import { FOLLOWUP_COLLECTION, followUpStopped, stopFollowUpWithUndo } from '@/lib/email/followups';
 import { sameUniversity } from '@/lib/email/universities';
 import { applyPastEmail } from '@/lib/email/past-email';
 import { logAiAction } from './action-log';
@@ -178,7 +178,7 @@ By default your reply is addressed to whoever wrote to you. When staff ask you t
 Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
 
 ## Fixing the record
-Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
+Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
 
 ## Creating tasks
 When an employee asks for something that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
@@ -476,13 +476,19 @@ function buildToolset(opts: {
     },
   });
 
-  /** As on the site: only admins, admin plus and departments change statuses and file documents. */
-  const refuseRecordChange = async (): Promise<string | null> => {
+  /**
+   * As on the site: only admins, admin plus and departments change statuses and file
+   * documents. The final choice may also be set by the student's own employee.
+   */
+  const refuseRecordChange = async (opts: { assignedEmployee?: boolean } = {}): Promise<string | null> => {
     if (!addressed) return 'Only when staff ask you directly (@ai, or sent to Masar AI).';
     if (!requesterVerified) return 'Not changed: I can only act on a request sent from masar by the person who wrote it. Ask them to send it again.';
     const role = await trustedRole(requesterId);
     if (role === 'admin' || role === 'adminplus' || role === 'department') return null;
-    return 'Not changed: only admins and departments can change application statuses or file documents, the same as on the site.';
+    if (opts.assignedEmployee && role === 'employee' && employee?.id === requesterId) return null;
+    return opts.assignedEmployee
+      ? "Not changed: only admins, departments or this student's own employee can set the final choice."
+      : 'Not changed: only admins and departments can change application statuses or file documents, the same as on the site.';
   };
 
   tools.push({
@@ -575,6 +581,66 @@ function buildToolset(opts: {
       });
       collected.acted = true;
       return { ok: true, changed: `${app.university} (${app.major}): ${app.status} → ${to}`, employeeNotified: !!s.employeeId };
+    },
+  });
+
+  tools.push({
+    write: false,
+    definition: {
+      name: 'set_final_choice',
+      description:
+        "Set the student's final choice — the school they are going with — when staff ask (\"he is going with Sheffield\", " +
+        '"change the final choice to Sheffield"). Give the university exactly as it appears in the applications list. Only ' +
+        'the final choice is chased for an offer from then on.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          university: { type: 'string' },
+          major: { type: 'string', description: 'Only needed when the student has two applications at that university.' },
+          note: { type: 'string', description: 'What staff said, in a few words.' },
+        },
+        required: ['university'],
+      },
+    },
+    handler: async (input) => {
+      const refused = await refuseRecordChange({ assignedEmployee: true });
+      if (refused) return { ok: false, error: refused };
+      if (!db) return { ok: false, error: 'Database not available.' };
+      const s = (await db.collection('students').doc(studentId).get()).data();
+      if (!s) return { ok: false, error: 'Student not found.' };
+      const found = findApplication((s.applications ?? []) as Application[], input.university, input.major);
+      if ('error' in found) return { ok: false, error: found.error };
+      const app = found.app;
+      const before: string | null = s.finalChoiceUniversity ?? null;
+      // Drafts already waiting for the other schools: staff delete those, the AI never does.
+      const waiting = (await db.collection(FOLLOWUP_COLLECTION).where('studentId', '==', studentId).get()).docs
+        .map((d) => d.data())
+        .filter((f) => f.lastDraftedAt && f.university !== app.university && !followUpStopped(f))
+        .map((f) => `${f.university}: update request to ${f.to} drafted ${String(f.lastDraftedAt).slice(0, 10)}`);
+      if (before === app.university) {
+        return { ok: true, unchanged: `The final choice is already ${app.university}.`, draftsForOtherSchools: waiting };
+      }
+      if (preview) return { ok: true, preview: true, wouldSet: `${before ?? '(none)'} → ${app.university}`, draftsForOtherSchools: waiting };
+
+      // The site's own action: the note in the requester's name, and admins told when an employee sets it.
+      const r = await setStudentFinalChoice(studentId, app.university, app.major, requesterId);
+      if (!r.success) return { ok: false, error: `Not changed: ${r.message}` };
+      const said = String(input.note ?? '').slice(0, 200);
+      await logAiAction({
+        source: 'chat',
+        summary: `Final choice: ${before ?? '(none)'} → ${app.university}`,
+        reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
+        studentId,
+        studentName: s.name ?? null,
+        undo: { type: 'set_field', field: 'finalChoiceUniversity', from: before, to: app.university },
+      });
+      collected.acted = true;
+      return {
+        ok: true,
+        finalChoice: `${before ?? '(none)'} → ${app.university}`,
+        followUps: `Only ${app.university} is chased from now on.`,
+        draftsForOtherSchools: waiting.length ? waiting : 'None waiting.',
+      };
     },
   });
 
