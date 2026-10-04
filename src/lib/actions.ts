@@ -1954,6 +1954,8 @@ export async function deleteStudent(studentId: string, adminId: string) {
     await adminDb!.collection('chats').doc(studentId).collection('messages').get().then(s => s.forEach(d => d.ref.delete()));
     await adminDb!.collection('chats').doc(studentId).delete();
     await studentRef.delete();
+    // Its reminders go too: no pop-up or WhatsApp for a student who no longer exists.
+    await retireStudentReminders(studentId, 'deleted').catch((e) => console.error('[reminders] cleanup on delete failed:', e));
 
     // Check if we just resolved a duplicate phone issue (across all phone fields)
     const deletedPhones = [studentData.phone, studentData.phone2, studentData.phone3].filter(Boolean) as string[];
@@ -3243,6 +3245,45 @@ async function sendDueStagesFor(
 }
 
 /**
+ * A closed student's reminders are dismissed (kept, with the reason), a deleted student's
+ * are removed — either way no pop-up, WhatsApp stage or dashboard entry any more.
+ * Not exported on purpose: everything exported from this file can be called from a browser.
+ */
+async function retireStudentReminders(studentId: string, how: 'closed' | 'deleted'): Promise<number> {
+  const snap = await adminDb!
+    .collection('student_reminders')
+    .where('studentId', '==', studentId)
+    .where('status', '==', 'active')
+    .get();
+  if (snap.empty) return 0;
+  const batch = adminDb!.batch();
+  const now = new Date().toISOString();
+  snap.docs.forEach((d) =>
+    how === 'deleted'
+      ? batch.delete(d.ref)
+      : batch.update(d.ref, { status: 'dismissed', dismissedAt: now, dismissedReason: 'student profile closed' }),
+  );
+  await batch.commit();
+  return snap.size;
+}
+
+/** Active reminders whose student is closed or gone: retired, and left out of the result. */
+async function withoutRetiredStudents(docs: FirebaseFirestore.QueryDocumentSnapshot[]) {
+  const ids = [...new Set(docs.map((d) => d.data().studentId as string).filter(Boolean))];
+  const students = ids.length ? await adminDb!.getAll(...ids.map((id) => adminDb!.collection('students').doc(id))) : [];
+  const state = new Map(students.map((s) => [s.id, !s.exists ? 'deleted' : s.data()?.isClosed === true ? 'closed' : 'open']));
+  const keep: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  const retire = new Map<string, 'closed' | 'deleted'>();
+  for (const d of docs) {
+    const st = state.get(d.data().studentId) ?? 'deleted';
+    if (st === 'open') keep.push(d);
+    else retire.set(d.data().studentId, st as 'closed' | 'deleted');
+  }
+  for (const [id, how] of retire) await retireStudentReminders(id, how).catch((e) => console.error('[reminders] retire failed:', e));
+  return keep;
+}
+
+/**
  * Send every reminder stage that is due right now, for every student.
  *
  * Called by the scheduler (every few minutes) and as a fallback whenever someone loads
@@ -3264,7 +3305,8 @@ export async function processReminderStages(): Promise<{ sent: number; details: 
     const details: string[] = [];
     let sent = 0;
 
-    for (const doc of snapshot.docs) {
+    // A reminder for a student closed or deleted since it was made is retired, not sent.
+    for (const doc of await withoutRetiredStudents(snapshot.docs)) {
       const results = await sendDueStagesFor(doc.ref, now);
       for (const r of results) {
         sent += r.recipients;
@@ -3372,7 +3414,7 @@ export async function processStudentReminders(params: {
 
     const triggered: Reminder[] = [];
 
-    for (const doc of snapshot.docs) {
+    for (const doc of await withoutRetiredStudents(snapshot.docs)) {
       const reminder = { id: doc.id, ...doc.data() } as Reminder;
       const { recipientType, recipientUserIds } = reminder;
 
@@ -3454,6 +3496,9 @@ export async function closeStudentProfile(studentId: string, reason: string, adm
         createdAt: now,
       }),
     });
+
+    // Its reminders stop as well (dismissed, with the reason, should the profile be reopened).
+    await retireStudentReminders(studentId, 'closed').catch((e) => console.error('[reminders] cleanup on close failed:', e));
 
     return { success: true, message: 'Profile closed successfully.' };
   } catch (error: any) {
