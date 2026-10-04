@@ -54,6 +54,8 @@ export type ResponderOutcome = {
   drafted?: boolean;
   tasksCreated?: Array<{ requestTypeId: string; description: string; ok: boolean; message?: string }>;
   usage?: { inputTokens: number; outputTokens: number };
+  /** Who the reply was addressed to. */
+  replyTo?: string;
 };
 
 type ChatMessage = {
@@ -75,6 +77,8 @@ type ResponderState = {
   tasks: CreatedTask[];
   /** Staff asked for something and it was done (stop_follow_up): the reply is posted even in observe-only mode. */
   acted?: boolean;
+  /** Who the reply was addressed to. */
+  replyTo?: string;
 };
 
 async function log(entry: Record<string, unknown>): Promise<void> {
@@ -165,6 +169,9 @@ Call \`post_reply\` when:
 - Someone asks for something that should become a task — create the task first, then say plainly what you created.
 - There is a clear, checkable error worth flagging.
 
+## Who sees your reply
+By default your reply is addressed to whoever wrote to you. When staff ask you to tell, inform, notify or pass something on to the assigned employee ("الموظف المسؤول", "the employee", or the employee's name), set \`to\` in post_reply to "assigned_employee" — or "sender_and_employee" if the person asking should see it as well. For the admins or the departments use "admins" or "departments". Write the message itself for the people it is addressed to. Refer to people by name, never by civil ID.
+
 ## Stopping a follow-up
 Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
 
@@ -190,6 +197,8 @@ function buildToolset(opts: {
   preview: boolean;
   /** Who asked, for the records. */
   requestedBy: string;
+  /** The student's assigned employee (resolved from the civil ID), if any. */
+  employee: { id: string; name: string } | null;
   /** The user id of whoever wrote the newest message — checked before anything is changed. */
   requesterId: string;
   /**
@@ -199,7 +208,7 @@ function buildToolset(opts: {
    */
   requesterVerified: boolean;
 }): AiTool[] {
-  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected, addressed, preview, requestedBy, requesterId, requesterVerified } = opts;
+  const { studentId, allowTaskCreation, observeOnly, notifyUserIds, collected, addressed, preview, requestedBy, requesterId, requesterVerified, employee } = opts;
 
   const tools: AiTool[] = [
     {
@@ -240,7 +249,14 @@ function buildToolset(opts: {
           `${CHAT_BOT_NAME}. Keep it to one or two sentences. Call this at most once.`,
         input_schema: {
           type: 'object',
-          properties: { content: { type: 'string', description: 'The message text.' } },
+          properties: {
+            content: { type: 'string', description: 'The message text.' },
+            to: {
+              type: 'string',
+              enum: ['sender', 'assigned_employee', 'sender_and_employee', 'admins', 'departments'],
+              description: 'Who the message is addressed to (they are notified). Default: the person who wrote to you.',
+            },
+          },
           required: ['content'],
         },
       },
@@ -332,6 +348,24 @@ function buildToolset(opts: {
     }
     collected.reply = content;
 
+    // Who it is addressed to — and so notified.
+    const to = String(input.to ?? 'sender');
+    let recipients = notifyUserIds;
+    let toLabel = requestedBy;
+    if (to === 'assigned_employee' || to === 'sender_and_employee') {
+      if (!employee) {
+        recipients = to === 'sender_and_employee' ? [...notifyUserIds, 'admins'] : ['admins'];
+        toLabel = 'the admins (this student has no assigned employee)';
+      } else {
+        recipients = to === 'sender_and_employee' ? [...new Set([...notifyUserIds, employee.id])] : [employee.id];
+        toLabel = to === 'sender_and_employee' ? `${requestedBy} and ${employee.name}` : employee.name;
+      }
+    } else if (to === 'admins' || to === 'departments') {
+      recipients = [to];
+      toLabel = to;
+    }
+    collected.replyTo = toLabel;
+
     // Observe-only holds back the AI's own answers. A confirmation of something staff asked
     // for and the AI did (stop_follow_up) is posted regardless — they are waiting for it.
     if (observeOnly && !collected.acted) {
@@ -342,9 +376,9 @@ function buildToolset(opts: {
       };
     }
 
-    const result = await sendChatMessage(studentId, CHAT_BOT_USER_ID, content, notifyUserIds);
+    const result = await sendChatMessage(studentId, CHAT_BOT_USER_ID, content, recipients);
     return result.success
-      ? { ok: true, posted: true }
+      ? { ok: true, posted: true, addressedTo: toLabel }
       : { ok: false, error: result.message ?? 'Failed to post the message.' };
   };
 
@@ -654,9 +688,14 @@ export async function respondToStudentChat(
       .map((rt) => `- ${rt.id}: ${rt.name}${rt.description ? ` — ${rt.description}` : ''}`)
       .join('\n');
 
+    const employeeDoc = (student as any).employeeId && db
+      ? (await db.collection('users').where('civilId', '==', (student as any).employeeId).limit(1).get()).docs[0]
+      : undefined;
+    const employee = employeeDoc ? { id: employeeDoc.id, name: String(employeeDoc.data().name ?? 'the assigned employee') } : null;
+
     const studentLine = [
       `Name: ${(student as any).name ?? 'unknown'}`,
-      `Assigned employee (civil ID): ${(student as any).employeeId ?? 'unassigned'}`,
+      `Assigned employee: ${employee ? employee.name : 'none'}`,
       `Applications: ${((student as any).applications ?? [])
         .map((a: any) => `${a.university} (${a.country}) — ${a.status}`)
         .join('; ') || 'none'}`,
@@ -694,6 +733,7 @@ ${addressesBot(last) || asksForStatus(last)
       preview: !!preview,
       requestedBy: authors.get(last.authorId)?.name ?? last.authorId,
       requesterId: last.authorId,
+      employee,
       requesterVerified: verified,
     });
 
@@ -732,6 +772,7 @@ ${addressesBot(last) || asksForStatus(last)
       status: state.reply ? 'replied' : 'silent',
       reason: state.silentReason ?? run.error,
       reply: state.reply,
+      replyTo: state.replyTo,
       drafted: state.reply ? settings.observeOnly && !state.acted : undefined,
       tasksCreated: state.tasks.length ? state.tasks : undefined,
       usage: { inputTokens: run.usage.inputTokens, outputTokens: run.usage.outputTokens },
@@ -745,6 +786,7 @@ ${addressesBot(last) || asksForStatus(last)
       status: outcome.status,
       reason: outcome.reason ?? null,
       reply: outcome.reply ?? null,
+      replyTo: state.replyTo ?? null,
       observeOnly: settings.observeOnly,
       posted: outcome.status === 'replied' && (!settings.observeOnly || !!state.acted),
       tasks: state.tasks,
