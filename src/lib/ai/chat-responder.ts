@@ -33,11 +33,13 @@ import { deadlinesFor } from './deadlines';
 import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
 import { adminDb as db } from '@/lib/firebase/admin';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
-import { createStudentTask, sendChatMessage } from '@/lib/actions';
+import { createStudentTask, sendChatMessage, updateApplicationStatus } from '@/lib/actions';
 import { trustedRole } from '@/lib/auth/trusted-role';
 import { stopFollowUpWithUndo } from '@/lib/email/followups';
 import { sameUniversity } from '@/lib/email/universities';
-import type { Application, User } from '@/lib/types';
+import { applyPastEmail } from '@/lib/email/past-email';
+import { logAiAction } from './action-log';
+import type { Application, ApplicationStatus, User } from '@/lib/types';
 
 export const AI_CHAT_LOG_COLLECTION = 'ai_chat_log';
 
@@ -175,6 +177,9 @@ By default your reply is addressed to whoever wrote to you. When staff ask you t
 ## Stopping a follow-up
 Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
 
+## Fixing the record
+Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
+
 ## Creating tasks
 When an employee asks for something that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
 
@@ -184,6 +189,22 @@ When an employee asks for something that matches one of the request types listed
 - Staff write in a mix of English and Arabic. Reply in the language the message used.
 - Never guess a fact. If you did not read it from the student record, do not state it.
 - Never claim you did something unless the tool told you it succeeded.`;
+
+/** The one application staff mean: exact name, then the same distinctive words; a course they name must match. */
+function findApplication(apps: Application[], university: unknown, major: unknown): { app: Application } | { error: string } {
+  const name = String(university ?? '').trim();
+  const course = typeof major === 'string' ? major.trim().toLowerCase() : '';
+  let hits = apps.filter((a) => a.university.trim().toLowerCase() === name.toLowerCase());
+  if (!hits.length) hits = apps.filter((a) => sameUniversity(a.university, name));
+  // A course named by staff must match, even when only one application is at that university.
+  if (course) hits = hits.filter((a) => a.major.toLowerCase().includes(course) || course.includes(a.major.toLowerCase()));
+  if (hits.length === 1) return { app: hits[0] };
+  return {
+    error: hits.length
+      ? `Several applications match: ${hits.map((a) => `${a.university} (${a.major})`).join('; ')}. Ask which one.`
+      : `No application "${name}" on this student. Their applications: ${apps.map((a) => a.university).join('; ')}.`,
+  };
+}
 
 function buildToolset(opts: {
   studentId: string;
@@ -420,22 +441,9 @@ function buildToolset(opts: {
       if (!(role === 'admin' || role === 'adminplus' || role === 'department' || assigned)) {
         return { ok: false, error: "Not changed: only admins, departments or this student's own employee can ask for this." };
       }
-      const apps = (s.applications ?? []) as Application[];
-      const name = String(input.university ?? '').trim();
-      const major = typeof input.major === 'string' ? input.major.trim().toLowerCase() : '';
-      let hits = apps.filter((a) => a.university.trim().toLowerCase() === name.toLowerCase());
-      if (!hits.length) hits = apps.filter((a) => sameUniversity(a.university, name));
-      // A course named by staff must match, even when only one application is at that university.
-      if (major) hits = hits.filter((a) => a.major.toLowerCase().includes(major) || major.includes(a.major.toLowerCase()));
-      if (hits.length !== 1) {
-        return {
-          ok: false,
-          error: hits.length
-            ? `Several applications match: ${hits.map((a) => `${a.university} (${a.major})`).join('; ')}. Ask which one.`
-            : `No application "${name}" on this student. Their applications: ${apps.map((a) => a.university).join('; ')}.`,
-        };
-      }
-      const app = hits[0];
+      const found = findApplication((s.applications ?? []) as Application[], input.university, input.major);
+      if ('error' in found) return { ok: false, error: found.error };
+      const app = found.app;
       const reason = ['chose_other_school', 'withdrawn', 'just_stop'].includes(input.reason) ? String(input.reason) : 'just_stop';
       const rejectionReason =
         reason === 'chose_other_school' ? 'Student chose another university' : reason === 'withdrawn' ? 'Withdrawn by the student' : null;
@@ -465,6 +473,108 @@ function buildToolset(opts: {
           ? `The update request to ${draft.to} drafted on ${draft.lastDraftedAt.slice(0, 10)} is still in Gmail Drafts — tell staff to delete it (you never delete email).`
           : 'No follow-up draft on record.',
       };
+    },
+  });
+
+  /** As on the site: only admins, admin plus and departments change statuses and file documents. */
+  const refuseRecordChange = async (): Promise<string | null> => {
+    if (!addressed) return 'Only when staff ask you directly (@ai, or sent to Masar AI).';
+    if (!requesterVerified) return 'Not changed: I can only act on a request sent from masar by the person who wrote it. Ask them to send it again.';
+    const role = await trustedRole(requesterId);
+    if (role === 'admin' || role === 'adminplus' || role === 'department') return null;
+    return 'Not changed: only admins and departments can change application statuses or file documents, the same as on the site.';
+  };
+
+  tools.push({
+    write: false,
+    definition: {
+      name: 'apply_email',
+      description:
+        "Apply one of this student's emails to the profile, when admins or departments ask — usually an offer or a " +
+        'rejection that came before the system read the mailbox, so its status was never set and its letter never filed. ' +
+        "Files the email's attachments on the profile and applies an offer (→ Accepted) or a rejection (→ Rejected) to the " +
+        'application it is about, under the usual rules. Find the email with get_student_emails and pass its ref.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          ref: { type: 'string', description: 'The ref of the email, from get_student_emails.' },
+          note: { type: 'string', description: 'What staff asked, in a few words.' },
+        },
+        required: ['ref'],
+      },
+    },
+    handler: async (input) => {
+      const refused = await refuseRecordChange();
+      if (refused) return { ok: false, error: refused };
+      const said = String(input.note ?? '').slice(0, 200);
+      const r = await applyPastEmail({
+        studentId,
+        ref: String(input.ref ?? ''),
+        by: `${requestedBy} in the internal chat${said ? `: "${said}"` : ''}`,
+        dryRun: preview,
+      });
+      if (!r.ok) return { ok: false, error: `Not changed: ${r.error}` };
+      if (!preview) collected.acted = true;
+      return {
+        ok: true,
+        ...(preview ? { preview: true } : {}),
+        email: r.email,
+        filedOnProfile: r.filed,
+        statusChanges: r.lines.length ? r.lines : ['No status changed.'],
+        alreadyCorrect: r.alreadyCorrect,
+      };
+    },
+  });
+
+  tools.push({
+    write: false,
+    definition: {
+      name: 'set_application_status',
+      description:
+        "Change the status of one of this student's applications when admins or departments ask (\"change Leeds to " +
+        'Accepted"). Give the university exactly as it appears in the applications list. Rejected needs a reason. When the ' +
+        'change comes from an email, use apply_email instead, so the letter is filed too.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          university: { type: 'string' },
+          major: { type: 'string', description: 'Only needed when the student has two applications at that university.' },
+          status: { type: 'string', enum: ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'] },
+          rejectionReason: { type: 'string', description: 'Required for Rejected.' },
+          note: { type: 'string', description: 'What staff said, in a few words.' },
+        },
+        required: ['university', 'status'],
+      },
+    },
+    handler: async (input) => {
+      const refused = await refuseRecordChange();
+      if (refused) return { ok: false, error: refused };
+      if (!db) return { ok: false, error: 'Database not available.' };
+      const s = (await db.collection('students').doc(studentId).get()).data();
+      if (!s) return { ok: false, error: 'Student not found.' };
+      const found = findApplication((s.applications ?? []) as Application[], input.university, input.major);
+      if ('error' in found) return { ok: false, error: found.error };
+      const app = found.app;
+      const to = String(input.status) as ApplicationStatus;
+      if (!['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'].includes(to)) return { ok: false, error: `Unknown status "${to}".` };
+      const reason = String(input.rejectionReason ?? '').trim().slice(0, 200);
+      if (to === 'Rejected' && !reason) return { ok: false, error: 'Not changed: Rejected needs a reason — ask for it.' };
+      if (app.status === to) return { ok: true, unchanged: `${app.university} (${app.major}) is already ${to}.` };
+      if (preview) return { ok: true, preview: true, wouldSet: `${app.university} (${app.major}): ${app.status} → ${to}` };
+
+      const r = await updateApplicationStatus(studentId, app.university, app.major, to, s.name, s.employeeId ?? null, to === 'Rejected' ? reason : undefined);
+      if (!r.success) return { ok: false, error: `Not changed: ${r.message}` };
+      const said = String(input.note ?? '').slice(0, 200);
+      await logAiAction({
+        source: 'chat',
+        summary: `${app.university}: ${app.status} → ${to}${to === 'Rejected' ? ` (${reason})` : ''}`,
+        reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
+        studentId,
+        studentName: s.name ?? null,
+        undo: { type: 'app_status', university: app.university, major: app.major, from: app.status, to, rejectionReason: app.rejectionReason ?? null },
+      });
+      collected.acted = true;
+      return { ok: true, changed: `${app.university} (${app.major}): ${app.status} → ${to}`, employeeNotified: !!s.employeeId };
     },
   });
 

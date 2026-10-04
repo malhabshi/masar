@@ -151,6 +151,12 @@ export async function updateApplicationsFromEmail(input: {
   studentId: string;
   /** Work out the changes but apply nothing — for previews and tests. */
   dryRun?: boolean;
+  /**
+   * An older email read again (applyPastEmail): only an offer or a rejection is applied —
+   * an "application received" or a request for documents is long past by now — and a
+   * change of agent it mentions is left alone.
+   */
+  pastEmail?: boolean;
 }): Promise<{ changes: StatusChange[]; unlisted: string[]; alreadyCorrect: string[]; changeAgent: string[] }> {
   const none = { changes: [] as StatusChange[], unlisted: [] as string[], alreadyCorrect: [] as string[], changeAgent: [] as string[] };
   if (!isAiConfigured() || !adminDb) return none;
@@ -214,6 +220,11 @@ export async function updateApplicationsFromEmail(input: {
       }
       if (FINAL.includes(app.status)) {
         change.note = `Not changed — ${app.status} is final. Check whether the email means it should be ${to}.`;
+        changes.push(change);
+        continue;
+      }
+      if (input.pastEmail && to !== 'Accepted' && to !== 'Rejected') {
+        change.note = 'Not changed — from an older email, only an offer or a rejection is applied.';
         changes.push(change);
         continue;
       }
@@ -282,7 +293,7 @@ export async function updateApplicationsFromEmail(input: {
     // Change of agent: switch it on for an alert, note an outcome.
     const changeAgent: string[] = [];
     const from = message.fromName || message.from;
-    for (const c of raw.changeAgent ?? []) {
+    for (const c of input.pastEmail ? [] : raw.changeAgent ?? []) {
       if (!['conflict', 'transferred_away', 'stays_with_us'].includes(c?.event)) continue;
       let app = Number.isInteger(c.index) ? apps[c.index] : undefined;
       // INTO often names only itself. With exactly one application through that provider,

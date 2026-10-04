@@ -232,6 +232,41 @@ export async function fetchUnreadHeaders(limit = 50): Promise<MessageHeader[]> {
   return out;
 }
 
+/** Parse a downloaded message into what the intake works with. */
+async function toInboxMessage(uid: number, source: Buffer): Promise<InboxMessage> {
+  const parsed = await simpleParser(source);
+  const attachments: InboxAttachment[] = [];
+  for (const att of parsed.attachments ?? []) {
+    const contentType = String(att.contentType ?? '').toLowerCase();
+    if (!ALLOWED_CONTENT_TYPES.has(contentType)) continue;
+    if (!att.content || att.size > MAX_ATTACHMENT_BYTES) continue;
+    if (att.contentDisposition === 'inline' && contentType.startsWith('image/')) continue;
+    attachments.push({
+      filename: att.filename || `attachment-${attachments.length + 1}`,
+      contentType,
+      size: att.size,
+      content: att.content as Buffer,
+    });
+  }
+
+  const fromAddr = parsed.from?.value?.[0];
+  const replyAddr = parsed.replyTo?.value?.[0];
+  const refs = parsed.references;
+  return {
+    uid,
+    messageId: parsed.messageId ?? null,
+    from: fromAddr?.address ?? '',
+    fromName: fromAddr?.name ?? '',
+    subject: parsed.subject ?? '',
+    date: (parsed.date ?? new Date()).toISOString(),
+    replyTo: replyAddr?.address ?? null,
+    replyToName: replyAddr?.name ?? null,
+    references: Array.isArray(refs) ? refs : refs ? [refs] : [],
+    text: emailBodyText(parsed),
+    attachments,
+  };
+}
+
 /** Download and parse one message in full, including attachments. */
 export async function fetchMessageByUid(uid: number): Promise<InboxMessage | null> {
   const config = imapConfig();
@@ -244,38 +279,39 @@ export async function fetchMessageByUid(uid: number): Promise<InboxMessage | nul
     try {
       const item = await client.fetchOne(String(uid), { source: true }, { uid: true });
       if (!item || !item.source) return null;
+      return await toInboxMessage(uid, item.source);
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
 
-      const parsed = await simpleParser(item.source);
-      const attachments: InboxAttachment[] = [];
-      for (const att of parsed.attachments ?? []) {
-        const contentType = String(att.contentType ?? '').toLowerCase();
-        if (!ALLOWED_CONTENT_TYPES.has(contentType)) continue;
-        if (!att.content || att.size > MAX_ATTACHMENT_BYTES) continue;
-        if (att.contentDisposition === 'inline' && contentType.startsWith('image/')) continue;
-        attachments.push({
-          filename: att.filename || `attachment-${attachments.length + 1}`,
-          contentType,
-          size: att.size,
-          content: att.content as Buffer,
-        });
+/**
+ * Download one message from All Mail by its Message-ID — an email from before the intake
+ * began, or one already handled. Read-only; drafts are never returned. The uid is 0: an
+ * All Mail uid would label the wrong message in the inbox.
+ */
+export async function fetchMessageById(messageId: string): Promise<InboxMessage | null> {
+  const config = imapConfig();
+  if (!config) throw new Error('Inbox is not configured.');
+  const id = messageId.trim().replace(/^<|>$/g, '');
+  if (!id) return null;
+
+  const client = new ImapFlow(config);
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock('[Gmail]/All Mail', { readOnly: true });
+    try {
+      let uids = (await client.search({ gmraw: `rfc822msgid:${id}` }, { uid: true }).catch(() => false as const)) || [];
+      if (!uids.length) uids = (await client.search({ header: { 'message-id': id } }, { uid: true })) || [];
+      for (const uid of [...uids].reverse()) {
+        const item = await client.fetchOne(String(uid), { source: true, flags: true }, { uid: true });
+        if (!item || !item.source || item.flags?.has('\\Draft')) continue;
+        return await toInboxMessage(0, item.source);
       }
-
-      const fromAddr = parsed.from?.value?.[0];
-      const replyAddr = parsed.replyTo?.value?.[0];
-      const refs = parsed.references;
-      return {
-        uid,
-        messageId: parsed.messageId ?? null,
-        from: fromAddr?.address ?? '',
-        fromName: fromAddr?.name ?? '',
-        subject: parsed.subject ?? '',
-        date: (parsed.date ?? new Date()).toISOString(),
-        replyTo: replyAddr?.address ?? null,
-        replyToName: replyAddr?.name ?? null,
-        references: Array.isArray(refs) ? refs : refs ? [refs] : [],
-        text: emailBodyText(parsed),
-        attachments,
-      };
+      return null;
     } finally {
       lock.release();
     }

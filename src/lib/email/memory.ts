@@ -74,7 +74,7 @@ function imapClient(): ImapFlow | null {
 }
 
 /** Firestore ids cannot contain "/"; Message-IDs often do. */
-function entryId(messageId: string | null, fallback: string): string {
+export function entryId(messageId: string | null, fallback: string): string {
   const raw = messageId ?? fallback;
   return raw.replace(/[^A-Za-z0-9._@+-]/g, '_').slice(0, 300);
 }
@@ -204,7 +204,7 @@ export async function rememberEmail(input: {
 /** A student's email timeline, newest first. Optionally only one university / sender. */
 export async function getStudentEmailTimeline(studentId: string, opts: { filter?: string; limit?: number } = {}) {
   const snap = await db().collection(EMAIL_MEMORY_COLLECTION).where('studentId', '==', studentId).get();
-  let rows = snap.docs.map((d) => d.data() as EmailMemoryEntry);
+  let rows = snap.docs.map((d) => ({ ...(d.data() as EmailMemoryEntry), ref: d.id }));
   if (opts.filter) {
     const f = opts.filter.toLowerCase();
     rows = rows.filter((r) =>
@@ -218,6 +218,8 @@ export async function getStudentEmailTimeline(studentId: string, opts: { filter?
     count: rows.length,
     shown: Math.min(rows.length, limit),
     timeline: rows.slice(0, limit).map((r) => ({
+      // Names this one email, for applying it to the profile (applyPastEmail).
+      ref: r.ref,
       date: r.date.slice(0, 10),
       direction: r.direction === 'in' ? 'received' : 'sent',
       with: r.organisation ?? (r.direction === 'in' ? r.from : r.to),

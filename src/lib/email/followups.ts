@@ -13,7 +13,10 @@
 //   - the same application is chased again only after another 5 days without news;
 //   - when the student has a final choice, only that school is chased — the others are not
 //     where the student is going;
-//   - never an application staff asked to stop chasing (stopFollowUp, from the chat).
+//   - never an application staff asked to stop chasing (stopFollowUp, from the chat);
+//   - never an application whose emails already hold the decision: the history loaded
+//     before the intake began has offers that never reached the profile. That email is
+//     applied instead (applyPastEmail) — or, when it changes nothing, a person is asked.
 
 import Anthropic from '@anthropic-ai/sdk';
 import nodemailer from 'nodemailer';
@@ -23,13 +26,14 @@ import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
 import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured } from './inbox';
-import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, type EmailMemoryEntry } from './memory';
+import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, entryId, type EmailMemoryEntry } from './memory';
 import { replyWithReceipt } from './reply-receipt';
 import type { Application } from '@/lib/types';
 import { AI_ACTIONS_COLLECTION, logAiAction, type AiAction } from '@/lib/ai/action-log';
 import { notifyEmployeeOfStatus } from '@/lib/applications/set-status';
 import { FieldValue } from 'firebase-admin/firestore';
 import { sameUniversity } from './universities';
+import { applyPastEmail, type PastEmailResult } from './past-email';
 
 const FOLLOWUP_COLLECTION = 'email_followups';
 const WAIT_DAYS = 5;
@@ -170,7 +174,7 @@ export async function stopFollowUpWithUndo(input: {
 }
 
 
-const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Never guess.`;
+const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Also give "decision": the number of an email RECEIVED that already gives the university's decision on that application — an offer (conditional or unconditional), a rejection, or a CAS — or null when none does. University names in the applications are sometimes misspelt ("Striling" is Stirling). Never guess.`;
 
 const PICK_TOOL: Anthropic.Tool = {
   name: 'record_threads',
@@ -182,8 +186,12 @@ const PICK_TOOL: Anthropic.Tool = {
         type: 'array',
         items: {
           type: 'object',
-          properties: { app: { type: 'integer' }, email: { type: ['integer', 'null'] } },
-          required: ['app', 'email'],
+          properties: {
+            app: { type: 'integer' },
+            email: { type: ['integer', 'null'] },
+            decision: { type: ['integer', 'null'] },
+          },
+          required: ['app', 'email', 'decision'],
         },
       },
     },
@@ -193,6 +201,18 @@ const PICK_TOOL: Anthropic.Tool = {
 
 /** Which email conversation handles each application (index into emails). Also used for renewed passports. */
 export async function pickThreads(apps: Application[], emails: EmailMemoryEntry[]): Promise<Map<number, number>> {
+  return (await pickThreadsAndDecisions(apps, emails)).threads;
+}
+
+/** An offer, a rejection or a CAS, by the memory's own reading of the email. */
+const DECISION_KINDS = new Set(['offer', 'rejection', 'cas']);
+const DECISION_WORDS = /\boffer\b|unsuccessful|reject|regret|\bCAS\b|unable to offer/i;
+
+/** As pickThreads, and which received email (if any) already gives each application's decision. */
+export async function pickThreadsAndDecisions(
+  apps: Application[],
+  emails: EmailMemoryEntry[],
+): Promise<{ threads: Map<number, number>; decisions: Map<number, number> }> {
   const res = await getAnthropicClient('follow-ups').messages.create({
     model: AI_FAST_MODEL,
     max_tokens: 800,
@@ -208,18 +228,32 @@ export async function pickThreads(apps: Application[], emails: EmailMemoryEntry[
           'Emails (newest first):',
           ...emails.map(
             (e, i) =>
-              `${i}. ${e.date.slice(0, 10)} ${e.direction === 'in' ? `from ${e.from}` : `to ${e.to}`} | ${e.subject} | ${e.summary}`,
+              `${i}. ${e.date.slice(0, 10)} ${e.direction === 'in' ? `from ${e.from}` : `to ${e.to}`} | ${e.kind} | ${e.subject} | ${e.summary}`,
           ),
         ].join('\n'),
       },
     ],
   });
   const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-  const out = new Map<number, number>();
-  for (const p of ((use?.input as any)?.picks ?? []) as Array<{ app: number; email: number | null }>) {
-    if (Number.isInteger(p.app) && Number.isInteger(p.email) && apps[p.app] && emails[p.email!]) out.set(p.app, p.email!);
+  const threads = new Map<number, number>();
+  const decisions = new Map<number, number>();
+  for (const p of ((use?.input as any)?.picks ?? []) as Array<{ app: number; email: number | null; decision: number | null }>) {
+    if (!Number.isInteger(p.app) || !apps[p.app]) continue;
+    if (Number.isInteger(p.email) && emails[p.email!]) threads.set(p.app, p.email!);
+    // The model's word alone is not enough: the email must read as a decision too, and come
+    // after the application was submitted — an older one is about an earlier round.
+    const d = Number.isInteger(p.decision) ? emails[p.decision!] : undefined;
+    const submittedAt = apps[p.app].updatedAt ?? '';
+    if (
+      d &&
+      d.direction === 'in' &&
+      d.date >= submittedAt &&
+      (DECISION_KINDS.has(d.kind) || DECISION_WORDS.test(`${d.subject} ${d.summary}`))
+    ) {
+      decisions.set(p.app, p.decision!);
+    }
   }
-  return out;
+  return { threads, decisions };
 }
 
 export type FollowUpResult = {
@@ -230,12 +264,26 @@ export type FollowUpResult = {
   notFinalChoice: number;
   /** Not chased: staff asked to stop. */
   stopped: number;
+  /** Not chased: an earlier email held the decision, now applied. */
+  decidedByEmail: Array<{ student: string; application: string; status: string; email: string }>;
+  /** Not chased: an earlier email looks like a decision but changed nothing — a person was asked. */
+  needsCheck: Array<{ student: string; application: string; email: string }>;
   capped: boolean;
   errors: string[];
 };
 
 export async function followUpSubmittedApplications(opts: { cap?: number; dryRun?: boolean } = {}): Promise<FollowUpResult> {
-  const result: FollowUpResult = { drafted: [], noConversation: [], tooOld: 0, notFinalChoice: 0, stopped: 0, capped: false, errors: [] };
+  const result: FollowUpResult = {
+    drafted: [],
+    noConversation: [],
+    tooOld: 0,
+    notFinalChoice: 0,
+    stopped: 0,
+    decidedByEmail: [],
+    needsCheck: [],
+    capped: false,
+    errors: [],
+  };
   const started = Date.now();
   let historyLoads = 0;
   if (!isAiConfigured() || !isInboxConfigured()) return result;
@@ -307,10 +355,57 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
         continue;
       }
 
-      const picks = await pickThreads(due.map((w) => w.app), emails);
+      const { threads: picks, decisions } = await pickThreadsAndDecisions(due.map((w) => w.app), emails);
+
+      // The decision is already in the emails: apply that email instead of chasing.
+      const stateOf = new Map(student.waiting.map((w, i) => [w.key, states[i].data()] as const));
+      const applied = new Map<string, PastEmailResult>();
+      for (const [i, d] of decisions) {
+        const w = due[i];
+        const e = emails[d];
+        const ref = entryId(e.messageId, `${e.date}-${e.subject}`);
+        const label = `${e.date.slice(0, 10)} "${e.subject}"`;
+        if (opts.dryRun) {
+          result.decidedByEmail.push({ student: student.name, application: w.app.university, status: '(dry run)', email: label });
+          continue;
+        }
+        // Already applied once and a person asked: leave it with them.
+        if (stateOf.get(w.key)?.decisionRef === ref) continue;
+        if (!applied.has(ref)) applied.set(ref, await applyPastEmail({ studentId: student.id, ref, by: 'follow-ups' }));
+        const r = applied.get(ref)!;
+        // Gmail or the model failed: not chased this time, and tried again on the next run.
+        if (!r.ok) {
+          result.errors.push(`${student.name}: ${w.app.university}: ${r.error}`);
+          continue;
+        }
+        const fresh = ((await db().collection('students').doc(student.id).get()).data()?.applications ?? []) as Application[];
+        const current = fresh.find((a) => a.university === w.app.university && a.major === w.app.major);
+        await db()
+          .collection(FOLLOWUP_COLLECTION)
+          .doc(w.key)
+          .set({ studentId: student.id, university: w.app.university, major: w.app.major, decisionRef: ref, decisionCheckedAt: new Date().toISOString() }, { merge: true });
+        if (current && current.status !== 'Submitted') {
+          result.decidedByEmail.push({ student: student.name, application: w.app.university, status: current.status, email: label });
+          continue;
+        }
+        // It reads as a decision but changed nothing: a person decides, and it is not chased.
+        result.needsCheck.push({ student: student.name, application: w.app.university, email: label });
+        const why =
+          r.changes.find((c) => c.university === w.app.university && c.major === w.app.major)?.note ??
+          'the email did not say which application it decides';
+        await ensureChatBotUser();
+        await sendChatMessage(
+          student.id,
+          CHAT_BOT_USER_ID,
+          `⚠️ ${e.organisation ?? e.from} emailed on ${e.date.slice(0, 10)} ("${e.subject}") what looks like a decision on ${w.app.university} (${w.app.major}), but its status was not changed automatically — ${why}. It will not be chased; please check it and set the status.`,
+          ['admins'],
+        ).catch(() => undefined);
+      }
+
       // Group by conversation partner, so one email asks about all of them.
       const groups = new Map<string, { email: EmailMemoryEntry; items: Waiting[] }>();
       due.forEach((w, i) => {
+        if (decisions.has(i)) return;
         const e = picks.has(i) ? emails[picks.get(i)!] : undefined;
         if (!e) {
           result.noConversation.push({ student: student.name, application: w.app.university });
