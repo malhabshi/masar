@@ -26,6 +26,8 @@ import { getStudentDocumentCards, readStudentDocuments } from './documents';
 import { backfillStudentEmails, getStudentEmailTimeline } from '@/lib/email/memory';
 import { collectDeadlines } from './deadlines';
 import { getCompanyProfile, listCompanyProfiles } from '@/lib/email/companies';
+import { updateStudentIdentity } from '@/lib/students/identity';
+import { logAiAction } from './action-log';
 
 export type ToolContext = {
   actor: Actor;
@@ -389,6 +391,52 @@ const saveTeamNoteTool: AiTool = {
   },
 };
 
+const updateStudentDetailsTool: AiTool = {
+  write: true,
+  definition: {
+    name: 'update_student_details',
+    description:
+      "Fill in or correct a student's name, date of birth or civil ID — the fields at the top of the profile (the record " +
+      'keeps the last two as jotformData.dob and jotformData.civilId). Give only the fields to change. The civil ID is ' +
+      'checked against the birth date it encodes and against other students; set confirmed only after the user confirms ' +
+      'it following such a warning. A civil ID comes from the civil ID card or the user — a number on a school ' +
+      'certificate is not proof of it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        studentId: { type: 'string' },
+        name: { type: 'string' },
+        dob: { type: 'string', description: 'YYYY-MM-DD.' },
+        civilId: { type: 'string', description: '12 digits.' },
+        confirmed: { type: 'boolean' },
+      },
+      required: ['studentId'],
+    },
+  },
+  handler: async (input, ctx) => {
+    guardWrite(ctx);
+    const r = await updateStudentIdentity({
+      studentId: String(input.studentId),
+      fields: { name: input.name, dob: input.dob, civilId: input.civilId },
+      by: { id: ctx.actor.id, name: ctx.actor.name },
+      confirmed: input.confirmed === true,
+    });
+    if (!r.ok) return r;
+    const student = await queries.getStudent(String(input.studentId));
+    for (const c of r.changes) {
+      await logAiAction({
+        source: 'assistant',
+        summary: `${c.label[0].toUpperCase()}${c.label.slice(1)}: ${c.from ?? '(empty)'} → ${c.to}`,
+        reason: `Asked in the AI Assistant by ${ctx.actor.name}`,
+        studentId: String(input.studentId),
+        studentName: (student as { name?: string } | null)?.name ?? null,
+        undo: { type: 'set_field', field: c.path, from: c.from, to: c.to },
+      });
+    }
+    return { ok: true, changed: r.changes.map((c) => `${c.label}: ${c.from ?? '(empty)'} → ${c.to}`), unchanged: r.unchanged };
+  },
+};
+
 // --------------------------------------------------------------------------
 // Documents
 // --------------------------------------------------------------------------
@@ -749,6 +797,7 @@ export const AI_TOOLS: AiTool[] = [
   listUniversitiesTool,
   getWorkGuideTool,
   saveTeamNoteTool,
+  updateStudentDetailsTool,
   countRecordsTool,
   generateReportTool,
   findLateApplicationsTool,

@@ -24,6 +24,7 @@ const SOURCES: Record<string, string> = {
   followup: 'Follow-up',
   document: 'Document',
   chat: 'Chat',
+  assistant: 'AI Assistant',
 };
 
 export default function AiActivityPage() {

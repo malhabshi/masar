@@ -38,6 +38,7 @@ import { trustedRole } from '@/lib/auth/trusted-role';
 import { FOLLOWUP_COLLECTION, followUpStopped, stopFollowUpWithUndo } from '@/lib/email/followups';
 import { sameUniversity } from '@/lib/email/universities';
 import { applyPastEmail } from '@/lib/email/past-email';
+import { updateStudentIdentity } from '@/lib/students/identity';
 import { logAiAction } from './action-log';
 import type { Application, ApplicationStatus, User } from '@/lib/types';
 
@@ -178,7 +179,7 @@ By default your reply is addressed to whoever wrote to you. When staff ask you t
 Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
 
 ## Fixing the record
-Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
+Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
 
 ## Creating tasks
 When an employee asks for something that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
@@ -480,14 +481,14 @@ function buildToolset(opts: {
    * As on the site: only admins, admin plus and departments change statuses and file
    * documents. The final choice may also be set by the student's own employee.
    */
-  const refuseRecordChange = async (opts: { assignedEmployee?: boolean } = {}): Promise<string | null> => {
+  const refuseRecordChange = async (opts: { assignedEmployee?: boolean; what?: string } = {}): Promise<string | null> => {
     if (!addressed) return 'Only when staff ask you directly (@ai, or sent to Masar AI).';
     if (!requesterVerified) return 'Not changed: I can only act on a request sent from masar by the person who wrote it. Ask them to send it again.';
     const role = await trustedRole(requesterId);
     if (role === 'admin' || role === 'adminplus' || role === 'department') return null;
     if (opts.assignedEmployee && role === 'employee' && employee?.id === requesterId) return null;
     return opts.assignedEmployee
-      ? "Not changed: only admins, departments or this student's own employee can set the final choice."
+      ? `Not changed: only admins, departments or this student's own employee can ${opts.what ?? 'ask for this'}.`
       : 'Not changed: only admins and departments can change application statuses or file documents, the same as on the site.';
   };
 
@@ -587,6 +588,54 @@ function buildToolset(opts: {
   tools.push({
     write: false,
     definition: {
+      name: 'set_student_details',
+      description:
+        "Fill in or correct the student's name, date of birth or civil ID — the fields at the top of the profile — when " +
+        'staff ask. Give only the fields to change. The civil ID is checked against the birth date it encodes and against ' +
+        'other students; set confirmed only when staff have confirmed it after such a warning.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'The full name as it should appear, e.g. from the passport.' },
+          dob: { type: 'string', description: 'Date of birth, YYYY-MM-DD.' },
+          civilId: { type: 'string', description: '12 digits.' },
+          confirmed: { type: 'boolean', description: 'Staff confirmed the civil ID after a warning.' },
+          note: { type: 'string', description: 'What staff asked, in a few words.' },
+        },
+      },
+    },
+    handler: async (input) => {
+      const refused = await refuseRecordChange({ assignedEmployee: true, what: 'change these details' });
+      if (refused) return { ok: false, error: refused };
+      const r = await updateStudentIdentity({
+        studentId,
+        fields: { name: input.name, dob: input.dob, civilId: input.civilId },
+        by: { id: requesterId, name: requestedBy },
+        confirmed: input.confirmed === true,
+        dryRun: preview,
+      });
+      if (!r.ok) return { ok: false, error: r.error };
+      if (preview) return { ok: true, preview: true, wouldChange: r.changes.map((c) => `${c.label}: ${c.from ?? '(empty)'} → ${c.to}`), unchanged: r.unchanged };
+      const said = String(input.note ?? '').slice(0, 200);
+      const studentName = (await db?.collection('students').doc(studentId).get())?.data()?.name ?? null;
+      for (const c of r.changes) {
+        await logAiAction({
+          source: 'chat',
+          summary: `${c.label[0].toUpperCase()}${c.label.slice(1)}: ${c.from ?? '(empty)'} → ${c.to}`,
+          reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
+          studentId,
+          studentName,
+          undo: { type: 'set_field', field: c.path, from: c.from, to: c.to },
+        });
+      }
+      if (r.changes.length) collected.acted = true;
+      return { ok: true, changed: r.changes.map((c) => `${c.label}: ${c.from ?? '(empty)'} → ${c.to}`), unchanged: r.unchanged };
+    },
+  });
+
+  tools.push({
+    write: false,
+    definition: {
       name: 'set_final_choice',
       description:
         "Set the student's final choice — the school they are going with — when staff ask (\"he is going with Sheffield\", " +
@@ -603,7 +652,7 @@ function buildToolset(opts: {
       },
     },
     handler: async (input) => {
-      const refused = await refuseRecordChange({ assignedEmployee: true });
+      const refused = await refuseRecordChange({ assignedEmployee: true, what: 'set the final choice' });
       if (refused) return { ok: false, error: refused };
       if (!db) return { ok: false, error: 'Database not available.' };
       const s = (await db.collection('students').doc(studentId).get()).data();

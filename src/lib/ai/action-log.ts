@@ -16,7 +16,7 @@ import type { Application, ApplicationStatus } from '@/lib/types';
 
 export const AI_ACTIONS_COLLECTION = 'ai_actions';
 
-export type AiActionSource = 'email' | 'notice' | 'task' | 'document' | 'chat' | 'followup' | 'change_agent';
+export type AiActionSource = 'email' | 'notice' | 'task' | 'document' | 'chat' | 'followup' | 'change_agent' | 'assistant';
 
 export type UndoSpec =
   | {
