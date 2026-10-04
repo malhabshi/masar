@@ -12,9 +12,15 @@
 // Dated items are announced in the student's internal chat to the assigned employee 7
 // days and 1 day before; passport and IELTS warnings once. Each alert is sent once
 // (ai_deadline_alerts). The full list shows on the AI Activity page.
+//
+// A passport warning also opens a Missing Item "Renewed passport", once per passport. When a
+// newer passport is uploaded and read, auto-fill closes it (autofill.ts). If staff remove it,
+// it stays removed.
 
+import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase/admin';
 import { sendChatMessage } from '@/lib/actions';
+import { logAiAction } from './action-log';
 import { CHAT_BOT_USER_ID, ensureChatBotUser } from './chat-bot';
 import type { DocCard } from './documents';
 import type { Application } from '@/lib/types';
@@ -136,9 +142,12 @@ export function deadlinesFor(studentId: string, s: Record<string, any>, now: str
             ...base,
             key: `${d.id}__passport__${f.expiryDate}`,
             kind: 'passport',
-            label: start
-              ? `Passport expires ${f.expiryDate}, under 6 months after the course starts (${start}) — renew before the visa`
-              : `Passport expires ${f.expiryDate}, under 6 months away — renew before the visa`,
+            label:
+              f.expiryDate! < now
+                ? `The passport on file expired on ${f.expiryDate} — upload the renewed passport (needed for the visa)`
+                : start
+                  ? `Passport expires ${f.expiryDate}, under 6 months after the course starts (${start}) — renew before the visa`
+                  : `Passport expires ${f.expiryDate}, under 6 months away — renew before the visa`,
             date: f.expiryDate!,
             daysLeft: daysBetween(now, f.expiryDate!),
             warning: true,
@@ -211,6 +220,7 @@ export async function runDeadlineAlerts() {
   const users = (await db().collection('users').get()).docs.map((u) => ({ id: u.id, ...(u.data() as { civilId?: string }) }));
 
   for (const d of deadlines) {
+    if (d.kind === 'passport') await openRenewalItem(d).catch((e) => console.error('[deadlines] renewal item:', e));
     const stage = d.warning ? 'once' : d.daysLeft <= 1 ? '1' : d.daysLeft <= 7 ? '7' : null;
     if (!stage) continue;
     const ref = db().collection(ALERTS).doc(`${d.key}__${stage}`.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 400));
@@ -227,6 +237,37 @@ export async function runDeadlineAlerts() {
     }
   }
   return result;
+}
+
+/** The Missing Item that goes with a passport warning — once per passport, recorded in ai_deadline_alerts. */
+export async function openRenewalItem(d: Deadline) {
+  const mark = db().collection(ALERTS).doc(`${d.key}__item`.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 400));
+  if ((await mark.get()).exists) return;
+  const now = new Date().toISOString();
+  const item = {
+    id: `mi-ai-passport-${d.date}`,
+    text: `Renewed passport — the one on file ${d.date < today() ? 'expired' : 'expires'} on ${d.date}`,
+    department: 'Documents',
+    addedBy: 'ai',
+    createdAt: now,
+    /** Closed by auto-fill when a passport expiring after this date is read. */
+    passportExpiry: d.date,
+  };
+  const ref = db().collection('students').doc(d.studentId);
+  const s = (await ref.get()).data();
+  const already = ((s?.missingItems ?? []) as Array<string | { id?: string }>).some((m) => typeof m !== 'string' && m.id === item.id);
+  if (!already) {
+    await ref.update({ missingItems: FieldValue.arrayUnion(item), newMissingItemsForEmployee: FieldValue.increment(1), lastActivityAt: now });
+    await logAiAction({
+      source: 'document',
+      summary: `Missing Item added: ${item.text}`,
+      reason: d.label,
+      studentId: d.studentId,
+      studentName: d.studentName,
+      undo: { type: 'remove_missing_items', ids: [item.id] },
+    });
+  }
+  await mark.set({ ...d, item: item.id, addedAt: now });
 }
 
 /** Once a day, from 09:00 Kuwait. */

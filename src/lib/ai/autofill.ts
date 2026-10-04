@@ -21,7 +21,7 @@ import { logAiAction } from './action-log';
 import type { DocCard } from './documents';
 
 type StoredDoc = { id?: string; name?: string; uploadedAt?: string; ai?: DocCard };
-type MissingItem = { id?: string; text?: string; createdAt?: string } | string;
+type MissingItem = { id?: string; text?: string; createdAt?: string; passportExpiry?: string } | string;
 
 function db() {
   if (!adminDb) throw new Error('Database not available');
@@ -138,6 +138,32 @@ export async function applyDocumentFacts(studentId: string, doc: StoredDoc, opts
       if (r) done.push(r);
     }
 
+    // "Renewed passport" (opened by a passport warning, deadlines.ts) is closed by rule, not
+    // by the model: only a passport that expires after the one that was flagged answers it.
+    if (card.type === 'passport' && /^\d{4}-\d{2}-\d{2}$/.test(f.expiryDate ?? '')) {
+      const renewed = ((s.missingItems ?? []) as MissingItem[]).filter(
+        (m): m is { id: string; text: string; passportExpiry: string } =>
+          typeof m !== 'string' && String(m.id ?? '').startsWith('mi-ai-passport-') && !!m.passportExpiry && m.passportExpiry < f.expiryDate!,
+      );
+      if (renewed.length && opts.dryRun) {
+        done.push(`[preview] would mark received: ${renewed.map((m) => m.text).join(' · ')}`);
+      } else if (renewed.length) {
+        await snap.ref.update({
+          missingItems: FieldValue.arrayRemove(...renewed),
+          adminNotes: FieldValue.arrayUnion(note(`Marked as received from "${doc.name}" (AI): new passport expires ${f.expiryDate}`)),
+        });
+        await logAiAction({
+          source: 'document',
+          summary: `Missing Item marked received: ${renewed.map((m) => m.text).join(' · ')}`,
+          reason: `Document "${doc.name}": passport expiring ${f.expiryDate}`,
+          studentId,
+          studentName: name,
+          undo: { type: 'restore_missing_items', items: renewed },
+        });
+        done.push(`Missing Item received: ${renewed.map((m) => m.text).join(' · ')}`);
+      }
+    }
+
     // Missing Items this document answers. Email-requested items are left to the
     // email flow, which also drafts the reply; only items older than the file count.
     const open = ((s.missingItems ?? []) as MissingItem[]).filter(
@@ -145,6 +171,7 @@ export async function applyDocumentFacts(studentId: string, doc: StoredDoc, opts
         typeof m !== 'string' &&
         !!m.id &&
         !String(m.id).startsWith('mi-email-') &&
+        !String(m.id).startsWith('mi-ai-passport-') &&
         String(m.createdAt ?? '') < String(doc.uploadedAt ?? ''),
     );
     if (open.length) {
