@@ -14,6 +14,8 @@ export async function notifyEmployeeOfStatus(input: {
   university: string;
   to: ApplicationStatus;
   applications: Application[];
+  /** The application was just added (from an email), not changed. */
+  added?: boolean;
 }): Promise<void> {
   if (!adminDb || !input.employeeId) return;
   try {
@@ -21,7 +23,9 @@ export async function notifyEmployeeOfStatus(input: {
     if (q.empty) return;
     const employee = q.docs[0];
     const summary = input.applications.map((a) => `- ${a.university}: *${a.status}*`).join('\n') || 'No applications listed.';
-    const content = `Status update for ${input.studentName}: ${input.university} is now ${input.to}.\n\nFull Summary:\n${summary}`;
+    const content = input.added
+      ? `New application for ${input.studentName}: ${input.university} was added from an email, as ${input.to}.\n\nFull Summary:\n${summary}`
+      : `Status update for ${input.studentName}: ${input.university} is now ${input.to}.\n\nFull Summary:\n${summary}`;
     await adminDb.collection('tasks').add({
       authorId: 'system',
       createdBy: 'system',

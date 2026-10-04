@@ -32,7 +32,7 @@ export type UndoSpec =
       followUpStop?: FollowUpStopUndo;
     }
   | ({ type: 'resume_follow_up' } & FollowUpStopUndo)
-  | { type: 'remove_application'; university: string; major: string }
+  | { type: 'remove_application'; university: string; major: string; addedStatus?: ApplicationStatus }
   | { type: 'remove_missing_items'; ids: string[] }
   | { type: 'restore_missing_items'; items: unknown[] }
   | { type: 'change_agent'; university: string; logEntryId: string; wasRequired: boolean; previousUniversities: string[] }
@@ -179,10 +179,11 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
           const apps = (s.applications ?? []) as Application[];
           const app = apps.find((x) => x.university === u.university && x.major === u.major);
           if (!app) return finish('Already removed.');
-          if (app.status !== 'Pending') return { ok: false, message: `Not removed — it has moved on to ${app.status} since it was added.` };
+          const added = u.addedStatus ?? 'Pending';
+          if (app.status !== added) return { ok: false, message: `Not removed — it has moved on to ${app.status} since it was added.` };
           tx.update(studentRef!, {
             applications: apps.filter((x) => x !== app),
-            adminNotes: FieldValue.arrayUnion(note(`Undid AI change: removed ${u.university} (${u.major}), added from a request. By ${user.name}.`, user.id)),
+            adminNotes: FieldValue.arrayUnion(note(`Undid AI change: removed ${u.university} (${u.major}), added by the AI. By ${user.name}.`, user.id)),
           });
           return finish(`${u.university} removed from the applications.`);
         }

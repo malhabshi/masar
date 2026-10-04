@@ -38,6 +38,12 @@ export async function applyPastEmail(input: {
   ref: string;
   /** Who asked, for AI Activity. */
   by: string;
+  /**
+   * Staff asked for this email to be applied: everything in it counts — an application
+   * received, a school not yet on the list. Otherwise (the follow-ups) only an offer or a
+   * rejection, as the rest of an old email's news may be long past.
+   */
+  staffAsked?: boolean;
   dryRun?: boolean;
 }): Promise<PastEmailResult> {
   if (!adminDb) return { ok: false, error: 'Database not available.' };
@@ -88,7 +94,7 @@ export async function applyPastEmail(input: {
       filed.push(...message.attachments.map((a) => `${a.filename} (would be filed)`));
     }
 
-    const status = await updateApplicationsFromEmail({ message, studentId: input.studentId, dryRun: input.dryRun, pastEmail: true });
+    const status = await updateApplicationsFromEmail({ message, studentId: input.studentId, dryRun: input.dryRun, pastEmail: !input.staffAsked });
     return {
       ok: true,
       email,

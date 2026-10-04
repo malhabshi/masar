@@ -33,11 +33,12 @@ import { deadlinesFor } from './deadlines';
 import { EMAIL_REQUESTS_COLLECTION } from '@/lib/email/requests';
 import { adminDb as db } from '@/lib/firebase/admin';
 import { getStudent, getStudentChat, listRequestTypes } from '@/lib/mcp/query-tools';
-import { createStudentTask, sendChatMessage, setStudentFinalChoice, updateApplicationStatus } from '@/lib/actions';
+import { addApplication, createStudentTask, sendChatMessage, setStudentFinalChoice, updateApplicationStatus } from '@/lib/actions';
 import { trustedRole } from '@/lib/auth/trusted-role';
 import { FOLLOWUP_COLLECTION, followUpStopped, stopFollowUpWithUndo } from '@/lib/email/followups';
 import { sameUniversity } from '@/lib/email/universities';
 import { applyPastEmail } from '@/lib/email/past-email';
+import { closeUniversity, listedUniversity } from '@/lib/email/application-status';
 import { updateStudentIdentity } from '@/lib/students/identity';
 import { logAiAction } from './action-log';
 import type { Application, ApplicationStatus, User } from '@/lib/types';
@@ -142,7 +143,7 @@ async function resolveAuthors(ids: string[]): Promise<Map<string, { name: string
 
 const SYSTEM = `You are ${CHAT_BOT_NAME}, an assistant that sits inside the internal staff chat of masar, a Kuwaiti study-abroad agency. The chat is between STAFF about a student — the student themselves cannot see it.
 
-Your job is to help when you genuinely can, and otherwise to stay quiet.
+You only see a thread when someone mentions you ("@ai", "Masar AI") or sends the message to you — staff talking to each other never reach you. So someone is always waiting on you.
 
 ## "شنو صار عليه؟" — status questions
 "شنو صار عليه / عليها؟", "وش صار", "شصار", "any update?", "what's the status?" — someone wants to know where the student stands. You MUST answer (post_reply), never stay silent. Call \`get_student_status\` first; it has everything in one place. Answer in the language of the question, in 2–5 short lines:
@@ -151,19 +152,10 @@ Your job is to help when you genuinely can, and otherwise to stay quiet.
 - a deadline coming up, if there is one.
 Leave out Rejected applications unless the question is about them. If the record has nothing new, say so plainly and say who would know (the department handling it, or the assigned employee). Never invent progress.
 
-## When you are addressed directly
-If the newest message was sent to ${CHAT_BOT_NAME} or mentions you ("@ai", "Masar AI"), someone is waiting on you: you MUST call \`post_reply\`, never \`stay_silent\`. Only \`post_reply\` reaches the chat — an answer written as plain text is never seen. If you cannot find the answer, say exactly what you could not find and who would know (usually the assigned employee or the department).
+## Always answer
+The newest message was sent to ${CHAT_BOT_NAME} or mentions you: you MUST call \`post_reply\`, never \`stay_silent\`. Only \`post_reply\` reaches the chat — an answer written as plain text is never seen. If you cannot find the answer, say exactly what you could not find and who would know (usually the assigned employee or the department). Never guess: if you are not sure, say so.
 
-## Otherwise, staying quiet is the normal outcome
-Most messages do not need you. Call \`stay_silent\` when:
-- Staff are talking to each other and no question is directed at the system.
-- The message is social, an acknowledgement ("ok", "done", "thanks"), or an update with no request.
-- Answering would need information you cannot look up.
-- A human has already answered it.
-- You are not confident. Silence is always safer than a wrong answer in a shared staff channel.
-
-## Speak when you can actually help
-Call \`post_reply\` when:
+## What you can do
 - Someone asks a factual question you can answer from the student's record (their applications, statuses, documents, assigned employee, IELTS score, deadlines).
 - Someone asks what happened by email ("did they reply", "did we send it") — use \`get_student_emails\`.
 - Someone asks what a document says (is the offer conditional, the deposit deadline, the IELTS bands) — use \`get_student_documents\`.
@@ -179,7 +171,7 @@ By default your reply is addressed to whoever wrote to you. When staff ask you t
 Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
 
 ## Fixing the record
-Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
+Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`; to add a school with no email behind it, \`add_application\`. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
 
 ## Creating tasks
 When an employee asks for something that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
@@ -489,7 +481,7 @@ function buildToolset(opts: {
     if (opts.assignedEmployee && role === 'employee' && employee?.id === requesterId) return null;
     return opts.assignedEmployee
       ? `Not changed: only admins, departments or this student's own employee can ${opts.what ?? 'ask for this'}.`
-      : 'Not changed: only admins and departments can change application statuses or file documents, the same as on the site.';
+      : `Not changed: only admins and departments can ${opts.what ?? 'change application statuses or file documents'}, the same as on the site.`;
   };
 
   tools.push({
@@ -497,10 +489,10 @@ function buildToolset(opts: {
     definition: {
       name: 'apply_email',
       description:
-        "Apply one of this student's emails to the profile, when admins or departments ask — usually an offer or a " +
-        'rejection that came before the system read the mailbox, so its status was never set and its letter never filed. ' +
-        "Files the email's attachments on the profile and applies an offer (→ Accepted) or a rejection (→ Rejected) to the " +
-        'application it is about, under the usual rules. Find the email with get_student_emails and pass its ref.',
+        "Apply one of this student's emails to the profile, when admins or departments ask — an offer, a rejection or an " +
+        '"application received" the record does not show yet. Files the email\'s attachments on the profile, applies the ' +
+        'status it gives to the application it is about, and adds that school to the applications if it is not on the ' +
+        'list, under the usual rules. Find the email with get_student_emails and pass its ref.',
       input_schema: {
         type: 'object',
         properties: {
@@ -518,6 +510,7 @@ function buildToolset(opts: {
         studentId,
         ref: String(input.ref ?? ''),
         by: `${requestedBy} in the internal chat${said ? `: "${said}"` : ''}`,
+        staffAsked: true,
         dryRun: preview,
       });
       if (!r.ok) return { ok: false, error: `Not changed: ${r.error}` };
@@ -582,6 +575,67 @@ function buildToolset(opts: {
       });
       collected.acted = true;
       return { ok: true, changed: `${app.university} (${app.major}): ${app.status} → ${to}`, employeeNotified: !!s.employeeId };
+    },
+  });
+
+  tools.push({
+    write: false,
+    definition: {
+      name: 'add_application',
+      description:
+        "Add a school to this student's applications when admins or departments ask (\"add Saint Louis University, " +
+        'Computer Science"). It is named as the Approved Universities list names it. Status is Pending unless staff say ' +
+        'otherwise. When an email is behind it, use apply_email instead, so its status and letter come with it.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          university: { type: 'string' },
+          major: { type: 'string' },
+          country: { type: 'string', enum: ['UK', 'USA', 'Australia', 'New Zealand', 'Ireland'], description: 'Only needed when the school is not on the Approved Universities list.' },
+          status: { type: 'string', enum: ['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'] },
+          rejectionReason: { type: 'string' },
+          note: { type: 'string', description: 'What staff asked, in a few words.' },
+        },
+        required: ['university', 'major'],
+      },
+    },
+    handler: async (input) => {
+      const refused = await refuseRecordChange({ what: 'add applications' });
+      if (refused) return { ok: false, error: refused };
+      if (!db) return { ok: false, error: 'Database not available.' };
+      const s = (await db.collection('students').doc(studentId).get()).data();
+      if (!s) return { ok: false, error: 'Student not found.' };
+      const listed = await listedUniversity(String(input.university ?? ''));
+      const university = listed?.name ?? String(input.university ?? '').replace(/\s+/g, ' ').trim();
+      const country = listed?.country ?? input.country;
+      const major = String(input.major ?? '').trim();
+      const status = (['Pending', 'Submitted', 'Missing Items', 'Accepted', 'Rejected'].includes(input.status) ? input.status : 'Pending') as ApplicationStatus;
+      if (!university || !major) return { ok: false, error: 'Not added: give the university and the course.' };
+      if (!country) return { ok: false, error: `Not added: ${university} is not on the Approved Universities list — ask which country it is in.` };
+      const reason = String(input.rejectionReason ?? '').trim().slice(0, 200);
+      if (status === 'Rejected' && !reason) return { ok: false, error: 'Not added: Rejected needs a reason — ask for it.' };
+      const twin = ((s.applications ?? []) as Application[]).find((a) => closeUniversity(a.university, university) && a.major.trim().toLowerCase() === major.toLowerCase());
+      if (twin) return { ok: true, unchanged: `${twin.university} (${twin.major}) is already on the list, as ${twin.status}.` };
+      if (preview) return { ok: true, preview: true, wouldAdd: `${university} (${major}, ${country}) as ${status}` };
+
+      // The site's own action (and its notification to the employee), then the status asked for.
+      const r = await addApplication(studentId, university, country, major, s.name, s.employeeId ?? null);
+      if (!r.success) return { ok: false, error: `Not added: ${r.message}` };
+      if (status !== 'Pending') {
+        const u = await updateApplicationStatus(studentId, university, major, status, s.name, s.employeeId ?? null, status === 'Rejected' ? reason : undefined);
+        if (!u.success) return { ok: true, added: `${university} (${major}) as Pending`, error: `The status could not be set to ${status}: ${u.message}` };
+      }
+      const said = String(input.note ?? '').slice(0, 200);
+      await logAiAction({
+        source: 'chat',
+        summary: `Added: ${university} (${major}) as ${status}`,
+        reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
+        studentId,
+        studentName: s.name ?? null,
+        undo: { type: 'remove_application', university, major, addedStatus: status },
+      });
+      collected.acted = true;
+      return { ok: true, added: `${university} (${major}, ${country}) as ${status}` };
     },
   });
 
@@ -742,19 +796,6 @@ function buildToolset(opts: {
   return tools;
 }
 
-/**
- * Pure acknowledgements, in the two languages the staff chat actually uses. Matched
- * against the whole message, so "ok" is caught but "ok what about the UCL offer" is not.
- */
-const ACKNOWLEDGEMENT =
-  /^(ok(ay)?|k+|done|thx|thanks?|thank you|ty|noted|sure|yes|yeah|yep|no|nope|got it|fine|great|perfect|تم|تمام|شكرا|شكرا جزيلا|اوك|أوك|ماشي|تسلم|زين)[\s.!،]*$/i;
-
-/**
- * Cheap triage before any tokens are spent. The responder fires on every message posted
- * to a student thread, and the overwhelming majority of those are staff talking to each
- * other — a full agent run only to conclude stay_silent. Deliberately conservative: an
- * attachment, a question mark, or any message of real length always reaches the model.
- */
 /** One digest of where a student stands — for status questions. */
 async function studentStatus(studentId: string) {
   if (!db) return { error: 'Database not available' };
@@ -810,19 +851,6 @@ function addressesBot(m: ChatMessage): boolean {
   return /@ai\b|masar\s*ai|مسار\s*(ai|الذكي)/i.test(m.content ?? '');
 }
 
-function needsModel(m: ChatMessage): boolean {
-  if (addressesBot(m) || asksForStatus(m)) return true;
-  if (m.document) return true;
-  const text = (m.content ?? '').trim();
-  if (!text) return false;
-  if (/[?؟]/.test(text)) return true;
-  if (ACKNOWLEDGEMENT.test(text)) return false;
-  // Only a message that asks for something is worth a model call. A plain statement
-  // between colleagues ("sent it to Merit", "the student will come tomorrow") is not,
-  // and those are most of the chat.
-  return /\b(please|pls|plz|can you|could you|book|request|need|send)\b|ابي|ابغى|نبي|نبغى|ممكن|لو سمحت|حجز|احجز|ارسل|طلب/i.test(text);
-}
-
 /**
  * Examine a student's chat thread and act if useful. Never throws.
  */
@@ -867,10 +895,11 @@ export async function respondToStudentChat(
       return { studentId, status: 'already_replied', reason: "last message is the bot's own" };
     }
 
-    // Triage gate. Skipped messages cost nothing — no model call, no log write — and are
-    // left unclaimed, so a later edit to the thread is still free to wake the responder.
-    if (!needsModel(last)) {
-      return { studentId, status: 'silent', reason: 'no answer needed (pre-model triage)' };
+    // Masar AI replies only when someone mentions it or sends the message to it — staff
+    // talking to each other are left alone. Skipped messages cost nothing (no model call,
+    // no log write) and are left unclaimed.
+    if (!addressesBot(last)) {
+      return { studentId, status: 'silent', reason: 'not addressed to Masar AI' };
     }
 
     // A request to the AI can lead it to change data, which needs the sender's own wake-up
