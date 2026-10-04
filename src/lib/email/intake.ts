@@ -665,12 +665,14 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         // the email asks for, a changed version of a document, a status the AI would not set
         // by itself, a change of agent, or a company notice. Routine news ("application
         // received", an offer filed and its status set) stays out of the chat — the document
-        // is on the profile, and a status change already notifies the employee.
+        // is on the profile, and a status change already notifies the employee. JotForm
+        // copies are our own submissions, so they never need a note.
         const needsSomeone =
-          noticeLines.length > 0 ||
-          requestLines.length > 0 ||
-          statusLines.some((l) => !l.startsWith('🎓')) ||
-          versionNotes.some((l) => l.startsWith('⚠️'));
+          !isFormCopy &&
+          (noticeLines.length > 0 ||
+            requestLines.length > 0 ||
+            statusLines.some((l) => !l.startsWith('🎓')) ||
+            versionNotes.some((l) => l.startsWith('⚠️')));
         const employeeCivilId = needsSomeone ? await getStudentEmployeeCivilId(match.student.id) : null;
         const announcement: Awaited<ReturnType<typeof announceEmailInChat>> & { skipped?: boolean } = needsSomeone
           ? await announceEmailInChat({
