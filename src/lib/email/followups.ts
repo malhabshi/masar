@@ -33,7 +33,7 @@ import { AI_ACTIONS_COLLECTION, logAiAction, type AiAction } from '@/lib/ai/acti
 import { notifyEmployeeOfStatus } from '@/lib/applications/set-status';
 import { FieldValue } from 'firebase-admin/firestore';
 import { sameUniversity } from './universities';
-import { applyPastEmail, type PastEmailResult } from './past-email';
+import type { PastEmailResult } from './past-email';
 
 const FOLLOWUP_COLLECTION = 'email_followups';
 const WAIT_DAYS = 5;
@@ -371,7 +371,12 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
         }
         // Already applied once and a person asked: leave it with them.
         if (stateOf.get(w.key)?.decisionRef === ref) continue;
-        if (!applied.has(ref)) applied.set(ref, await applyPastEmail({ studentId: student.id, ref, by: 'follow-ups' }));
+        if (!applied.has(ref)) {
+          // Loaded here, not at the top: past-email → requests → ai/documents → autofill →
+          // passport-renewal → this file is a loop, and a top-level import breaks the build.
+          const { applyPastEmail } = await import('./past-email');
+          applied.set(ref, await applyPastEmail({ studentId: student.id, ref, by: 'follow-ups' }));
+        }
         const r = applied.get(ref)!;
         // Gmail or the model failed: not chased this time, and tried again on the next run.
         if (!r.ok) {
