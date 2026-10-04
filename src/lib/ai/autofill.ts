@@ -16,6 +16,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from './client';
+import { queueAfterFgl, queuePassportRenewal, renewedPassport } from '@/lib/email/passport-renewal';
 import { AI_DOC_MODEL } from './config';
 import { logAiAction } from './action-log';
 import type { DocCard } from './documents';
@@ -136,6 +137,14 @@ export async function applyDocumentFacts(studentId: string, doc: StoredDoc, opts
     if ((card.type === 'mohe' || card.type === 'financial') && /guarantee|ضمان|sponsorship letter/i.test(`${card.title} ${card.summary}`)) {
       const r = await checklistTick(studentId, name, checklist, 'submitKcoRequest', 'KCO request submitted', doc, opts.dryRun);
       if (r) done.push(r);
+      // An FGL for a school: if there is a renewed passport, that school's company should have it.
+      if (!opts.dryRun) await queueAfterFgl(studentId, [...((s.documents ?? []) as StoredDoc[]).filter((d) => d.id !== doc.id), doc]);
+    }
+
+    // A renewed passport (expires later than another on file) goes to the companies, as drafts.
+    if (card.type === 'passport' && !opts.dryRun) {
+      const docs = [...((s.documents ?? []) as StoredDoc[]).filter((d) => d.id !== doc.id), doc];
+      if (renewedPassport(docs)?.id === doc.id) await queuePassportRenewal(studentId, doc, 'renewed passport read');
     }
 
     // "Renewed passport" (opened by a passport warning, deadlines.ts) is closed by rule, not

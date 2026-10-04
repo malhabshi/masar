@@ -13,6 +13,7 @@ import { runAllSiteWatches } from '@/lib/site-watch';
 import { getDocumentReaderSettings, readPendingDocuments } from '@/lib/ai/documents';
 import { isAiConfigured } from '@/lib/ai/config';
 import { fulfilEmailRequests } from '@/lib/email/requests';
+import { processPassportRenewals } from '@/lib/email/passport-renewal';
 import { getIntakeSettings } from '@/lib/email/intake-settings';
 import { syncSentMail } from '@/lib/email/memory';
 import { followUpsIfDue } from '@/lib/email/followups';
@@ -83,6 +84,15 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     console.error('[cron/email-drafts] failed:', e);
     emailDrafts = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  // A renewed passport, drafted to the companies that need it (FGL school, else all active).
+  let passportRenewals: unknown = null;
+  try {
+    if (aiAllowed && (await getIntakeSettings()).draftReplies) passportRenewals = await processPassportRenewals({ limit: 3 });
+  } catch (e) {
+    console.error('[cron/passport-renewals] failed:', e);
+    passportRenewals = { error: e instanceof Error ? e.message : String(e) };
   }
 
   // The agency's sent replies, into each student's email memory.
@@ -157,6 +167,7 @@ export async function GET(req: NextRequest) {
     emailDrafts,
     sentMail,
     followUps,
+    passportRenewals,
     taskAutomation,
     inbox,
     dailyReport,

@@ -191,7 +191,8 @@ const PICK_TOOL: Anthropic.Tool = {
   },
 };
 
-async function pickThreads(apps: Application[], emails: EmailMemoryEntry[]): Promise<Map<number, number>> {
+/** Which email conversation handles each application (index into emails). Also used for renewed passports. */
+export async function pickThreads(apps: Application[], emails: EmailMemoryEntry[]): Promise<Map<number, number>> {
   const res = await getAnthropicClient('follow-ups').messages.create({
     model: AI_FAST_MODEL,
     max_tokens: 800,
