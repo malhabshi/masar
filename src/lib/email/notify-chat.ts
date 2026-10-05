@@ -51,6 +51,18 @@ export async function departmentFor(studentId: string, university: string | null
   return team.docs.map((d) => d.id);
 }
 
+/**
+ * The department to mention: from the school the summary names, else from the
+ * applications the email changed or confirmed ("INTO Admissions" names no school, but
+ * the email set Saint Louis to Submitted). null when neither tells.
+ */
+export async function teamFor(studentId: string, university: string | null, schools: string[]): Promise<string[] | null> {
+  const named = await departmentFor(studentId, university);
+  if (named) return named;
+  const teams = (await Promise.all([...new Set(schools)].map((s) => departmentFor(studentId, s)))).filter((t): t is string[] => t !== null);
+  return teams.length ? [...new Set(teams.flat())] : null;
+}
+
 const SUMMARY_SYSTEM = `You summarise incoming student emails for a Kuwaiti study-abroad agency's internal staff chat. Staff are busy and read on their phones, so every word must earn its place.
 
 Say ONLY the thing that matters: what is needed, what changed, or what was decided.
@@ -147,6 +159,8 @@ export type ChatAnnouncement = {
   versionNotes?: string[];
   /** What the email asks for, now on the profile as Missing Items. */
   requestNotes?: string[];
+  /** The applications the email changed or confirmed — the school when the summary names none. */
+  schools?: string[];
 };
 
 /**
@@ -215,7 +229,7 @@ export async function announceEmailInChat(
 
     const employeeUserId = await findEmployeeUserIdByCivilId(input.employeeCivilId);
     const owner = process.env.MCP_OWNER_USER_ID?.trim();
-    const team = await departmentFor(input.studentId, summary.university).catch(() => null);
+    const team = await teamFor(input.studentId, summary.university, input.schools ?? []).catch(() => null);
     const recipientIds = [
       ...new Set([
         ...(employeeUserId ? [employeeUserId] : []),

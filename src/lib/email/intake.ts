@@ -44,7 +44,7 @@ import {
   analyseEmail,
   emailDocumentNote,
   fulfilEmailRequests,
-  getOpenMissingItemTexts,
+  getOpenMissingItems,
   recordEmailRequests,
 } from './requests';
 
@@ -243,6 +243,11 @@ async function stashAttachment(att: InboxAttachment, key: string): Promise<strin
     console.error('[email-intake] Failed to stash attachment:', e);
     return null;
   }
+}
+
+/** The applications an email changed or confirmed — which school it is about, for whom to mention. */
+function statusSchools(status: { changes: Array<{ university: string }>; alreadyCorrect: string[] }): string[] {
+  return [...status.changes.map((c) => c.university), ...status.alreadyCorrect.map((line) => line.replace(/: [^:]*$/, ''))];
 }
 
 /**
@@ -671,7 +676,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
             body: message.text,
             attachmentNames,
             studentName: match.student.name,
-            openMissingItems: await getOpenMissingItemTexts(match.student.id),
+            openMissingItems: await getOpenMissingItems(match.student.id),
           });
           if (analysis) {
             const recorded = await recordEmailRequests({
@@ -690,10 +695,11 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         // What does the email mean for the student's applications? An offer → Accepted,
         // "application received" → Submitted, and so on, under the agency's rules.
         let statusLines: string[] = [];
+        let schools: string[] = [];
         if (settings.autoApplicationStatus && (await screen()).applicationNews) {
-          statusLines = statusChangeLines(
-            await updateApplicationsFromEmail({ message, studentId: match.student.id }),
-          );
+          const status = await updateApplicationsFromEmail({ message, studentId: match.student.id });
+          statusLines = statusChangeLines(status);
+          schools = statusSchools(status);
         }
 
         // Keep it in the student's email memory, so the AI knows the whole story later.
@@ -735,6 +741,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
               filedAttachments: filedNames,
               versionNotes,
               requestNotes: [...nameLines, ...noticeLines, ...statusLines, ...requestLines],
+              schools,
             })
           : { posted: false, skipped: true };
 
@@ -896,11 +903,14 @@ export async function resolveQueuedItem(
   // for an email matched automatically — read again in full from Gmail — and into the
   // student's email memory.
   let statusLines: string[] = [];
+  let schools: string[] = [];
   const full = item.messageId ? await fetchMessageById(item.messageId).catch(() => null) : null;
   if (full) {
     const settings = await getIntakeSettings();
     if (settings.autoApplicationStatus) {
-      statusLines = statusChangeLines(await updateApplicationsFromEmail({ message: full, studentId }));
+      const status = await updateApplicationsFromEmail({ message: full, studentId });
+      statusLines = statusChangeLines(status);
+      schools = statusSchools(status);
     }
     const student = (await adminDb.collection('students').doc(studentId).get()).data();
     await rememberEmail({
@@ -929,6 +939,7 @@ export async function resolveQueuedItem(
     body: (item as { bodyPreview?: string }).bodyPreview ?? '',
     filedAttachments: filedNames,
     requestNotes: statusLines,
+    schools,
   });
 
   await ref.update({

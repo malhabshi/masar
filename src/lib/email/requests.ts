@@ -97,8 +97,9 @@ Do NOT list:
 - Information the sender is giving (an offer issued, a CAS ready, a visa decision, an interview date) — that is not a request.
 - Marketing, newsletters, automated notifications with nothing asked.
 - Conditions of an offer that the student will meet later (final exam results, the IELTS still to be taken) unless the email asks for them to be sent now.
-- Anything already in the student's open missing items listed in the request.
 - The application fee line INTO adds to its "Application Received" emails ("We will begin processing the application once we have received the application fee payment. The fee can be paid here") — the agency does not pay these; it is not a request.
+
+If something asked for is already among the student's open missing items (numbered in the request), still list it and set sameAs to that number: another university asking for the same document must get it in a reply too. It is not added to the list twice.
 
 One request per distinct thing. Keep text short, in English (e.g. "Personal statement", "Passport copy", "Confirm start date"). Put the sender's own wording in detail.
 needsReply is true only if at least one request is "document" or "information".`;
@@ -120,6 +121,7 @@ const ANALYSE_TOOL: Anthropic.Tool = {
             kind: { type: 'string', enum: ['document', 'information', 'action'] },
             docType: { type: ['string', 'null'], enum: [...DOC_TYPES, null] },
             detail: { type: 'string' },
+            sameAs: { type: ['integer', 'null'], description: 'Number of the open missing item this is the same as, or null.' },
           },
           required: ['text', 'kind', 'detail'],
         },
@@ -132,7 +134,14 @@ const ANALYSE_TOOL: Anthropic.Tool = {
 export type EmailAnalysis = {
   organisation: string | null;
   needsReply: boolean;
-  requests: Array<{ text: string; kind: RequestKind; docType: DocType | null; detail: string }>;
+  requests: Array<{
+    text: string;
+    kind: RequestKind;
+    docType: DocType | null;
+    detail: string;
+    /** Already on the student's Missing Items (asked for by another email): that item's id. */
+    existingMissingItemId: string | null;
+  }>;
 };
 
 export async function analyseEmail(input: {
@@ -142,7 +151,7 @@ export async function analyseEmail(input: {
   body: string;
   attachmentNames: string[];
   studentName: string;
-  openMissingItems: string[];
+  openMissingItems: Array<{ id: string; text: string }>;
 }): Promise<EmailAnalysis | null> {
   if (!isAiConfigured()) return null;
   try {
@@ -156,7 +165,8 @@ export async function analyseEmail(input: {
           role: 'user',
           content: [
             `Student: ${input.studentName}`,
-            `Student's open missing items: ${input.openMissingItems.length ? input.openMissingItems.join('; ') : 'none'}`,
+            "Student's open missing items:",
+            ...(input.openMissingItems.length ? input.openMissingItems.map((m, n) => `${n + 1}. ${m.text}`) : ['none']),
             `From: ${input.fromName ? `${input.fromName} <${input.from}>` : input.from}`,
             `Subject: ${input.subject}`,
             `Attachments: ${input.attachmentNames.join(', ') || 'none'}`,
@@ -176,6 +186,7 @@ export async function analyseEmail(input: {
         kind: r.kind as RequestKind,
         docType: (DOC_TYPES as readonly string[]).includes(r.docType) ? (r.docType as DocType) : null,
         detail: String(r.detail ?? '').trim().slice(0, 600),
+        existingMissingItemId: Number.isInteger(r.sameAs) ? input.openMissingItems[r.sameAs - 1]?.id ?? null : null,
       }));
     return {
       organisation: typeof i.organisation === 'string' ? i.organisation : null,
@@ -192,16 +203,19 @@ export async function analyseEmail(input: {
 // 2. Recording the requests
 // --------------------------------------------------------------------------
 
-export async function getOpenMissingItemTexts(studentId: string): Promise<string[]> {
+export async function getOpenMissingItems(studentId: string): Promise<Array<{ id: string; text: string }>> {
   const snap = await db().collection('students').doc(studentId).get();
-  return ((snap.data()?.missingItems ?? []) as Array<string | { text?: string }>)
-    .map((m) => (typeof m === 'string' ? m : m.text ?? ''))
-    .filter(Boolean);
+  return ((snap.data()?.missingItems ?? []) as Array<string | { id?: string; text?: string }>)
+    .map((m) => (typeof m === 'string' ? { id: m, text: m } : { id: m.id ?? '', text: m.text ?? '' }))
+    .filter((m) => m.id && m.text);
 }
 
 /**
  * Turn the analysed asks into Missing Items and remember the email so its reply can be
  * drafted later. Returns the lines for the chat note. Does nothing when nothing was asked.
+ * An ask already on the list (another university wants the same transcripts) is linked to
+ * that Missing Item: this sender gets its own reply when the file arrives, and nothing new
+ * is announced.
  */
 export async function recordEmailRequests(input: {
   message: InboxMessage;
@@ -220,32 +234,35 @@ export async function recordEmailRequests(input: {
     kind: r.kind,
     docType: r.docType,
     detail: r.detail,
-    missingItemId: `mi-email-${Date.now()}-${i}`,
+    missingItemId: r.existingMissingItemId ?? `mi-email-${Date.now()}-${i}`,
     // An action has no reply; it is tracked only as a Missing Item.
     status: r.kind === 'action' ? 'closed' : 'waiting',
   }));
 
-  // Missing Items, in the same shape the profile already shows.
-  const missing = items.map((it) => ({
+  // Missing Items, in the same shape the profile already shows — only the new ones.
+  const fresh = items.filter((_, i) => !analysis.requests[i].existingMissingItemId);
+  const missing = fresh.map((it) => ({
     id: it.missingItemId,
     text: `${it.text} — requested by ${from} by email (${now.slice(0, 10)})`,
     department: 'Email',
     addedBy: 'email-intake',
     createdAt: now,
   }));
-  await db().collection('students').doc(studentId).update({
-    missingItems: FieldValue.arrayUnion(...missing),
-    newMissingItemsForEmployee: FieldValue.increment(missing.length),
-    lastActivityAt: now,
-  });
-  await logAiAction({
-    source: 'email',
-    summary: `Missing Items added: ${items.map((it) => it.text).join(' · ')}`,
-    reason: `Requested by ${from} by email, "${message.subject}"`,
-    studentId,
-    studentName,
-    undo: { type: 'remove_missing_items', ids: missing.map((m) => m.id) },
-  });
+  if (missing.length) {
+    await db().collection('students').doc(studentId).update({
+      missingItems: FieldValue.arrayUnion(...missing),
+      newMissingItemsForEmployee: FieldValue.increment(missing.length),
+      lastActivityAt: now,
+    });
+    await logAiAction({
+      source: 'email',
+      summary: `Missing Items added: ${fresh.map((it) => it.text).join(' · ')}`,
+      reason: `Requested by ${from} by email, "${message.subject}"`,
+      studentId,
+      studentName,
+      undo: { type: 'remove_missing_items', ids: missing.map((m) => m.id) },
+    });
+  }
 
   let requestId: string | null = null;
   if (items.some((it) => it.status === 'waiting')) {
@@ -271,9 +288,11 @@ export async function recordEmailRequests(input: {
     requestId = ref.id;
   }
 
+  // Nothing new on the list, nothing to announce.
+  if (!fresh.length) return { requestId, chatLines: [] };
   const chatLines = [
     '📋 Requested in this email (added to Missing Items):',
-    ...items.map((it) => `• ${it.text}${it.kind === 'action' ? ' (to do, no reply needed)' : ''}`),
+    ...fresh.map((it) => `• ${it.text}${it.kind === 'action' ? ' (to do, no reply needed)' : ''}`),
   ];
   if (requestId) {
     chatLines.push('Once these are uploaded to the profile, a reply with them is drafted in the agency Gmail for sending.');
