@@ -98,6 +98,7 @@ Do NOT list:
 - Marketing, newsletters, automated notifications with nothing asked.
 - Conditions of an offer that the student will meet later (final exam results, the IELTS still to be taken) unless the email asks for them to be sent now.
 - Anything already in the student's open missing items listed in the request.
+- The application fee line INTO adds to its "Application Received" emails ("We will begin processing the application once we have received the application fee payment. The fee can be paid here") — the agency does not pay these; it is not a request.
 
 One request per distinct thing. Keep text short, in English (e.g. "Personal statement", "Passport copy", "Confirm start date"). Put the sender's own wording in detail.
 needsReply is true only if at least one request is "document" or "information".`;

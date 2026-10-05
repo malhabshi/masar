@@ -11,7 +11,9 @@
 //   2027"). The AI reads them with the student's applications, email history and
 //   documents, finds the conversation with the company handling it, and drafts the email
 //   in Gmail — asking for the update, or passing the instruction on, with any document it
-//   names attached. Nothing is sent.
+//   names attached. Nothing is sent. Only the request's own country is asked about ("… In
+//   the UK" never writes to a USA school), and a company waiting on documents from us is
+//   not asked for news — the task says what it is waiting for instead.
 //
 // Either way, what was done is written back on the task as a reply, so the department
 // handling it sees it immediately. Each task is processed once (a claim on the task).
@@ -28,7 +30,8 @@ import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, typ
 import { downloadDoc } from '@/lib/email/requests';
 import { replyWithReceipt } from '@/lib/email/reply-receipt';
 import { logAiAction } from './action-log';
-import type { Application } from '@/lib/types';
+import { universityWords } from '@/lib/email/universities';
+import type { Application, Country, MissingItem } from '@/lib/types';
 
 const DRAFT_SIGNATURE = 'MMohammed';
 const ATTACH_LIMIT = 17 * 1024 * 1024;
@@ -152,6 +155,8 @@ const UPDATE_SYSTEM = `An employee of a Kuwaiti study-abroad agency raised a req
 - Pick the conversation from the numbered email list: the email to reply to, from the conversation that handles the application(s) concerned (prefer the most recent email of that conversation). One draft per conversation. If the request concerns applications handled in different conversations, make one draft for each.
 - If the request names a document (passport, transcript, IELTS…), attach it: give its id from the documents list. Only attach what the request asks for.
 - body: short, in the agency's style, inside an existing thread — greeting ("Dear <organisation> Team,"), one or two lines, no sign-off (added afterwards). Do not repeat the student's name or references; the thread has them. Name the university when the conversation covers several.
+- Only the applications listed concern this request; never write about another one.
+- Do not ask a company for an update while it is waiting on the agency: the newest email in that conversation asks for documents or information that are still among the open missing items. Asking them for news then would be wrong. Leave that application out and put it in waitingOnUs, saying what they are waiting for.
 - If no conversation fits, return no draft and say why in problem.`;
 
 const UPDATE_TOOL: Anthropic.Tool = {
@@ -173,10 +178,29 @@ const UPDATE_TOOL: Anthropic.Tool = {
           required: ['email', 'about', 'body'],
         },
       },
+      waitingOnUs: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Applications left out because the company is waiting on the agency, e.g. "Oregon State — INTO is waiting on the English scores and transcripts".',
+      },
       problem: { type: ['string', 'null'] },
     },
     required: ['drafts'],
   },
+};
+
+/** The request type names its country: "… In the UK", "… In the USA", "… In the AS/ NZ". */
+function requestCountries(taskType: string): Country[] | null {
+  const t = taskType.toUpperCase();
+  if (/\bUK\b/.test(t)) return ['UK'];
+  if (/\bUSA\b/.test(t)) return ['USA'];
+  if (/\b(AS|AU)\s*\/?\s*NZ\b|AUSTRALIA|NEW ZEALAND/.test(t)) return ['Australia', 'New Zealand'];
+  return null;
+}
+
+const shareWords = (a: string, b: string) => {
+  const wb = universityWords(b);
+  return [...universityWords(a)].some((w) => wb.has(w));
 };
 
 const firstAddress = (s: string) => s.match(/[\w.+-]+@[\w.-]+/)?.[0]?.toLowerCase() ?? '';
@@ -202,7 +226,17 @@ async function draftUpdate(task: Record<string, any>, dryRun = false): Promise<s
   if (!emails.length) return ['⚠️ No email conversation with any company was found for this student — please email them directly.'];
 
   const docs = ((s.documents ?? []) as Array<Record<string, any>>).filter((d) => d.id);
-  const apps = (s.applications ?? []) as Application[];
+  const allApps = (s.applications ?? []) as Application[];
+  const countries = requestCountries(String(task.taskType ?? ''));
+  const apps = countries ? allApps.filter((a) => countries.includes(a.country)) : allApps;
+  if (!apps.length) return [`⚠️ No draft made: this student has no ${countries!.join('/')} application.`];
+  // A conversation about another country's school is not offered at all.
+  const elsewhere = allApps.filter((a) => !apps.includes(a));
+  emails = emails.filter(
+    (e) => !e.university || !elsewhere.some((a) => shareWords(e.university!, a.university)) || apps.some((a) => shareWords(e.university!, a.university)),
+  );
+  if (!emails.length) return ['⚠️ No email conversation about these applications was found — please email the company directly.'];
+  const missing = ((s.missingItems ?? []) as Array<MissingItem | string>).map((m) => (typeof m === 'string' ? m : m.text));
   const note = String(task.data?.notes ?? task.content ?? '').trim();
 
   const res = await getAnthropicClient('requests').messages.create({
@@ -223,8 +257,11 @@ async function draftUpdate(task: Record<string, any>, dryRun = false): Promise<s
           'Emails (newest first):',
           ...emails.map(
             (e, i) =>
-              `${i}. ${e.date.slice(0, 10)} ${e.direction === 'in' ? `from ${e.from}` : `to ${e.to}`} | ${e.subject} | ${e.summary}`,
+              `${i}. ${e.date.slice(0, 10)} ${e.direction === 'in' ? `from ${e.from}` : `to ${e.to}`} | ${e.kind} | ${e.subject} | ${e.summary}`,
           ),
+          '',
+          'Open missing items:',
+          ...(missing.length ? missing.map((m) => `- ${m}`) : ['(none)']),
           '',
           'Documents on the profile:',
           ...docs.map((d) => `- ${d.id}: ${d.name}${d.ai?.type ? ` [${d.ai.type}]` : ''}`),
@@ -233,10 +270,11 @@ async function draftUpdate(task: Record<string, any>, dryRun = false): Promise<s
     ],
   });
   const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-  const out = (use?.input ?? {}) as { drafts?: any[]; problem?: string | null };
-  if (!out.drafts?.length) return [`⚠️ No draft made: ${out.problem ?? 'could not tell which conversation this is about.'}`];
+  const out = (use?.input ?? {}) as { drafts?: any[]; waitingOnUs?: string[]; problem?: string | null };
+  const waiting = (out.waitingOnUs ?? []).filter((w) => typeof w === 'string' && w.trim()).map((w) => `⏸ Not asked for an update — they are waiting on us: ${w.trim()}`);
+  if (!out.drafts?.length) return [...waiting, ...(waiting.length && !out.problem ? [] : [`⚠️ No draft made: ${out.problem ?? 'could not tell which conversation this is about.'}`])];
 
-  const lines: string[] = [];
+  const lines: string[] = [...waiting];
   const done = new Set<string>();
   for (const d of out.drafts) {
     const e = emails[Number(d.email)];
