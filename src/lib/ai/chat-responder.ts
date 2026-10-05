@@ -41,6 +41,7 @@ import { applyPastEmail } from '@/lib/email/past-email';
 import { closeUniversity, listedUniversity } from '@/lib/email/application-status';
 import { updateStudentIdentity } from '@/lib/students/identity';
 import { logAiAction } from './action-log';
+import { automateTask } from './task-automation';
 import type { Application, ApplicationStatus, User } from '@/lib/types';
 
 export const AI_CHAT_LOG_COLLECTION = 'ai_chat_log';
@@ -173,8 +174,11 @@ Your ⏳ messages say an email asking for an update on an application is waiting
 ## Fixing the record
 Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`; to add a school with no email behind it, \`add_application\`. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
 
+## Requests already made
+"The request", "the task", "the request school" or the name of a request type usually means a request already made for this student, not a new one. Call \`get_student_requests\` first: it lists each request with the school and course picked in it, who made it, when, and where it stands. "Add the request school to the list" means: add each school from those requests that is not on the applications yet, with \`add_application\`, using the school and course exactly as the request names them. Never create a task when staff point to one that exists.
+
 ## Creating tasks
-When an employee asks for something that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
+When staff ask for something new that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. A request that picks a school (adding schools, first year, change of major) needs the school and the course: pass university and major, and if staff did not name them, ask — never create it empty. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
 
 ## How to write
 - Short. One or two sentences. This is a busy work chat, not a report.
@@ -314,6 +318,18 @@ function buildToolset(opts: {
         input_schema: { type: 'object', properties: { filter: { type: 'string' } } },
       },
       handler: (input) => getStudentEmailTimeline(studentId, { filter: input.filter, limit: 30 }),
+    },
+    {
+      write: false,
+      definition: {
+        name: 'get_student_requests',
+        description:
+          "The requests (tasks) made for this student, newest first: the request type, who made it and when, its status, " +
+          'the school and course picked in it, notes, what was already done about it and the latest replies. Use it ' +
+          'whenever staff mention "the request" or "the task", and before creating a task.',
+        input_schema: { type: 'object', properties: {} },
+      },
+      handler: () => studentRequests(studentId),
     },
     {
       write: false,
@@ -753,9 +769,11 @@ function buildToolset(opts: {
       definition: {
         name: 'create_task',
         description:
-          'Create a task/request for this student from what an employee asked for in the chat. ' +
-          'Use one of the requestTypeId values listed in the conversation. After creating it, ' +
-          'post_reply to say what you created.',
+          'Create a task/request for this student from what staff asked for in the chat. ' +
+          'Use one of the requestTypeId values listed in the conversation. A request that picks a school ' +
+          '(adding schools, first year, change of major) needs university and major — it is never created ' +
+          'without them, and its school is added to the applications as Pending, as on the site. After ' +
+          'creating it, post_reply to say what you created.',
         input_schema: {
           type: 'object',
           properties: {
@@ -764,6 +782,8 @@ function buildToolset(opts: {
               type: 'string',
               description: 'What is being requested, quoting the employee where useful.',
             },
+            university: { type: 'string', description: 'For a request that picks a school: the school, as staff named it.' },
+            major: { type: 'string', description: "The course at that school. For a change of major: the application's current course." },
           },
           required: ['requestTypeId', 'description'],
         },
@@ -771,6 +791,20 @@ function buildToolset(opts: {
       handler: async (input) => {
         const requestTypeId = String(input.requestTypeId ?? '');
         const description = String(input.description ?? '');
+        if (!db) return { ok: false, error: 'Database not available.' };
+        const rt = (await db.collection('request_types').doc(requestTypeId).get()).data();
+        if (!rt) return { ok: false, error: 'Unknown requestTypeId — use one of the listed ids.' };
+        const picked = await requestSchool(studentId, rt, input.university, input.major);
+        if ('error' in picked) return { ok: false, error: picked.error };
+        if (picked.school) {
+          const refused = await refuseRecordChange({ assignedEmployee: true, what: 'request schools for this student' });
+          if (refused) return { ok: false, error: refused };
+        }
+        if (preview) {
+          const wouldCreate = `${String(rt.name).trim()}${picked.school ? ` — ${picked.school}` : ''}`;
+          collected.tasks.push({ requestTypeId, description, ok: true, message: `preview: would create ${wouldCreate}` });
+          return { ok: true, preview: true, wouldCreate };
+        }
         if (observeOnly) {
           collected.tasks.push({ requestTypeId, description, ok: true, message: 'observe-only: not created' });
           return {
@@ -779,21 +813,143 @@ function buildToolset(opts: {
             note: 'Observe-only mode is on: the task was recorded for review but NOT created.',
           };
         }
-        const result = await createStudentTask(CHAT_BOT_USER_ID, studentId, requestTypeId, description);
+        const result = await createStudentTask(CHAT_BOT_USER_ID, studentId, requestTypeId, description, picked.data);
         collected.tasks.push({
           requestTypeId,
           description,
           ok: result.success === true,
           message: result.message,
         });
-        return result.success
-          ? { ok: true, created: true }
-          : { ok: false, error: result.message ?? 'Task creation failed.' };
+        if (!result.success) return { ok: false, error: result.message ?? 'Task creation failed.' };
+        // As when the request is made on the site: its school goes on the applications list now.
+        const done = picked.data && rt.specialConfig?.useApprovedUniversitiesList && result.taskId ? (await automateTask(result.taskId)).lines : [];
+        return { ok: true, created: true, ...(picked.school ? { school: picked.school } : {}), ...(done.length ? { done } : {}) };
       },
     });
   }
 
   return tools;
+}
+
+const cmpDesc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
+const norm = (v: unknown) => String(v ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** The schools picked in a request's form (one, or several where the form allows it). */
+function requestedSchools(t: Record<string, any>): Array<{ id?: string; name: string; major?: string }> {
+  const d = t.data ?? {};
+  const list = Array.isArray(d.selectedGlobalUniversities) && d.selectedGlobalUniversities.length ? d.selectedGlobalUniversities : [d.selectedGlobalUniversityDetails];
+  return list.filter((u: { name?: string } | undefined) => u?.name);
+}
+
+/** The requests made for a student — "the request" staff point to. */
+async function studentRequests(studentId: string) {
+  if (!db) return { error: 'Database not available' };
+  const snap = await db.collection('tasks').where('studentId', '==', studentId).get();
+  const requests = snap.docs
+    .map((d): Record<string, any> => ({ id: d.id, ...d.data() }))
+    .filter((t) => t.category === 'request')
+    .sort((a, b) => cmpDesc(String(a.createdAt ?? ''), String(b.createdAt ?? '')))
+    .slice(0, 20)
+    .map((t) => {
+      const app = t.data?.selectedApplicationDetails;
+      const schools = requestedSchools(t).map((u) => `${u.name} — ${String(u.major ?? '?').trim()}`);
+      return {
+        type: String(t.taskType ?? '').trim(),
+        by: t.authorName ?? null,
+        on: String(t.createdAt ?? '').slice(0, 10),
+        status: t.status ?? null,
+        ...(schools.length ? { schools } : {}),
+        ...(app?.university ? { application: `${app.university} — ${app.major}` } : {}),
+        ...(t.data?.notes ? { notes: String(t.data.notes).slice(0, 300) } : {}),
+        ...(t.content && !/^Dynamic request:/.test(t.content) ? { details: String(t.content).slice(0, 400) } : {}),
+        ...(t.aiAutomation?.lines?.length ? { alreadyDone: t.aiAutomation.lines } : {}),
+        ...(t.denialReason ? { denialReason: t.denialReason } : {}),
+        latestReplies: ((t.replies ?? []) as Array<{ authorName?: string; content?: string }>)
+          .slice(-3)
+          .map((r) => `${r.authorName ?? 'staff'}: ${String(r.content ?? '').slice(0, 200)}`),
+      };
+    });
+  return { count: requests.length, requests };
+}
+
+/**
+ * What a request type's form holds for the school staff named: the Approved Universities
+ * course for an add-school request, the student's own application for a change of major.
+ * A request whose form picks a school is never made without one, nor twice while open.
+ */
+async function requestSchool(
+  studentId: string,
+  rt: Record<string, any>,
+  university: unknown,
+  major: unknown,
+): Promise<{ data?: Record<string, unknown>; school?: string } | { error: string }> {
+  const cfg = rt.specialConfig ?? {};
+  if (!cfg.useApprovedUniversitiesList && !cfg.requireUniversitySelection) return {};
+  const name = String(university ?? '').replace(/\s+/g, ' ').trim();
+  const course = String(major ?? '').replace(/\s+/g, ' ').trim();
+  if (!name || !course) {
+    return {
+      error:
+        `Not created: "${String(rt.name).trim()}" needs the school and the course. Ask staff which — or, if they mean ` +
+        'a request already made for this student, read it with get_student_requests.',
+    };
+  }
+  const s = (await db!.collection('students').doc(studentId).get()).data();
+  if (!s) return { error: 'Student not found.' };
+
+  if (cfg.requireUniversitySelection) {
+    const found = findApplication((s.applications ?? []) as Application[], name, course);
+    if ('error' in found) return { error: `Not created: ${found.error}` };
+    const a = found.app;
+    return {
+      school: `${a.university} (${a.major})`,
+      data: {
+        selectedApplicationId: `${a.university}|${a.major}`,
+        selectedApplicationDetails: { university: a.university, major: a.major, country: a.country, status: a.status },
+      },
+    };
+  }
+
+  const rows = (await db!.collection('approved_universities').get()).docs
+    .map((d) => ({ id: d.id, ...(d.data() as { name?: string; major?: string; country?: string; category?: string }) }))
+    .filter((r) => r.name && (!cfg.countryFilter || r.country === cfg.countryFilter));
+  let school = rows.filter((r) => norm(r.name) === norm(name));
+  if (!school.length) {
+    school = rows.filter((r) => closeUniversity(r.name!, name));
+    // "Liverpool Kaplan": the provider named picks between the pathway versions of one school.
+    const providers = norm(name).split(/[^a-z]+/).filter((w) => ['kaplan', 'into', 'navitas', 'oncampus', 'isc'].includes(w));
+    const viaProvider = school.filter((r) => providers.some((p) => norm(r.name).includes(p)));
+    if (viaProvider.length) school = viaProvider;
+  }
+  const names = [...new Set(school.map((r) => r.name!.trim()))];
+  if (names.length > 1) return { error: `Not created: "${name}" could be ${names.join(' or ')}. Ask which.` };
+  if (!names.length) return { error: `Not created: ${name} is not on the Approved Universities list${cfg.countryFilter ? ` for the ${cfg.countryFilter}` : ''}.` };
+  let hit = school.filter((r) => norm(r.major) === norm(course));
+  if (!hit.length) hit = school.filter((r) => norm(r.major).includes(norm(course)) || norm(course).includes(norm(r.major)));
+  if (hit.length !== 1) {
+    return {
+      error: `Not created: ${hit.length ? 'several courses' : 'no course'} at ${names[0]} match "${course}". Its courses: ${school.map((r) => String(r.major).trim()).join('; ')}.`,
+    };
+  }
+  const u = hit[0];
+  const label = `${u.name} (${String(u.major).trim()})`;
+  const open = (await db!.collection('tasks').where('studentId', '==', studentId).get()).docs
+    .map((d) => d.data())
+    .find(
+      (t) =>
+        t.category === 'request' &&
+        t.status !== 'completed' &&
+        t.status !== 'denied' &&
+        requestedSchools(t).some((x) => x.id === u.id || (norm(x.name) === norm(u.name) && norm(x.major) === norm(u.major))),
+    );
+  if (open) return { error: `Not created: ${label} was already requested by ${open.authorName ?? 'staff'} on ${String(open.createdAt).slice(0, 10)} and that request is still open.` };
+  const details = { id: u.id, name: u.name, major: u.major, country: u.country, category: u.category ?? null };
+  return {
+    school: label,
+    data: cfg.allowMultipleUniversitySelection
+      ? { selectedGlobalUniversityIds: [u.id], selectedGlobalUniversities: [details] }
+      : { selectedGlobalUniversityId: u.id, selectedGlobalUniversityDetails: details },
+  };
 }
 
 /** One digest of where a student stands — for status questions. */
@@ -863,7 +1019,7 @@ export async function respondToStudentChat(
 ): Promise<ResponderOutcome> {
   try {
     const settings = preview
-      ? { ...(await getResponderSettings()), enabled: true, observeOnly: true, allowTaskCreation: false }
+      ? { ...(await getResponderSettings()), enabled: true, observeOnly: true }
       : await getResponderSettings();
     if (!settings.enabled || !isAiConfigured()) {
       return { studentId, status: 'disabled', reason: !settings.enabled ? 'responder disabled' : 'no API key' };
@@ -951,7 +1107,7 @@ export async function respondToStudentChat(
       `Name: ${(student as any).name ?? 'unknown'}`,
       `Assigned employee: ${employee ? employee.name : 'none'}`,
       `Applications: ${((student as any).applications ?? [])
-        .map((a: any) => `${a.university} (${a.country}) — ${a.status}`)
+        .map((a: any) => `${a.university} — ${a.major} (${a.country}) — ${a.status}`)
         .join('; ') || 'none'}`,
     ].join('\n');
 
