@@ -20,12 +20,8 @@ export type ApiAuthResult =
 function bearerFrom(req: Request): string | undefined {
   const h = req.headers.get('authorization') || req.headers.get('Authorization');
   if (h) return h.replace(/^Bearer\s+/i, '').trim();
-  // Fallback: allow ?token= for quick browser/testing use.
-  try {
-    const u = new URL(req.url);
-    const t = u.searchParams.get('token');
-    if (t) return t.trim();
-  } catch { /* ignore */ }
+  // Never from the URL (?token= was removed on 2026-10-05): a token in a URL ends up in
+  // logs, browser history and links pasted into chats.
   return undefined;
 }
 

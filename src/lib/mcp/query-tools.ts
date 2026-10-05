@@ -51,16 +51,46 @@ export type StudentFilters = {
   limit?: number;
   /** Rows to skip, for paging through more than `limit`. */
   offset?: number;
+  /** nextCursor from the previous page (preferred over offset: rows added or removed between pages do not shift it). */
+  cursor?: string;
 };
 
-/** One page of a longer list: `count` rows here, `total` in all, `nextOffset` null on the last page. */
-function page<T>(rows: T[], offset: number, limit: number) {
-  const slice = rows.slice(offset, offset + limit);
-  const next = offset + slice.length;
-  return { total: rows.length, count: slice.length, offset, limit, nextOffset: next < rows.length ? next : null, rows: slice };
+/** Plain character order, for both the sort and the cursor, so a page never skips or repeats a row. */
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+const encodeCursor = (key: string) => Buffer.from(key).toString('base64url');
+const decodeCursor = (cursor: string) => Buffer.from(cursor, 'base64url').toString();
+
+/**
+ * One page of a list already sorted by `keyOf` (`desc`: largest key first). A cursor
+ * (the key of the last row seen) continues after that row, as list_tasks does; without
+ * one, `offset` rows are skipped. `total` / `totalCount` are all matches, `count` this
+ * page; `nextCursor` and `nextOffset` are null on the last page.
+ */
+function page<T>(rows: T[], keyOf: (row: T) => string, opts: { limit: number; offset: number; cursor?: string; desc?: boolean }) {
+  let start = opts.offset;
+  if (opts.cursor) {
+    const after = decodeCursor(opts.cursor);
+    start = rows.findIndex((r) => (opts.desc ? cmp(keyOf(r), after) < 0 : cmp(keyOf(r), after) > 0));
+    if (start < 0) start = rows.length;
+  }
+  const slice = rows.slice(start, start + opts.limit);
+  const hasMore = start + slice.length < rows.length;
+  return {
+    total: rows.length,
+    totalCount: rows.length,
+    count: slice.length,
+    offset: start,
+    limit: opts.limit,
+    hasMore,
+    nextCursor: hasMore && slice.length ? encodeCursor(keyOf(slice[slice.length - 1])) : null,
+    nextOffset: hasMore ? start + slice.length : null,
+    rows: slice,
+  };
 }
 
 const clampOffset = (n: number | undefined) => Math.max(Math.floor(n ?? 0), 0) || 0;
+
+const studentKey = (r: { id: string; d: Record<string, unknown> }) => `${String(r.d.createdAt ?? '')}|${r.id}`;
 
 export async function listStudents(f: StudentFilters = {}) {
   const limit = Math.min(Math.max(f.limit ?? 25, 1), 500);
@@ -82,9 +112,9 @@ export async function listStudents(f: StudentFilters = {}) {
   const matches = (await query.select('createdAt', ...rest.map(([k]) => k)).get()).docs
     .map((doc) => ({ id: doc.id, d: doc.data() }))
     .filter(({ d }) => rest.every(([k, v]) => d[k] === v))
-    .sort((a, b) => String(b.d.createdAt ?? '').localeCompare(String(a.d.createdAt ?? '')) || a.id.localeCompare(b.id));
+    .sort((a, b) => cmp(studentKey(b), studentKey(a)));
 
-  const { rows, ...meta } = page(matches, offset, limit);
+  const { rows, ...meta } = page(matches, studentKey, { limit, offset, cursor: f.cursor, desc: true });
   const docs = rows.length ? await db().getAll(...rows.map((r) => col.doc(r.id))) : [];
   const students = docs.filter((doc) => doc.exists).map((doc) => studentSummary(doc.id, doc.data() as Record<string, unknown>));
   return { ...meta, count: students.length, students };
@@ -161,7 +191,10 @@ export type ReminderFilters = {
   studentId?: string;
   limit?: number;
   offset?: number;
+  cursor?: string;
 };
+
+const reminderKey = (r: { id: string; d: Record<string, unknown> }) => `${String(r.d.createdAt ?? '')}|${r.id}`;
 
 export async function listReminders(f: ReminderFilters = {}) {
   const limit = Math.min(Math.max(f.limit ?? 50, 1), 1000);
@@ -175,8 +208,8 @@ export async function listReminders(f: ReminderFilters = {}) {
     // Dismissals record their time only since 2026-10-05; earlier ones have none.
     .filter(({ d }) => !f.dismissedSince || String(d.dismissedAt ?? '') >= f.dismissedSince)
     // Oldest first, so a new reminder lands on the last page and never shifts earlier ones.
-    .sort((a, b) => String(a.d.createdAt ?? '').localeCompare(String(b.d.createdAt ?? '')) || a.id.localeCompare(b.id));
-  const { rows, ...meta } = page(matches, offset, limit);
+    .sort((a, b) => cmp(reminderKey(a), reminderKey(b)));
+  const { rows, ...meta } = page(matches, reminderKey, { limit, offset, cursor: f.cursor });
   return { ...meta, reminders: rows.map((r) => scrub({ id: r.id, ...r.d })) };
 }
 

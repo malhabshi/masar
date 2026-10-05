@@ -6,7 +6,7 @@
 //
 // Examples:
 //   GET /api/v1                          -> index of endpoints
-//   GET /api/v1/students?limit=50        -> student summaries (filters below; offset to page)
+//   GET /api/v1/students?limit=50        -> student summaries (filters below; cursor to page)
 //   GET /api/v1/students?q=<name|phone>  -> search students
 //   GET /api/v1/students/<id>            -> one full student profile
 //   GET /api/v1/students/<id>/chat       -> internal chat for a student
@@ -61,9 +61,10 @@ export const DELETE = methodNotAllowed;
 const INDEX = {
   name: 'masar read-only API v1',
   readOnly: true,
-  auth: 'Send header "Authorization: Bearer <token>" (or ?token=<token> for quick tests).',
+  auth: 'Send header "Authorization: Bearer <token>". Tokens are not accepted in the URL.',
+  paging: 'students and reminders: pass limit, and cursor = nextCursor from the previous reply (as for tasks). Each reply carries totalCount (all matches), count (this page), hasMore and nextCursor (null on the last page). offset / nextOffset still work.',
   endpoints: {
-    'GET /api/v1/students': 'List students, newest first. Query: q (name/phone search), employeeId, pipelineStatus, changeAgentRequired, jotform, hasChangeAgentHistory, limit (max 500), offset. The reply carries total (all matches), count (this page) and nextOffset (null on the last page).',
+    'GET /api/v1/students': 'List students, newest first (createdAt, then id). Query: q (name/phone search), employeeId, pipelineStatus, changeAgentRequired, jotform, hasChangeAgentHistory, limit (max 500), cursor.',
     'GET /api/v1/students/{id}': 'Full student profile.',
     'GET /api/v1/students/{id}/chat': 'Internal chat messages. Query: limit (max 200).',
     'GET /api/v1/students/{id}/tasks': 'Tasks attached to the student.',
@@ -73,7 +74,7 @@ const INDEX = {
     'GET /api/v1/employees': 'All staff/users.',
     'GET /api/v1/universities': 'Approved universities.',
     'GET /api/v1/invoices': 'Invoices. Query: studentId, status, limit.',
-    'GET /api/v1/reminders': 'Student reminders, oldest first. Query: status (active | dismissed), dismissedSince (YYYY-MM-DD; dismissals before 2026-10-05 carry no date), studentId, limit (max 1000), offset. The reply carries total, count and nextOffset as for students.',
+    'GET /api/v1/reminders': 'Student reminders, oldest first (createdAt, then id). Query: status (active | dismissed), dismissedSince (YYYY-MM-DD; dismissals before 2026-10-05 carry no date), studentId, limit (max 1000), cursor.',
     'GET /api/v1/events': 'Upcoming events.',
     'GET /api/v1/request-types': 'Task/request types.',
   },
@@ -105,6 +106,7 @@ export async function GET(req: Request, ctx: { params: { path?: string[] } }) {
             hasChangeAgentHistory: bool(sp.get('hasChangeAgentHistory')),
             limit: num(sp.get('limit'), 25),
             offset: num(sp.get('offset'), 0),
+            cursor: sp.get('cursor') ?? undefined,
           }));
         }
         if (sub === 'chat') return jsonResponse(await q.getStudentChat(id, num(sp.get('limit'), 50)));
@@ -157,6 +159,7 @@ export async function GET(req: Request, ctx: { params: { path?: string[] } }) {
           studentId: sp.get('studentId') ?? undefined,
           limit: num(sp.get('limit'), 50),
           offset: num(sp.get('offset'), 0),
+          cursor: sp.get('cursor') ?? undefined,
         }));
       }
       case 'events':

@@ -154,11 +154,13 @@ export function getMcpHandler() {
 
     // ---------------------------------------------------------- Read layer
     s.registerTool('list_students', {
-      description: 'List students (newest first). Optional filters: employeeId, pipelineStatus, changeAgentRequired, jotform, hasChangeAgentHistory. Returns compact summaries.',
+      description: 'List students (newest first). Optional filters: employeeId, pipelineStatus, changeAgentRequired, jotform, hasChangeAgentHistory. Returns compact summaries. ' +
+        'Pagination: limit (default 25, max 500) and cursor (nextCursor from the previous page). The reply has totalCount, hasMore and nextCursor — if hasMore is true, page on.',
       inputSchema: {
         employeeId: z.string().optional(), pipelineStatus: z.string().optional(),
         changeAgentRequired: z.boolean().optional(), jotform: z.boolean().optional(),
-        hasChangeAgentHistory: z.boolean().optional(), limit: z.number().int().min(1).max(100).optional(),
+        hasChangeAgentHistory: z.boolean().optional(), limit: z.number().int().min(1).max(500).optional(),
+        cursor: z.string().optional(),
       },
     }, async (f: q.StudentFilters) => json(await q.listStudents(f)));
 
@@ -266,8 +268,17 @@ export function getMcpHandler() {
       inputSchema: { studentId: z.string().optional(), status: z.string().optional(), limit: z.number().int().min(1).max(100).optional() },
     }, async (o: { studentId?: string; status?: string; limit?: number }) => json(await q.listInvoices(o)));
 
-    s.registerTool('list_reminders', { description: 'List student reminders.', inputSchema: { limit: z.number().int().min(1).max(200).optional() } },
-      async ({ limit }: { limit?: number }) => json(await q.listReminders({ limit })));
+    s.registerTool('list_reminders', {
+      description: 'List student reminders, oldest first (createdAt). Filters: status (active | dismissed), dismissedSince (YYYY-MM-DD, implies dismissed), studentId. ' +
+        'Pagination: limit (default 50, max 1000) and cursor (nextCursor from the previous page). The reply has totalCount, hasMore and nextCursor.',
+      inputSchema: {
+        status: z.enum(['active', 'dismissed']).optional(),
+        dismissedSince: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        studentId: z.string().optional(),
+        limit: z.number().int().min(1).max(1000).optional(),
+        cursor: z.string().optional(),
+      },
+    }, async (f: q.ReminderFilters) => json(await q.listReminders(f)));
 
     s.registerTool('list_events', { description: 'List upcoming events.', inputSchema: {} }, async () => json(await q.listEvents()));
 
