@@ -120,14 +120,26 @@ export async function GET(req: NextRequest) {
   try {
     const slot = currentSlot();
     if (aiAllowed && slot && (await getIntakeSettings()).scheduledIntake && !(await isSlotDone(slot))) {
-      const started = fetch(new URL('/api/email/intake', req.nextUrl.origin), {
+      // The site's public address. Behind App Hosting, req.nextUrl.origin is the container's
+      // own port with the visitor's https ("https://0.0.0.0:8080"), which nothing answers.
+      const origin = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+      const started = fetch(new URL('/api/email/intake', origin), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
         body: JSON.stringify({ action: 'scheduled' }),
-      }).catch((e) => console.error('[cron/inbox] could not start:', e));
-      // Long enough for the request to be on its way; not waiting for the result.
-      await Promise.race([started, new Promise((r) => setTimeout(r, 3000))]);
-      inbox = { started: slot };
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`the inbox check answered ${res.status}`);
+          return null;
+        })
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.error('[cron/inbox] failed:', message);
+          return message;
+        });
+      // Long enough for the request to be on its way, or to fail; not waiting for the result.
+      const failed = await Promise.race([started, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+      inbox = failed ? { slot, error: failed } : { started: slot };
     }
   } catch (e) {
     console.error('[cron/inbox] failed:', e);
