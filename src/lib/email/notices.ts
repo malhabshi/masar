@@ -19,8 +19,15 @@
 //   other (a changed requirement, a new deadline…)
 //       A note to each affected student; no status changes.
 //
-// Accepted and Rejected applications are never touched. Every affected student gets an
-// admin note and a chat message, and the full list goes into the email's summary.
+// Accepted and Rejected applications are never touched. A notice that names no course
+// changes nothing by itself — it is reported for a person to check. Only an application
+// that was changed gets an admin note; nothing is posted in the affected students' chats,
+// and the email's own chat note says how many were affected, not who (the AI Activity
+// page and the notice record have the list).
+//
+// 2026-10-05: one student's "offers are currently on hold for the chosen programme" was
+// read as a notice for all of INTO Newcastle — 9 applications rejected, 5 courses closed,
+// 84 chat messages. Hence the stricter detection and the rules above.
 //
 // "Not approved by the KCO" is checked against the Approved Universities list first: when
 // the list shows the course as approved, nothing is rejected or closed — the students are
@@ -31,8 +38,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
 import { AI_DOC_MODEL, isAiConfigured } from '@/lib/ai/config';
-import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
-import { sendChatMessage, updateApplicationStatus } from '@/lib/actions';
+import { updateApplicationStatus } from '@/lib/actions';
 import { companyForAddress } from './companies';
 import { newestMessage } from './text';
 import type { InboxMessage } from './inbox';
@@ -72,7 +78,7 @@ A notice is a general statement about a university, college, course or intake, f
 
 scope: "new" when only new applications are affected (the usual case); "all" only when the email says existing applications are cancelled or will not be processed either.
 
-Not a notice: a decision about this one student (their offer, their rejection, their missing document), marketing, newsletters, general greetings. Only use the newest message — quoted older messages are not included. If there is no notice, return an empty list.`;
+Not a notice: anything about this one student's application, even when it is worded generally — their offer, their rejection, their missing document, "offers are currently on hold for the chosen programme", "please email us again once the intake is closer", "the course you applied for is full". These emails are replies about one application; "the chosen programme" / "this course" / "your application" means that student's. A notice must say plainly that it applies to everyone — all applicants, all students, all new applications, the course or university for everybody. When in doubt, it is not a notice. Also not a notice: marketing, newsletters, general greetings. Only use the newest message — quoted older messages are not included. If there is no notice, return an empty list.`;
 
 const DETECT_TOOL: Anthropic.Tool = {
   name: 'record_notices',
@@ -290,48 +296,45 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
       const held = listed.length > 0;
       const heldText = `${company} says ${target} is not KCO-approved, but your Approved Universities list shows it as approved (${listed[0] ?? ''}). Nothing was changed — please confirm with the KCO.`;
 
+      // A notice that names no course is too broad to act on by itself: a whole university
+      // closed is rare, and a misread reply would reject every application there.
+      const actOn = !held && !!n.course;
       const toReject: ApplicationStatus[] =
-        n.kind === 'closed' || n.kind === 'paused'
+        actOn && (n.kind === 'closed' || n.kind === 'paused')
           ? n.scope === 'all'
             ? ['Pending', 'Missing Items', 'Submitted']
             : ['Pending', 'Missing Items']
           : [];
 
       const touched: string[] = [];
+      let rejected = 0;
       for (const c of hit) {
         if (c.app.status === 'Rejected') continue;
         // Accepted is never changed by an email — but an offer for a course that has just
         // been closed or found not KCO-approved is exactly what someone needs to look at.
-        const reject = !held && c.app.status !== 'Accepted' && toReject.includes(c.app.status);
-        const what = held
-          ? `${c.app.university} (${c.app.status}) — held, the list says approved`
-          : reject
-            ? `${c.app.university} → Rejected`
-            : `${c.app.university} (${c.app.status}) — noted${c.app.status === 'Accepted' ? ', please check' : ''}`;
-        touched.push(`${c.studentName}: ${what}`);
-        if (opts.dryRun) continue;
+        const reject = c.app.status !== 'Accepted' && toReject.includes(c.app.status);
+        touched.push(`${c.studentName}: ${c.app.university} (${c.app.status})${reject ? ' → Rejected' : ''}`);
+        if (opts.dryRun || !reject) continue;
 
-        if (reject) {
-          const result = await updateApplicationStatus(
-            c.studentId,
-            c.app.university,
-            c.app.major,
-            'Rejected',
-            c.studentName,
-            c.employeeId,
-            `${company}: ${n.summary}`.slice(0, 200),
-          );
-          if (result.success) {
-            await logAiAction({
-              source: 'notice',
-              summary: `${c.app.university}: ${c.app.status} → Rejected (notice from ${company})`,
-              reason: `${n.summary} — "${n.evidence}"`,
-              studentId: c.studentId,
-              studentName: c.studentName,
-              undo: { type: 'app_status', university: c.app.university, major: c.app.major, from: c.app.status, to: 'Rejected', rejectionReason: c.app.rejectionReason ?? null },
-            });
-          }
-        }
+        const result = await updateApplicationStatus(
+          c.studentId,
+          c.app.university,
+          c.app.major,
+          'Rejected',
+          c.studentName,
+          c.employeeId,
+          `${company}: ${n.summary}`.slice(0, 200),
+        );
+        if (!result.success) continue;
+        rejected++;
+        await logAiAction({
+          source: 'notice',
+          summary: `${c.app.university}: ${c.app.status} → Rejected (notice from ${company})`,
+          reason: `${n.summary} — "${n.evidence}"`,
+          studentId: c.studentId,
+          studentName: c.studentName,
+          undo: { type: 'app_status', university: c.app.university, major: c.app.major, from: c.app.status, to: 'Rejected', rejectionReason: c.app.rejectionReason ?? null },
+        });
         await db()
           .collection('students')
           .doc(c.studentId)
@@ -339,34 +342,23 @@ export async function handleCompanyNotices(message: InboxMessage, opts: { dryRun
             adminNotes: FieldValue.arrayUnion({
               id: `note-notice-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               authorId: 'email-intake',
-              content: held
-                ? `Notice from ${company} (${message.date.slice(0, 10)}): ${heldText} "${n.evidence}"`
-                : `Notice from ${company} (${message.date.slice(0, 10)}): ${n.summary}${reject ? ' — this application set to Rejected.' : ''} "${n.evidence}"`,
+              content: `Notice from ${company} (${message.date.slice(0, 10)}): ${n.summary} — this application set to Rejected. "${n.evidence}"`,
               createdAt: new Date().toISOString(),
             }),
           });
-        await ensureChatBotUser();
-        await sendChatMessage(
-          c.studentId,
-          CHAT_BOT_USER_ID,
-          held
-            ? `⚠️ ${heldText}\nThis concerns ${c.app.university} (${c.app.status}).`
-            : `📢 ${company}: ${n.summary}\n${reject ? `${c.app.university} has been set to Rejected — it can no longer be submitted.` : `This may affect ${c.app.university} (${c.app.status}); please check.`}`,
-          ['admins', 'departments'],
-        ).catch(() => undefined);
       }
 
       let catalogue: string[] = [];
       if (held) lines.push(`   ⚠️ Not applied: ${heldText}`);
-      if (!held && !opts.dryRun && (n.kind === 'closed' || n.kind === 'paused' || n.kind === 'reopened')) {
+      else if (!n.course && n.kind !== 'other') lines.push(`   ⚠️ Not applied: the notice names no course. Please check it before acting.`);
+      if (actOn && !opts.dryRun && (n.kind === 'closed' || n.kind === 'paused' || n.kind === 'reopened')) {
         catalogue = await updateApprovedUniversities(n, n.kind === 'reopened');
       }
 
-      lines.push(
-        touched.length
-          ? `   Affected students (${touched.length}): ${touched.join('; ')}`
-          : `   No open application matches ${target}.`,
-      );
+      // How many, not who: the list is on the AI Activity page and in the notice record.
+      if (!touched.length) lines.push(`   No open application matches ${target}.`);
+      else if (rejected) lines.push(`   ${rejected} application(s) set to Rejected; ${touched.length - rejected} more at ${target} may be affected — see AI Activity.`);
+      else lines.push(`   ${touched.length} application(s) at ${target} may be affected; none was changed.`);
       if (catalogue.length) {
         lines.push(`   Approved Universities marked ${n.kind === 'reopened' ? 'open' : 'closed'}: ${catalogue.join('; ')}`);
       }

@@ -1,11 +1,12 @@
 // Announcing an incoming email in the student's internal staff chat.
 //
-// Recipients are resolved so the right people actually get a notification:
+// Who is mentioned, as the admin set it (2026-10-05):
 //   - the assigned employee   (student.employeeId is a CIVIL ID, so it needs a lookup)
-//   - 'admins'                (every admin user)
-//   - 'departments'           (department users whose department matches the student's
-//                              application countries — a UK applicant reaches UK, an
-//                              Australian one reaches AU/NZ; resolved inside sendChatMessage)
+//   - the owner               (MCP_OWNER_USER_ID — the admin who runs masar), not every admin
+//   - the department for the email's university: a UK university reaches the UK team only,
+//     even when the student also applies to the USA; a USA school reaches no department —
+//     the owner and the assigned employee only. When the university is not one of the
+//     student's applications, the departments for all of them ('departments').
 
 import Anthropic from '@anthropic-ai/sdk';
 import { adminDb } from '@/lib/firebase/admin';
@@ -13,6 +14,8 @@ import { sendChatMessage } from '@/lib/actions';
 import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
 import { getAnthropicClient } from '@/lib/ai/client';
 import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
+import { universityWords } from './universities';
+import type { Application, Country } from '@/lib/types';
 
 /** Look up the user id of the employee assigned to a student, given their civil ID. */
 export async function findEmployeeUserIdByCivilId(civilId?: string | null): Promise<string | null> {
@@ -23,6 +26,29 @@ export async function findEmployeeUserIdByCivilId(civilId?: string | null): Prom
   } catch {
     return null;
   }
+}
+
+/** null: no department is told (USA schools — the owner and the assigned employee only). */
+const DEPARTMENT_FOR: Partial<Record<Country, string | null>> = { UK: 'UK', USA: null, Australia: 'AU/NZ', 'New Zealand': 'AU/NZ' };
+
+/** The department team for the university an email is about, as user ids; null when unknown. */
+export async function departmentFor(studentId: string, university: string | null): Promise<string[] | null> {
+  if (!adminDb || !university) return null;
+  const words = universityWords(university);
+  if (!words.size) return null;
+  const apps = ((await adminDb.collection('students').doc(studentId).get()).data()?.applications ?? []) as Application[];
+  // The application sharing the most distinctive words ("Newcastle University International
+  // Study Centre" is "Newcastle University - INTO").
+  let best: { app: Application; score: number } | null = null;
+  for (const app of apps) {
+    const score = [...universityWords(app.university)].filter((w) => words.has(w)).length;
+    if (score && (!best || score > best.score)) best = { app, score };
+  }
+  const department = best ? DEPARTMENT_FOR[best.app.country] : undefined;
+  if (department === undefined) return null;
+  if (department === null) return [];
+  const team = await adminDb.collection('users').where('role', '==', 'department').where('department', '==', department).get();
+  return team.docs.map((d) => d.id);
 }
 
 const SUMMARY_SYSTEM = `You summarise incoming student emails for a Kuwaiti study-abroad agency's internal staff chat. Staff are busy and read on their phones, so every word must earn its place.
@@ -154,7 +180,7 @@ export type ChatAnnouncementResult = {
 
 /**
  * Post an "email received" note into the student's internal chat, mentioning the
- * assigned employee, all admins, and the relevant department.
+ * assigned employee, the owner and the department for the email's university.
  */
 export async function announceEmailInChat(
   input: ChatAnnouncement,
@@ -187,12 +213,15 @@ export async function announceEmailInChat(
     }
     const content = lines.join('\n').trim();
 
-    // Assigned employee + all admins + the student's own department(s).
     const employeeUserId = await findEmployeeUserIdByCivilId(input.employeeCivilId);
+    const owner = process.env.MCP_OWNER_USER_ID?.trim();
+    const team = await departmentFor(input.studentId, summary.university).catch(() => null);
     const recipientIds = [
-      ...(employeeUserId ? [employeeUserId] : []),
-      'admins',
-      'departments',
+      ...new Set([
+        ...(employeeUserId ? [employeeUserId] : []),
+        ...(owner ? [owner] : ['admins']),
+        ...(team ?? ['departments']),
+      ]),
     ];
 
     const result = await sendChatMessage(input.studentId, CHAT_BOT_USER_ID, content, recipientIds);

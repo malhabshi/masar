@@ -129,7 +129,9 @@ export type MessageHeader = {
  */
 /**
  * Every message in the inbox since `since` that the system has not labelled yet — read or
- * unread — newest first. The agency's own messages (the filing receipts) are left out.
+ * unread — oldest first, so a backlog is handled in the order it arrived: the application
+ * received before the offer, and nothing old left waiting behind new mail. The agency's
+ * own messages (the filing receipts) are left out.
  *
  * Gmail's own search does the filtering; its after: works by whole days, so the caller
  * makes the exact cut on each message's date. If that search is unavailable, everything
@@ -154,7 +156,7 @@ export async function listUnhandledUids(since: Date): Promise<number[]> {
         uids = false;
       }
       if (!uids) uids = (await client.search({ since: day }, { uid: true })) || [];
-      return [...uids].sort((a, b) => b - a);
+      return [...uids].sort((a, b) => a - b);
     } finally {
       lock.release();
     }

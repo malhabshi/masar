@@ -9,8 +9,10 @@
 //                    offer, or the course is not approved by the KCO.
 //
 // Guard rails, enforced here rather than left to the model:
-//   - Accepted and Rejected are final: an email never changes them. If it seems to
-//     disagree, that is reported in the chat for a person to look at.
+//   - Accepted and Rejected are final: an email never changes them, except that an offer
+//     turns Rejected into Accepted. An acknowledgement or document request arriving after
+//     the decision changes nothing and is not reported; an email that suggests Rejected
+//     for an Accepted application is reported in the chat for a person to look at.
 //   - Nothing moves back to Pending, and Submitted never moves back to Missing Items
 //     unless the email says the application cannot proceed without documents.
 //   - Only applications already on the student are changed; an offer for a university
@@ -48,7 +50,7 @@ const SYSTEM = `You update a Kuwaiti study-abroad agency's application tracker f
 You are given the email (and the text of any attached letters) and the student's applications, each with an index and its current status. Call record_status_changes exactly once.
 
 The agency's statuses:
-- "Submitted": the application has been sent to the university and no offer has been received yet. An "application received / under review / we have your application" email.
+- "Submitted": the application has been sent to the university and no offer has been received yet. An "application received / under review / we have your application" email. Also an offer that is on hold, delayed or deferred ("offers are currently on hold for the chosen programme", "please email us again once the intake is closer") — the application is in, the offer has not come: Submitted until the offer arrives.
 - "Missing Items": the application cannot be submitted or processed until documents or information are provided. "Your application is incomplete", "on hold until we receive…".
 - "Accepted": an offer was received — conditional or unconditional. An offer letter, "we are pleased to offer you…".
 - "Rejected": the course is not found or closed, the application was unsuccessful or withdrawn, there is no possible way to get an offer, or the KCO says the course/university is not approved.
@@ -383,9 +385,19 @@ export async function updateApplicationsFromEmail(input: {
         continue;
       }
       if (FINAL.includes(app.status)) {
-        change.note = `Not changed — ${app.status} is final. Check whether the email means it should be ${to}.`;
-        changes.push(change);
-        continue;
+        // An "application received" or a document request arriving after the decision is
+        // mail out of order, not a conflict: nothing to change and nothing to post.
+        if (to === 'Submitted' || to === 'Missing Items') {
+          alreadyCorrect.push(`${app.university}: ${app.status}`);
+          continue;
+        }
+        // An offer letter outranks an earlier Rejected (a course said to be closed, a
+        // misread notice): the offer is applied. Accepted → Rejected is still only flagged.
+        if (!(app.status === 'Rejected' && to === 'Accepted')) {
+          change.note = `Not changed — ${app.status} is final. Check whether the email means it should be ${to}.`;
+          changes.push(change);
+          continue;
+        }
       }
       if (input.pastEmail && to !== 'Accepted' && to !== 'Rejected') {
         change.note = 'Not changed — from an older email, only an offer or a rejection is applied.';

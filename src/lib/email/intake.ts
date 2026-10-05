@@ -324,7 +324,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
   }
 
   // Phase 1 — which messages to look at: mail the system has not labelled yet, read or
-  // unread, newest first. The label search leaves handled mail out, and the claims below
+  // unread, oldest first. The label search leaves handled mail out, and the claims below
   // catch anything whose label failed to apply.
   let uids: number[];
   let since: Date;
@@ -358,8 +358,8 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
 
   // Phase 2 — walk the list a page of envelopes at a time until `limit` unhandled
   // messages are found or the list ends; download in full only those. In test mode only
-  // the chosen student's mail counts toward the limit — otherwise the newest mail of
-  // other students fills every batch and an older email for that student is never reached.
+  // the chosen student's mail counts toward the limit — otherwise other students' mail
+  // fills every batch and that student's email is never reached.
   const messages: InboxMessage[] = [];
   for (let i = 0; i < uids.length && messages.length < limit; i += 50) {
     const page = await fetchHeadersForUids(uids.slice(i, i + 50));
