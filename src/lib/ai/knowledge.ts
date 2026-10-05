@@ -76,6 +76,7 @@ export const WORK_GUIDE: Record<string, { title: string; text: string }> = {
 - system: automatic notifications (status changes, transfers, new unassigned students, final choice…). For these, new = unread and completed = read.
 - update: a management broadcast to staff (can go to everyone).
 - Transfer and Deletion requests, IELTS Course and Unified Exam requests are kept off the Tasks page; the latter two have their own pages.
+- IELTS Course: each course has a timing and a ballroom, set by an admin on the request type and kept on the request (courseTiming, courseBallroom). Registering a student adds a reminder on the student's page for the course start and emails every detail from the agency mailbox to the employee who registered.
 - WhatsApp templates (notification_templates) drive outgoing WhatsApp messages for each event.
 - Reminders (student_reminders) send four stages: on creation, 24h before, 1h before, 5 minutes before — to admins, the assigned employee, a department, everyone, or chosen people.`,
   },

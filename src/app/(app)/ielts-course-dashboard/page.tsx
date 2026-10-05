@@ -145,7 +145,7 @@ export default function IeltsCourseDashboard() {
     if (filteredTasks.length === 0) return;
 
     // CSV Headers
-    const headers = ["Student Name", "Phone Number", "Email", "Course Type", "Exam Date", "Employee Name", "Admin Note", "Sent to IDP"];
+    const headers = ["Student Name", "Phone Number", "Email", "Course Type", "Exam Date", "Timing", "Ballroom", "Employee Name", "Admin Note", "Sent to IDP"];
     
     // CSV Content
     const rows = filteredTasks.map(task => [
@@ -154,6 +154,8 @@ export default function IeltsCourseDashboard() {
       task.data?.studentEmail || '',
       task.data?.courseOption || '',
       task.data?.courseStartDate ? format(toDate(task.data.courseStartDate)!, 'yyyy-MM-dd') : '',
+      task.data?.courseTiming || '',
+      task.data?.courseBallroom || '',
       task.authorName || '',
       task.data?.adminNote || '',
       task.data?.sentToIdp ? 'Yes' : 'No'
@@ -302,6 +304,11 @@ export default function IeltsCourseDashboard() {
                           <span className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-semibold">
                             {task.data?.courseOption || 'General'}
                           </span>
+                          {(task.data?.courseTiming || task.data?.courseBallroom) && (
+                            <span className="block text-[11px] text-muted-foreground mt-1">
+                              {[task.data?.courseTiming, task.data?.courseBallroom].filter(Boolean).join(' · ')}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="font-medium text-blue-600">
                           {task.data?.courseStartDate ? formatDate(task.data.courseStartDate) : 'N/A'}

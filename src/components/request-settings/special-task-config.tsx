@@ -1,13 +1,17 @@
 
 'use client';
 
-import { useFormContext } from 'react-hook-form';
+import { useEffect } from 'react';
+import { useFieldArray, useFormContext } from 'react-hook-form';
 import { FormControl, FormField, FormItem, FormLabel, FormDescription, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Separator } from '../ui/separator';
+import { Button } from '@/components/ui/button';
+import { Plus, Trash2 } from 'lucide-react';
+import { DEFAULT_IELTS_COURSES } from '@/lib/ielts-course';
 
 export function SpecialTaskConfigSection({ form }: { form: any }) {
   const watchExamTypes = form.watch('specialConfig.examTypes') || [];
@@ -264,10 +268,45 @@ export function SpecialTaskConfigSection({ form }: { form: any }) {
                   </FormItem>
                 )} />
               </div>
+              <IeltsCoursesEditor form={form} />
             </CardContent>
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The IELTS courses on offer, each with its timing and ballroom. */
+function IeltsCoursesEditor({ form }: { form: any }) {
+  const courses = useFieldArray({ control: form.control, name: 'specialConfig.ielts_course.courses' });
+
+  // Start from the four courses the form has always offered, so their names stay the same.
+  useEffect(() => {
+    if (courses.fields.length === 0) courses.replace(DEFAULT_IELTS_COURSES);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="md:col-span-2 space-y-2">
+      <FormLabel className="text-xs">Courses — timing (Kuwait time) and ballroom</FormLabel>
+      <FormDescription className="text-[10px]">
+        Shown to the employee when registering, kept on the request, and sent in the email to the employee. Leave the ballroom empty for an online course.
+      </FormDescription>
+      {courses.fields.map((row, i) => (
+        <div key={row.id} className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_2fr_auto] gap-2 items-center">
+          <Input placeholder="Course name" className="h-8 text-xs" {...form.register(`specialConfig.ielts_course.courses.${i}.name`)} />
+          <Input type="time" aria-label="Starts" className="h-8 text-xs" {...form.register(`specialConfig.ielts_course.courses.${i}.startTime`)} />
+          <Input type="time" aria-label="Ends" className="h-8 text-xs" {...form.register(`specialConfig.ielts_course.courses.${i}.endTime`)} />
+          <Input placeholder="Ballroom" className="h-8 text-xs" {...form.register(`specialConfig.ielts_course.courses.${i}.ballroom`)} />
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Remove course" onClick={() => courses.remove(i)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => courses.append({ name: '', startTime: '', endTime: '', ballroom: '' })}>
+        <Plus className="h-3 w-3 mr-1" /> Add course
+      </Button>
     </div>
   );
 }

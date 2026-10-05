@@ -273,6 +273,8 @@ async function rememberParsed(
   direction: 'in' | 'out',
   students: StudentNameRecord[],
 ): Promise<'stored' | 'exists' | 'skipped' | 'unmatched'> {
+  // Mail masar sends to staff (an IELTS course registration) is not mail with a school.
+  if (parsed.headers.get('x-masar-internal')) return 'skipped';
   const body = emailBodyText(parsed);
   const match = matchStudentByName([parsed.subject ?? '', addressList(parsed.to), body].join('\n'), students);
   if (match.kind !== 'matched') return 'unmatched';

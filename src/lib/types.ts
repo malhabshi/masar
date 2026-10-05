@@ -380,6 +380,15 @@ export interface GpaMajor {
   createdAt: string;
 }
 
+export interface IeltsCourse {
+  name: string;
+  /** "HH:mm", Kuwait time. */
+  startTime?: string;
+  endTime?: string;
+  /** Where the course is held; empty for an online course. */
+  ballroom?: string;
+}
+
 export interface SpecialTaskConfig {
   examTypes: ('ielts' | 'toefl' | 'ielts_retake' | 'ielts_course' | 'unified_exam')[];
   ielts: {
@@ -404,6 +413,8 @@ export interface SpecialTaskConfig {
   ielts_course?: {
     showOptions: boolean;
     showSundaysOnly: boolean;
+    /** The courses on offer, each with its timing and ballroom. Empty: the standard four. */
+    courses?: IeltsCourse[];
   };
   unified_exam?: {
     showDeliveryMethod: boolean;

@@ -30,6 +30,7 @@ import { Badge } from '../ui/badge';
 import { useCollection } from '@/firebase/client';
 import { useUser } from '@/hooks/use-user';
 import { validateFile, ALLOWED_FILE_EXTENSIONS } from '@/lib/file-validation';
+import { courseTimingLabel, ieltsCourses } from '@/lib/ielts-course';
 import { where } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
@@ -137,13 +138,6 @@ const COMPANY_COLORS: Record<string, string> = {
 // Default exam prices (KWD). TOEFL costs more than IELTS.
 const IELTS_EXAM_PRICE = 94;
 const TOEFL_EXAM_PRICE = 108;
-
-const IELTS_COURSE_OPTIONS = [
-  'One week "ielts" In-Person',
-  'One week "ielts" Online',
-  'One month "ielts" In-Person',
-  'One on One class Inperson'
-];
 
 export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSubmitting }: DynamicTaskFormProps) {
   const config = requestType.specialConfig;
@@ -1229,12 +1223,22 @@ export function DynamicTaskForm({ student, requestType, onSubmit, onCancel, isSu
                   <FormLabel>Select Course Option *</FormLabel>
                   <FormControl>
                     <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {IELTS_COURSE_OPTIONS.map((option) => (
-                        <FormItem key={option} className="flex items-center space-x-3 space-y-0 border p-4 rounded-lg bg-muted/20">
-                          <FormControl><RadioGroupItem value={option} /></FormControl>
-                          <FormLabel className="font-medium cursor-pointer">{option}</FormLabel>
-                        </FormItem>
-                      ))}
+                      {ieltsCourses(config.ielts_course).map((course) => {
+                        const timing = courseTimingLabel(course);
+                        return (
+                          <FormItem key={course.name} className="flex items-center space-x-3 space-y-0 border p-4 rounded-lg bg-muted/20">
+                            <FormControl><RadioGroupItem value={course.name} /></FormControl>
+                            <FormLabel className="font-medium cursor-pointer">
+                              {course.name}
+                              {(timing || course.ballroom) && (
+                                <span className="block text-xs font-normal text-muted-foreground mt-1">
+                                  {[timing, course.ballroom].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      })}
                     </RadioGroup>
                   </FormControl>
                   <FormMessage />

@@ -3,6 +3,8 @@
 import { adminDb, adminAuth, storage } from '@/lib/firebase/admin';
 import { jsPDF } from 'jspdf';
 import { formatKuwaitTime } from '@/lib/timestamp-utils';
+import { chosenCourse } from '@/lib/ielts-course';
+import { afterIeltsCourseRegistration } from '@/lib/ielts-course-registration';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import {
   COMPANY_LIMIT,
@@ -724,6 +726,11 @@ export async function createStudentTask(authorId: string, studentId: string, req
     }
     const creator = await getUser(authorId);
     const recipientIdsForTask = [...specificUserIds, ...recipientGroups];
+    // An IELTS course keeps the timing and ballroom it has today, read here rather than
+    // taken from the form, so the request shows what the course was when booked.
+    const ieltsCourse = dynamicData?.examType === 'ielts_course'
+      ? chosenCourse(requestTypeData.specialConfig?.ielts_course, dynamicData?.courseOption)
+      : null;
     const taskRef = await adminDb!.collection('tasks').add({
       authorId, createdBy: authorId, authorName: creator?.name || 'Staff',
       recipientId: recipientIdsForTask[0] || 'all',
@@ -731,7 +738,11 @@ export async function createStudentTask(authorId: string, studentId: string, req
       content: description, createdAt: new Date().toISOString(), status: 'new', category: 'request', replies: [],
       studentId, studentName: studentData.name, studentPhone: studentData.phone,
       taskType: requestTypeData.name, requestTypeId: requestTypeId,
-      data: { ...(dynamicData || {}), studentName: studentData.name, studentEmail: studentData.email, studentPhone: studentData.phone, requestedBy: creator?.email, requestedByName: creator?.name }
+      data: {
+        ...(dynamicData || {}),
+        ...(ieltsCourse ? { courseTiming: ieltsCourse.courseTiming, courseBallroom: ieltsCourse.courseBallroom } : {}),
+        studentName: studentData.name, studentEmail: studentData.email, studentPhone: studentData.phone, requestedBy: creator?.email, requestedByName: creator?.name,
+      }
     });
     // An IELTS retake taken WITHOUT choosing a saved portal reference means the IDP
     // login was typed by hand. Keep it as a portal reference so the next retake can be
@@ -805,6 +816,20 @@ export async function createStudentTask(authorId: string, studentId: string, req
           }),
         }).catch(e => console.error('[createStudentTask] could not write the admin note:', e));
       }
+    }
+
+    // A reminder on the student's page and an email to the employee, straight away.
+    if (ieltsCourse) {
+      await afterIeltsCourseRegistration({
+        taskId: taskRef.id,
+        studentId,
+        student: studentData,
+        registeredBy: creator,
+        option: String(dynamicData?.courseOption ?? ''),
+        ...ieltsCourse,
+        courseStartDate: dynamicData?.courseStartDate,
+        notes: dynamicData?.notes,
+      });
     }
 
     await refreshStudentActivity(studentId);

@@ -311,7 +311,7 @@ export function TaskDetailsDialog({
   // Details" section so no employee-entered value is ever silently dropped.
   const HANDLED_DATA_KEYS = new Set<string>([
     'internalNumber', 'passportName', 'examType', 'ieltsSubtype', 'lrwTime', 'requestedDate',
-    'courseStartDate', 'courseOption', 'retakeSection', 'preferredDate', 'preferredTime', 'amount',
+    'courseStartDate', 'courseOption', 'courseTiming', 'courseBallroom', 'retakeSection', 'preferredDate', 'preferredTime', 'amount',
     'guardianFirstNameEn', 'guardianLastNameEn', 'guardianDob', 'guardianPhone', 'originalExamDate',
     'idpUsername', 'idpPassword', 'notes', 'isPaid',
     // Auto-added to every task's data (createStudentTask) and already shown in the header.
@@ -459,6 +459,8 @@ export function TaskDetailsDialog({
                 {renderDataField('Requested Date', data.requestedDate, Calendar, true, undefined, true)}
                 {renderDataField('Course Start', data.courseStartDate, Calendar)}
                 {renderDataField('Course Option', data.courseOption)}
+                {renderDataField('Course Timing', data.courseTiming, Clock)}
+                {renderDataField('Ballroom', data.courseBallroom)}
                 {renderDataField('Retake Section', data.retakeSection)}
                 {renderDataField('Preferred Date', data.preferredDate, Calendar, true, 'text-danger font-bold', true)}
                 {renderDataField('Preferred Time', data.preferredTime, Clock, false, undefined, true)}
