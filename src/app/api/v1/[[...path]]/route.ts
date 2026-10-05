@@ -6,7 +6,7 @@
 //
 // Examples:
 //   GET /api/v1                          -> index of endpoints
-//   GET /api/v1/students?limit=50        -> student summaries (filters below)
+//   GET /api/v1/students?limit=50        -> student summaries (filters below; offset to page)
 //   GET /api/v1/students?q=<name|phone>  -> search students
 //   GET /api/v1/students/<id>            -> one full student profile
 //   GET /api/v1/students/<id>/chat       -> internal chat for a student
@@ -63,7 +63,7 @@ const INDEX = {
   readOnly: true,
   auth: 'Send header "Authorization: Bearer <token>" (or ?token=<token> for quick tests).',
   endpoints: {
-    'GET /api/v1/students': 'List students. Query: q (name/phone search), employeeId, pipelineStatus, changeAgentRequired, jotform, hasChangeAgentHistory, limit (max 100).',
+    'GET /api/v1/students': 'List students, newest first. Query: q (name/phone search), employeeId, pipelineStatus, changeAgentRequired, jotform, hasChangeAgentHistory, limit (max 500), offset. The reply carries total (all matches), count (this page) and nextOffset (null on the last page).',
     'GET /api/v1/students/{id}': 'Full student profile.',
     'GET /api/v1/students/{id}/chat': 'Internal chat messages. Query: limit (max 200).',
     'GET /api/v1/students/{id}/tasks': 'Tasks attached to the student.',
@@ -73,7 +73,7 @@ const INDEX = {
     'GET /api/v1/employees': 'All staff/users.',
     'GET /api/v1/universities': 'Approved universities.',
     'GET /api/v1/invoices': 'Invoices. Query: studentId, status, limit.',
-    'GET /api/v1/reminders': 'Student reminders. Query: limit.',
+    'GET /api/v1/reminders': 'Student reminders, oldest first. Query: status (active | dismissed), dismissedSince (YYYY-MM-DD; dismissals before 2026-10-05 carry no date), studentId, limit (max 1000), offset. The reply carries total, count and nextOffset as for students.',
     'GET /api/v1/events': 'Upcoming events.',
     'GET /api/v1/request-types': 'Task/request types.',
   },
@@ -104,6 +104,7 @@ export async function GET(req: Request, ctx: { params: { path?: string[] } }) {
             jotform: bool(sp.get('jotform')),
             hasChangeAgentHistory: bool(sp.get('hasChangeAgentHistory')),
             limit: num(sp.get('limit'), 25),
+            offset: num(sp.get('offset'), 0),
           }));
         }
         if (sub === 'chat') return jsonResponse(await q.getStudentChat(id, num(sp.get('limit'), 50)));
@@ -144,8 +145,20 @@ export async function GET(req: Request, ctx: { params: { path?: string[] } }) {
           status: sp.get('status') ?? undefined,
           limit: num(sp.get('limit'), 25),
         }));
-      case 'reminders':
-        return jsonResponse(await q.listReminders(num(sp.get('limit'), 50)));
+      case 'reminders': {
+        const status = sp.get('status');
+        if (status && status !== 'active' && status !== 'dismissed') return err(400, 'status must be "active" or "dismissed".');
+        const dismissedSince = sp.get('dismissedSince');
+        if (dismissedSince && !/^\d{4}-\d{2}-\d{2}$/.test(dismissedSince)) return err(400, 'dismissedSince must be a date written YYYY-MM-DD.');
+        if (dismissedSince && status === 'active') return err(400, 'dismissedSince only applies to dismissed reminders.');
+        return jsonResponse(await q.listReminders({
+          status: (status || undefined) as 'active' | 'dismissed' | undefined,
+          dismissedSince: dismissedSince ?? undefined,
+          studentId: sp.get('studentId') ?? undefined,
+          limit: num(sp.get('limit'), 50),
+          offset: num(sp.get('offset'), 0),
+        }));
+      }
       case 'events':
         return jsonResponse(await q.listEvents());
       case 'request-types':

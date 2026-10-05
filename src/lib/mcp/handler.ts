@@ -267,7 +267,7 @@ export function getMcpHandler() {
     }, async (o: { studentId?: string; status?: string; limit?: number }) => json(await q.listInvoices(o)));
 
     s.registerTool('list_reminders', { description: 'List student reminders.', inputSchema: { limit: z.number().int().min(1).max(200).optional() } },
-      async ({ limit }: { limit?: number }) => json(await q.listReminders(limit)));
+      async ({ limit }: { limit?: number }) => json(await q.listReminders({ limit })));
 
     s.registerTool('list_events', { description: 'List upcoming events.', inputSchema: {} }, async () => json(await q.listEvents()));
 

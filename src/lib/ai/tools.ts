@@ -79,7 +79,7 @@ const listStudentsTool: AiTool = {
       employeeId: input.employeeId,
       pipelineStatus: input.pipelineStatus,
       changeAgentRequired: input.changeAgentRequired,
-      limit: input.limit,
+      limit: Math.min(Number(input.limit) || 25, 100),
     }),
 };
 

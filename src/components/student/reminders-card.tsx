@@ -348,7 +348,7 @@ export function RemindersCard({ student, currentUser }: Props) {
   const handleDismiss = async (id: string) => {
     setDismissingId(id);
     try {
-      await updateDoc(doc(firestore, 'student_reminders', id), { status: 'dismissed' });
+      await updateDoc(doc(firestore, 'student_reminders', id), { status: 'dismissed', dismissedAt: new Date().toISOString() });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed', description: e.message });
     } finally {

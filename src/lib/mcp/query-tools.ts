@@ -49,10 +49,22 @@ export type StudentFilters = {
   jotform?: boolean;
   hasChangeAgentHistory?: boolean;
   limit?: number;
+  /** Rows to skip, for paging through more than `limit`. */
+  offset?: number;
 };
 
+/** One page of a longer list: `count` rows here, `total` in all, `nextOffset` null on the last page. */
+function page<T>(rows: T[], offset: number, limit: number) {
+  const slice = rows.slice(offset, offset + limit);
+  const next = offset + slice.length;
+  return { total: rows.length, count: slice.length, offset, limit, nextOffset: next < rows.length ? next : null, rows: slice };
+}
+
+const clampOffset = (n: number | undefined) => Math.max(Math.floor(n ?? 0), 0) || 0;
+
 export async function listStudents(f: StudentFilters = {}) {
-  const limit = Math.min(Math.max(f.limit ?? 25, 1), 100);
+  const limit = Math.min(Math.max(f.limit ?? 25, 1), 500);
+  const offset = clampOffset(f.offset);
   const col = db().collection('students');
 
   // Primary (indexable) equality filter — one only, to avoid composite indexes.
@@ -63,22 +75,19 @@ export async function listStudents(f: StudentFilters = {}) {
   if (f.jotform !== undefined) filters.push(['jotform', f.jotform]);
   if (f.hasChangeAgentHistory !== undefined) filters.push(['hasChangeAgentHistory', f.hasChangeAgentHistory]);
 
-  let rows: Array<{ id: string; d: Record<string, unknown> }>;
-  if (filters.length === 0) {
-    const snap = await col.orderBy('createdAt', 'desc').limit(limit).get();
-    rows = snap.docs.map((doc) => ({ id: doc.id, d: doc.data() }));
-  } else {
-    const [primary, ...rest] = filters;
-    // Fetch a wider window so in-memory secondary filtering doesn't starve the result.
-    const fetchN = rest.length ? 400 : limit;
-    const snap = await col.where(primary[0], '==', primary[1]).limit(fetchN).get();
-    rows = snap.docs
-      .map((doc) => ({ id: doc.id, d: doc.data() }))
-      .filter(({ d }) => rest.every(([k, v]) => d[k] === v))
-      .sort((a, b) => String(b.d.createdAt ?? '').localeCompare(String(a.d.createdAt ?? '')))
-      .slice(0, limit);
-  }
-  return { count: rows.length, students: rows.map((r) => studentSummary(r.id, r.d)) };
+  // Every match, read with only the fields needed to filter and order (student documents
+  // are large), so the total is exact and pages follow one fixed order: newest first.
+  const [primary, ...rest] = filters;
+  const query = primary ? col.where(primary[0], '==', primary[1]) : col;
+  const matches = (await query.select('createdAt', ...rest.map(([k]) => k)).get()).docs
+    .map((doc) => ({ id: doc.id, d: doc.data() }))
+    .filter(({ d }) => rest.every(([k, v]) => d[k] === v))
+    .sort((a, b) => String(b.d.createdAt ?? '').localeCompare(String(a.d.createdAt ?? '')) || a.id.localeCompare(b.id));
+
+  const { rows, ...meta } = page(matches, offset, limit);
+  const docs = rows.length ? await db().getAll(...rows.map((r) => col.doc(r.id))) : [];
+  const students = docs.filter((doc) => doc.exists).map((doc) => studentSummary(doc.id, doc.data() as Record<string, unknown>));
+  return { ...meta, count: students.length, students };
 }
 
 export async function searchStudents(query: string, limit = 20) {
@@ -145,11 +154,30 @@ export async function listInvoices(opts: { studentId?: string; status?: string; 
   return { count: rows.length, invoices: rows.map((r) => scrub({ id: r.id, ...r.d })) };
 }
 
-export async function listReminders(limit = 50) {
-  const lim = Math.min(Math.max(limit, 1), 200);
-  const snap = await db().collection('student_reminders').limit(lim).get();
-  const reminders = snap.docs.map((d) => scrub({ id: d.id, ...d.data() }));
-  return { count: reminders.length, reminders };
+export type ReminderFilters = {
+  status?: 'active' | 'dismissed';
+  /** YYYY-MM-DD: only reminders dismissed on or after it (implies status dismissed). */
+  dismissedSince?: string;
+  studentId?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export async function listReminders(f: ReminderFilters = {}) {
+  const limit = Math.min(Math.max(f.limit ?? 50, 1), 1000);
+  const offset = clampOffset(f.offset);
+  const status = f.status ?? (f.dismissedSince ? 'dismissed' : undefined);
+  const col = db().collection('student_reminders');
+  const snap = await (status ? col.where('status', '==', status) : col).get();
+  const matches = snap.docs
+    .map((d) => ({ id: d.id, d: d.data() }))
+    .filter(({ d }) => !f.studentId || d.studentId === f.studentId)
+    // Dismissals record their time only since 2026-10-05; earlier ones have none.
+    .filter(({ d }) => !f.dismissedSince || String(d.dismissedAt ?? '') >= f.dismissedSince)
+    // Oldest first, so a new reminder lands on the last page and never shifts earlier ones.
+    .sort((a, b) => String(a.d.createdAt ?? '').localeCompare(String(b.d.createdAt ?? '')) || a.id.localeCompare(b.id));
+  const { rows, ...meta } = page(matches, offset, limit);
+  return { ...meta, reminders: rows.map((r) => scrub({ id: r.id, ...r.d })) };
 }
 
 export async function listEvents() {

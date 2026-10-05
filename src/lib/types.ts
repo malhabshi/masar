@@ -688,6 +688,9 @@ export interface Reminder {
   createdByName: string;
   createdAt: string;
   status: 'active' | 'dismissed';
+  /** When it was dismissed; recorded since 2026-10-05. */
+  dismissedAt?: string;
+  dismissedReason?: string;
   notifyWhatsApp: boolean;
   /** Superseded by `stages`; kept so reminders created before staged sending still read correctly. */
   whatsAppSentAt?: string;
