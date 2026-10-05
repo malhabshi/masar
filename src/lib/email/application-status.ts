@@ -3,7 +3,11 @@
 // The agency's rules, as the admin set them:
 //   Pending        — the default; nothing has happened yet. Never set from an email.
 //   Submitted      — the application has been sent; no offer yet ("application received").
-//   Missing Items  — it cannot be submitted / processed until documents are provided.
+//   Missing Items  — the agency cannot submit it yet: an agent or provider will not send it
+//                    until documents are provided. Once the university or provider has the
+//                    application, it is Submitted — an "Information Required / incomplete"
+//                    email puts what they ask for on the Missing Items list, not the status
+//                    (the admin's definition, 2026-10-05).
 //   Accepted       — an offer was received (conditional or unconditional).
 //   Rejected       — the course is not found / closed, there is no possible way to an
 //                    offer, or the course is not approved by the KCO.
@@ -13,8 +17,7 @@
 //     turns Rejected into Accepted. An acknowledgement or document request arriving after
 //     the decision changes nothing and is not reported; an email that suggests Rejected
 //     for an Accepted application is reported in the chat for a person to look at.
-//   - Nothing moves back to Pending, and Submitted never moves back to Missing Items
-//     unless the email says the application cannot proceed without documents.
+//   - Nothing moves back to Pending, and Submitted never moves back to Missing Items.
 //   - Only applications already on the student are changed; an offer for a university
 //     that is not listed is reported, not added.
 //   - "Not approved by the KCO" is checked against the Approved Universities list first:
@@ -51,7 +54,7 @@ You are given the email (and the text of any attached letters) and the student's
 
 The agency's statuses:
 - "Submitted": the application has been sent to the university and no offer has been received yet. An "application received / under review / we have your application" email. An application received email is Submitted even when it adds that processing starts once the application fee is paid (INTO's standard line — the agency does not pay these). Also an offer that is on hold, delayed or deferred ("offers are currently on hold for the chosen programme", "please email us again once the intake is closer") — the application is in, the offer has not come: Submitted until the offer arrives.
-- "Missing Items": the application cannot be submitted or processed until documents or information are provided. "Your application is incomplete", "on hold until we receive…".
+- "Missing Items": the agency cannot submit the application yet — an agent or provider says they will not send it to the university until documents or information are provided ("we cannot submit until we receive…"). Once the university or provider has received the application it is "Submitted", even when they then ask for more to evaluate it ("Thank you for submitting your application… it is incomplete", "Information Required", "we are missing the following") — those documents go on the student's missing items list, which is handled separately, and the status is Submitted.
 - "Accepted": an offer was received — conditional or unconditional. An offer letter, "we are pleased to offer you…".
 - "Rejected": the course is not found or closed, the application was unsuccessful or withdrawn, there is no possible way to get an offer, or the KCO says the course/university is not approved.
 
@@ -404,9 +407,10 @@ export async function updateApplicationsFromEmail(input: {
         changes.push(change);
         continue;
       }
-      if (app.status === 'Submitted' && to === 'Missing Items' && !/incomplete|cannot|can't|unable|on hold|until we receive|before we can/i.test(change.evidence)) {
-        change.note = 'Not changed — the email asks for something but does not say the application is held up by it.';
-        changes.push(change);
+      // Submitted means it has been sent; a request for more documents after that does
+      // not take it back — what is asked for goes on the Missing Items list instead.
+      if (app.status === 'Submitted' && to === 'Missing Items') {
+        alreadyCorrect.push(`${app.university}: Submitted`);
         continue;
       }
       if (to === 'Rejected' && aboutKcoApproval(c.kcoApproval, change.reason, change.evidence)) {

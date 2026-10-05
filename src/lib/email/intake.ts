@@ -245,6 +245,30 @@ async function stashAttachment(att: InboxAttachment, key: string): Promise<strin
   }
 }
 
+/**
+ * Tell the owner on the site, not only in the email's Gmail thread, that an email is
+ * waiting for someone to choose its student.
+ */
+async function notifyUnmatched(message: InboxMessage, reason: string): Promise<void> {
+  if (!adminDb) return;
+  const owner = process.env.MCP_OWNER_USER_ID?.trim();
+  const recipients = owner
+    ? [owner]
+    : (await adminDb.collection('users').where('role', '==', 'admin').get()).docs.map((d) => d.id);
+  if (!recipients.length) return;
+  await adminDb.collection('tasks').add({
+    authorId: 'system',
+    createdBy: 'system',
+    recipientId: recipients[0],
+    recipientIds: recipients,
+    content: `📥 An email could not be matched to a student: "${message.subject}" from ${message.fromName || message.from}. ${reason} Choose the student on the Email Documents page.`,
+    createdAt: new Date().toISOString(),
+    status: 'new',
+    category: 'system',
+    replies: [],
+  });
+}
+
 async function queueForReview(
   message: InboxMessage,
   reason: string,
@@ -522,8 +546,12 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         // An unidentified email carrying a document must never be dropped. An unidentified
         // email with no attachment is usually a newsletter or spam, so it is logged and
         // marked read rather than filling the review queue — unless a member of staff sent
-        // or forwarded it: that is someone asking for it to be dealt with.
-        if (message.attachments.length === 0 && !staffAddresses.has(message.from.toLowerCase())) {
+        // or forwarded it (someone asking for it to be dealt with), or a company wrote about
+        // an application (a name spelt differently from the profile must reach a person,
+        // not vanish under the masar/filed label).
+        const aboutAnApplication =
+          !!(await companyForAddress(message.from)) && ((await screen()).applicationNews || (await screen()).asksForSomething);
+        if (message.attachments.length === 0 && !staffAddresses.has(message.from.toLowerCase()) && !aboutAnApplication) {
           await replyWithReceipt(message, { kind: 'skipped', reason, notices: noticeLines });
           await applyLabel(message.uid, INTAKE_LABELS.noAction);
           result.skipped++;
@@ -542,6 +570,7 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
           ? match.candidates.map((c) => ({ id: c.id, name: c.name }))
           : [];
         await queueForReview(message, reason, candidates);
+        await notifyUnmatched(message, reason).catch((e) => console.error('[email-intake] could not notify:', e));
         await replyWithReceipt(message, { kind: 'queued', reason, attachments: attachmentNames, notices: noticeLines });
         await applyLabel(message.uid, INTAKE_LABELS.review);
         result.queued++;

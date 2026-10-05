@@ -109,10 +109,11 @@ function editDistance(a: string, b: string, max: number): number {
 
 /**
  * The same name with one word spelt a letter or two differently — INTO wrote "Abdulrahman
- * Y A S Alkhamis" for a student registered as "ABDILRAHMAN Y A S ALKHAMIS", and the email
- * was dropped. Only when nothing matches exactly, the name has three or more words, the
- * family name and every other word match exactly, the differing word is a long one with
- * the same first letter, and exactly one student fits.
+ * Y A S Alkhamis" for a student registered as "ABDILRAHMAN Y A S ALKHAMIS", and "ALSALLAL"
+ * for one registered as "ALSALAL"; both emails were dropped. Only when nothing matches
+ * exactly, the name has three or more words, every other word matches exactly, the
+ * differing word (first, middle or family name) is a long one with the same first letter,
+ * and exactly one student fits.
  */
 export function nearMatchStudentByName(
   text: string,
@@ -128,18 +129,20 @@ export function nearMatchStudentByName(
     const words = s.normalized.split(' ');
     const n = words.length;
     if (n < 3) continue;
-    for (const end of at.get(words[n - 1]) ?? []) {
-      const start = end - (n - 1);
-      if (start < 0) continue;
+    // With one word allowed to differ, the first or the last word matches exactly: start
+    // from where either appears.
+    const starts = new Set([...(at.get(words[0]) ?? []), ...(at.get(words[n - 1]) ?? []).map((end) => end - (n - 1))]);
+    for (const start of starts) {
+      if (start < 0 || start + n > tokens.length) continue;
       let differ = 0;
-      for (let k = 0; k < n - 1 && differ <= 1; k++) {
+      for (let k = 0; k < n && differ <= 1; k++) {
         const a = tokens[start + k];
         const b = words[k];
         if (a === b) continue;
         const close = a.length >= 5 && b.length >= 5 && a[0] === b[0] && editDistance(a, b, b.length >= 8 ? 2 : 1) <= (b.length >= 8 ? 2 : 1);
         differ += close ? 1 : 2;
       }
-      if (differ === 1) fits.set(s.id, { student: s, found: tokens.slice(start, end + 1).join(' ') });
+      if (differ === 1) fits.set(s.id, { student: s, found: tokens.slice(start, start + n).join(' ') });
     }
   }
   return fits.size === 1 ? [...fits.values()][0] : null;
