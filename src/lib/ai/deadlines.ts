@@ -11,7 +11,8 @@
 //   change agent         — the date the student must choose an agent by
 // Dated items are announced in the student's internal chat to the assigned employee 7
 // days and 1 day before; passport and IELTS warnings once. Each alert is sent once
-// (ai_deadline_alerts). The full list shows on the AI Activity page.
+// (ai_deadline_alerts). A finalized student gets none in the chat. The full list shows on
+// the AI Activity page.
 //
 // A passport warning also opens a Missing Item "Renewed passport", once per passport. When a
 // newer passport is uploaded and read, auto-fill closes it (autofill.ts). If staff remove it,
@@ -21,7 +22,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase/admin';
 import { sendChatMessage } from '@/lib/actions';
 import { logAiAction } from './action-log';
-import { CHAT_BOT_USER_ID, ensureChatBotUser } from './chat-bot';
+import { CHAT_BOT_USER_ID, ensureChatBotUser, quietWhenFinalized } from './chat-bot';
 import type { DocCard } from './documents';
 import type { Application } from '@/lib/types';
 
@@ -225,6 +226,8 @@ export async function runDeadlineAlerts() {
     if (!stage) continue;
     const ref = db().collection(ALERTS).doc(`${d.key}__${stage}`.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 400));
     if ((await ref.get()).exists) continue;
+    // Not marked sent: if the final choice is cleared, the reminder still comes.
+    if (await quietWhenFinalized(d.studentId)) continue;
 
     const employee = users.find((u) => d.employeeId && u.civilId === d.employeeId);
     const when = d.daysLeft === 0 ? 'today' : d.daysLeft === 1 ? 'tomorrow' : `in ${d.daysLeft} days (${d.date})`;

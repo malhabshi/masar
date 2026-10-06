@@ -72,6 +72,20 @@ export async function saveResponderSettings(
   return next;
 }
 
+/**
+ * A finalized student (a final choice is set) gets no note the AI posts on its own —
+ * deadline reminders, follow-ups, a renewed passport. An email we receive about the student
+ * is still announced, and the AI still answers staff who write to it (the admin, 2026-10-06).
+ */
+export async function quietWhenFinalized(studentId: string): Promise<boolean> {
+  if (!adminDb) return false;
+  try {
+    return !!(await adminDb.collection('students').doc(studentId).get()).data()?.finalChoiceUniversity;
+  } catch {
+    return false;
+  }
+}
+
 let botEnsured = false;
 
 /** Create the bot's user document if it does not exist yet. Safe to call repeatedly. */

@@ -13,6 +13,7 @@
 //   - the same application is chased again only after another 5 days without news;
 //   - when the student has a final choice, only that school is chased — the others are not
 //     where the student is going;
+//   - a finalized student's chat is not told a chase was drafted;
 //   - never an application staff asked to stop chasing (stopFollowUp, from the chat);
 //   - never an application whose emails already hold the decision: the history loaded
 //     before the intake began has offers that never reached the profile. That email is
@@ -23,7 +24,7 @@ import nodemailer from 'nodemailer';
 import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
 import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
-import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
+import { CHAT_BOT_USER_ID, ensureChatBotUser, quietWhenFinalized } from '@/lib/ai/chat-bot';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured } from './inbox';
 import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, entryId, type EmailMemoryEntry } from './memory';
@@ -516,15 +517,18 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
         const stoppedMeanwhile = (
           await Promise.all(g.items.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()))
         ).some((d) => followUpStopped(d.data()));
-        await ensureChatBotUser();
-        await sendChatMessage(
-          student.id,
-          CHAT_BOT_USER_ID,
-          stoppedMeanwhile
-            ? `⚠️ An email asking ${org} for an update was saved in Gmail Drafts just as chasing was stopped (${list.join(' · ')}). Please delete that draft — do not send it.`
-            : `⏳ No offer yet after ${Math.max(...g.items.map((w) => w.days))} days — an email asking ${org} for an update is waiting in Gmail Drafts: ${list.join(' · ')}`,
-          ['admins'],
-        ).catch(() => undefined);
+        // A finalized student's chat only hears of a draft that must not be sent.
+        if (stoppedMeanwhile || !(await quietWhenFinalized(student.id))) {
+          await ensureChatBotUser();
+          await sendChatMessage(
+            student.id,
+            CHAT_BOT_USER_ID,
+            stoppedMeanwhile
+              ? `⚠️ An email asking ${org} for an update was saved in Gmail Drafts just as chasing was stopped (${list.join(' · ')}). Please delete that draft — do not send it.`
+              : `⏳ No offer yet after ${Math.max(...g.items.map((w) => w.days))} days — an email asking ${org} for an update is waiting in Gmail Drafts: ${list.join(' · ')}`,
+            ['admins'],
+          ).catch(() => undefined);
+        }
       }
     } catch (e) {
       result.errors.push(`${student.name}: ${e instanceof Error ? e.message : String(e)}`);

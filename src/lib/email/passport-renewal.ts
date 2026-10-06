@@ -8,11 +8,12 @@
 //   - no FGL → every company that handles one of the student's active applications.
 // An FGL read later queues the student again, so the FGL school's company gets the passport
 // if it has not had it yet. Each company gets it once (sentTo). Nothing is ever sent.
+// A finalized student's chat is not told (quietWhenFinalized).
 
 import nodemailer from 'nodemailer';
 import { adminDb, storage } from '@/lib/firebase/admin';
 import { isAiConfigured } from '@/lib/ai/config';
-import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
+import { CHAT_BOT_USER_ID, ensureChatBotUser, quietWhenFinalized } from '@/lib/ai/chat-bot';
 import { storagePathFromUrl } from '@/lib/mcp/document-tools';
 import { sendChatMessage } from '@/lib/actions';
 import { logAiAction } from '@/lib/ai/action-log';
@@ -189,7 +190,7 @@ export async function processPassportRenewals(opts: { limit?: number; dryRun?: b
       const todo = [...groups.entries()].filter(([partner]) => !sentTo[partner]);
       if (!todo.length) {
         // Nothing to draft because no email thread exists: tell staff, so it is sent by hand.
-        if (!groups.size && noThread.length && !opts.dryRun) {
+        if (!groups.size && noThread.length && !opts.dryRun && !(await quietWhenFinalized(job.studentId))) {
           await ensureChatBotUser();
           await sendChatMessage(
             job.studentId,
@@ -252,6 +253,8 @@ export async function processPassportRenewals(opts: { limit?: number; dryRun?: b
           studentName: name,
           undo: { type: 'none' },
         });
+      }
+      if (drafted.length && !(await quietWhenFinalized(job.studentId))) {
         await ensureChatBotUser();
         await sendChatMessage(
           job.studentId,
