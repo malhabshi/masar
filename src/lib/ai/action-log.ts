@@ -91,6 +91,13 @@ export async function listAiActions(opts: { limit?: number; source?: string; stu
   return rows;
 }
 
+/** JSON with object keys sorted: Firestore does not keep the order a map's keys were written in. */
+function stable(v: unknown): string {
+  return JSON.stringify(v, (_, x) =>
+    x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x,
+  );
+}
+
 /** Clears a "stop chasing" from an email_followups record. */
 const RESUME = { stoppedAt: FieldValue.delete(), stoppedBy: FieldValue.delete(), stopReason: FieldValue.delete() };
 
@@ -224,7 +231,7 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
         }
         case 'set_field': {
           const current = u.field.split('.').reduce<any>((o, k) => (o == null ? o : o[k]), s);
-          if (JSON.stringify(current) !== JSON.stringify(u.to)) return { ok: false, message: 'Not undone — the value has been changed since.' };
+          if (stable(current) !== stable(u.to)) return { ok: false, message: 'Not undone — the value has been changed since.' };
           tx.update(studentRef!, {
             [u.field]: u.from === undefined || u.from === null ? FieldValue.delete() : u.from,
             adminNotes: FieldValue.arrayUnion(note(`Undid AI change: ${u.field} restored. By ${user.name}.`, user.id)),

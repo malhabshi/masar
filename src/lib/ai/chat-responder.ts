@@ -174,7 +174,7 @@ By default your reply is addressed to whoever wrote to you. When staff ask you t
 Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
 
 ## Fixing the record
-Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`; to add a school with no email behind it, \`add_application\`. To add to the student's Missing Items list ("add these to missing items"), call \`add_missing_items\` with one line per item — setting an application's status to Missing Items does not add them. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
+Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`; to add a school with no email behind it, \`add_application\`. To add to the student's Missing Items list ("add these to missing items"), call \`add_missing_items\` with one line per item, rewording an item already listed when the new one only adds detail to it — setting an application's status to Missing Items does not add them. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
 
 ## Requests already made
 "The request", "the task", "the request school" or the name of a request type usually means a request already made for this student, not a new one. Call \`get_student_requests\` first: it lists each request with the school and course picked in it, who made it, when, and where it stands. "Add the request school to the list" means: add each school from those requests that is not on the applications yet, with \`add_application\`, using the school and course exactly as the request names them. Never create a task when staff point to one that exists.
@@ -711,56 +711,107 @@ function buildToolset(opts: {
       name: 'add_missing_items',
       description:
         "Add items to the student's Missing Items list (what the student or the agency still has to provide) when staff " +
-        'ask. One short line per item, in English: what is needed, and for which school when staff named one. An item ' +
-        'already on the list is not added again.',
+        'ask. One short line per item, in English: what is needed, and for which school when staff named one. When an item ' +
+        'already on the list is the same thing with fewer details ("IELTS / TOEFL certificate", and the school now gives the ' +
+        'minimum score), reword that item instead of adding a second one. An item already on the list is not added again.',
       input_schema: {
         type: 'object',
         properties: {
-          items: { type: 'array', items: { type: 'string' }, description: 'One line per item.' },
+          items: { type: 'array', items: { type: 'string' }, description: 'New items, one line each.' },
+          reword: {
+            type: 'array',
+            description: 'Items already on the list that should say more. Each keeps its place, date and author.',
+            items: {
+              type: 'object',
+              properties: {
+                current: { type: 'string', description: 'The item exactly as it is on the list now.' },
+                text: { type: 'string', description: 'The new wording, keeping what the old one said.' },
+              },
+              required: ['current', 'text'],
+            },
+          },
           note: { type: 'string', description: 'What staff asked, in a few words.' },
         },
-        required: ['items'],
       },
     },
     handler: async (input) => {
       const refused = await refuseRecordChange({ what: 'add Missing Items' });
       if (refused) return { ok: false, error: refused };
       if (!db) return { ok: false, error: 'Database not available.' };
-      const texts = [
-        ...new Set((Array.isArray(input.items) ? input.items : []).map((t: unknown) => String(t ?? '').replace(/\s+/g, ' ').trim()).filter(Boolean)),
-      ].slice(0, 10) as string[];
-      if (!texts.length) return { ok: false, error: 'No items given.' };
+      const clean = (t: unknown) => String(t ?? '').replace(/\s+/g, ' ').trim();
+      const texts = [...new Set((Array.isArray(input.items) ? input.items : []).map(clean).filter(Boolean))].slice(0, 10) as string[];
+      const rewords = (Array.isArray(input.reword) ? input.reword : [])
+        .map((r: { current?: unknown; text?: unknown }) => ({ current: clean(r?.current), text: clean(r?.text) }))
+        .filter((r: { current: string; text: string }) => r.current && r.text)
+        .slice(0, 10) as Array<{ current: string; text: string }>;
+      if (!texts.length && !rewords.length) return { ok: false, error: 'No items given.' };
       const ref = db.collection('students').doc(studentId);
-      const s = (await ref.get()).data();
-      if (!s) return { ok: false, error: 'Student not found.' };
-      const onList = new Set(((s.missingItems ?? []) as Array<string | { text?: string }>).map((m) => norm(typeof m === 'string' ? m : m.text)));
-      const fresh = texts.filter((t) => !onList.has(norm(t)));
-      const already = texts.filter((t) => onList.has(norm(t)));
-      if (!fresh.length) return { ok: true, added: [], alreadyOnList: already };
-      if (preview) return { ok: true, preview: true, wouldAdd: fresh, alreadyOnList: already };
-
       // As the site's own "Add item": in the name of the person who asked, under their department.
       const asker = (await db.collection('users').doc(requesterId).get()).data() ?? {};
       const department = asker.role === 'admin' || asker.role === 'adminplus' ? 'Admin' : asker.department || 'General';
-      const now = new Date().toISOString();
-      const items: MissingItem[] = fresh.map((text, i) => ({ id: `mi-${Date.now()}-${i}`, text, department, addedBy: requesterId, createdAt: now }));
-      await ref.update({
-        missingItems: FieldValue.arrayUnion(...items),
-        newMissingItemsForEmployee: FieldValue.increment(items.length),
-        missingItemsViewedBy: [requesterId],
-        lastActivityAt: now,
-      });
       const said = String(input.note ?? '').slice(0, 200);
+
+      type Item = string | MissingItem;
+      const outcome = await db.runTransaction(async (tx) => {
+        const s = (await tx.get(ref)).data();
+        if (!s) return { error: 'Student not found.' } as const;
+        const list = (s.missingItems ?? []) as Item[];
+        const textOf = (m: Item) => (typeof m === 'string' ? m : m.text);
+        const unknown = rewords.filter((r) => !list.some((m) => norm(textOf(m)) === norm(r.current)));
+        if (unknown.length) {
+          return { error: `Not on the list: ${unknown.map((r) => `"${r.current}"`).join(', ')}. The list now: ${list.map((m) => `"${textOf(m)}"`).join(', ') || '(empty)'}.` } as const;
+        }
+        const now = new Date().toISOString();
+        let k = 0;
+        const reworded: Array<{ from: string; to: string }> = [];
+        const next: Item[] = list.map((m) => {
+          const r = rewords.find((x) => norm(x.current) === norm(textOf(m)));
+          if (!r || norm(r.text) === norm(textOf(m))) return m;
+          reworded.push({ from: textOf(m), to: r.text });
+          return typeof m === 'string'
+            ? { id: `mi-${Date.now()}-r${k++}`, text: r.text, department, addedBy: requesterId, createdAt: now }
+            : { ...m, text: r.text };
+        });
+        const onList = new Set(next.map((m) => norm(textOf(m))));
+        const fresh = texts.filter((t) => !onList.has(norm(t)));
+        const already = texts.filter((t) => onList.has(norm(t)));
+        const added: MissingItem[] = fresh.map((text, i) => ({ id: `mi-${Date.now()}-${i}`, text, department, addedBy: requesterId, createdAt: now }));
+        if (preview || (!added.length && !reworded.length)) return { name: s.name ?? null, added, reworded, already, list, next: [...next, ...added] };
+        tx.update(ref, {
+          missingItems: [...next, ...added],
+          newMissingItemsForEmployee: FieldValue.increment(added.length + reworded.length),
+          missingItemsViewedBy: [requesterId],
+          lastActivityAt: now,
+        });
+        return { name: s.name ?? null, added, reworded, already, list, next: [...next, ...added] };
+      });
+      if ('error' in outcome) return { ok: false, error: outcome.error };
+      const { added, reworded, already } = outcome;
+      const report = {
+        ...(added.length ? { added: added.map((m) => m.text) } : {}),
+        ...(reworded.length ? { reworded: reworded.map((r) => `"${r.from}" → "${r.to}"`) } : {}),
+        ...(already.length ? { alreadyOnList: already } : {}),
+      };
+      if (preview) return { ok: true, preview: true, ...report };
+      if (!added.length && !reworded.length) return { ok: true, nothingChanged: true, ...report };
       await logAiAction({
         source: 'chat',
-        summary: `Missing Items added: ${fresh.join(' · ')}`,
+        summary: [
+          added.length ? `Missing Items added: ${added.map((m) => m.text).join(' · ')}` : '',
+          ...reworded.map((r) => `Missing Item reworded: "${r.from}" → "${r.to}"`),
+        ]
+          .filter(Boolean)
+          .join(' · '),
         reason: `Asked in the internal chat by ${requestedBy}${said ? `: "${said}"` : ''}`,
         studentId,
-        studentName: s.name ?? null,
-        undo: { type: 'remove_missing_items', ids: items.map((m) => m.id) },
+        studentName: outcome.name,
+        // A reword can only be undone by putting the whole list back, and only while nobody has changed it since.
+        undo: reworded.length
+          ? { type: 'set_field', field: 'missingItems', from: outcome.list, to: outcome.next }
+          : { type: 'remove_missing_items', ids: added.map((m) => m.id) },
       });
       collected.acted = true;
-      return { ok: true, added: fresh, ...(already.length ? { alreadyOnList: already } : {}) };
+      return { ok: true, ...report };
     },
   });
 
