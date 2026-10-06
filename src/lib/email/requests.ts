@@ -210,12 +210,22 @@ export async function getOpenMissingItems(studentId: string): Promise<Array<{ id
     .filter((m) => m.id && m.text);
 }
 
+/** Of these Missing Items, the ones put on the list before the day of an email (date). */
+export function askedAgain(ids: string[], missingItems: Array<string | { id?: string; createdAt?: string }>, date: string): string[] {
+  const day = String(date).slice(0, 10);
+  return ids.filter((id) =>
+    missingItems.some((m) => typeof m !== 'string' && m.id === id && typeof m.createdAt === 'string' && m.createdAt.slice(0, 10) < day),
+  );
+}
+
 /**
  * Turn the analysed asks into Missing Items and remember the email so its reply can be
  * drafted later. Returns the lines for the chat note. Does nothing when nothing was asked.
  * An ask already on the list (another university wants the same transcripts) is linked to
  * that Missing Item: this sender gets its own reply when the file arrives, and nothing new
- * is announced.
+ * is announced — unless it was put on the list on an earlier day: then the school is
+ * chasing it, and the employee is told it is still owed (the admin, 2026-10-06: Merit asked
+ * again for Basemah's FGL with a last enrolment date, and nobody heard of it).
  */
 export async function recordEmailRequests(input: {
   message: InboxMessage;
@@ -288,12 +298,27 @@ export async function recordEmailRequests(input: {
     requestId = ref.id;
   }
 
-  // Nothing new on the list, nothing to announce.
-  if (!fresh.length) return { requestId, chatLines: [] };
-  const chatLines = [
-    '📋 Requested in this email (added to Missing Items):',
-    ...fresh.map((it) => `• ${it.text}${it.kind === 'action' ? ' (to do, no reply needed)' : ''}`),
-  ];
+  // Asked for again: the ask was already on the list before the day this email came.
+  const linked = items.filter((_, i) => analysis.requests[i].existingMissingItemId);
+  let chased: RequestItem[] = [];
+  if (linked.length) {
+    const onList = (await db().collection('students').doc(studentId).get()).data()?.missingItems ?? [];
+    const again = askedAgain(linked.map((it) => it.missingItemId), onList, message.date);
+    chased = linked.filter((it) => again.includes(it.missingItemId));
+  }
+
+  // Nothing new on the list and nothing chased: nothing to announce.
+  if (!fresh.length && !chased.length) return { requestId, chatLines: [] };
+  const chatLines: string[] = [];
+  if (fresh.length) {
+    chatLines.push(
+      '📋 Requested in this email (added to Missing Items):',
+      ...fresh.map((it) => `• ${it.text}${it.kind === 'action' ? ' (to do, no reply needed)' : ''}`),
+    );
+  }
+  if (chased.length) {
+    chatLines.push('⏳ Asked for again — already on Missing Items, still not done:', ...chased.map((it) => `• ${it.text}`));
+  }
   if (requestId) {
     chatLines.push('Once these are uploaded to the profile, a reply with them is drafted in the agency Gmail for sending.');
   }

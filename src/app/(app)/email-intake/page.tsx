@@ -85,8 +85,24 @@ type IntakeStatus = {
   queue: QueueItem[];
   requests?: EmailRequestRow[];
   companies?: CompanyProfile[];
-  schedule?: { label: string; next: string };
+  schedule?: {
+    label: string;
+    next: string;
+    lastStart?: { slot: string; at: string; error: string | null } | null;
+    lastRun?: { slot: string; at: string; processed: number; error: string | null } | null;
+  };
 };
+
+/** "Last automatic check: Tue 15:02, 4 emails." — or why the latest one did not run. */
+function lastAutoCheck(schedule: IntakeStatus['schedule']): string | null {
+  const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  const run = schedule?.lastRun;
+  const start = schedule?.lastStart;
+  if (start?.error && (!run || start.at > run.at)) return `The last automatic check could not start (${when(start.at)}): ${start.error}. It is tried again every five minutes.`;
+  if (run?.error) return `The last automatic check stopped with an error (${when(run.at)}): ${run.error}. It is tried again every five minutes.`;
+  if (run) return `Last automatic check: ${when(run.at)}, ${run.processed} email${run.processed === 1 ? '' : 's'}.`;
+  return null;
+}
 
 export default function EmailIntakePage() {
   const { user, isUserLoading } = useUser();
@@ -308,6 +324,9 @@ export default function EmailIntakePage() {
                 {status.settings.scheduledIntake
                   ? `on — ${status.schedule?.label ?? 'on schedule'}. Next: ${status.schedule?.next ?? '—'}. "Check inbox now" works any time.`
                   : 'off — the inbox is only checked when you press "Check inbox now".'}
+                {status.settings.scheduledIntake && lastAutoCheck(status.schedule) && (
+                  <span className="block text-muted-foreground">{lastAutoCheck(status.schedule)}</span>
+                )}
               </span>
               <Button
                 size="sm"

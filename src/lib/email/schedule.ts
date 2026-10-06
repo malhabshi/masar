@@ -4,6 +4,12 @@
 // The five-minute cron is the clock. During the first 55 minutes after each check time
 // it starts an inbox run of up to 10 emails, round after round, until a run finds nothing
 // new; then that check is marked done for the day.
+//
+// A check whose run never finished is not dropped when its 55 minutes are up: it stays due,
+// and is started again every five minutes, until a run of it finishes or the next check time
+// comes (after 15:00, until midnight). On 2026-10-06 the 13:00 and 15:00 checks never ran and
+// Merit's email waited for a person to notice. Every start and every finished run is kept
+// (lastStart, lastRun) and shown on the Email Intake page.
 
 import { adminDb } from '@/lib/firebase/admin';
 
@@ -15,24 +21,52 @@ const STATE = { collection: 'app_settings', doc: 'email_intake_schedule' };
 
 export const SCHEDULE_LABEL = 'Monday–Friday at 10:00, 13:00 and 15:00 (Kuwait time)';
 
+export type ScheduleState = {
+  doneSlot?: string;
+  doneAt?: string;
+  lastProcessed?: number;
+  /** The cron asked for a run. error: the request failed at once. */
+  lastStart?: { slot: string; at: string; error: string | null };
+  /** A scheduled run finished. error: it stopped with one. */
+  lastRun?: { slot: string; at: string; processed: number; filed: number; queued: number; failed: number; error: string | null };
+};
+
 /** Kuwait is UTC+3 all year — no daylight saving. */
-function kuwaitNow(): Date {
-  return new Date(Date.now() + 3 * 3_600_000);
+function kuwaitNow(now = Date.now()): Date {
+  return new Date(now + 3 * 3_600_000);
 }
 
-/** The check currently due, e.g. "2026-10-05@13", or null outside the check windows. */
-export function currentSlot(): string | null {
-  const k = kuwaitNow();
+/** The latest check time already passed today, e.g. "2026-10-05@13"; null before 10:00 and at weekends. */
+function latestSlot(now: number): { slot: string; inWindow: boolean } | null {
+  const k = kuwaitNow(now);
   if (!WORKDAYS.includes(k.getUTCDay())) return null;
-  const hour = CHECK_HOURS.find((h) => k.getUTCHours() === h && k.getUTCMinutes() < WINDOW_MINUTES);
+  const hour = [...CHECK_HOURS].reverse().find((h) => k.getUTCHours() >= h);
   if (hour === undefined) return null;
-  return `${k.toISOString().slice(0, 10)}@${hour}`;
+  return {
+    slot: `${k.toISOString().slice(0, 10)}@${hour}`,
+    inWindow: k.getUTCHours() === hour && k.getUTCMinutes() < WINDOW_MINUTES,
+  };
 }
 
-export async function isSlotDone(slot: string): Promise<boolean> {
-  if (!adminDb) return true;
-  const d = (await adminDb.collection(STATE.collection).doc(STATE.doc).get()).data();
-  return d?.doneSlot === slot;
+export async function getScheduleState(): Promise<ScheduleState> {
+  if (!adminDb) return {};
+  return ((await adminDb.collection(STATE.collection).doc(STATE.doc).get()).data() ?? {}) as ScheduleState;
+}
+
+/**
+ * The check to run now, or null. Inside its 55 minutes a check runs round after round until
+ * done; after them, only while no run of it has finished without an error.
+ */
+export function dueSlotFrom(state: ScheduleState, now = Date.now()): string | null {
+  const latest = latestSlot(now);
+  if (!latest || state.doneSlot === latest.slot) return null;
+  if (latest.inWindow || state.lastRun?.slot !== latest.slot || state.lastRun.error) return latest.slot;
+  return null;
+}
+
+export async function dueSlot(): Promise<string | null> {
+  if (!adminDb || !latestSlot(Date.now())) return null;
+  return dueSlotFrom(await getScheduleState());
 }
 
 export async function markSlotDone(slot: string, processedTotal: number) {
@@ -41,6 +75,30 @@ export async function markSlotDone(slot: string, processedTotal: number) {
     .collection(STATE.collection)
     .doc(STATE.doc)
     .set({ doneSlot: slot, doneAt: new Date().toISOString(), lastProcessed: processedTotal }, { merge: true });
+}
+
+export async function recordStart(slot: string, error: string | null) {
+  if (!adminDb) return;
+  const lastStart: ScheduleState['lastStart'] = { slot, at: new Date().toISOString(), error };
+  await adminDb.collection(STATE.collection).doc(STATE.doc).set({ lastStart }, { merge: true });
+}
+
+export async function recordRun(
+  slot: string,
+  result: { processed: number; filed: number; queued: number; failed: number } | null,
+  error: string | null = null,
+) {
+  if (!adminDb) return;
+  const lastRun: ScheduleState['lastRun'] = {
+    slot,
+    at: new Date().toISOString(),
+    processed: result?.processed ?? 0,
+    filed: result?.filed ?? 0,
+    queued: result?.queued ?? 0,
+    failed: result?.failed ?? 0,
+    error,
+  };
+  await adminDb.collection(STATE.collection).doc(STATE.doc).set({ lastRun }, { merge: true });
 }
 
 /** For the page: when the next automatic check is. */

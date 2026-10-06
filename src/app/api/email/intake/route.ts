@@ -11,7 +11,7 @@ import { isInboxConfigured, verifyInboxConnection } from '@/lib/email/inbox';
 import { getIntakeSettings, saveIntakeSettings } from '@/lib/email/intake-settings';
 import { fulfilEmailRequests, listEmailRequests } from '@/lib/email/requests';
 import { followUpSubmittedApplications } from '@/lib/email/followups';
-import { currentSlot, isSlotDone, markSlotDone, nextCheckLabel, SCHEDULE_LABEL } from '@/lib/email/schedule';
+import { dueSlot, getScheduleState, markSlotDone, nextCheckLabel, recordRun, SCHEDULE_LABEL } from '@/lib/email/schedule';
 import {
   learnCompanyPlaybook,
   listCompanyProfiles,
@@ -79,7 +79,9 @@ export async function GET(req: NextRequest) {
     queue,
     requests: await listEmailRequests(40).catch(() => []),
     companies: await listCompanyProfiles().catch(() => []),
-    schedule: { label: SCHEDULE_LABEL, next: nextCheckLabel() },
+    schedule: await getScheduleState()
+      .then((st) => ({ label: SCHEDULE_LABEL, next: nextCheckLabel(), lastStart: st.lastStart ?? null, lastRun: st.lastRun ?? null }))
+      .catch(() => ({ label: SCHEDULE_LABEL, next: nextCheckLabel(), lastStart: null, lastRun: null })),
   });
 }
 
@@ -120,14 +122,21 @@ export async function POST(req: NextRequest) {
     case 'scheduled': {
       // Started by the cron during a check window. Only the scheduler may call it.
       if (auth.user.id !== 'cron') return NextResponse.json({ error: 'Scheduler only.' }, { status: 403 });
-      const slot = currentSlot();
-      if (!slot) return NextResponse.json({ skipped: 'outside the check times' });
       if (!(await getIntakeSettings()).scheduledIntake) return NextResponse.json({ skipped: 'automatic checks are off' });
-      if (await isSlotDone(slot)) return NextResponse.json({ skipped: `check ${slot} already done` });
-      const result = await runEmailIntake({ limit: 10 });
-      // Nothing new left: this check is finished for the day.
-      if (result.processed === 0) await markSlotDone(slot, result.processed);
-      return NextResponse.json({ slot, ...result });
+      const slot = await dueSlot();
+      if (!slot) return NextResponse.json({ skipped: 'no check due' });
+      try {
+        const result = await runEmailIntake({ limit: 10 });
+        await recordRun(slot, result);
+        // Nothing new left: this check is finished for the day.
+        if (result.processed === 0) await markSlotDone(slot, result.processed);
+        return NextResponse.json({ slot, ...result });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error('[email-intake] scheduled run failed:', message);
+        await recordRun(slot, null, message).catch(() => undefined);
+        return NextResponse.json({ slot, error: message }, { status: 500 });
+      }
     }
     case 'run': {
       const result = await runEmailIntake({ limit: body.limit });

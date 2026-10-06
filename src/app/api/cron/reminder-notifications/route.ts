@@ -18,7 +18,7 @@ import { getIntakeSettings } from '@/lib/email/intake-settings';
 import { syncSentMail } from '@/lib/email/memory';
 import { followUpsIfDue } from '@/lib/email/followups';
 import { automateRecentTasks } from '@/lib/ai/task-automation';
-import { currentSlot, isSlotDone } from '@/lib/email/schedule';
+import { dueSlot, recordStart } from '@/lib/email/schedule';
 import { buildTodayIfDue } from '@/lib/reports/employee-daily';
 import { automaticAiAllowed } from '@/lib/ai/usage';
 import { deadlineAlertsIfDue } from '@/lib/ai/deadlines';
@@ -64,6 +64,41 @@ export async function GET(req: NextRequest) {
   // Every job below uses the AI. Once this month's budget is used up they all pause until
   // the month ends or the budget is raised; the reminders above never depend on it.
   const aiAllowed = await automaticAiAllowed();
+
+  // The inbox check, Mon–Fri 10:00 / 13:00 / 15:00 Kuwait. Started as its own request so a
+  // busy inbox never holds up this job; each round takes up to 10 emails, and rounds
+  // repeat every five minutes until the slot is marked done. Started before the other AI
+  // jobs, so a slow one of them cannot keep it from starting.
+  let inbox: unknown = null;
+  try {
+    const slot = aiAllowed && (await getIntakeSettings()).scheduledIntake ? await dueSlot() : null;
+    if (slot) {
+      // The site's public address. Behind App Hosting, req.nextUrl.origin is the container's
+      // own port with the visitor's https ("https://0.0.0.0:8080"), which nothing answers.
+      const origin = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+      const started = fetch(new URL('/api/email/intake', origin), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ action: 'scheduled' }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`the inbox check answered ${res.status}`);
+          return null;
+        })
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : String(e);
+          console.error('[cron/inbox] failed:', message);
+          return message;
+        });
+      // Long enough for the request to be on its way, or to fail; not waiting for the result.
+      const failed = await Promise.race([started, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+      inbox = failed ? { slot, error: failed } : { started: slot };
+      await recordStart(slot, failed).catch(() => undefined);
+    }
+  } catch (e) {
+    console.error('[cron/inbox] failed:', e);
+    inbox = { error: e instanceof Error ? e.message : String(e) };
+  }
 
   // Read newly uploaded documents, a few per run. Every five minutes keeps up with uploads
   // without one run holding the job open; switched on from the AI Assistant page.
@@ -111,39 +146,6 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     console.error('[cron/follow-ups] failed:', e);
     followUps = { error: e instanceof Error ? e.message : String(e) };
-  }
-
-  // The inbox check, Mon–Fri 10:00 / 13:00 / 15:00 Kuwait. Started as its own request so a
-  // busy inbox never holds up this job; each round takes up to 10 emails, and rounds
-  // repeat every five minutes until the slot is marked done.
-  let inbox: unknown = null;
-  try {
-    const slot = currentSlot();
-    if (aiAllowed && slot && (await getIntakeSettings()).scheduledIntake && !(await isSlotDone(slot))) {
-      // The site's public address. Behind App Hosting, req.nextUrl.origin is the container's
-      // own port with the visitor's https ("https://0.0.0.0:8080"), which nothing answers.
-      const origin = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
-      const started = fetch(new URL('/api/email/intake', origin), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ action: 'scheduled' }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`the inbox check answered ${res.status}`);
-          return null;
-        })
-        .catch((e) => {
-          const message = e instanceof Error ? e.message : String(e);
-          console.error('[cron/inbox] failed:', message);
-          return message;
-        });
-      // Long enough for the request to be on its way, or to fail; not waiting for the result.
-      const failed = await Promise.race([started, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
-      inbox = failed ? { slot, error: failed } : { started: slot };
-    }
-  } catch (e) {
-    console.error('[cron/inbox] failed:', e);
-    inbox = { error: e instanceof Error ? e.message : String(e) };
   }
 
   // Deadline reminders from the documents (no AI calls — reads what was already read).
