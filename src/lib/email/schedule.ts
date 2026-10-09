@@ -6,8 +6,10 @@
 // new; then that check is marked done for the day.
 //
 // A check whose run never finished is not dropped when its 55 minutes are up: it stays due,
-// and is started again every five minutes, until a run of it finishes or the next check time
-// comes (after 15:00, until midnight). On 2026-10-06 the 13:00 and 15:00 checks never ran and
+// and is started again every five minutes, until a run of it finishes — and rounds go on
+// while each takes a full ROUND_SIZE, so the backlog is cleared — or the next check time
+// comes (after 15:00, until midnight). On 2026-10-09 a caught-up check stopped after ten
+// emails and left INTO's "late fees, response required" for Monday. On 2026-10-06 the 13:00 and 15:00 checks never ran and
 // Merit's email waited for a person to notice. Every start and every finished run is kept
 // (lastStart, lastRun) and shown on the Email Intake page.
 
@@ -17,6 +19,8 @@ export const CHECK_HOURS = [10, 13, 15];
 /** Monday … Friday, as returned by getUTCDay() on Kuwait time. */
 const WORKDAYS = [1, 2, 3, 4, 5];
 const WINDOW_MINUTES = 55;
+/** Emails per scheduled round. A round that takes this many may have left more behind. */
+export const ROUND_SIZE = 10;
 const STATE = { collection: 'app_settings', doc: 'email_intake_schedule' };
 
 export const SCHEDULE_LABEL = 'Monday–Friday at 10:00, 13:00 and 15:00 (Kuwait time)';
@@ -55,12 +59,14 @@ export async function getScheduleState(): Promise<ScheduleState> {
 
 /**
  * The check to run now, or null. Inside its 55 minutes a check runs round after round until
- * done; after them, only while no run of it has finished without an error.
+ * done; after them, only while no run of it has finished without an error, or the last one
+ * was full.
  */
 export function dueSlotFrom(state: ScheduleState, now = Date.now()): string | null {
   const latest = latestSlot(now);
   if (!latest || state.doneSlot === latest.slot) return null;
-  if (latest.inWindow || state.lastRun?.slot !== latest.slot || state.lastRun.error) return latest.slot;
+  const run = state.lastRun;
+  if (latest.inWindow || run?.slot !== latest.slot || run.error || run.processed >= ROUND_SIZE) return latest.slot;
   return null;
 }
 

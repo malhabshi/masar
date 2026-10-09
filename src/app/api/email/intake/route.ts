@@ -11,7 +11,7 @@ import { isInboxConfigured, verifyInboxConnection } from '@/lib/email/inbox';
 import { getIntakeSettings, saveIntakeSettings } from '@/lib/email/intake-settings';
 import { fulfilEmailRequests, listEmailRequests } from '@/lib/email/requests';
 import { followUpSubmittedApplications } from '@/lib/email/followups';
-import { dueSlot, getScheduleState, markSlotDone, nextCheckLabel, recordRun, SCHEDULE_LABEL } from '@/lib/email/schedule';
+import { dueSlot, getScheduleState, markSlotDone, nextCheckLabel, recordRun, ROUND_SIZE, SCHEDULE_LABEL } from '@/lib/email/schedule';
 import {
   learnCompanyPlaybook,
   listCompanyProfiles,
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       const slot = await dueSlot();
       if (!slot) return NextResponse.json({ skipped: 'no check due' });
       try {
-        const result = await runEmailIntake({ limit: 10 });
+        const result = await runEmailIntake({ limit: ROUND_SIZE });
         await recordRun(slot, result);
         // Nothing new left: this check is finished for the day.
         if (result.processed === 0) await markSlotDone(slot, result.processed);
