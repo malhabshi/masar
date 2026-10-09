@@ -238,6 +238,10 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
     }
   };
 
+  // Each line takes its own direction from its first letter (unicode-bidi: plaintext): an
+  // Arabic line reads right to left even with CAS or Merit inside it, an English line left
+  // to right. Without it Arabic was laid out left to right and its words ran together.
+  const textClass = 'whitespace-pre-wrap break-words text-start [unicode-bidi:plaintext]';
   const renderMessageContent = (content: string) => {
     if (!content) return null;
     const mentionRegex = /^(@[A-Za-z\s]+:)/;
@@ -246,13 +250,13 @@ export function StudentChat({ student, currentUser }: StudentChatProps) {
       const mention = match[1];
       const rest = content.slice(mention.length);
       return (
-        <p className="whitespace-pre-wrap break-words">
+        <p dir="auto" className={textClass}>
           <span className="font-bold underline text-accent-foreground/90">{mention}</span>
           {rest}
         </p>
       );
     }
-    return <p className="whitespace-pre-wrap break-words">{content}</p>;
+    return <p dir="auto" className={textClass}>{content}</p>;
   };
 
   const hasMultipleAdmins = useMemo(() => (allUsers || []).filter(u => u.role === 'admin').length > 1, [allUsers]);

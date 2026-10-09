@@ -73,9 +73,10 @@ export async function saveResponderSettings(
 }
 
 /**
- * A finalized student (a final choice is set) gets no note the AI posts on its own —
- * deadline reminders, follow-ups, a renewed passport. An email we receive about the student
- * is still announced, and the AI still answers staff who write to it (the admin, 2026-10-06).
+ * A finalized student (a final choice is set) gets no reminder the AI sends on its own —
+ * deadline notes, the renewed-passport Missing Item, follow-up chasing, a renewed passport
+ * note. An email we receive about the student is still announced, and the AI still answers
+ * staff who write to it (the admin, 2026-10-06; again 2026-10-09).
  */
 export async function quietWhenFinalized(studentId: string): Promise<boolean> {
   if (!adminDb) return false;

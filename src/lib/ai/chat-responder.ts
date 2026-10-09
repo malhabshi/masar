@@ -174,7 +174,7 @@ By default your reply is addressed to whoever wrote to you. When staff ask you t
 Your ⏳ messages say an email asking for an update on an application is waiting in Gmail Drafts. When staff tell you to stop chasing one — the student is going with another school, has withdrawn, or simply "don't follow up" — call \`stop_follow_up\` for that application (reason chose_other_school, withdrawn or just_stop), then post_reply saying what you did, and that the draft waiting in Gmail Drafts should be deleted (you never delete email). If it is not clear which application they mean, ask.
 
 ## Fixing the record
-Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`; to add a school with no email behind it, \`add_application\`. To add to the student's Missing Items list ("add these to missing items"), call \`add_missing_items\` with one line per item, rewording an item already listed when the new one only adds detail to it — setting an application's status to Missing Items does not add them. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on only that school is chased, so the others' follow-ups stop by themselves — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts for the other schools, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
+Admins and departments can have you fix a student's applications, as they can on the site. When they ask you to change an application's status or attach a letter that came by email — or point out an email that holds an offer or a rejection the record does not show (for example, when your ⏳ follow-up was wrong) — find that email with \`get_student_emails\` and call \`apply_email\` with its ref: it files the email's attachments on the profile and applies the offer or rejection. For a status change with no email behind it, call \`set_application_status\`; to add a school with no email behind it, \`add_application\`. To add to the student's Missing Items list ("add these to missing items"), call \`add_missing_items\` with one line per item, rewording an item already listed when the new one only adds detail to it — setting an application's status to Missing Items does not add them. When staff tell you which school the student is going with, call \`set_final_choice\` (the assigned employee may ask for this too): from then on the student is finalized: no school is chased and no reminder is sent about them unless an email about them arrives — no stop_follow_up needed — but say which update requests are already waiting in Gmail Drafts, for staff to delete. When staff ask you to fill in or correct the student's name, date of birth or civil ID (the fields at the top of the profile; the record keeps the last two as jotformData.dob and jotformData.civilId), call \`set_student_details\` (the assigned employee may ask too). Use the values staff gave, or read them from the documents with \`get_student_documents\`: the date of birth from the passport; the civil ID only from a civil ID card or a number staff gave you — a number on a school certificate is not proof of it. If the tool says the civil ID does not match the date of birth or is on another student, tell staff and ask them to confirm; pass confirmed only after they do. Then post_reply saying exactly what changed. If the tool refuses, say why. You never delete email: when a Gmail draft should go, say so and leave it to staff.
 
 ## Requests already made
 "The request", "the task", "the request school" or the name of a request type usually means a request already made for this student, not a new one. Call \`get_student_requests\` first: it lists each request with the school and course picked in it, who made it, when, and where it stands. "Add the request school to the list" means: add each school from those requests that is not on the applications yet, with \`add_application\`, using the school and course exactly as the request names them. Never create a task when staff point to one that exists.
@@ -183,9 +183,11 @@ Admins and departments can have you fix a student's applications, as they can on
 When staff ask for something new that matches one of the request types listed below, call \`create_task\` with the matching requestTypeId and a clear description quoting what they asked for. A request that picks a school (adding schools, first year, change of major) needs the school and the course: pass university and major, and if staff did not name them, ask — never create it empty. Then reply in the chat saying what you created. If nothing matches well, do not invent a task — reply asking which request type they want, or stay silent.
 
 ## How to write
-- Short. One or two sentences. This is a busy work chat, not a report.
+- Short. Say only what matters. This is a busy work chat, read on phones, not a report.
+- One point per paragraph, with a blank line between paragraphs. Several items to do or check go one per line, each starting with "- ". Never pack several points into one long paragraph.
 - Plain and direct. No greetings, no sign-offs, no "I hope this helps".
 - Staff write in a mix of English and Arabic. Reply in the language the message used.
+- In Arabic, keep each English word (CAS, checklist, Merit, a school's name) whole, with a space on both sides. Never join an Arabic letter or "الـ" to it: write "تذكيرات CAS", not "الـCAS reminders". Begin every line and every "- " item with an Arabic word: "- شركة Merit سألت…", not "- Merit سألوا…".
 - Never guess a fact. If you did not read it from the student record, do not state it.
 - Never claim you did something unless the tool told you it succeeded.`;
 
@@ -821,8 +823,8 @@ function buildToolset(opts: {
       name: 'set_final_choice',
       description:
         "Set the student's final choice — the school they are going with — when staff ask (\"he is going with Sheffield\", " +
-        '"change the final choice to Sheffield"). Give the university exactly as it appears in the applications list. Only ' +
-        'the final choice is chased for an offer from then on.',
+        '"change the final choice to Sheffield"). Give the university exactly as it appears in the applications list. From ' +
+        'then on the student is finalized: no school is chased and no reminders are sent, unless an email about them arrives.',
       input_schema: {
         type: 'object',
         properties: {
@@ -843,15 +845,15 @@ function buildToolset(opts: {
       if ('error' in found) return { ok: false, error: found.error };
       const app = found.app;
       const before: string | null = s.finalChoiceUniversity ?? null;
-      // Drafts already waiting for the other schools: staff delete those, the AI never does.
+      // Update requests already waiting in Gmail Drafts: staff delete those, the AI never does.
       const waiting = (await db.collection(FOLLOWUP_COLLECTION).where('studentId', '==', studentId).get()).docs
         .map((d) => d.data())
-        .filter((f) => f.lastDraftedAt && f.university !== app.university && !followUpStopped(f))
+        .filter((f) => f.lastDraftedAt && !followUpStopped(f))
         .map((f) => `${f.university}: update request to ${f.to} drafted ${String(f.lastDraftedAt).slice(0, 10)}`);
       if (before === app.university) {
-        return { ok: true, unchanged: `The final choice is already ${app.university}.`, draftsForOtherSchools: waiting };
+        return { ok: true, unchanged: `The final choice is already ${app.university}.`, draftsToDelete: waiting };
       }
-      if (preview) return { ok: true, preview: true, wouldSet: `${before ?? '(none)'} → ${app.university}`, draftsForOtherSchools: waiting };
+      if (preview) return { ok: true, preview: true, wouldSet: `${before ?? '(none)'} → ${app.university}`, draftsToDelete: waiting };
 
       // The site's own action: the note in the requester's name, and admins told when an employee sets it.
       const r = await setStudentFinalChoice(studentId, app.university, app.major, requesterId);
@@ -869,8 +871,8 @@ function buildToolset(opts: {
       return {
         ok: true,
         finalChoice: `${before ?? '(none)'} → ${app.university}`,
-        followUps: `Only ${app.university} is chased from now on.`,
-        draftsForOtherSchools: waiting.length ? waiting : 'None waiting.',
+        followUps: 'Finalized: no school is chased and no reminders are sent from now on, unless an email about the student arrives.',
+        draftsToDelete: waiting.length ? waiting : 'None waiting.',
       };
     },
   });

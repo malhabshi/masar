@@ -11,8 +11,8 @@
 //   change agent         — the date the student must choose an agent by
 // Dated items are announced in the student's internal chat to the assigned employee 7
 // days and 1 day before; passport and IELTS warnings once. Each alert is sent once
-// (ai_deadline_alerts). A finalized student gets none in the chat. The full list shows on
-// the AI Activity page.
+// (ai_deadline_alerts). A finalized student gets no reminder at all — neither the note nor
+// the renewed-passport Missing Item. The full list still shows on the AI Activity page.
 //
 // A passport warning also opens a Missing Item "Renewed passport", once per passport. When a
 // newer passport is uploaded and read, auto-fill closes it (autofill.ts). If staff remove it,
@@ -220,14 +220,17 @@ export async function runDeadlineAlerts() {
   result.checked = deadlines.length;
   const users = (await db().collection('users').get()).docs.map((u) => ({ id: u.id, ...(u.data() as { civilId?: string }) }));
 
+  const finalized = new Map<string, boolean>();
   for (const d of deadlines) {
+    // A finalized student gets no reminder of any kind — no chat note, no Missing Item. Not
+    // marked sent: if the final choice is cleared, the reminder still comes.
+    if (!finalized.has(d.studentId)) finalized.set(d.studentId, await quietWhenFinalized(d.studentId));
+    if (finalized.get(d.studentId)) continue;
     if (d.kind === 'passport') await openRenewalItem(d).catch((e) => console.error('[deadlines] renewal item:', e));
     const stage = d.warning ? 'once' : d.daysLeft <= 1 ? '1' : d.daysLeft <= 7 ? '7' : null;
     if (!stage) continue;
     const ref = db().collection(ALERTS).doc(`${d.key}__${stage}`.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 400));
     if ((await ref.get()).exists) continue;
-    // Not marked sent: if the final choice is cleared, the reminder still comes.
-    if (await quietWhenFinalized(d.studentId)) continue;
 
     const employee = users.find((u) => d.employeeId && u.civilId === d.employeeId);
     const when = d.daysLeft === 0 ? 'today' : d.daysLeft === 1 ? 'tomorrow' : `in ${d.daysLeft} days (${d.date})`;

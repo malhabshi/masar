@@ -11,9 +11,9 @@
 //   - at most DAILY_CAP drafts per run;
 //   - not when the company wrote about the student in the last 5 days;
 //   - the same application is chased again only after another 5 days without news;
-//   - when the student has a final choice, only that school is chased — the others are not
-//     where the student is going;
-//   - a finalized student's chat is not told a chase was drafted;
+//   - a finalized student (a final choice is set) is not chased at all — not even the
+//     school they chose: the admin has said it more than once (2026-10-04, 2026-10-09);
+//     only an email about the student brings news of them;
 //   - never an application staff asked to stop chasing (stopFollowUp, from the chat);
 //   - never an application whose emails already hold the decision: the history loaded
 //     before the intake began has offers that never reached the profile. That email is
@@ -24,7 +24,7 @@ import nodemailer from 'nodemailer';
 import { adminDb } from '@/lib/firebase/admin';
 import { getAnthropicClient } from '@/lib/ai/client';
 import { AI_FAST_MODEL, isAiConfigured } from '@/lib/ai/config';
-import { CHAT_BOT_USER_ID, ensureChatBotUser, quietWhenFinalized } from '@/lib/ai/chat-bot';
+import { CHAT_BOT_USER_ID, ensureChatBotUser } from '@/lib/ai/chat-bot';
 import { sendChatMessage } from '@/lib/actions';
 import { appendDraft, isInboxConfigured } from './inbox';
 import { backfillStudentEmails, EMAIL_MEMORY_COLLECTION, emailHistoryLoaded, entryId, type EmailMemoryEntry } from './memory';
@@ -33,7 +33,6 @@ import type { Application } from '@/lib/types';
 import { AI_ACTIONS_COLLECTION, logAiAction, type AiAction } from '@/lib/ai/action-log';
 import { notifyEmployeeOfStatus } from '@/lib/applications/set-status';
 import { FieldValue } from 'firebase-admin/firestore';
-import { sameUniversity } from './universities';
 import type { PastEmailResult } from './past-email';
 
 export const FOLLOWUP_COLLECTION = 'email_followups';
@@ -58,21 +57,6 @@ const appKey = (studentId: string, a: Application) =>
 const firstAddress = (s: string) => s.match(/[\w.+-]+@[\w.-]+/)?.[0]?.toLowerCase() ?? '';
 
 type Waiting = { app: Application; days: number; key: string };
-
-/**
- * With a final choice set, only that school's applications are chased. Matched by exact
- * name, then by the same distinctive words ("University of Liverpool - kaplan" = "University
- * of Liverpool") — never by one shared word, which would make East London East Anglia. A
- * final choice that matches none of the applications means nothing is chased.
- */
-function finalChoiceFilter(final: unknown, apps: Application[]): ((a: Application) => boolean) | null {
-  if (typeof final !== 'string' || !final.trim()) return null;
-  const plain = (x: string) => x.trim().toLowerCase().replace(/\s+/g, ' ');
-  // Exact name first: a general name ("University of London") has no distinctive words left.
-  const exact = apps.filter((a) => plain(a.university) === plain(final));
-  const strict = exact.length ? exact : apps.filter((a) => sameUniversity(final, a.university));
-  return (a) => strict.includes(a);
-}
 
 /**
  * Is chasing stopped? Each stop request adds its id to stopIds and its Undo removes only
@@ -261,8 +245,8 @@ export type FollowUpResult = {
   drafted: Array<{ student: string; to: string; applications: string[] }>;
   noConversation: Array<{ student: string; application: string }>;
   tooOld: number;
-  /** Not chased: the student's final choice is another school. */
-  notFinalChoice: number;
+  /** Not chased: the student is finalized (a final choice is set). */
+  finalized: number;
   /** Not chased: staff asked to stop. */
   stopped: number;
   /** Not chased: an earlier email held the decision, now applied. */
@@ -278,7 +262,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
     drafted: [],
     noConversation: [],
     tooOld: 0,
-    notFinalChoice: 0,
+    finalized: 0,
     stopped: 0,
     decidedByEmail: [],
     needsCheck: [],
@@ -298,14 +282,13 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
   for (const d of snap.docs) {
     const s = d.data();
     if (s.isClosed === true) continue;
+    if (s.finalChoiceUniversity) {
+      result.finalized++;
+      continue;
+    }
     const waiting: Waiting[] = [];
-    const isFinalChoice = finalChoiceFilter(s.finalChoiceUniversity, (s.applications ?? []) as Application[]);
     for (const a of (s.applications ?? []) as Application[]) {
       if (a.status !== 'Submitted' || !a.updatedAt) continue;
-      if (isFinalChoice && !isFinalChoice(a)) {
-        result.notFinalChoice++;
-        continue;
-      }
       const days = Math.floor((now - new Date(a.updatedAt).getTime()) / DAY);
       if (days < WAIT_DAYS) continue;
       if (days > MAX_AGE_DAYS) {
@@ -438,18 +421,18 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
         );
         if (heardRecently) continue;
 
-        // Re-check just before drafting: staff may have stopped one in the chat, or its status
-        // moved on, while this run was loading mail and asking the model.
+        // Re-check just before drafting: staff may have stopped one in the chat, set the final
+        // choice, or its status moved on, while this run was loading mail and asking the model.
         if (!opts.dryRun) {
           const [fresh, ...stops] = await Promise.all([
             db().collection('students').doc(student.id).get(),
             ...g.items.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()),
           ]);
           const apps = (fresh.data()?.applications ?? []) as Application[];
-          const stillFinal = finalChoiceFilter(fresh.data()?.finalChoiceUniversity, apps);
+          const finalized = !!fresh.data()?.finalChoiceUniversity;
           g.items = g.items.filter((w, k) => {
             const current = apps.find((a) => a.university === w.app.university && a.major === w.app.major);
-            return !followUpStopped(stops[k].data()) && current?.status === 'Submitted' && (!stillFinal || stillFinal(current));
+            return !finalized && !followUpStopped(stops[k].data()) && current?.status === 'Submitted';
           });
           if (!g.items.length) continue;
         }
@@ -517,18 +500,15 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
         const stoppedMeanwhile = (
           await Promise.all(g.items.map((w) => db().collection(FOLLOWUP_COLLECTION).doc(w.key).get()))
         ).some((d) => followUpStopped(d.data()));
-        // A finalized student's chat only hears of a draft that must not be sent.
-        if (stoppedMeanwhile || !(await quietWhenFinalized(student.id))) {
-          await ensureChatBotUser();
-          await sendChatMessage(
-            student.id,
-            CHAT_BOT_USER_ID,
-            stoppedMeanwhile
-              ? `⚠️ An email asking ${org} for an update was saved in Gmail Drafts just as chasing was stopped (${list.join(' · ')}). Please delete that draft — do not send it.`
-              : `⏳ No offer yet after ${Math.max(...g.items.map((w) => w.days))} days — an email asking ${org} for an update is waiting in Gmail Drafts: ${list.join(' · ')}`,
-            ['admins'],
-          ).catch(() => undefined);
-        }
+        await ensureChatBotUser();
+        await sendChatMessage(
+          student.id,
+          CHAT_BOT_USER_ID,
+          stoppedMeanwhile
+            ? `⚠️ An email asking ${org} for an update was saved in Gmail Drafts just as chasing was stopped (${list.join(' · ')}). Please delete that draft — do not send it.`
+            : `⏳ No offer yet after ${Math.max(...g.items.map((w) => w.days))} days — an email asking ${org} for an update is waiting in Gmail Drafts: ${list.join(' · ')}`,
+          ['admins'],
+        ).catch(() => undefined);
       }
     } catch (e) {
       result.errors.push(`${student.name}: ${e instanceof Error ? e.message : String(e)}`);
