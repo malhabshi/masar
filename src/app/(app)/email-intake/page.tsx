@@ -185,7 +185,10 @@ export default function EmailIntakePage() {
       if (!res.ok || data.success === false) {
         toast({ variant: 'destructive', title: 'Failed', description: data.error ?? 'Unknown error' });
       } else {
-        toast({ title: successMessage });
+        toast({
+          title: successMessage,
+          ...(data.learnedName ? { description: `From now on, emails that write "${data.learnedName}" are filed to this student.` } : {}),
+        });
         await load();
       }
     },

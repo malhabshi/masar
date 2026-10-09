@@ -34,6 +34,8 @@ export type UndoSpec =
   | ({ type: 'resume_follow_up' } & FollowUpStopUndo)
   | { type: 'remove_application'; university: string; major: string; addedStatus?: ApplicationStatus }
   | { type: 'remove_missing_items'; ids: string[] }
+  /** A name learned from an email staff attached (email_name_aliases): Undo forgets it. */
+  | { type: 'forget_name'; id: string }
   | { type: 'restore_missing_items'; items: unknown[] }
   | { type: 'change_agent'; university: string; logEntryId: string; wasRequired: boolean; previousUniversities: string[] }
   | { type: 'set_field'; field: string; from: unknown; to: unknown }
@@ -211,6 +213,10 @@ export async function undoAiAction(id: string, user: { id: string; name: string 
         }
         case 'resume_follow_up': {
           return finish(undoStop() ? 'Follow-ups are back on for this application.' : 'This stop request is removed; another one still applies.');
+        }
+        case 'forget_name': {
+          tx.delete(db().collection('email_name_aliases').doc(u.id));
+          return finish('Name forgotten: emails that write it go to the review queue again.');
         }
         case 'restore_missing_items': {
           if (u.items.length) tx.update(studentRef!, { missingItems: FieldValue.arrayUnion(...u.items) });

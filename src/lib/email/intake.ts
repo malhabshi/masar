@@ -24,6 +24,7 @@ import {
   type InboxMessage,
 } from './inbox';
 import { loadStudentNames, matchStudentByName, nearMatchStudentByName, type MatchResult } from './matcher';
+import { learnNameFromEmail } from './name-alias';
 import { announceEmailInChat } from './notify-chat';
 import { nameDocument } from './name-document';
 import { getIntakeSettings } from './intake-settings';
@@ -844,7 +845,7 @@ export async function resolveQueuedItem(
   queueItemId: string,
   studentId: string,
   reviewerId: string,
-): Promise<{ success: boolean; filed?: number; error?: string }> {
+): Promise<{ success: boolean; filed?: number; error?: string; learnedName?: string }> {
   if (!adminDb) return { success: false, error: 'Database not available' };
 
   const ref = adminDb.collection(INTAKE_QUEUE_COLLECTION).doc(queueItemId);
@@ -950,7 +951,19 @@ export async function resolveQueuedItem(
     chatPosted: announcement.posted,
   });
 
-  return { success: true, filed };
+  // The name as this email wrote it now finds the student next time (name-alias.ts).
+  const reviewer = (await adminDb.collection('users').doc(reviewerId).get()).data();
+  const learned = await learnNameFromEmail({
+    studentId,
+    fromName: full?.fromName ?? (item as { fromName?: string }).fromName,
+    from: item.from,
+    subject: full?.subject ?? item.subject,
+    body: full?.text ?? (item as { bodyPreview?: string }).bodyPreview,
+    by: { id: reviewerId, name: String(reviewer?.name ?? 'Staff') },
+  });
+  await ref.update({ learnedName: 'learned' in learned ? learned.learned : null, nameNotLearned: 'skipped' in learned ? learned.skipped : null }).catch(() => undefined);
+
+  return { success: true, filed, ...('learned' in learned ? { learnedName: learned.learned } : {}) };
 }
 
 /** Discard a queued item without filing it (spam, irrelevant, duplicate). */

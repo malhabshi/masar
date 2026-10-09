@@ -8,10 +8,23 @@
 //
 // Therefore: a document is filed automatically ONLY when exactly one student's complete
 // registered name appears in the email. Everything else goes to a human.
+//
+// A name staff have taught it counts as the registered name: when an email that names a
+// student differently ("Abdulaziz E Kh E M E Alhammadi" for ABDULAZIZ E KH E M ALHMMADI)
+// is attached to that student from the review queue, the name as the email wrote it is kept
+// in email_name_aliases (name-alias.ts), and the next email that writes it so is filed.
 
 import { adminDb } from '@/lib/firebase/admin';
 
-export type StudentNameRecord = { id: string; name: string; normalized: string };
+export type StudentNameRecord = {
+  id: string;
+  name: string;
+  normalized: string;
+  /** A name staff taught by attaching an email to this student — not the profile name. */
+  alias?: true;
+};
+
+export const NAME_ALIASES_COLLECTION = 'email_name_aliases';
 
 export type MatchResult =
   | { kind: 'matched'; student: StudentNameRecord }
@@ -30,11 +43,15 @@ export function normalizeName(value: string): string {
     .trim();
 }
 
-/** Load every open student's name once per intake run. */
+/** Load every open student's name once per intake run, with the names staff taught. */
 export async function loadStudentNames(): Promise<StudentNameRecord[]> {
   if (!adminDb) throw new Error('Database not available');
-  const snap = await adminDb.collection('students').select('name', 'isClosed').get();
+  const [snap, aliases] = await Promise.all([
+    adminDb.collection('students').select('name', 'isClosed').get(),
+    adminDb.collection(NAME_ALIASES_COLLECTION).get(),
+  ]);
   const out: StudentNameRecord[] = [];
+  const open = new Map<string, StudentNameRecord>();
   snap.forEach((doc) => {
     const d = doc.data();
     if (d.isClosed === true) return;
@@ -42,7 +59,16 @@ export async function loadStudentNames(): Promise<StudentNameRecord[]> {
     const normalized = normalizeName(name);
     // Single-token names are too weak to match on; they'd hit half the inbox.
     if (!normalized || normalized.split(' ').length < 2) return;
-    out.push({ id: doc.id, name, normalized });
+    const record = { id: doc.id, name, normalized };
+    out.push(record);
+    open.set(doc.id, record);
+  });
+  aliases.forEach((doc) => {
+    const a = doc.data();
+    const student = open.get(String(a.studentId ?? ''));
+    const normalized = normalizeName(String(a.normalized ?? ''));
+    if (a.conflict === true || !student || normalized.split(' ').length < 2 || normalized === student.normalized) return;
+    out.push({ id: student.id, name: student.name, normalized, alias: true });
   });
   return out;
 }
@@ -73,7 +99,14 @@ export function matchStudentByName(text: string, students: StudentNameRecord[]):
   const haystack = ` ${normalizeName(text)} `;
   if (haystack.trim().length === 0) return { kind: 'no_match' };
 
-  const hits = students.filter((s) => containsWholePhrase(haystack, s.normalized));
+  // A student found by both the profile name and a taught name is one hit, not two.
+  const byId = new Map<string, StudentNameRecord>();
+  for (const s of students) {
+    if (!containsWholePhrase(haystack, s.normalized)) continue;
+    const seen = byId.get(s.id);
+    if (!seen || (seen.alias && !s.alias)) byId.set(s.id, s);
+  }
+  const hits = [...byId.values()];
 
   if (hits.length === 1) return { kind: 'matched', student: hits[0] };
   if (hits.length > 1) {
@@ -126,6 +159,7 @@ export function nearMatchStudentByName(
 
   const fits = new Map<string, { student: StudentNameRecord; found: string }>();
   for (const s of students) {
+    if (s.alias) continue;
     const words = s.normalized.split(' ');
     const n = words.length;
     if (n < 3) continue;
