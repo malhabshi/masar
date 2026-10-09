@@ -530,7 +530,9 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
       const isFormCopy = /(^|\.)jotform\.com$/i.test(message.from.split('@')[1] ?? '');
       let screened: Awaited<ReturnType<typeof screenEmail>> | null = null;
       const screen = async () =>
-        (screened ??= isFormCopy ? { applicationNews: false, generalNotice: false, asksForSomething: false } : await screenEmail(message));
+        (screened ??= isFormCopy
+          ? { applicationNews: false, generalNotice: false, asksForSomething: false, agentAnnouncement: false }
+          : await screenEmail(message));
 
       // News for everyone ("applications for this course are closed") — read from every
       // company email, identified or not, since a general notice often names no student.
@@ -557,17 +559,22 @@ export async function runEmailIntake(options: { limit?: number } = {}): Promise<
         // not vanish under the masar/filed label).
         const aboutAnApplication =
           !!(await companyForAddress(message.from)) && ((await screen()).applicationNews || (await screen()).asksForSomething);
-        if (message.attachments.length === 0 && !staffAddresses.has(message.from.toLowerCase()) && !aboutAnApplication) {
-          await replyWithReceipt(message, { kind: 'skipped', reason, notices: noticeLines });
+        // Written to the agency, about no student (a webinar, a portal reminder): there is no
+        // student to pick, so it never waits in the queue — whatever it carries (a brochure).
+        const fromStaff = staffAddresses.has(message.from.toLowerCase());
+        const forTheAgency = !fromStaff && match.kind === 'no_match' && (await screen()).agentAnnouncement;
+        if (forTheAgency || (message.attachments.length === 0 && !fromStaff && !aboutAnApplication)) {
+          const skipReason = forTheAgency ? 'An announcement to the agency, about no student.' : reason;
+          await replyWithReceipt(message, { kind: 'skipped', reason: skipReason, notices: noticeLines });
           await applyLabel(message.uid, INTAKE_LABELS.noAction);
           result.skipped++;
-          await log({ status: 'skipped', reason, from: message.from, subject: message.subject });
+          await log({ status: 'skipped', reason: skipReason, from: message.from, subject: message.subject });
           result.items.push({
             subject: message.subject,
             from: message.from,
             status: 'pending_review',
-            reason: `${reason} No attachment, so it was skipped rather than queued.`,
-            attachments: [],
+            reason: forTheAgency ? `${skipReason} Skipped rather than queued.` : `${reason} No attachment, so it was skipped rather than queued.`,
+            attachments: forTheAgency ? attachmentNames : [],
           });
           continue;
         }

@@ -20,30 +20,38 @@ export type EmailScreen = {
   generalNotice: boolean;
   /** Asks the agency or the student to send or answer something. */
   asksForSomething: boolean;
+  /**
+   * Written to the agency as a partner, about no student: a webinar, a training, a newsletter,
+   * an incentive, a monthly portal reminder. Such an email is never put in the review queue
+   * for staff to pick a student (the admin, 2026-10-09).
+   */
+  agentAnnouncement: boolean;
 };
 
 /** When the screen cannot run, everything goes through — the screen only ever saves money. */
-export const PASS_ALL: EmailScreen = { applicationNews: true, generalNotice: true, asksForSomething: true };
+export const PASS_ALL: EmailScreen = { applicationNews: true, generalNotice: true, asksForSomething: true, agentAnnouncement: false };
 
-const SYSTEM = `You take a quick first look at an email sent to a Kuwaiti study-abroad agency by a university, pathway provider (INTO, Study Group, Kaplan, Navitas…), agent (Merit…), the Kuwait Cultural Office or a family. Answer three yes/no questions about the NEWEST message (and the names of its attachments). Call record_screen once.
+const SYSTEM = `You take a quick first look at an email sent to a Kuwaiti study-abroad agency by a university, pathway provider (INTO, Study Group, Kaplan, Navitas…), agent (Merit…), the Kuwait Cultural Office or a family. Answer four yes/no questions about the NEWEST message (and the names of its attachments). Call record_screen once.
 
 applicationNews: does it tell of a decision or change for an application — an offer (conditional or unconditional, including an attached offer letter), a CAS or I-20, a rejection or course closed, "application received / under review", an incomplete application held up for documents, or another agent applying for the student (change of agent)?
 generalNotice: does it state something true for OTHER students as well — a course or university closed, paused, reopened, full, or not approved by the KCO; a new requirement or deadline for everyone?
 asksForSomething: does it ask the agency or the student to send a document, answer a question, confirm something, or do something?
+agentAnnouncement: is it written to the agency as a partner and about no particular student — a webinar, training or event invitation, a newsletter or marketing, an agent incentive or commission, a reminder to update the partner portal for all students, a notice for every agent? False when it is about one student or one application, even if it names nobody ("please find attached the CAS", "your student's offer").
 
-When unsure, answer true. A wrong "true" costs little; a wrong "false" means something is missed.`;
+For the first three, when unsure answer true: a wrong "true" costs little; a wrong "false" means something is missed. For agentAnnouncement, when unsure answer false.`;
 
 const TOOL: Anthropic.Tool = {
   name: 'record_screen',
-  description: 'The three answers.',
+  description: 'The four answers.',
   input_schema: {
     type: 'object',
     properties: {
       applicationNews: { type: 'boolean' },
       generalNotice: { type: 'boolean' },
       asksForSomething: { type: 'boolean' },
+      agentAnnouncement: { type: 'boolean' },
     },
-    required: ['applicationNews', 'generalNotice', 'asksForSomething'],
+    required: ['applicationNews', 'generalNotice', 'asksForSomething', 'agentAnnouncement'],
   },
 };
 
@@ -75,6 +83,7 @@ export async function screenEmail(message: InboxMessage): Promise<EmailScreen> {
       applicationNews: i.applicationNews !== false,
       generalNotice: i.generalNotice !== false,
       asksForSomething: i.asksForSomething !== false,
+      agentAnnouncement: i.agentAnnouncement === true,
     };
   } catch (e) {
     console.error('[email-screen] failed, letting everything through:', e);
