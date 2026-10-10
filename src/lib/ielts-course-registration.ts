@@ -4,11 +4,10 @@
 // Server only — kept out of actions.ts, whose exports any browser can call.
 //
 // Registering a student again for a course that starts the same day is a change, not a
-// second course: the earlier registration for that day is marked replaced (the dashboard
-// shows only the new one, with what it was before) and its reminder is turned off. Talal
-// moved Rawan and Haya from In-Person to Online on 5 Oct and both stayed, contradicting each
-// other (the admin, 2026-10-10). A one-on-one class and a group course are separate — a
-// few students take both from the same day.
+// second course: the newer registration always wins (the admin, 2026-10-10: "always keep
+// the newer"). The earlier one for that day is marked replaced (the dashboard shows only
+// the new one, with what it was before) and its reminder is turned off. Talal had moved
+// Rawan and Haya from In-Person to Online on 5 Oct and both stayed, contradicting each other.
 
 import nodemailer from 'nodemailer';
 import { adminDb } from '@/lib/firebase/admin';
@@ -57,13 +56,8 @@ export type CourseRegistrationResult = {
 };
 
 const isIeltsCourse = (t: Record<string, any>) => t.data?.examType === 'ielts_course' || String(t.taskType ?? '').toLowerCase() === 'ielts course';
-const oneOnOne = (option: unknown) => /one\s*on\s*one/i.test(String(option ?? ''));
-
-/**
- * Mark the student's earlier registrations for the same start day (and the same kind of
- * course) replaced by this one, and turn off their reminders.
- */
-async function replaceEarlier(input: { taskId: string; studentId: string; day: string; option: string; dryRun?: boolean }) {
+/** Mark the student's earlier registrations for the same start day replaced by this one, and turn off their reminders. */
+async function replaceEarlier(input: { taskId: string; studentId: string; day: string; dryRun?: boolean }) {
   if (!adminDb) return [];
   const snap = await adminDb.collection('tasks').where('studentId', '==', input.studentId).get();
   const earlier = snap.docs.filter((d) => {
@@ -73,8 +67,7 @@ async function replaceEarlier(input: { taskId: string; studentId: string; day: s
       isIeltsCourse(t) &&
       !t.replacedBy &&
       t.status !== 'denied' &&
-      kuwaitDay(t.data?.courseStartDate) === input.day &&
-      oneOnOne(t.data?.courseOption) === oneOnOne(input.option)
+      kuwaitDay(t.data?.courseStartDate) === input.day
     );
   });
   const out: Array<{ taskId: string; option: string; registeredAt: string }> = [];
@@ -119,7 +112,7 @@ export async function afterIeltsCourseRegistration(input: {
   const studentUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/student/${input.studentId}`;
 
   const replaced = day
-    ? await replaceEarlier({ taskId: input.taskId, studentId: input.studentId, day, option: input.option, dryRun: input.dryRun }).catch((e) => {
+    ? await replaceEarlier({ taskId: input.taskId, studentId: input.studentId, day, dryRun: input.dryRun }).catch((e) => {
         errors.push(`replacing the earlier registration: ${e instanceof Error ? e.message : String(e)}`);
         return [];
       })
