@@ -80,10 +80,21 @@ export default function IeltsCourseDashboard() {
     return m;
   }, [students]);
 
+  // Registrations replaced by a later one for the same start day, by the one that replaced
+  // them: shown as "changed from" on the current row, never as a row of their own.
+  const replacedFor = useMemo(() => {
+    const m = new Map<string, Task[]>();
+    (tasks || []).forEach((t) => {
+      if (t.replacedBy) m.set(t.replacedBy, [...(m.get(t.replacedBy) ?? []), t]);
+    });
+    return m;
+  }, [tasks]);
+
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
     
     return tasks.filter((task) => {
+      if (task.replacedBy) return false;
       // ✅ Stable check: Use programmatic markers (Marker 1 & 2)
       // String matching kept as fallback for legacy data only (Marker 3)
       const isIeltsCourse = 
@@ -309,6 +320,12 @@ export default function IeltsCourseDashboard() {
                               {[task.data?.courseTiming, task.data?.courseBallroom].filter(Boolean).join(' · ')}
                             </span>
                           )}
+                          {(replacedFor.get(task.id) ?? []).map((old) => (
+                            <span key={old.id} className="block text-[11px] text-amber-700 dark:text-amber-400 mt-1">
+                              Changed from {old.data?.courseOption || 'another course'} (registered {format(new Date(old.createdAt), 'd MMM')}
+                              {old.data?.sentToIdp ? ', sent to IDP' : ''})
+                            </span>
+                          ))}
                         </TableCell>
                         <TableCell className="font-medium text-blue-600">
                           {task.data?.courseStartDate ? formatDate(task.data.courseStartDate) : 'N/A'}

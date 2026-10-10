@@ -319,6 +319,9 @@ export interface Task {
   updatedByName?: string;
   // Set on 'update' broadcasts: which recipients have had it on screen, and when.
   readBy?: ReadReceipts;
+  // An IELTS course registration replaced by a later one for the same start day.
+  replacedBy?: string;
+  replacedAt?: string;
 }
 
 export interface ResourceLink {
