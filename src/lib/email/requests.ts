@@ -97,6 +97,7 @@ Do NOT list:
 - Information the sender is giving (an offer issued, a CAS ready, a visa decision, an interview date) — that is not a request.
 - Marketing, newsletters, automated notifications with nothing asked.
 - Conditions of an offer that the student will meet later (final exam results, the IELTS still to be taken) unless the email asks for them to be sent now.
+- An offer letter's own standard next steps — accept the offer, confirm the place, pay the deposit, all "as set out in the attached letter". The offer is filed and its status set, and that is all the agency wants from it (the admin, 2026-10-10). List only a direct question the sender wants answered by reply.
 - The application fee line INTO adds to its "Application Received" emails ("We will begin processing the application once we have received the application fee payment. The fee can be paid here") — the agency does not pay these; it is not a request.
 
 If something asked for is already among the student's open missing items (numbered in the request), still list it and set sameAs to that number: another university asking for the same document must get it in a reply too. It is not added to the list twice.

@@ -71,12 +71,14 @@ const DETECT_SYSTEM = `You read emails that universities, pathway providers and 
 
 A notice is a general statement about a university, college, course or intake, for example:
 - "all applications for this major/course are stopped / closed / full", "we are no longer accepting applications for…", "the September intake for … is closed" → kind "closed"
-- "we cannot submit applications to … at the moment / temporarily unavailable / on hold" → kind "paused"
+- "we cannot submit applications to … at the moment", "new applications are temporarily not accepted" → kind "paused"
 - "this course / university is not approved by the KCO (Kuwait Cultural Office) / MOHE" → kind "closed", scope "all" — sponsored students cannot take it at all"
 - "applications for … are open again / we can now submit to …" → kind "reopened"
 - a changed entry requirement, a new deadline, a new document required for everyone applying to … → kind "other"
 
 scope: "new" when only new applications are affected (the usual case); "all" only when the email says existing applications are cancelled or will not be processed either.
+
+Not a notice, even when it is said for every applicant: offers or decisions being held, delayed or on hold ("we are holding all offers for the Pharmacy intake until the Centre confirms", "offers are on hold, please email us closer to the intake"). Applications are still taken and nothing has closed; such an email changes nothing (2026-10-06: one was read as "paused" — two Pending applications rejected and the course closed).
 
 Not a notice: anything about this one student's application, even when it is worded generally — their offer, their rejection, their missing document, "offers are currently on hold for the chosen programme", "please email us again once the intake is closer", "the course you applied for is full". These emails are replies about one application; "the chosen programme" / "this course" / "your application" means that student's. A notice must say plainly that it applies to everyone — all applicants, all students, all new applications, the course or university for everybody. When in doubt, it is not a notice. Also not a notice: marketing, newsletters, general greetings. Only use the newest message — quoted older messages are not included. If there is no notice, return an empty list.`;
 

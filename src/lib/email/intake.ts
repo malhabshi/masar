@@ -911,16 +911,36 @@ export async function resolveQueuedItem(
   // for an email matched automatically — read again in full from Gmail — and into the
   // student's email memory.
   let statusLines: string[] = [];
+  let requestLines: string[] = [];
   let schools: string[] = [];
   const full = item.messageId ? await fetchMessageById(item.messageId).catch(() => null) : null;
   if (full) {
     const settings = await getIntakeSettings();
+    const student = (await adminDb.collection('students').doc(studentId).get()).data();
+    // What it asks for, as for an email matched automatically: Missing Items, a reply later.
+    if (settings.draftReplies && (await screenEmail(full)).asksForSomething) {
+      const analysis = await analyseEmail({
+        subject: full.subject,
+        from: full.from,
+        fromName: full.fromName,
+        body: full.text,
+        attachmentNames: full.attachments.map((a) => a.filename),
+        studentName: String(student?.name ?? ''),
+        openMissingItems: await getOpenMissingItems(studentId),
+      });
+      if (analysis) {
+        const recorded = await recordEmailRequests({ message: full, studentId, studentName: String(student?.name ?? ''), analysis }).catch((e) => {
+          console.error('[email-intake] could not record requests:', e);
+          return { requestId: null, chatLines: [] as string[] };
+        });
+        requestLines = recorded.chatLines;
+      }
+    }
     if (settings.autoApplicationStatus) {
       const status = await updateApplicationsFromEmail({ message: full, studentId });
       statusLines = statusChangeLines(status);
       schools = statusSchools(status);
     }
-    const student = (await adminDb.collection('students').doc(studentId).get()).data();
     await rememberEmail({
       studentId,
       studentName: String(student?.name ?? ''),
@@ -935,10 +955,12 @@ export async function resolveQueuedItem(
     }).catch(() => undefined);
   }
 
-  // Same announcement as the automatic path, so a manually-filed document notifies the
-  // employee and department too.
-  const employeeCivilId = await getStudentEmployeeCivilId(studentId);
-  const announcement = await announceEmailInChat({
+  // The same rule as the automatic path: a note only when someone has to act — something
+  // asked for, or a status the AI would not set by itself. A routine offer or "application
+  // received" attached by hand stays silent too (the admin, 2026-10-10).
+  const needsSomeone = requestLines.length > 0 || statusLines.some((l) => !l.startsWith('🎓'));
+  const employeeCivilId = needsSomeone ? await getStudentEmployeeCivilId(studentId) : null;
+  const announcement = needsSomeone ? await announceEmailInChat({
     studentId,
     employeeCivilId,
     from: item.from ?? 'unknown',
@@ -946,9 +968,9 @@ export async function resolveQueuedItem(
     subject: item.subject ?? '',
     body: (item as { bodyPreview?: string }).bodyPreview ?? '',
     filedAttachments: filedNames,
-    requestNotes: statusLines,
+    requestNotes: [...statusLines, ...requestLines],
     schools,
-  });
+  }) : { posted: false };
 
   await ref.update({
     status: 'resolved',
