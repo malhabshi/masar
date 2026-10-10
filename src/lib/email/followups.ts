@@ -5,6 +5,10 @@
 // Merit, INTO, Study Group… — found from the student's email memory. One draft covers
 // every waiting application on the same conversation. Nothing is sent.
 //
+// Only UK schools are chased (the admin, 2026-10-10: George Mason was chased through INTO).
+// The draft never goes to a member of staff: a conversation that is a colleague forwarding
+// the school's email is not the school (one went to a staff Gmail the same day).
+//
 // Limits, so the first run does not flood Drafts with a backlog of stale records:
 //   - only applications that became Submitted between 5 and 60 days ago; older ones are
 //     listed for a person to check, since they are usually a status nobody updated;
@@ -247,6 +251,8 @@ export type FollowUpResult = {
   tooOld: number;
   /** Not chased: the student is finalized (a final choice is set). */
   finalized: number;
+  /** Not chased: the school is not in the UK. */
+  notUk: number;
   /** Not chased: staff asked to stop. */
   stopped: number;
   /** Not chased: an earlier email held the decision, now applied. */
@@ -263,6 +269,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
     noConversation: [],
     tooOld: 0,
     finalized: 0,
+    notUk: 0,
     stopped: 0,
     decidedByEmail: [],
     needsCheck: [],
@@ -275,6 +282,9 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
   const cap = opts.cap ?? DAILY_CAP;
   const now = Date.now();
   const mailbox = (process.env.SMTP_USER ?? '').trim().toLowerCase();
+  const staff = new Set(
+    (await db().collection('users').select('email').get()).docs.map((u) => String(u.data().email ?? '').trim().toLowerCase()).filter(Boolean),
+  );
 
   // Every open student's applications that have waited long enough.
   const snap = await db().collection('students').select('name', 'applications', 'isClosed', 'employeeId', 'finalChoiceUniversity').get();
@@ -289,6 +299,10 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
     const waiting: Waiting[] = [];
     for (const a of (s.applications ?? []) as Application[]) {
       if (a.status !== 'Submitted' || !a.updatedAt) continue;
+      if (a.country !== 'UK') {
+        result.notUk++;
+        continue;
+      }
       const days = Math.floor((now - new Date(a.updatedAt).getTime()) / DAY);
       if (days < WAIT_DAYS) continue;
       if (days > MAX_AGE_DAYS) {
@@ -401,7 +415,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
           return;
         }
         const partner = e.direction === 'in' ? firstAddress(e.from) : firstAddress(e.to);
-        if (!partner || partner === mailbox) {
+        if (!partner || partner === mailbox || staff.has(partner)) {
           result.noConversation.push({ student: student.name, application: w.app.university });
           return;
         }

@@ -141,6 +141,9 @@ export async function processPassportRenewals(opts: { limit?: number; dryRun?: b
   const result: RenewalResult = { students: 0, drafted: [], notes: [] };
   if (!isAiConfigured() || !isInboxConfigured()) return result;
   const mailbox = (process.env.SMTP_USER ?? '').trim().toLowerCase();
+  const staff = new Set(
+    (await db().collection('users').select('email').get()).docs.map((u) => String(u.data().email ?? '').trim().toLowerCase()).filter(Boolean),
+  );
   const jobs = opts.studentId
     ? [(await db().collection(COLLECTION).doc(opts.studentId).get()).data() as Job | undefined].filter((j): j is Job => !!j)
     : ((await db().collection(COLLECTION).where('pending', '==', true).limit(opts.limit ?? 3).get()).docs.map((d) => d.data()) as Job[]);
@@ -180,7 +183,8 @@ export async function processPassportRenewals(opts: { limit?: number; dryRun?: b
       targets.forEach((a, i) => {
         const e = picks.has(i) ? emails[picks.get(i)!] : undefined;
         const partner = e ? (e.direction === 'in' ? firstAddress(e.from) : firstAddress(e.to)) : '';
-        if (!e || !partner || partner === mailbox) { noThread.push(a.university); return; }
+        // A colleague who forwarded the school's email is not the school.
+        if (!e || !partner || partner === mailbox || staff.has(partner)) { noThread.push(a.university); return; }
         const g = groups.get(partner) ?? { email: e, universities: [] };
         g.universities.push(a.university);
         groups.set(partner, g);
