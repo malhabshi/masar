@@ -4,7 +4,8 @@
 //
 // Run from the five-minute cron. Sent once per Sunday (app_settings/ielts_weekly_report);
 // when 20:00 is missed it goes at the next run before midnight. A registration replaced by
-// a newer one for the same day, or denied, is left out.
+// a newer one for the same day, or denied, is left out, and so is a student whose profile is
+// closed (the admin, 2026-10-10).
 
 import nodemailer from 'nodemailer';
 import * as XLSX from 'xlsx';
@@ -27,9 +28,17 @@ const longDate = (day: string) =>
 /** The rows for one Sunday (YYYY-MM-DD, Kuwait), by course then name. */
 export async function ieltsRowsFor(day: string): Promise<string[][]> {
   const snap = await db().collection('tasks').where('data.examType', '==', 'ielts_course').get();
-  return snap.docs
+  const regs = snap.docs
     .map((d) => d.data())
-    .filter((t) => !t.replacedBy && t.status !== 'denied' && kuwaitDay(t.data?.courseStartDate) === day)
+    .filter((t) => !t.replacedBy && t.status !== 'denied' && kuwaitDay(t.data?.courseStartDate) === day);
+  // Closed profiles: the flag, or "-Closed" on the name.
+  const ids = [...new Set(regs.map((t) => String(t.studentId ?? '')).filter(Boolean))];
+  const students = ids.length ? await db().getAll(...ids.map((id) => db().collection('students').doc(id))) : [];
+  const closed = new Set(
+    students.filter((s) => s.data()?.isClosed === true || /-\s*closed\s*$/i.test(String(s.data()?.name ?? ''))).map((s) => s.id),
+  );
+  return regs
+    .filter((t) => !closed.has(String(t.studentId ?? '')))
     .map((t) => [
       String(t.studentName ?? t.data?.studentName ?? '').trim(),
       String(t.studentPhone ?? t.data?.studentPhone ?? '').trim(),
