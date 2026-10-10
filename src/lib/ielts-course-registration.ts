@@ -21,7 +21,7 @@ const KUWAIT_OFFSET_MS = 3 * 3_600_000;
  * The start date as a Kuwait calendar day. The form sends midnight of the picked day in the
  * browser's time zone; rounding to the nearest Kuwait midnight gives the day picked.
  */
-function kuwaitDay(value: unknown): string | null {
+export function kuwaitDay(value: unknown): string | null {
   const ms =
     value instanceof Date
       ? value.getTime()

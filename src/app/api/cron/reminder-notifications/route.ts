@@ -22,6 +22,7 @@ import { dueSlot, recordStart } from '@/lib/email/schedule';
 import { buildTodayIfDue } from '@/lib/reports/employee-daily';
 import { automaticAiAllowed } from '@/lib/ai/usage';
 import { deadlineAlertsIfDue } from '@/lib/ai/deadlines';
+import { ieltsWeeklyIfDue } from '@/lib/reports/ielts-weekly';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -157,6 +158,15 @@ export async function GET(req: NextRequest) {
     deadlines = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Saturday from 20:00 Kuwait: the owner's Excel of Sunday's IELTS course students (no AI).
+  let ieltsWeekly: unknown = null;
+  try {
+    ieltsWeekly = await ieltsWeeklyIfDue();
+  } catch (e) {
+    console.error('[cron/ielts-weekly] failed:', e);
+    ieltsWeekly = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   // The day's employee report, built by itself after 22:00 Kuwait time.
   let dailyReport: unknown = null;
   try {
@@ -186,6 +196,7 @@ export async function GET(req: NextRequest) {
     inbox,
     dailyReport,
     deadlines,
+    ieltsWeekly,
     aiAllowed,
     success: true,
     messagesSent: result.sent,
