@@ -19,6 +19,9 @@
 //     school they chose: the admin has said it more than once (2026-10-04, 2026-10-09);
 //     only an email about the student brings news of them;
 //   - never an application staff asked to stop chasing (stopFollowUp, from the chat);
+//   - never an application the school asked us to wait on — "offers are on hold for the
+//     chosen programme, email us again closer to the intake" (the admin, 2026-10-10: two
+//     such were chased). Staff chase those when the time comes;
 //   - never an application whose emails already hold the decision: the history loaded
 //     before the intake began has offers that never reached the profile. That email is
 //     applied instead (applyPastEmail) — or, when it changes nothing, a person is asked.
@@ -163,7 +166,7 @@ export async function stopFollowUpWithUndo(input: {
 }
 
 
-const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Also give "decision": the number of an email RECEIVED that already gives the university's decision on that application — an offer (conditional or unconditional), a rejection, or a CAS — or null when none does. University names in the applications are sometimes misspelt ("Striling" is Stirling). Never guess.`;
+const PICK_SYSTEM = `You match a student's submitted university applications to the email conversation through which each one is handled, for a Kuwaiti study-abroad agency. Applications go through agents and pathway providers (Merit handles Kaplan, OnCampus and others; INTO, Study Group and Navitas run their own centres) or direct to a university. Call record_threads once. For each application give the number of the email in the list that belongs to the conversation handling it (prefer the most recent email of that conversation), or null if none of the emails is about it. Also give "decision": the number of an email RECEIVED that already gives the university's decision on that application — an offer (conditional or unconditional), a rejection, or a CAS — or null when none does. Also give "onHold": the number of an email RECEIVED in which the school says the application is on hold or asks the agency to wait — offers on hold for the programme, "email us again closer to the intake", "we will contact you when a decision is made" — or null when none does. University names in the applications are sometimes misspelt ("Striling" is Stirling). Never guess.`;
 
 const PICK_TOOL: Anthropic.Tool = {
   name: 'record_threads',
@@ -179,8 +182,9 @@ const PICK_TOOL: Anthropic.Tool = {
             app: { type: 'integer' },
             email: { type: ['integer', 'null'] },
             decision: { type: ['integer', 'null'] },
+            onHold: { type: ['integer', 'null'] },
           },
-          required: ['app', 'email', 'decision'],
+          required: ['app', 'email', 'decision', 'onHold'],
         },
       },
     },
@@ -196,12 +200,17 @@ export async function pickThreads(apps: Application[], emails: EmailMemoryEntry[
 /** An offer, a rejection or a CAS, by the memory's own reading of the email. */
 const DECISION_KINDS = new Set(['offer', 'rejection', 'cas']);
 const DECISION_WORDS = /\boffer\b|unsuccessful|reject|regret|\bCAS\b|unable to offer/i;
+/** A school asking us to wait, by the memory's own reading of the email. */
+const HOLD_WORDS = /on hold|closer to (the )?intake|nearer (to )?(the )?intake|until further notice|later date|re-?submit|re-?contact|email (us )?again|wait(ing)? (for|until)|paused/i;
 
-/** As pickThreads, and which received email (if any) already gives each application's decision. */
+/**
+ * As pickThreads, and which received email (if any) already gives each application's
+ * decision, or asked us to wait.
+ */
 export async function pickThreadsAndDecisions(
   apps: Application[],
   emails: EmailMemoryEntry[],
-): Promise<{ threads: Map<number, number>; decisions: Map<number, number> }> {
+): Promise<{ threads: Map<number, number>; decisions: Map<number, number>; holds: Map<number, number> }> {
   const res = await getAnthropicClient('follow-ups').messages.create({
     model: AI_FAST_MODEL,
     max_tokens: 800,
@@ -226,7 +235,8 @@ export async function pickThreadsAndDecisions(
   const use = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
   const threads = new Map<number, number>();
   const decisions = new Map<number, number>();
-  for (const p of ((use?.input as any)?.picks ?? []) as Array<{ app: number; email: number | null; decision: number | null }>) {
+  const holds = new Map<number, number>();
+  for (const p of ((use?.input as any)?.picks ?? []) as Array<{ app: number; email: number | null; decision: number | null; onHold?: number | null }>) {
     if (!Number.isInteger(p.app) || !apps[p.app]) continue;
     if (Number.isInteger(p.email) && emails[p.email!]) threads.set(p.app, p.email!);
     // The model's word alone is not enough: the email must read as a decision too, and come
@@ -241,8 +251,13 @@ export async function pickThreadsAndDecisions(
     ) {
       decisions.set(p.app, p.decision!);
     }
+    // Asked to wait, after this submission, and the email reads so too.
+    const h = Number.isInteger(p.onHold) ? emails[p.onHold!] : undefined;
+    if (h && h.direction === 'in' && h.date >= submittedAt && HOLD_WORDS.test(`${h.subject} ${h.summary}`)) {
+      holds.set(p.app, p.onHold!);
+    }
   }
-  return { threads, decisions };
+  return { threads, decisions, holds };
 }
 
 export type FollowUpResult = {
@@ -257,6 +272,8 @@ export type FollowUpResult = {
   stopped: number;
   /** Not chased: an earlier email held the decision, now applied. */
   decidedByEmail: Array<{ student: string; application: string; status: string; email: string }>;
+  /** Not chased: the school asked us to wait (offers on hold, email again closer to the intake). */
+  onHold: Array<{ student: string; application: string; email: string }>;
   /** Not chased: an earlier email looks like a decision but changed nothing — a person was asked. */
   needsCheck: Array<{ student: string; application: string; email: string }>;
   capped: boolean;
@@ -272,6 +289,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
     notUk: 0,
     stopped: 0,
     decidedByEmail: [],
+    onHold: [],
     needsCheck: [],
     capped: false,
     errors: [],
@@ -353,7 +371,7 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
         continue;
       }
 
-      const { threads: picks, decisions } = await pickThreadsAndDecisions(due.map((w) => w.app), emails);
+      const { threads: picks, decisions, holds } = await pickThreadsAndDecisions(due.map((w) => w.app), emails);
 
       // The decision is already in the emails: apply that email instead of chasing.
       const stateOf = new Map(student.waiting.map((w, i) => [w.key, states[i].data()] as const));
@@ -409,6 +427,11 @@ export async function followUpSubmittedApplications(opts: { cap?: number; dryRun
       const groups = new Map<string, { email: EmailMemoryEntry; items: Waiting[] }>();
       due.forEach((w, i) => {
         if (decisions.has(i)) return;
+        if (holds.has(i)) {
+          const e = emails[holds.get(i)!];
+          result.onHold.push({ student: student.name, application: w.app.university, email: `${e.date.slice(0, 10)} "${e.subject}"` });
+          return;
+        }
         const e = picks.has(i) ? emails[picks.get(i)!] : undefined;
         if (!e) {
           result.noConversation.push({ student: student.name, application: w.app.university });
